@@ -1,0 +1,12 @@
+[package]
+name = "hayagriva-main"
+version = "0.1.0"
+authors = ["Martin Haug <mhaug@live.de>"]
+edition = "2018"
+
+[dependencies]
+hayagriva = { path = ".." }
+
+[[bin]]
+name = "hayagriva-main"
+path = "main.rs"

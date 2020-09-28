@@ -1,0 +1,11 @@
+# VS Code
+.vscode
+
+# Trying stuff locally
+/_studies
+
+# Rust
+/target
+/main/target
+Cargo.lock
+**/*.rs.bk

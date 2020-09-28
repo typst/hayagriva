@@ -1,0 +1,15 @@
+[package]
+name = "hayagriva"
+version = "0.1.0"
+authors = ["Martin Haug <mhaug@live.de>"]
+edition = "2018"
+
+[dependencies]
+chrono = { version = "0.4.15", default-features = false }
+lazy_static = "1.4.0"
+linked-hash-map = "0.5.3"
+thiserror = "1.0.20"
+regex = "1.3.9"
+unic-langid = "0.9.0"
+url = "2.1.1"
+yaml-rust = "0.4.4"

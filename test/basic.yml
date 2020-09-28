@@ -1,0 +1,64 @@
+zygos:
+    type: ConferencePaper
+    author:
+        - Prekas, George
+        - Kogias, Marios
+        - Bugnion, Edouard
+    title:
+        value: "ZygOS: Achieving Low Tail Latency for Microsecond-Scale Networked Tasks"
+        verbatim: true
+    date: 2017
+    page-range: 325-341
+    doi: 10.1145/3132747.3132780
+    parent:
+        title: Proceedings of the 26th Symposium on Operating Systems Principles
+        publisher: Association for Computing Machinery
+        location: New York, NY, USA
+        isbn: 978-1450350853
+
+wwdc-network:
+    type: ConferencePaper
+    author:  ["Mehta, Jiten", "Kinnear, Eric"]
+    title: Boost Performance and Security with Modern Networking
+    date: 2020-06-26
+    parent:
+        - type: Conference
+          title:
+              value: World Wide Developer Conference 2020
+              shorthand: WWDC 2020
+          organization: Apple, Inc.
+        - type: Video
+          runtime: "00:13:42"
+          url: { value: https://developer.apple.com/videos/play/wwdc2020/10111/, date: 2020-09-17 }
+
+omarova-libra:
+    type: Article
+    author: ["Omarova, Saule", "Steele, Graham"]
+    title: There’s a Lot We Still Don’t Know About Libra
+    date: 2019-11-04
+    url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
+    parent: { type: NewspaperIssue, title: The New York Times, location: "New York, NY, USA" }
+
+harry:
+    type: Chapter
+    page-range: 135-139
+    parent:
+        title: Harry Potter and the Order of the Phoenix
+        author: Rowling, J. K.
+        volume: 5
+        volume-total: 7
+        isbn: 978-0747551003
+        page-total: 768
+        date: 2003-06-21
+
+science-e-issue:
+    type: WebItem
+    title: Tokenization of + and - with scientific notation
+    url: https://github.com/typst/typstc/issues/3
+    serial-number: 3
+    author:
+        - name: "Mädje"
+          given-name: "Laurenz"
+          alias: "laurmaedje"
+    date: 2020-07-18
+    parent: { type: Repository, title: typstc, url: https://github.com/typst/typstc }
