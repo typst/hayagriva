@@ -62,3 +62,16 @@ science-e-issue:
           alias: "laurmaedje"
     date: 2020-07-18
     parent: { type: Repository, title: typstc, url: https://github.com/typst/typstc }
+
+terminator-2:
+    type: Video
+    title: "Terminator 2: Judgment Day"
+    author: Cameron, James
+    affiliated:
+        - role: CastMember
+          names: ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]
+        - role: Composer
+          names: Fiedel, Brad
+    date: 1991-07-01
+    runtime: "137:00"
+    time-range: "17:05-17:48"

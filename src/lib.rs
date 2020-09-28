@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 pub mod types;
 
@@ -20,7 +21,7 @@ enum FieldTypes {
     Integer(i64),
     Date(Date),
     Persons(Vec<Person>),
-    PersonsWithRoles(Vec<(Person, PersonRole)>),
+    PersonsWithRoles(Vec<(Vec<Person>, PersonRole)>),
     IntegerOrText(NumOrStr),
     Range(std::ops::Range<i64>),
     Duration(Duration),
@@ -37,7 +38,7 @@ pub struct Entry {
     content: HashMap<String, FieldTypes>,
 }
 
-#[derive(Error, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum YamlBibliographyError {
     #[error("string could not be read as yaml")]
     Scan(#[from] yaml_rust::ScanError),
@@ -66,7 +67,7 @@ pub enum YamlBibliographyError {
     },
 }
 
-#[derive(Error, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum YamlFormattableStringError {
     #[error("key cannot be parsed as a string")]
     KeyIsNoString,
@@ -78,7 +79,7 @@ pub enum YamlFormattableStringError {
     VerbatimNotBool,
 }
 
-#[derive(Error, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum YamlDataTypeError {
     #[error("formattable string structurally malformed")]
     FormattableString(#[from] YamlFormattableStringError),
@@ -243,11 +244,26 @@ fn person_from_yaml(
         )
     } else {
         Err(YamlBibliographyError::new_data_type_error(
-            key,
-            field_name,
-            "person",
+            key, field_name, "person",
         ))
     }
+}
+
+fn persons_from_yaml(
+    value: Yaml,
+    key: &str,
+    field_name: &str,
+) -> Result<Vec<Person>, YamlBibliographyError> {
+    let mut persons = vec![];
+    if value.is_array() {
+        for item in value {
+            persons.push(person_from_yaml(item, key, field_name)?);
+        }
+    } else {
+        persons.push(person_from_yaml(value, key, field_name)?);
+    }
+
+    Ok(persons)
 }
 
 fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyError> {
@@ -287,18 +303,67 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
                 }
             }
             "author" | "editor" => {
-                let mut persons = vec![];
-                if value.is_array() {
-                    for item in value {
-                        persons.push(person_from_yaml(item, &key, &field_name)?);
-                    }
-                } else {
-                    persons.push(person_from_yaml(value, &key, &field_name)?);
+                FieldTypes::Persons(persons_from_yaml(value, &key, &field_name)?)
+            }
+            "affiliated" => {
+                let mut res = vec![];
+                if !value.is_array() {
+                    return Err(YamlBibliographyError::new_data_type_error(
+                        &key,
+                        &field_name,
+                        "affiliated person",
+                    ));
                 }
 
-                FieldTypes::Persons(persons)
+                for item in value {
+                    let mut map = yaml_hash_map_with_string_keys(
+                        item.into_hash().ok_or_else(|| {
+                            YamlBibliographyError::new_data_type_error(
+                                &key,
+                                &field_name,
+                                "affiliated person",
+                            )
+                        })?,
+                    );
+
+                    let persons = map
+                        .remove("names")
+                        .ok_or_else(|| {
+                            YamlBibliographyError::new_data_type_src_error(
+                                &key,
+                                &field_name,
+                                YamlDataTypeError::MissingRequiredField,
+                            )
+                        })
+                        .and_then(|value| persons_from_yaml(value, &key, &field_name))?;
+
+                    let role = map
+                        .remove("role")
+                        .ok_or_else(|| {
+                            YamlBibliographyError::new_data_type_src_error(
+                                &key,
+                                &field_name,
+                                YamlDataTypeError::MissingRequiredField,
+                            )
+                        })
+                        .and_then(|t| {
+                            t.into_string().ok_or_else(|| {
+                                YamlBibliographyError::new_data_type_src_error(
+                                    &key,
+                                    &field_name,
+                                    YamlDataTypeError::MismatchedPrimitive,
+                                )
+                            })
+                        })?;
+
+                    let role = PersonRole::from_str(&role.to_lowercase())
+                        .unwrap_or_else(|e| PersonRole::Unknown(role));
+
+                    res.push((persons, role))
+                }
+
+                FieldTypes::PersonsWithRoles(res)
             }
-            "affiliated" => todo!("person role tuple vector"),
             "date" => FieldTypes::Date(if let Some(value) = value.as_i64() {
                 Date::from_year(value as i32)
             } else if let Some(value) = value.into_string() {
@@ -371,7 +436,7 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
                         )
                     })
                     .and_then(|s| {
-                        Duration::from_string(&s).map_err(|e| {
+                        Duration::from_str(&s).map_err(|e| {
                             YamlBibliographyError::new_data_type_src_error(
                                 &key,
                                 &field_name,
@@ -382,7 +447,28 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
 
                 FieldTypes::Duration(v)
             }
-            "time-range" => todo!("duration range"),
+            "time-range" => {
+                let v = value
+                    .into_string()
+                    .ok_or_else(|| {
+                        YamlBibliographyError::new_data_type_error(
+                            &key,
+                            &field_name,
+                            "duration",
+                        )
+                    })
+                    .and_then(|s| {
+                        Duration::range_from_str(&s).map_err(|e| {
+                            YamlBibliographyError::new_data_type_src_error(
+                                &key,
+                                &field_name,
+                                YamlDataTypeError::Duration(e),
+                            )
+                        })
+                    })?;
+
+                FieldTypes::TimeRange(v)
+            }
             "url" => {
                 let (url, date) = if let Some(s) = value.as_str() {
                     (
@@ -490,9 +576,13 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
                 } else if let Some(i) = value.as_f64() {
                     FieldTypes::Text(i.to_string())
                 } else {
-                    return Err(YamlBibliographyError::new_data_type_error(&key, &field_name, "text"));
+                    return Err(YamlBibliographyError::new_data_type_error(
+                        &key,
+                        &field_name,
+                        "text",
+                    ));
                 }
-            },
+            }
         };
 
         entry.content.insert(field_name, value);

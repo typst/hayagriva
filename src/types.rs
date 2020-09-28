@@ -4,6 +4,7 @@ use regex::Regex;
 use std::cmp::{Ordering, PartialOrd};
 use std::ops::Range;
 use std::ops::{Add, Sub};
+use strum_macros::EnumString;
 use thiserror::Error;
 use url::Url;
 
@@ -14,13 +15,15 @@ lazy_static! {
 
     // Duration regexes.
     static ref DURATION_REGEX: Regex = Regex::new(r"^(((?P<d>\d+)\s*:\s*)?(?P<h>\d{2,})\s*:\s*)?(?P<m>\d{2,})\s*:\s*(?P<s>\d{2})(\s*,\s*(?P<ms>\d+))?").unwrap();
+    static ref DURATION_RANGE_REGEX: Regex = Regex::new(r"^(?P<s>((\d+\s*:\s*)?\d{2,}\s*:\s*)?\d{2,}\s*:\s*\d{2}(\s*,\s*\d+)?)(\s*-+\s*(?P<e>((\d+\s*:\s*)?\d{2,}\s*:\s*)?\d{2,}\s*:\s*\d{2}(\s*,\s*\d+)?))?").unwrap();
 
     // Definite (i.e. non-range) date regexes.
     static ref MONTH_REGEX: Regex = Regex::new(r"^(?P<y>(\+|-)?\s*\d{4})\s*-\s*(?P<m>\d{2})").unwrap();
     static ref YEAR_REGEX: Regex = Regex::new(r"^(?P<y>(\+|-)?\s*\d{4})").unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, EnumString)]
+#[strum(serialize_all = "lowercase")]
 pub(crate) enum PersonRole {
     Translator,
     Afterword,
@@ -37,7 +40,10 @@ pub(crate) enum PersonRole {
     Composer,
     Producer,
     Writer,
+    Cinematography,
     Director,
+
+    #[strum(disabled)]
     Unknown(String),
 }
 
@@ -50,7 +56,7 @@ pub struct Person {
     pub alias: Option<String>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum PersonError {
     #[error("too many parts")]
     TooManyParts,
@@ -128,7 +134,7 @@ impl Person {
         Ok(Person {
             name,
             given_name,
-            prefix: prefix,
+            prefix,
             suffix,
             alias: None,
         })
@@ -148,7 +154,7 @@ pub struct Date {
     day: Option<u8>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum DateError {
     #[error("date format unknown")]
     UnknownFormat,
@@ -267,7 +273,7 @@ pub struct Duration {
     milliseconds: f64,
 }
 
-#[derive(Error, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum DurationError {
     #[error("string does not match duration regex")]
     NoMatch,
@@ -306,7 +312,7 @@ impl Duration {
         }
     }
 
-    pub fn from_string(source: &str) -> Result<Self, DurationError> {
+    pub fn from_str(source: &str) -> Result<Self, DurationError> {
         let capt =
             DURATION_REGEX.captures(source.trim()).ok_or(DurationError::NoMatch)?;
 
@@ -348,6 +354,20 @@ impl Duration {
             seconds,
             milliseconds: ms.unwrap_or(0.0),
         })
+    }
+
+    pub fn range_from_str(source: &str) -> Result<std::ops::Range<Self>, DurationError> {
+        let caps = DURATION_RANGE_REGEX
+            .captures(source.trim())
+            .ok_or(DurationError::NoMatch)?;
+
+        let start = Self::from_str(caps.name("s").expect("start is mandatory").as_str())?;
+        let end = caps
+            .name("e")
+            .map(|e| Self::from_str(e.as_str()))
+            .unwrap_or_else(|| Ok(start.clone()))?;
+
+        Ok(start .. end)
     }
 }
 
