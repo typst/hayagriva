@@ -22,7 +22,7 @@ lazy_static! {
     static ref YEAR_REGEX: Regex = Regex::new(r"^(?P<y>(\+|-)?\s*\d{4})").unwrap();
 }
 
-#[derive(Debug, EnumString)]
+#[derive(Clone, Debug, EnumString)]
 #[strum(serialize_all = "lowercase")]
 pub(crate) enum PersonRole {
     Translator,
@@ -47,7 +47,7 @@ pub(crate) enum PersonRole {
     Unknown(String),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Person {
     pub name: String,
     pub given_name: Option<String>,
@@ -141,15 +141,15 @@ impl Person {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum NumOrStr {
     Number(i64),
     Str(String),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Date {
-    year: i32,
+    pub year: i32,
     month: Option<u8>,
     day: Option<u8>,
 }
@@ -203,12 +203,19 @@ impl Date {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct FormattableString {
-    value: String,
-    title_case: Option<String>,
-    sentence_case: Option<String>,
-    verbatim: bool,
+    pub(crate) value: String,
+    pub(crate) title_case: Option<String>,
+    pub(crate) sentence_case: Option<String>,
+    pub(crate) verbatim: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct FormattedString {
+    pub value: String,
+    pub title_case: String,
+    pub sentence_case: String,
 }
 
 impl FormattableString {
@@ -245,7 +252,7 @@ impl FormattableString {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct QualifiedUrl {
     pub value: Url,
     pub visit_date: Option<Date>,

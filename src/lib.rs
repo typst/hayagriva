@@ -3,9 +3,10 @@ use std::str::FromStr;
 
 pub mod lang;
 pub mod types;
+pub mod output;
 
 use types::{
-    get_range, Date, Duration, FormattableString, NumOrStr, Person, PersonRole,
+    get_range, Date, Duration, FormattableString, FormattedString, NumOrStr, Person, PersonRole,
     QualifiedUrl,
 };
 
@@ -15,9 +16,10 @@ use unic_langid::LanguageIdentifier;
 use url::Url;
 use yaml_rust::{Yaml, YamlLoader};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum FieldTypes {
     FormattableString(FormattableString),
+    FormattedString(FormattedString),
     Text(String),
     Integer(i64),
     Date(Date),
@@ -33,7 +35,7 @@ enum FieldTypes {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Entry {
     key: String,
     content: HashMap<String, FieldTypes>,
