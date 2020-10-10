@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+mod lang;
 pub mod types;
 
 use types::{

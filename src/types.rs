@@ -316,16 +316,16 @@ impl Duration {
         let capt =
             DURATION_REGEX.captures(source.trim()).ok_or(DurationError::NoMatch)?;
 
-        let seconds: u8 = str::parse(capt.name("s").unwrap().as_str()).unwrap();
-        let mut minutes: u32 = str::parse(capt.name("m").unwrap().as_str()).unwrap();
+        let seconds: u8 = capt.name("s").unwrap().as_str().parse().unwrap();
+        let mut minutes: u32 = capt.name("m").unwrap().as_str().parse().unwrap();
 
         if seconds > 59 {
             return Err(DurationError::TooLarge);
         }
 
-        let ms: Option<f64> = capt.name("ms").and_then(|m| str::parse(m.as_str()).ok());
-        let hours: Option<u32> = capt.name("h").and_then(|m| str::parse(m.as_str()).ok());
-        let days: Option<u32> = capt.name("d").and_then(|m| str::parse(m.as_str()).ok());
+        let ms: Option<f64> = capt.name("ms").and_then(|m| m.as_str().parse().ok());
+        let hours: Option<u32> = capt.name("h").and_then(|m| m.as_str().parse().ok());
+        let days: Option<u32> = capt.name("d").and_then(|m| m.as_str().parse().ok());
 
         if hours.is_some() && minutes > 59 {
             return Err(DurationError::TooLarge);
