@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-mod lang;
+pub mod lang;
 pub mod types;
 
 use types::{
@@ -358,7 +358,7 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
                         })?;
 
                     let role = PersonRole::from_str(&role.to_lowercase())
-                        .unwrap_or_else(|e| PersonRole::Unknown(role));
+                        .unwrap_or_else(|_| PersonRole::Unknown(role));
 
                     res.push((persons, role))
                 }
