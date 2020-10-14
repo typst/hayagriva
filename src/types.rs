@@ -1,5 +1,7 @@
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
+use super::{FieldTypes, Entry, EntryAccessError};
+use std::convert::TryFrom;
 use regex::Regex;
 use std::cmp::{Ordering, PartialOrd};
 use std::ops::Range;
@@ -22,9 +24,141 @@ lazy_static! {
     static ref YEAR_REGEX: Regex = Regex::new(r"^(?P<y>(\+|-)?\s*\d{4})").unwrap();
 }
 
+/// Describes which kind of work a database entry refers to.
+#[derive(Clone, Debug, EnumString, PartialEq, Eq)]
+#[strum(serialize_all = "lowercase")]
+pub enum EntryType {
+    /// A short text, possibly of journalistic or scientific nature,
+    /// appearing in some greater publication.
+    Article,
+    /// A scientific, trade, or policy paper published within
+    /// the scope of a conference.
+    ConferencePaper,
+    /// A section of a greater containing work.
+    Chapter,
+    /// A short segment of media pertaining to some subject matter.
+    /// Could appear in a work of reference or a data set.
+    Entry,
+    /// Text published within an Anthology.
+    InAnthology,
+    /// A document compiled by authors that may be affiliated to an organisation.
+    /// Presents information for a specific audience or purpose.
+    Report,
+    /// Scholarly work delivered to fulfill degree requirements at a higher
+    /// education institution.
+    Thesis,
+    /// Piece of content that can be found on the internet and is native
+    /// to the medium, like an animation, a web app, or a form of content not
+    /// found elsewhere. Do not use this entry type when
+    /// referencing a textual blog article, instead use an `Article` with
+    /// a `Blog` parent.
+    WebItem,
+    /// A part of a show or another type of performed media, typically all
+    /// taking place in the same location.
+    Scene,
+    /// A form of artistic / creative expression.
+    Artwork,
+    /// A technical document deposited at a government agency that describes
+    /// an invention in order to legally limit the rights of reproduction
+    /// to the inventors.
+    Patent,
+    /// Reference to a legal case that was or is to be heared at a court of law.
+    Case,
+    /// The issue of a newspaper that was published on a given day.
+    NewspaperIssue,
+    /// Legal document or draft there of that is, is to be, or was to be
+    /// enacted into binding law.
+    Legislation,
+    /// Written document that is submitted as a candidate for publication.
+    Manuscript,
+    /// A post on a micro-blogging platform like Twitter.
+    Tweet,
+    /// Items that do not match any of the other Entry type composites.
+    Misc,
+    /// A publication that periodically publishes issues with unique content.
+    /// This includes scientific journals and news magazines.
+    Periodical,
+    /// The official published record of the subjects
+    /// of a professional conference.
+    Proceedings,
+    /// Long-form work published pysically as a set of bound sheets.
+    Book,
+    /// Set of self-published articles on a website.
+    Blog,
+    /// A work of reference. This could be a manual or a dictionary.
+    Reference,
+    /// Professional conference. This Entry type implies that the item
+    /// referenced has been an event at the conference itself. If you instead
+    /// want to reference a paper published in the published proceedings
+    /// of the conference, use an `Article` with a `Proceedings` parent.
+    Conference,
+    /// Collection of different texts pertaining to a single topic.
+    Anthology,
+    /// Publicly visible storage of the source code for a particular software
+    /// and its modifications over time.
+    Repository,
+    /// Written discussion on the internet triggered by an original post.
+    /// Could be on a forum, social network, or Q&A site.
+    Thread,
+    /// Motion picture of any form, possibly with accompanying audio.
+    Video,
+    /// Recorded audible sound of any kind.
+    Audio,
+    /// A curated set of artworks.
+    Exhibition,
+}
+
+/// Allows to formalize requirements for a single `EntryType`.
+#[derive(Clone, Debug)]
+pub(crate) enum EntryTypeModality {
+    /// `EntryType` must match exactly.
+    Specific(EntryType),
+    /// `EntryType` must be contained within this list.
+    Alternate(Vec<EntryType>),
+    /// `EntryType` must _not_ be contained within this list.
+    Disallowed(Vec<EntryType>),
+    /// Any `EntryType is allowed`.
+    Any,
+}
+
+impl EntryType {
+    /// Checks if the `EntryTypeModality` constraint is satisfied.
+    pub(crate) fn check(&self, constraint: EntryTypeModality) -> bool {
+        match constraint {
+            EntryTypeModality::Specific(tp) => &tp == self,
+            EntryTypeModality::Alternate(tps) => {
+                let mut found = false;
+                for tp in &tps {
+                    if tp == self {
+                        found = true;
+                        break;
+                    }
+                }
+
+                found
+            },
+            EntryTypeModality::Disallowed(tps) => {
+                !self.check(EntryTypeModality::Alternate(tps))
+            },
+            EntryTypeModality::Any => {
+                true
+            }
+        }
+    }
+}
+
+/// Specifies the types of an entry, including its parents.
+#[derive(Clone, Debug)]
+pub(crate) struct EntryTypeSpec {
+    /// The top-level type has to satisfy these conditions.
+    pub(crate) here: EntryTypeModality,
+    /// For each entry in the list, there must be an according parent.
+    pub(crate) parents: Vec<EntryTypeSpec>,
+}
+
 #[derive(Clone, Debug, EnumString)]
 #[strum(serialize_all = "lowercase")]
-pub(crate) enum PersonRole {
+pub enum PersonRole {
     Translator,
     Afterword,
     Foreword,
@@ -42,6 +176,7 @@ pub(crate) enum PersonRole {
     Writer,
     Cinematography,
     Director,
+    Illustrator,
 
     #[strum(disabled)]
     Unknown(String),
@@ -142,7 +277,7 @@ impl Person {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum NumOrStr {
+pub enum NumOrStr {
     Number(i64),
     Str(String),
 }
@@ -204,7 +339,7 @@ impl Date {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct FormattableString {
+pub struct FormattableString {
     pub(crate) value: String,
     pub(crate) title_case: Option<String>,
     pub(crate) sentence_case: Option<String>,
@@ -410,3 +545,39 @@ impl Add for Duration {
         Duration::from_ms(self.as_ms() + other.as_ms())
     }
 }
+
+macro_rules! try_from_fieldtypes {
+    ($variant:ident, $target:ty $(,)*) => {
+        impl TryFrom<FieldTypes> for $target {
+            type Error = EntryAccessError;
+
+            fn try_from(value: FieldTypes) -> Result<Self, Self::Error> {
+                match value {
+                    FieldTypes::$variant(f) => Ok(f),
+                    _ => Err(EntryAccessError::WrongType),
+                }
+            }
+        }
+
+        impl From<$target> for FieldTypes {
+            fn from(value: $target) -> Self {
+                FieldTypes::$variant(value)
+            }
+        }
+    };
+}
+
+try_from_fieldtypes!(FormattableString, FormattableString);
+try_from_fieldtypes!(FormattedString, FormattedString);
+try_from_fieldtypes!(Text, String);
+try_from_fieldtypes!(Integer, i64);
+try_from_fieldtypes!(Date, Date);
+try_from_fieldtypes!(Persons, Vec<Person>);
+try_from_fieldtypes!(PersonsWithRoles, Vec<(Vec<Person>, PersonRole)>);
+try_from_fieldtypes!(IntegerOrText, NumOrStr);
+try_from_fieldtypes!(Range, std::ops::Range<i64>);
+try_from_fieldtypes!(Duration, Duration);
+try_from_fieldtypes!(TimeRange, std::ops::Range<Duration>);
+try_from_fieldtypes!(Url, QualifiedUrl);
+try_from_fieldtypes!(Language, unic_langid::LanguageIdentifier);
+try_from_fieldtypes!(Entries, Vec<Entry>);

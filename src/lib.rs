@@ -7,17 +7,19 @@ pub mod output;
 
 use types::{
     get_range, Date, Duration, FormattableString, FormattedString, NumOrStr, Person, PersonRole,
-    QualifiedUrl,
+    QualifiedUrl, EntryType, EntryTypeSpec
 };
 
+use std::convert::TryFrom;
 use linked_hash_map::LinkedHashMap;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 use url::Url;
 use yaml_rust::{Yaml, YamlLoader};
+use paste::paste;
 
 #[derive(Clone, Debug)]
-enum FieldTypes {
+pub enum FieldTypes {
     FormattableString(FormattableString),
     FormattedString(FormattedString),
     Text(String),
@@ -35,10 +37,135 @@ enum FieldTypes {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Entry {
     key: String,
+    entry_type: EntryType,
     content: HashMap<String, FieldTypes>,
+}
+
+impl Entry {
+    pub fn get(&self, key: &str) -> Option<&FieldTypes> {
+        self.content.get(key)
+    }
+
+    pub fn set(&mut self, key: String, value: FieldTypes) {
+        self.content.insert(key, value);
+    }
+}
+
+#[derive(Clone, Error, Debug)]
+pub enum EntryAccessError {
+    #[error("the queried field is not present")]
+    NoSuchField,
+    #[error("datatype mismatch in the queried field")]
+    WrongType,
+}
+
+macro_rules! fields {
+    ($($name:ident: $field_name:expr $(=> $res:ty)?),* $(,)*) => {
+        $(
+            paste! {
+                #[doc = "Get and parse the `" $field_name "` field."]
+                pub fn [<get_ $name>](&self) -> Result<fields!(@type $($res)?), EntryAccessError> {
+                    self.get($field_name)
+                        .ok_or(EntryAccessError::NoSuchField)
+                        .and_then(|item| <fields!(@type $($res)?)>::try_from(item.clone()))
+                }
+
+                fields!(single_set $name => $field_name, fields!(@type $($res)?));
+            }
+        )*
+    };
+
+    (single_set $name:ident => $field_name:expr, $other_type:ty) => {
+        paste! {
+            #[doc = "Set a value in the `" $field_name "` field."]
+            pub fn [<set_ $name>](&mut self, item: $other_type) {
+                self.set($field_name.to_string(), FieldTypes::from(item));
+            }
+        }
+    };
+
+    (@type) => {String};
+    (@type $res:ty) => {$res};
+}
+
+impl Entry {
+    fields!(
+        parents: "parent" => Vec<Entry>,
+        title: "title" => FormattableString,
+        authors: "author" => Vec<Person>,
+        editor: "editor" => Vec<Person>,
+        affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>,
+        organization: "organization",
+        issue: "issue" => NumOrStr,
+        edition: "edition" => NumOrStr,
+        version: "version",
+        volume: "volume" => std::ops::Range<i64>,
+        total_volumes: "volume-total" => i64,
+        page_range: "page-range" => std::ops::Range<i64>
+    );
+
+    /// Get and parse the `page-total` field, falling back on
+    /// `page-range` if not specified.
+    pub fn get_page_total(&self) -> Result<i64, EntryAccessError> {
+        self.get("page-total")
+            .ok_or(EntryAccessError::NoSuchField)
+            .map(|ft| ft.clone())
+            .or_else(|_| {
+                self.get_page_range().map(|r| FieldTypes::from(r.end - r.start))
+            })
+            .and_then(|item| i64::try_from(item.clone()))
+    }
+
+    fields!(single_set total_pages => "page-total", i64);
+    fields!(time_range: "time-range" => std::ops::Range<Duration>);
+
+    /// Get and parse the `runtime` field, falling back on
+    /// `time-range` if not specified.
+    pub fn get_runtime(&self) -> Result<Duration, EntryAccessError> {
+        self.get("runtime")
+            .ok_or(EntryAccessError::NoSuchField)
+            .map(|ft| ft.clone())
+            .or_else(|_| {
+                self.get_time_range().map(|r| FieldTypes::from(r.end - r.start))
+            })
+            .and_then(|item| Duration::try_from(item.clone()))
+    }
+
+    fields!(single_set runtime => "runtime", Duration);
+
+    fields!(
+        issn: "issn",
+        isbn: "isbn",
+        doi: "doi",
+        serial_number: "serial-number",
+        url: "url" => QualifiedUrl,
+        language: "language" => LanguageIdentifier,
+        note: "note",
+        location: "location" => FormattableString,
+        publisher: "publisher" => FormattableString,
+        archive: "archive" => FormattableString,
+        archive_location: "archive-location" => FormattableString,
+    );
+
+    /// Recursively checks if `EntryTypeSpec` is applicable.
+    pub(crate) fn check_with_spec(&self, constraint: EntryTypeSpec) -> bool {
+        if !self.entry_type.check(constraint.here) {
+            return false;
+        }
+
+        let parents = self.get_parents().unwrap_or_else(|_| vec![]);
+
+        for pc in &constraint.parents {
+            if !parents.iter().any(|p| p.check_with_spec(pc.clone())) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 #[derive(Clone, Error, Debug)]
@@ -273,6 +400,7 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
     let mut entry = Entry {
         key: key.clone(),
         content: HashMap::new(),
+        entry_type: EntryType::Misc,
     };
     for (field_name, value) in yaml
         .into_hash()
@@ -282,8 +410,25 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
         let field_name = field_name
             .into_string()
             .ok_or_else(|| YamlBibliographyError::FieldNameUnparsable(key.clone()))?;
+        let fname_str = field_name.as_str();
 
-        let value = match field_name.as_str() {
+        if fname_str == "type" {
+            let val = value.into_string().ok_or_else(|| {
+                YamlBibliographyError::new_data_type_src_error(
+                    &key,
+                    &field_name,
+                    YamlDataTypeError::MismatchedPrimitive,
+                )
+            })?;
+
+            if let Ok(tp) = EntryType::from_str(&val.to_lowercase()) {
+                entry.entry_type = tp;
+            }
+
+            continue;
+        }
+
+        let value = match fname_str {
             "title" | "publisher" | "location" | "archive" | "archive-location" => {
                 if let Some(map) = value.clone().into_hash() {
                     FieldTypes::FormattableString(
