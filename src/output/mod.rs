@@ -1,8 +1,9 @@
-
-use super::{Entry, FieldTypes};
 use super::types::Person;
-use std::collections::{HashMap, HashSet, BTreeSet};
+use super::{Entry, FieldTypes};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
+
+pub mod apa;
 
 /// Will be raised if a user-specified citation is not possible with the given
 /// database.
@@ -23,7 +24,7 @@ pub struct Citation<'s> {
     /// Cited entry keys.
     keys: Vec<&'s str>,
     /// Supplements for each entry key such as page or chapter number.
-    supplements: Vec<Option<&'s str>>
+    supplements: Vec<Option<&'s str>>,
 }
 
 /// Structs implementing this trait can generate the appropriate reference
@@ -83,15 +84,16 @@ impl ImmediateReferenceGenerator for KeyReferenceGenerator<'_> {
     fn get_reference(&mut self, citation: Citation) -> Result<String, CitationError> {
         for &key in &citation.keys {
             if !self.entries.contains_key(key) {
-                return Err(CitationError::KeyNotFound(key.to_string()))
+                return Err(CitationError::KeyNotFound(key.to_string()));
             }
 
             self.cited.insert(key.to_string());
         }
 
-        let mut res = citation.keys.first().ok_or(CitationError::EmptyCitation)?.to_string();
+        let mut res =
+            citation.keys.first().ok_or(CitationError::EmptyCitation)?.to_string();
 
-        for key in &citation.keys[1..] {
+        for key in &citation.keys[1 ..] {
             res += ", ";
             res += key;
         }
@@ -127,7 +129,7 @@ impl ImmediateReferenceGenerator for NumericalReferenceGenerator<'_> {
         let mut ids = vec![];
         for &key in &citation.keys {
             if !self.entries.contains_key(key) {
-                return Err(CitationError::KeyNotFound(key.to_string()))
+                return Err(CitationError::KeyNotFound(key.to_string()));
             }
 
             let id = if let Some(&val) = self.num_map.get(key) {
@@ -141,7 +143,11 @@ impl ImmediateReferenceGenerator for NumericalReferenceGenerator<'_> {
             ids.push(id);
         }
 
-        Ok(ids.into_iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", "))
+        Ok(ids
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(", "))
     }
 
     fn used_keys(&self) -> Vec<String> {
@@ -174,7 +180,7 @@ fn author_list_names(authors: &Vec<Person>) -> String {
         format!("{} et al.", authors.first().unwrap().name)
     } else {
         let mut res = authors.first().unwrap().name.clone();
-        for author in &authors[1..] {
+        for author in &authors[1 ..] {
             res += ", ";
             res += &author.name;
         }
@@ -183,12 +189,8 @@ fn author_list_names(authors: &Vec<Person>) -> String {
 }
 
 const ASCII_ALPH: [char; 26] = [
-    'a', 'b', 'c', 'd', 'e',
-    'f', 'g', 'h', 'i', 'j',
-    'k', 'l', 'm', 'n', 'o',
-    'p', 'q', 'r', 's', 't',
-    'u', 'v', 'w', 'x', 'y',
-    'z'
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',
+    'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
 impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
@@ -205,7 +207,8 @@ impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
             }
         }
 
-        self.cited_keys.push(citation.keys.into_iter().map(|s| s.to_string()).collect());
+        self.cited_keys
+            .push(citation.keys.into_iter().map(|s| s.to_string()).collect());
 
         Ok(())
     }
@@ -222,18 +225,22 @@ impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
             }
 
             let e = self.entries.get(key).unwrap();
-            let name = e.content.get("author").map(|a| {
-                match a {
+            let name = e
+                .content
+                .get("author")
+                .map(|a| match a {
                     FieldTypes::Persons(ps) => author_list_names(ps),
                     _ => panic!("author field should have person type"),
-                }
-            }).unwrap();
-            let year = e.content.get("date").map(|a| {
-                match a {
+                })
+                .unwrap();
+            let year = e
+                .content
+                .get("date")
+                .map(|a| match a {
                     FieldTypes::Date(d) => d.year,
                     _ => panic!("date field should have date type"),
-                }
-            }).unwrap();
+                })
+                .unwrap();
 
             let val = if let Some(val) = count_map.get(&(name.clone(), year)) {
                 val + 1
@@ -257,8 +264,13 @@ impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
                 }
 
                 let (names, year, count) = triple.get(&key.as_ref()).unwrap().clone();
-                let is_alph = count > 0 || *count_map.get(&(names.clone(), year)).unwrap() > 0;
-                let letter = if is_alph { ASCII_ALPH[count as usize % ASCII_ALPH.len()].to_string() } else { String::new() };
+                let is_alph =
+                    count > 0 || *count_map.get(&(names.clone(), year)).unwrap() > 0;
+                let letter = if is_alph {
+                    ASCII_ALPH[count as usize % ASCII_ALPH.len()].to_string()
+                } else {
+                    String::new()
+                };
                 res += &format!("{}, {:04}{}", names, year, letter);
             }
             coll.push(res);

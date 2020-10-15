@@ -2,21 +2,21 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 pub mod lang;
-pub mod types;
 pub mod output;
+pub mod types;
 
 use types::{
-    get_range, Date, Duration, FormattableString, FormattedString, NumOrStr, Person, PersonRole,
-    QualifiedUrl, EntryType, EntryTypeSpec
+    get_range, Date, Duration, EntryType, EntryTypeSpec, FormattableString,
+    FormattedString, NumOrStr, Person, PersonRole, QualifiedUrl,
 };
 
-use std::convert::TryFrom;
 use linked_hash_map::LinkedHashMap;
+use paste::paste;
+use std::convert::TryFrom;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 use url::Url;
 use yaml_rust::{Yaml, YamlLoader};
-use paste::paste;
 
 #[derive(Clone, Debug)]
 pub enum FieldTypes {
@@ -45,6 +45,14 @@ pub struct Entry {
 }
 
 impl Entry {
+    pub fn new(key: &str, entry_type: EntryType) -> Self {
+        Self {
+            key: key.to_string(),
+            entry_type,
+            content: HashMap::new(),
+        }
+    }
+
     pub fn get(&self, key: &str) -> Option<&FieldTypes> {
         self.content.get(key)
     }
@@ -94,8 +102,18 @@ macro_rules! fields {
 impl Entry {
     fields!(
         parents: "parent" => Vec<Entry>,
-        title: "title" => FormattableString,
-        authors: "author" => Vec<Person>,
+        title: "title" => FormattableString
+    );
+
+    pub fn get_authors(&self) -> Vec<Person> {
+        self.get("author")
+            .map(|item| <Vec<Person>>::try_from(item.clone()).unwrap())
+            .unwrap_or_else(|| vec![])
+    }
+
+    fields!(single_set authors => "author", Vec<Person>);
+
+    fields!(
         editor: "editor" => Vec<Person>,
         affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>,
         organization: "organization",
@@ -113,9 +131,7 @@ impl Entry {
         self.get("page-total")
             .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
-            .or_else(|_| {
-                self.get_page_range().map(|r| FieldTypes::from(r.end - r.start))
-            })
+            .or_else(|_| self.get_page_range().map(|r| FieldTypes::from(r.end - r.start)))
             .and_then(|item| i64::try_from(item.clone()))
     }
 
@@ -128,9 +144,7 @@ impl Entry {
         self.get("runtime")
             .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
-            .or_else(|_| {
-                self.get_time_range().map(|r| FieldTypes::from(r.end - r.start))
-            })
+            .or_else(|_| self.get_time_range().map(|r| FieldTypes::from(r.end - r.start)))
             .and_then(|item| Duration::try_from(item.clone()))
     }
 

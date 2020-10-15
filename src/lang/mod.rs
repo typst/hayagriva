@@ -1,6 +1,6 @@
-use usize;
-use super::{Entry, FieldTypes};
 use super::types::FormattedString;
+use super::{Entry, FieldTypes};
+use usize;
 
 mod en;
 
@@ -381,38 +381,55 @@ impl CaseTransformer for SentenceCaseTransformer {
     }
 }
 
-fn apply_case_transformations(entry: &mut Entry, title: Option<&dyn CaseTransformer>, sentence: Option<&dyn CaseTransformer>) {
-    entry.content = entry.content.iter().map(|(k, v)|{
-        (k.clone(), if let FieldTypes::FormattableString(fstr) = v {
-            let (sentence_case, title_case) = if fstr.verbatim {
-                (fstr.sentence_case.as_ref().unwrap_or(&fstr.value).clone(), fstr.title_case.as_ref().unwrap_or(&fstr.value).clone())
-            } else {
-                (fstr.sentence_case.clone().unwrap_or_else(|| {
-                    if let Some(tf) = sentence {
-                        tf.apply(&fstr.value)
+fn apply_case_transformations(
+    entry: &mut Entry,
+    title: Option<&dyn CaseTransformer>,
+    sentence: Option<&dyn CaseTransformer>,
+) {
+    entry.content = entry
+        .content
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                if let FieldTypes::FormattableString(fstr) = v {
+                    let (sentence_case, title_case) = if fstr.verbatim {
+                        (
+                            fstr.sentence_case.as_ref().unwrap_or(&fstr.value).clone(),
+                            fstr.title_case.as_ref().unwrap_or(&fstr.value).clone(),
+                        )
                     } else {
-                        fstr.value.clone()
-                    }
-                }), fstr.title_case.clone().unwrap_or_else(|| {
-                    if let Some(tf) = title {
-                        tf.apply(&fstr.value)
-                    } else {
-                        fstr.value.clone()
-                    }
-                }))
-            };
+                        (
+                            fstr.sentence_case.clone().unwrap_or_else(|| {
+                                if let Some(tf) = sentence {
+                                    tf.apply(&fstr.value)
+                                } else {
+                                    fstr.value.clone()
+                                }
+                            }),
+                            fstr.title_case.clone().unwrap_or_else(|| {
+                                if let Some(tf) = title {
+                                    tf.apply(&fstr.value)
+                                } else {
+                                    fstr.value.clone()
+                                }
+                            }),
+                        )
+                    };
 
-            let fstr = FormattedString {
-                sentence_case,
-                title_case,
-                value: fstr.value.clone(),
-            };
+                    let fstr = FormattedString {
+                        sentence_case,
+                        title_case,
+                        value: fstr.value.clone(),
+                    };
 
-            FieldTypes::FormattedString(fstr)
-        } else {
-            v.clone()
+                    FieldTypes::FormattedString(fstr)
+                } else {
+                    v.clone()
+                },
+            )
         })
-    }).collect();
+        .collect();
 }
 
 #[cfg(test)]

@@ -1,13 +1,16 @@
-use chrono::{Datelike, NaiveDate};
-use lazy_static::lazy_static;
-use super::{FieldTypes, Entry, EntryAccessError};
-use std::convert::TryFrom;
-use regex::Regex;
 use std::cmp::{Ordering, PartialOrd};
+use std::convert::TryFrom;
 use std::ops::Range;
 use std::ops::{Add, Sub};
+
+use super::{Entry, EntryAccessError, FieldTypes};
+
+use chrono::{Datelike, NaiveDate};
+use lazy_static::lazy_static;
+use regex::Regex;
 use strum_macros::EnumString;
 use thiserror::Error;
+use unicode_segmentation::UnicodeSegmentation;
 use url::Url;
 
 #[rustfmt::skip]
@@ -136,13 +139,11 @@ impl EntryType {
                 }
 
                 found
-            },
+            }
             EntryTypeModality::Disallowed(tps) => {
                 !self.check(EntryTypeModality::Alternate(tps))
-            },
-            EntryTypeModality::Any => {
-                true
             }
+            EntryTypeModality::Any => true,
         }
     }
 }
@@ -265,6 +266,9 @@ impl Person {
         }
 
         let prefix = if prefix.is_empty() { None } else { Some(prefix) };
+        if prefix.is_some() {
+            name = name.trim_start().to_string();
+        }
 
         Ok(Person {
             name,
@@ -273,6 +277,47 @@ impl Person {
             suffix,
             alias: None,
         })
+    }
+
+    /// Formats the given name into initials, `"Judith Beatrice"`
+    /// would yield `"J. B."` if the `delimiter` argument is set to
+    /// `Some(".")`, `"Klaus-Peter"` would become `"K-P"` without a delimiter.
+    pub fn get_initials(&self, delimiter: Option<&str>) -> Option<String> {
+        if let Some(gn) = &self.given_name {
+            let mut collect = true;
+            let mut letters = vec![];
+            let mut seps = vec![];
+
+            for (_, gr) in gn.grapheme_indices(true) {
+                if let Some(c) = gr.chars().next() {
+                    if c.is_whitespace() || c == '-' {
+                        collect = true;
+                        seps.push(c);
+                        continue;
+                    }
+                }
+
+                if collect {
+                    letters.push(gr);
+                    collect = false;
+                }
+            }
+
+            let mut res = String::new();
+            for (i, e) in letters.into_iter().enumerate() {
+                if i != 0 {
+                    res.push(seps[i - 1]);
+                }
+                res += e;
+                if let Some(delimiter) = delimiter {
+                    res += delimiter;
+                }
+            }
+
+            Some(res)
+        } else {
+            None
+        }
     }
 }
 
@@ -581,3 +626,16 @@ try_from_fieldtypes!(TimeRange, std::ops::Range<Duration>);
 try_from_fieldtypes!(Url, QualifiedUrl);
 try_from_fieldtypes!(Language, unic_langid::LanguageIdentifier);
 try_from_fieldtypes!(Entries, Vec<Entry>);
+
+#[cfg(test)]
+mod tests {
+    use super::Person;
+
+    #[test]
+    fn person_initials() {
+        let p = Person::from_strings(&vec!["Dissmer", "Courtney Deliah"]).unwrap();
+        assert_eq!("C. D.", p.get_initials(Some(".")).unwrap());
+        let p = Person::from_strings(&vec!["Günther", "Hans-Joseph"]).unwrap();
+        assert_eq!("H-J", p.get_initials(None).unwrap());
+    }
+}
