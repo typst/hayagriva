@@ -1,8 +1,8 @@
-use super::types::FormattedString;
+use super::types::{FormattableString, FormattedString};
 use super::{Entry, FieldTypes};
 use usize;
 
-mod en;
+pub(crate) mod en;
 
 /// Structs implementing the `CaseTransformer` trait offer a method to
 /// convert a string slice to a well-defined upper-/lowercase scheme.
@@ -381,55 +381,44 @@ impl CaseTransformer for SentenceCaseTransformer {
     }
 }
 
-fn apply_case_transformations(
-    entry: &mut Entry,
-    title: Option<&dyn CaseTransformer>,
-    sentence: Option<&dyn CaseTransformer>,
-) {
-    entry.content = entry
-        .content
-        .iter()
-        .map(|(k, v)| {
+impl FormattableString {
+    pub fn format(
+        self,
+        title: Option<&dyn CaseTransformer>,
+        sentence: Option<&dyn CaseTransformer>,
+    ) -> FormattedString {
+        let (sentence_case, title_case) = if self.verbatim {
             (
-                k.clone(),
-                if let FieldTypes::FormattableString(fstr) = v {
-                    let (sentence_case, title_case) = if fstr.verbatim {
-                        (
-                            fstr.sentence_case.as_ref().unwrap_or(&fstr.value).clone(),
-                            fstr.title_case.as_ref().unwrap_or(&fstr.value).clone(),
-                        )
-                    } else {
-                        (
-                            fstr.sentence_case.clone().unwrap_or_else(|| {
-                                if let Some(tf) = sentence {
-                                    tf.apply(&fstr.value)
-                                } else {
-                                    fstr.value.clone()
-                                }
-                            }),
-                            fstr.title_case.clone().unwrap_or_else(|| {
-                                if let Some(tf) = title {
-                                    tf.apply(&fstr.value)
-                                } else {
-                                    fstr.value.clone()
-                                }
-                            }),
-                        )
-                    };
-
-                    let fstr = FormattedString {
-                        sentence_case,
-                        title_case,
-                        value: fstr.value.clone(),
-                    };
-
-                    FieldTypes::FormattedString(fstr)
-                } else {
-                    v.clone()
-                },
+                self.sentence_case.as_ref().unwrap_or(&self.value).clone(),
+                self.title_case.as_ref().unwrap_or(&self.value).clone(),
             )
-        })
-        .collect();
+        } else {
+            (
+                self.sentence_case.clone().unwrap_or_else(|| {
+                    if let Some(tf) = sentence {
+                        tf.apply(&self.value)
+                    } else {
+                        self.value.clone()
+                    }
+                }),
+                self.title_case.clone().unwrap_or_else(|| {
+                    if let Some(tf) = title {
+                        tf.apply(&self.value)
+                    } else {
+                        self.value.clone()
+                    }
+                }),
+            )
+        };
+
+        let fstr = FormattedString {
+            sentence_case,
+            title_case,
+            value: self.value.clone(),
+        };
+
+        fstr
+    }
 }
 
 #[cfg(test)]

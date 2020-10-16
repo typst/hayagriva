@@ -157,6 +157,26 @@ pub(crate) struct EntryTypeSpec {
     pub(crate) parents: Vec<EntryTypeSpec>,
 }
 
+impl EntryTypeSpec {
+    pub fn new(here: EntryTypeModality, parents: Vec<EntryTypeSpec>) -> Self {
+        Self { here, parents }
+    }
+
+    pub fn with_single(here: EntryType) -> Self {
+        Self {
+            here: EntryTypeModality::Specific(here),
+            parents: vec![],
+        }
+    }
+
+    pub fn with_specific(here: EntryType, parents: Vec<EntryTypeSpec>) -> Self {
+        Self {
+            here: EntryTypeModality::Specific(here),
+            parents,
+        }
+    }
+}
+
 #[derive(Clone, Debug, EnumString)]
 #[strum(serialize_all = "lowercase")]
 pub enum PersonRole {
@@ -330,8 +350,8 @@ pub enum NumOrStr {
 #[derive(Clone, Debug)]
 pub struct Date {
     pub year: i32,
-    month: Option<u8>,
-    day: Option<u8>,
+    pub month: Option<u8>,
+    pub day: Option<u8>,
 }
 
 #[derive(Clone, Debug, Error)]

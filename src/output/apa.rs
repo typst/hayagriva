@@ -1,4 +1,7 @@
 use super::Entry;
+use crate::lang::en::{get_month_name, get_ordinal};
+use crate::lang::{CaseTransformer, SentenceCaseTransformer};
+use crate::types::{EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr};
 
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator<'s> {
@@ -62,15 +65,149 @@ impl<'s> ApaBibliographyGenerator<'s> {
     }
 
     fn get_date(&self, index: usize) -> String {
-        let entry = &self.entries[index];
+        let date = &self.entries[index].get_date();
 
-        todo!()
+        if let Ok(date) = date {
+            match (date.month, date.day) {
+                (None, _) => format!("({:04})", date.year),
+                (Some(month), None) => {
+                    format!("({:04}, {})", date.year, get_month_name(month).unwrap())
+                }
+                (Some(month), Some(day)) => format!(
+                    "({:04}, {} {})",
+                    date.year,
+                    get_month_name(month).unwrap(),
+                    day,
+                ),
+            }
+        } else {
+            "(n. d.)".to_string()
+        }
     }
 
-    fn get_title(&self, index: usize) -> String {
-        let entry = &self.entries[index];
+    fn get_retreival_date(&self, index: usize) -> Option<String> {
+        let url = &self.entries[index].get_url();
 
-        todo!()
+        if let Ok(qurl) = url {
+            let uv = qurl.value.as_str();
+            let res = if let Some(date) = &qurl.visit_date {
+                match (date.month, date.day) {
+                    (None, _) => format!("Retrieved {:04}, from {}", date.year, uv),
+                    (Some(month), None) => format!(
+                        "Retrieved {} {:04}, from {}",
+                        get_month_name(month).unwrap(),
+                        date.year,
+                        uv,
+                    ),
+                    (Some(month), Some(day)) => format!(
+                        "(Retrieved {} {}, {:04}, from {})",
+                        get_month_name(month).unwrap(),
+                        day,
+                        date.year,
+                        uv,
+                    ),
+                }
+            } else {
+                uv.to_string()
+            };
+
+            Some(res)
+        } else {
+            None
+        }
+    }
+
+    fn get_title(&self, index: usize) -> Option<String> {
+        let entry = &self.entries[index];
+        let scase_transformer = SentenceCaseTransformer::default();
+        if let Ok(title) = entry.get_title_fmt(None, Some(&scase_transformer)) {
+            let multivol_spec = EntryTypeSpec::with_specific(EntryType::Book, vec![
+                EntryTypeSpec::with_single(EntryType::Book),
+            ]);
+
+            let mut multivolume_parent = None;
+            if let Ok(parents) = entry.check_with_spec(multivol_spec) {
+                if entry.get_volume().is_ok() {
+                    multivolume_parent = Some(parents[0]);
+                }
+            }
+
+            let book_spec = EntryTypeSpec::new(
+                EntryTypeModality::Alternate(vec![
+                    EntryType::Book,
+                    EntryType::Report,
+                    EntryType::Reference,
+                    EntryType::Anthology,
+                    EntryType::Proceedings,
+                ]),
+                vec![],
+            );
+
+            let mut res = title.sentence_case;
+
+            if let Some(mv_parent) = multivolume_parent {
+                let p: &Entry = &entry.get_parents().unwrap()[mv_parent];
+                let vols = entry.get_volume().unwrap();
+                if vols.start == vols.end {
+                    res = format!(
+                        "{}: Vol. {}. {}.",
+                        p.get_title_fmt(None, Some(&scase_transformer))
+                            .unwrap()
+                            .sentence_case,
+                        vols.start,
+                        res
+                    );
+                } else {
+                    res = format!(
+                        "{}: Vols. {}-{}. {}.",
+                        p.get_title_fmt(None, Some(&scase_transformer))
+                            .unwrap()
+                            .sentence_case,
+                        vols.start,
+                        vols.end,
+                        res
+                    );
+                }
+            } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok())
+                && entry.check_with_spec(book_spec).is_ok()
+            {
+                let vstr = if let Ok(vols) = entry.get_volume() {
+                    Some(if vols.start == vols.end {
+                        format!("Vol. {}", vols.start)
+                    } else {
+                        format!("Vols. {}-{}", vols.start, vols.end)
+                    })
+                } else {
+                    None
+                };
+
+                let estr = if let Ok(ed) = entry.get_edition() {
+                    Some(match ed {
+                        NumOrStr::Number(e) => get_ordinal(e),
+                        NumOrStr::Str(s) => s,
+                    })
+                } else {
+                    None
+                };
+
+                match (estr, vstr) {
+                    (None, None) => unreachable!(),
+                    (Some(e), None) => res += &format!(" ({} ed.).", e),
+                    (None, Some(v)) => res += &format!(" ({}).", v),
+                    (Some(e), Some(v)) => res += &format!(" ({} ed., {}).", e, v),
+                }
+            } else {
+                let lc = res.chars().last().unwrap_or('a');
+
+                if lc != '?' && lc != '.' && lc != '!' {
+                    res.push('.');
+                }
+            }
+
+            Some(res)
+        } else {
+            None
+        }
     }
 
     fn get_source(&self, index: usize) -> String {

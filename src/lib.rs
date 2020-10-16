@@ -5,6 +5,7 @@ pub mod lang;
 pub mod output;
 pub mod types;
 
+use lang::CaseTransformer;
 use types::{
     get_range, Date, Duration, EntryType, EntryTypeSpec, FormattableString,
     FormattedString, NumOrStr, Person, PersonRole, QualifiedUrl,
@@ -71,6 +72,33 @@ pub enum EntryAccessError {
 }
 
 macro_rules! fields {
+    ($($name:ident: $field_name:expr => FormattableString),* $(,)*) => {
+        $(
+            paste! {
+                #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
+                pub fn [<get_ $name>](&self) -> Result<FormattableString, EntryAccessError> {
+                    self.get($field_name)
+                        .ok_or(EntryAccessError::NoSuchField)
+                        .and_then(|item| FormattableString::try_from(item.clone()))
+                }
+
+                #[doc = "Get, parse, and format the `" $field_name "` field."]
+                pub fn [<get_ $name _fmt>](
+                    &self,
+                    title: Option<&dyn CaseTransformer>,
+                    sentence: Option<&dyn CaseTransformer>,
+                ) -> Result<FormattedString, EntryAccessError> {
+                    self.get($field_name)
+                        .ok_or(EntryAccessError::NoSuchField)
+                        .and_then(|item| <FormattableString>::try_from(item.clone()))
+                        .map(|fstr| fstr.format(title, sentence))
+                }
+
+                fields!(single_set $name => $field_name, FormattableString);
+            }
+        )*
+    };
+
     ($($name:ident: $field_name:expr $(=> $res:ty)?),* $(,)*) => {
         $(
             paste! {
@@ -100,11 +128,10 @@ macro_rules! fields {
 }
 
 impl Entry {
-    fields!(
-        parents: "parent" => Vec<Entry>,
-        title: "title" => FormattableString
-    );
+    fields!(parents: "parent" => Vec<Entry>);
+    fields!(title: "title" => FormattableString);
 
+    /// Get and parse the `author` field.
     pub fn get_authors(&self) -> Vec<Person> {
         self.get("author")
             .map(|item| <Vec<Person>>::try_from(item.clone()).unwrap())
@@ -114,6 +141,7 @@ impl Entry {
     fields!(single_set authors => "author", Vec<Person>);
 
     fields!(
+        date: "date" => Date,
         editor: "editor" => Vec<Person>,
         affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>,
         organization: "organization",
@@ -157,7 +185,9 @@ impl Entry {
         serial_number: "serial-number",
         url: "url" => QualifiedUrl,
         language: "language" => LanguageIdentifier,
-        note: "note",
+        note: "note"
+    );
+    fields!(
         location: "location" => FormattableString,
         publisher: "publisher" => FormattableString,
         archive: "archive" => FormattableString,
@@ -165,20 +195,35 @@ impl Entry {
     );
 
     /// Recursively checks if `EntryTypeSpec` is applicable.
-    pub(crate) fn check_with_spec(&self, constraint: EntryTypeSpec) -> bool {
+    /// Will return list of matching parent indices if spec applies.
+    pub(crate) fn check_with_spec(
+        &self,
+        constraint: EntryTypeSpec,
+    ) -> Result<Vec<usize>, ()> {
         if !self.entry_type.check(constraint.here) {
-            return false;
+            return Err(());
         }
 
         let parents = self.get_parents().unwrap_or_else(|_| vec![]);
+        let mut matching_parents = vec![];
 
         for pc in &constraint.parents {
-            if !parents.iter().any(|p| p.check_with_spec(pc.clone())) {
-                return false;
+            let mut found = false;
+
+            for (index, p) in parents.iter().enumerate() {
+                if p.check_with_spec(pc.clone()).is_ok() {
+                    matching_parents.push(index);
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                return Err(());
             }
         }
 
-        true
+        Ok(matching_parents)
     }
 }
 
