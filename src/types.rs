@@ -169,10 +169,17 @@ impl EntryTypeSpec {
         }
     }
 
-    pub fn with_specific(here: EntryType, parents: Vec<EntryTypeSpec>) -> Self {
+    pub fn with_parents(here: EntryType, parents: Vec<EntryTypeSpec>) -> Self {
         Self {
             here: EntryTypeModality::Specific(here),
             parents,
+        }
+    }
+
+    pub fn single_parent(here: EntryTypeModality, parent: EntryTypeModality) -> Self {
+        Self {
+            here,
+            parents: vec![Self::new(parent, vec![])],
         }
     }
 }
@@ -194,6 +201,7 @@ pub enum PersonRole {
     CastMember,
     Composer,
     Producer,
+    ExecutiveProducer,
     Writer,
     Cinematography,
     Director,

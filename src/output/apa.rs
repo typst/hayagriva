@@ -1,11 +1,126 @@
 use super::Entry;
 use crate::lang::en::{get_month_name, get_ordinal};
-use crate::lang::{CaseTransformer, SentenceCaseTransformer};
+use crate::lang::SentenceCaseTransformer;
 use crate::types::{EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr};
 
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator<'s> {
     entries: &'s [Entry],
+}
+
+#[derive(Clone, Debug)]
+enum SourceType {
+    PeriodicalItem(usize),
+    CollectionItem(usize),
+    TvSeries(usize),
+    Thesis,
+    Manuscript,
+    ArtContainer(usize),
+    StandaloneArt,
+    StandaloneWebItem,
+    WebItem(usize),
+    NewsItem(usize),
+    ConferenceTalk(usize),
+    Generic,
+}
+
+impl SourceType {
+    fn for_entry(entry: &Entry) -> Self {
+        let periodical = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Specific(EntryType::Periodical),
+        );
+        let collection_a = EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::InAnthology),
+            EntryTypeModality::Specific(EntryType::Anthology),
+        );
+        let collection_b = EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::Entry),
+            EntryTypeModality::Any,
+        );
+        let collection_c = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Specific(EntryType::Reference),
+        );
+        let collection_d = EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::Article),
+            EntryTypeModality::Specific(EntryType::Proceedings),
+        );
+        let tv_series = EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::Video),
+            EntryTypeModality::Specific(EntryType::Video),
+        );
+        let thesis = EntryTypeSpec::with_single(EntryType::Thesis);
+        let manuscript = EntryTypeSpec::with_single(EntryType::Manuscript);
+        let art_container = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Specific(EntryType::Artwork),
+        );
+        let art = EntryTypeSpec::new(
+            EntryTypeModality::Alternate(vec![EntryType::Artwork, EntryType::Exhibition]),
+            vec![],
+        );
+        let web_standalone = EntryTypeSpec::with_single(EntryType::WebItem);
+        let web_contained_a = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Alternate(vec![
+                EntryType::Misc,
+                EntryType::Blog,
+                EntryType::WebItem,
+            ]),
+        );
+        let web_contained_b = EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::WebItem),
+            EntryTypeModality::Any,
+        );
+        let talk = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Specific(EntryType::Conference),
+        );
+
+        if let Ok(i) = entry.check_with_spec(periodical) {
+            return Self::PeriodicalItem(i[0]);
+        }
+        if let Ok(i) = entry
+            .check_with_spec(collection_a)
+            .or_else(|_| entry.check_with_spec(collection_b))
+            .or_else(|_| entry.check_with_spec(collection_c))
+            .or_else(|_| entry.check_with_spec(collection_d))
+        {
+            return Self::CollectionItem(i[0]);
+        }
+        if let Ok(i) = entry.check_with_spec(tv_series) {
+            if entry.get_issue().is_ok() && entry.get_volume().is_ok() {
+                return Self::TvSeries(i[0]);
+            }
+        }
+        if entry.check_with_spec(thesis).is_ok() {
+            return Self::Thesis;
+        }
+        if entry.check_with_spec(manuscript).is_ok() {
+            return Self::Manuscript;
+        }
+        if let Ok(i) = entry.check_with_spec(art_container) {
+            return Self::ArtContainer(i[0]);
+        }
+        if entry.check_with_spec(art).is_ok() {
+            return Self::StandaloneArt;
+        }
+        if entry.check_with_spec(web_standalone).is_ok() {
+            return Self::StandaloneWebItem;
+        }
+        if let Ok(i) = entry
+            .check_with_spec(web_contained_a)
+            .or_else(|_| entry.check_with_spec(web_contained_b))
+        {
+            return Self::WebItem(i[0]);
+        }
+        if let Ok(i) = entry.check_with_spec(talk) {
+            return Self::ConferenceTalk(i[0]);
+        }
+
+        return Self::Generic;
+    }
 }
 
 impl<'s> ApaBibliographyGenerator<'s> {
@@ -121,7 +236,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
         let entry = &self.entries[index];
         let scase_transformer = SentenceCaseTransformer::default();
         if let Ok(title) = entry.get_title_fmt(None, Some(&scase_transformer)) {
-            let multivol_spec = EntryTypeSpec::with_specific(EntryType::Book, vec![
+            let multivol_spec = EntryTypeSpec::with_parents(EntryType::Book, vec![
                 EntryTypeSpec::with_single(EntryType::Book),
             ]);
 
@@ -159,7 +274,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     );
                 } else {
                     res = format!(
-                        "{}: Vols. {}-{}. {}.",
+                        "{}: Vols. {}–{}. {}.",
                         p.get_title_fmt(None, Some(&scase_transformer))
                             .unwrap()
                             .sentence_case,
@@ -175,7 +290,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     Some(if vols.start == vols.end {
                         format!("Vol. {}", vols.start)
                     } else {
-                        format!("Vols. {}-{}", vols.start, vols.end)
+                        format!("Vols. {}–{}", vols.start, vols.end)
                     })
                 } else {
                     None
