@@ -327,7 +327,7 @@ pub fn load_yaml_structure(file: &str) -> Result<Vec<Entry>, YamlBibliographyErr
     let mut entries = vec![];
     for (key, fields) in doc.into_iter() {
         let key = key.into_string().ok_or(YamlBibliographyError::KeyUnparsable)?;
-        entries.push(entry_from_yaml(key, fields)?);
+        entries.push(entry_from_yaml(key, fields, EntryType::Misc)?);
     }
 
     Ok(entries)
@@ -464,11 +464,15 @@ fn persons_from_yaml(
     Ok(persons)
 }
 
-fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyError> {
+fn entry_from_yaml(
+    key: String,
+    yaml: Yaml,
+    default_type: EntryType,
+) -> Result<Entry, YamlBibliographyError> {
     let mut entry = Entry {
         key: key.clone(),
         content: HashMap::new(),
-        entry_type: EntryType::Misc,
+        entry_type: default_type,
     };
     for (field_name, value) in yaml
         .into_hash()
@@ -775,13 +779,21 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
                 if value.is_array() {
                     let mut entries = vec![];
 
-                    for entry in value {
-                        entries.push(entry_from_yaml(key.clone(), entry)?)
+                    for item in value {
+                        entries.push(entry_from_yaml(
+                            key.clone(),
+                            item,
+                            entry.entry_type.default_parent(),
+                        )?)
                     }
 
                     FieldTypes::Entries(entries)
                 } else {
-                    FieldTypes::Entries(vec![entry_from_yaml(key.clone(), value)?])
+                    FieldTypes::Entries(vec![entry_from_yaml(
+                        key.clone(),
+                        value,
+                        entry.entry_type.default_parent(),
+                    )?])
                 }
             }
             _ => {
@@ -812,11 +824,17 @@ fn entry_from_yaml(key: String, yaml: Yaml) -> Result<Entry, YamlBibliographyErr
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
+    use crate::output::apa;
     use std::fs;
 
     #[test]
     fn it_works() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
-        println!("{:#?}", load_yaml_structure(&contents).unwrap());
+        let entries = load_yaml_structure(&contents).unwrap();
+        let apa = apa::ApaBibliographyGenerator::new(&entries);
+
+        for i in 0..entries.len() {
+            println!("{}", apa.get_reference(i).unwrap());
+        }
     }
 }

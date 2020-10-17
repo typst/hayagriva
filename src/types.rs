@@ -29,15 +29,15 @@ lazy_static! {
 }
 
 /// Describes which kind of work a database entry refers to.
-#[derive(Clone, Debug, EnumString, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "lowercase")]
 pub enum EntryType {
     /// A short text, possibly of journalistic or scientific nature,
     /// appearing in some greater publication.
     Article,
-    /// A scientific, trade, or policy paper published within
-    /// the scope of a conference.
-    ConferencePaper,
+    // / A scientific, trade, or policy paper published within
+    // / the scope of a conference.
+    // ConferencePaper,
     /// A section of a greater containing work.
     Chapter,
     /// A short segment of media pertaining to some subject matter.
@@ -145,6 +145,22 @@ impl EntryType {
                 !self.check(EntryTypeModality::Alternate(tps))
             }
             EntryTypeModality::Any => true,
+        }
+    }
+
+    pub(crate) fn default_parent(&self) -> Self {
+        match self {
+            Self::Article => Self::Periodical,
+            // Self::ConferencePaper => Self::Proceedings,
+            Self::Chapter => Self::Book,
+            Self::Entry => Self::Reference,
+            Self::InAnthology => Self::Anthology,
+            Self::WebItem => Self::WebItem,
+            Self::Scene => Self::Video,
+            Self::Artwork => Self::Exhibition,
+            Self::Legislation => Self::Anthology,
+            Self::Tweet => Self::Tweet,
+            _ => Self::Misc,
         }
     }
 }

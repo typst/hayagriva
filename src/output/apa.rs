@@ -227,7 +227,17 @@ impl<'s> ApaBibliographyGenerator<'s> {
 
     fn get_author(&self, index: usize) -> String {
         let entry = &self.entries[index];
-        ampersand_list(name_list(&entry.get_authors()))
+        let mut al = ampersand_list(name_list(&entry.get_authors()));
+
+        if !al.is_empty() {
+            let lc = al.chars().last().unwrap_or('a');
+
+            if lc != '?' && lc != '.' && lc != '!' {
+                al.push('.');
+            }
+        }
+
+        al
     }
 
     fn get_date(&self, index: usize) -> String {
@@ -235,43 +245,61 @@ impl<'s> ApaBibliographyGenerator<'s> {
 
         if let Ok(date) = date {
             match (date.month, date.day) {
-                (None, _) => format!("({:04})", date.year),
+                (None, _) => format!("({:04}).", date.year),
                 (Some(month), None) => {
-                    format!("({:04}, {})", date.year, get_month_name(month).unwrap())
+                    format!("({:04}, {}).", date.year, get_month_name(month).unwrap())
                 }
                 (Some(month), Some(day)) => format!(
-                    "({:04}, {} {})",
+                    "({:04}, {} {}).",
                     date.year,
                     get_month_name(month).unwrap(),
                     day,
                 ),
             }
         } else {
-            "(n. d.)".to_string()
+            "(n. d.).".to_string()
         }
     }
 
-    fn get_retreival_date(&self, index: usize) -> Option<String> {
-        let url = &self.entries[index].get_url();
+    fn get_retreival_date(&self, index: usize, use_date: bool) -> Option<String> {
+        let entry = &self.entries[index];
+        let url = entry.get_url().ok().or_else(|| {
+            let urls = entry
+                .get_parents()
+                .unwrap_or_else(|_| vec![])
+                .into_iter()
+                .map(|p| p.get_url());
+            for u in urls {
+                if let Ok(url) = u {
+                    return Some(url);
+                }
+            }
 
-        if let Ok(qurl) = url {
+            None
+        });
+
+        if let Some(qurl) = url {
             let uv = qurl.value.as_str();
-            let res = if let Some(date) = &qurl.visit_date {
-                match (date.month, date.day) {
-                    (None, _) => format!("Retrieved {:04}, from {}", date.year, uv),
-                    (Some(month), None) => format!(
-                        "Retrieved {} {:04}, from {}",
-                        get_month_name(month).unwrap(),
-                        date.year,
-                        uv,
-                    ),
-                    (Some(month), Some(day)) => format!(
-                        "(Retrieved {} {}, {:04}, from {})",
-                        get_month_name(month).unwrap(),
-                        day,
-                        date.year,
-                        uv,
-                    ),
+            let res = if use_date {
+                if let Some(date) = &qurl.visit_date {
+                    match (date.month, date.day) {
+                        (None, _) => format!("Retrieved {:04}, from {}", date.year, uv),
+                        (Some(month), None) => format!(
+                            "Retrieved {} {:04}, from {}",
+                            get_month_name(month).unwrap(),
+                            date.year,
+                            uv,
+                        ),
+                        (Some(month), Some(day)) => format!(
+                            "(Retrieved {} {}, {:04}, from {})",
+                            get_month_name(month).unwrap(),
+                            day,
+                            date.year,
+                            uv,
+                        ),
+                    }
+                } else {
+                    uv.to_string()
                 }
             } else {
                 uv.to_string()
@@ -415,12 +443,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
                         res.push(' ');
                         res += &ed_vol_str(entry);
-                    } else {
-                        let lc = res.chars().last().unwrap_or('a');
-
-                        if lc != '?' && lc != '.' && lc != '!' {
-                            res.push('.');
-                        }
                     }
                 }
 
@@ -527,12 +549,113 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     res.push('.');
                 }
             }
-            SourceType::ArtContainer(parent) => {}
-            SourceType::StandaloneArt => {}
-            SourceType::StandaloneWebItem => {}
-            SourceType::WebItem(parent) => {}
-            SourceType::NewsItem(parent) => {}
-            SourceType::ConferenceTalk(parent) => {}
+            SourceType::ArtContainer(parent) => {
+                let org = parent
+                    .get_organization()
+                    .or_else(|_| parent.get_archive().map(|o| o.value))
+                    .or_else(|_| parent.get_publisher().map(|o| o.value));
+
+                if let Ok(org) = org {
+                    if let Ok(loc) =
+                        parent.get_location().or_else(|_| parent.get_archive_location())
+                    {
+                        res += &format!("{}, {}.", org, loc.value);
+                    } else {
+                        res += &org;
+                        res.push('.');
+                    }
+                }
+            }
+            SourceType::StandaloneArt => {
+                let org = entry
+                    .get_organization()
+                    .or_else(|_| entry.get_archive().map(|o| o.value))
+                    .or_else(|_| entry.get_publisher().map(|o| o.value));
+
+                if let Ok(org) = org {
+                    if let Ok(loc) =
+                        entry.get_location().or_else(|_| entry.get_archive_location())
+                    {
+                        res += &format!("{}, {}.", org, loc.value);
+                    } else {
+                        res += &org;
+                        res.push('.');
+                    }
+                }
+            }
+            SourceType::StandaloneWebItem => {
+                let publisher = entry
+                    .get_publisher()
+                    .map(|o| o.value)
+                    .or_else(|_| entry.get_organization());
+
+                if let Ok(publisher) = publisher {
+                    let authors = entry.get_authors();
+                    if authors.len() != 1
+                        || authors.get(0).map(|a| &a.name) != Some(&publisher)
+                    {
+                        res += &publisher;
+                        res.push('.');
+                    }
+                }
+            }
+            SourceType::WebItem(parent) => {
+                if let Ok(title) = parent.get_title_fmt(None, Some(&self.formatter)) {
+                    let authors = entry.get_authors();
+                    if authors.len() != 1
+                        || authors.get(0).map(|a| &a.name) != Some(&title.value)
+                    {
+                        res += &title.sentence_case;
+                        res.push('.');
+                    }
+                }
+            }
+            SourceType::NewsItem(parent) => {
+                let mut comma = if let Ok(title) =
+                    parent.get_title_fmt(None, Some(&self.formatter))
+                {
+                    res += &title.sentence_case;
+                    true
+                } else {
+                    false
+                };
+
+                if let Ok(pps) = entry.get_page_range() {
+                    if comma {
+                        res += ", ";
+                    }
+
+                    res += &format_range("", "", &pps);
+                    comma = true;
+                }
+
+                if comma {
+                    res.push('.');
+                }
+            }
+            SourceType::ConferenceTalk(parent) => {
+                let mut comma = if let Ok(title) =
+                    parent.get_title_fmt(None, Some(&self.formatter))
+                {
+                    res += &title.sentence_case;
+                    true
+                } else {
+                    false
+                };
+
+                if let Ok(loc) = parent.get_location() {
+                    if comma {
+                        res += ", ";
+                    }
+
+                    res += &loc.value;
+                    comma = true;
+                }
+
+                if comma {
+                    res.push('.');
+                }
+            }
             SourceType::Generic => {
                 if entry.get_publisher().is_ok() || entry.get_organization().is_ok() {
                     if let Ok(publisher) = entry.get_publisher() {
@@ -546,7 +669,78 @@ impl<'s> ApaBibliographyGenerator<'s> {
             }
         }
 
-        todo!()
+        let lc = res.chars().last().unwrap_or('a');
+
+        if !res.is_empty() && lc != '?' && lc != '.' && lc != '!' {
+            res.push('.');
+        }
+
+        if let Ok(doi) = entry.get_doi() {
+            if !res.is_empty() {
+                res.push(' ');
+            }
+
+            res += &format!("https://doi.org/{}", doi);
+        } else {
+            let reference_entry = EntryTypeSpec::single_parent(
+                EntryTypeModality::Specific(EntryType::Entry),
+                EntryTypeModality::Specific(EntryType::Reference),
+            );
+            let url_str = self.get_retreival_date(
+                index,
+                entry.get_date().is_err()
+                    || entry.check_with_spec(reference_entry).is_ok()
+                    || (matches!(st, SourceType::StandaloneWebItem)
+                        && entry.get_parents().unwrap_or_else(|_| vec![]).is_empty()),
+            );
+            if let Some(url) = url_str {
+                if !res.is_empty() {
+                    res.push(' ');
+                }
+                res += &url;
+            }
+        }
+
+        res
+    }
+
+    pub fn get_reference(&self, index: usize) -> Result<String, ()> {
+        if index < self.entries.len() {
+            let authors = self.get_author(index);
+            let date = self.get_date(index);
+            let title = self.get_title(index);
+            let source = self.get_source(index);
+
+            let mut res = authors;
+
+            if !res.is_empty() {
+                if !date.is_empty() {
+                    res += &format!(" {}", date);
+                }
+            } else {
+                res += &date;
+            }
+
+            if let Some(title) = title {
+                if !res.is_empty() {
+                    res += &format!(" {}", title);
+                } else {
+                    res += &title;
+                }
+            }
+
+            if !source.is_empty() {
+                if !res.is_empty() {
+                    res += &format!(" {}", source);
+                } else {
+                    res += &source;
+                }
+            }
+
+            Ok(res)
+        } else {
+            Err(())
+        }
     }
 }
 

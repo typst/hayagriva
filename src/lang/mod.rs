@@ -251,6 +251,9 @@ impl CaseTransformer for SentenceCaseTransformer {
         let mut no_transformation = false;
 
         for (i, c) in title.chars().enumerate() {
+            if !title.is_char_boundary(i) {
+                continue;
+            }
             if has_lowercase || c.is_lowercase() {
                 has_lowercase = true;
             }
@@ -343,7 +346,6 @@ impl CaseTransformer for SentenceCaseTransformer {
                     && (self.keep_all_uppercase_words
                         || self.capitalize_words_with_caps_inside))
                 && has_lowercase;
-            println!("{:?}", situation);
 
             if force_cap
                 || ((situation == CaseSituation::HasNonFirstUppercase

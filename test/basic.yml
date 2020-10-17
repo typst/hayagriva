@@ -1,5 +1,5 @@
 zygos:
-    type: ConferencePaper
+    type: Article
     author:
         - Prekas, George
         - Kogias, Marios
@@ -11,13 +11,14 @@ zygos:
     page-range: 325-341
     doi: 10.1145/3132747.3132780
     parent:
+        type: Proceedings
         title: Proceedings of the 26th Symposium on Operating Systems Principles
         publisher: Association for Computing Machinery
         location: New York, NY, USA
         isbn: 978-1450350853
 
 wwdc-network:
-    type: ConferencePaper
+    type: Article
     author:  ["Mehta, Jiten", "Kinnear, Eric"]
     title: Boost Performance and Security with Modern Networking
     date: 2020-06-26
