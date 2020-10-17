@@ -129,6 +129,15 @@ macro_rules! fields {
 
 impl Entry {
     fields!(parents: "parent" => Vec<Entry>);
+
+    /// Get the `parent` field as a reference.
+    pub(crate) fn get_parents_ref(&self) -> Option<&Vec<Entry>> {
+        self.get("parent").map(|item| match item {
+            FieldTypes::Entries(s) => s,
+            _ => panic!("parent type mismatch"),
+        })
+    }
+
     fields!(title: "title" => FormattableString);
 
     /// Get and parse the `author` field.
@@ -142,7 +151,7 @@ impl Entry {
 
     fields!(
         date: "date" => Date,
-        editor: "editor" => Vec<Person>,
+        editors: "editor" => Vec<Person>,
         affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>,
         organization: "organization",
         issue: "issue" => NumOrStr,

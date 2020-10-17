@@ -66,8 +66,9 @@ science-e-issue:
 terminator-2:
     type: Video
     title: "Terminator 2: Judgment Day"
-    author: Cameron, James
     affiliated:
+        - role: Director
+          names: Cameron, James
         - role: CastMember
           names: ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]
         - role: Composer

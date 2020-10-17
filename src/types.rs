@@ -1,5 +1,6 @@
 use std::cmp::{Ordering, PartialOrd};
 use std::convert::TryFrom;
+use std::fmt::{Display, Formatter};
 use std::ops::Range;
 use std::ops::{Add, Sub};
 
@@ -184,7 +185,7 @@ impl EntryTypeSpec {
     }
 }
 
-#[derive(Clone, Debug, EnumString)]
+#[derive(Clone, Debug, EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "lowercase")]
 pub enum PersonRole {
     Translator,
@@ -353,6 +354,15 @@ impl Person {
 pub enum NumOrStr {
     Number(i64),
     Str(String),
+}
+
+impl Display for NumOrStr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Number(i) => write!(f, "{}", i),
+            Self::Str(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
