@@ -83,8 +83,15 @@ impl CaseTransformer for TitleCaseTransformer {
         let mut resume_word = true;
         // Should the next word force capitalizaion?
         let mut priority_override = true;
+        let mut resume_start = 0;
 
-        for (i, c) in title.chars().enumerate() {
+        let mut i = 0;
+
+        for c in title.chars() {
+            if !title.is_char_boundary(i) {
+                i += c.len_utf8();
+                continue;
+            }
             if has_lowercase || c.is_lowercase() {
                 has_lowercase = true;
             }
@@ -101,24 +108,29 @@ impl CaseTransformer for TitleCaseTransformer {
                 || c == '’' && self.use_exception_dictionary
                 || c.is_whitespace()
             {
+                if !resume_word {
+                    resume_start = i;
+                }
                 resume_word = true;
             } else if resume_word {
-                word_indices.push((i, priority_override));
+                word_indices.push((i, resume_start, priority_override));
                 priority_override = false;
                 resume_word = false;
             } else {
                 // Priority override only stays on while non-word chars appear
                 priority_override = false;
             }
+
+            i += c.len_utf8();
         }
 
         let mut word_length = vec![];
         for i in 0 .. word_indices.len() {
             let index = word_indices[i].0;
-            let len = if let Some((next_index, _)) = word_indices.get(i + 1) {
-                next_index - index - 1
+            let len = if let Some((_, re_start, _)) = word_indices.get(i + 1) {
+                re_start - index
             } else {
-                title.chars().count() - index
+                title.len() - index
             };
 
             let retain = has_lowercase
@@ -133,7 +145,7 @@ impl CaseTransformer for TitleCaseTransformer {
         let word_indices: Vec<(usize, bool, usize, bool)> = word_indices
             .into_iter()
             .zip(word_length.into_iter())
-            .map(|((ind, prio), (len, retain))| (ind, prio, len, retain))
+            .map(|((ind, _, prio), (len, retain))| (ind, prio, len, retain))
             .collect();
 
         let mut res = String::new();
@@ -154,7 +166,7 @@ impl CaseTransformer for TitleCaseTransformer {
                 } else {
                     res.push_str(&c.to_lowercase().to_string());
                 }
-                insert_index += 1;
+                insert_index += c.len_utf8();
             }
 
             let c = iter.next().expect("title string terminates before word start");
@@ -178,7 +190,7 @@ impl CaseTransformer for TitleCaseTransformer {
                 }
             }
 
-            insert_index += 1;
+            insert_index += c.len_utf8();
         }
 
         // Deplete iterator
@@ -249,9 +261,13 @@ impl CaseTransformer for SentenceCaseTransformer {
         let mut do_uppercase = true;
         // Should the next word be exempt from transformation?
         let mut no_transformation = false;
+        let mut resume_start = 0;
 
-        for (i, c) in title.chars().enumerate() {
+        let mut i = 0;
+
+        for c in title.chars() {
             if !title.is_char_boundary(i) {
+                i += c.len_utf8();
                 continue;
             }
             if has_lowercase || c.is_lowercase() {
@@ -259,13 +275,22 @@ impl CaseTransformer for SentenceCaseTransformer {
             }
 
             if c == '.' || c == ':' {
+                if !resume_word {
+                    resume_start = i;
+                }
                 no_transformation = true;
                 resume_word = true;
             } else if c == '?' || c == '!' {
+                if !resume_word {
+                    resume_start = i;
+                }
                 do_uppercase = true;
                 no_transformation = false;
                 resume_word = true;
             } else if c == '-' || c == ',' || c == ';' || c.is_whitespace() {
+                if !resume_word {
+                    resume_start = i;
+                }
                 resume_word = true;
 
                 if no_transformation {
@@ -273,11 +298,13 @@ impl CaseTransformer for SentenceCaseTransformer {
                     no_transformation = false;
                 }
             } else if resume_word {
-                word_indices.push((i, do_uppercase, no_transformation));
+                word_indices.push((i, resume_start, do_uppercase, no_transformation));
                 do_uppercase = false;
                 no_transformation = false;
                 resume_word = false;
             }
+
+            i += c.len_utf8();
         }
 
         /// Describes the case situation of a word.
@@ -294,10 +321,10 @@ impl CaseTransformer for SentenceCaseTransformer {
         let mut word_length = vec![];
         for i in 0 .. word_indices.len() {
             let index = word_indices[i].0;
-            let len = if let Some((next_index, _, _)) = word_indices.get(i + 1) {
-                next_index - index - 1
+            let len = if let Some((_, resume_start, _, _)) = word_indices.get(i + 1) {
+                resume_start - index
             } else {
-                title.chars().count() - index
+                title.len() - index
             };
 
             let situation = if len <= 1 {
@@ -319,7 +346,7 @@ impl CaseTransformer for SentenceCaseTransformer {
         let word_indices: Vec<(usize, bool, bool, usize, CaseSituation)> = word_indices
             .into_iter()
             .zip(word_length.into_iter())
-            .map(|((ind, upper, no_tf), (len, situation))| {
+            .map(|((ind, _, upper, no_tf), (len, situation))| {
                 (ind, upper, no_tf, len, situation)
             })
             .collect();
@@ -337,7 +364,7 @@ impl CaseTransformer for SentenceCaseTransformer {
                 } else {
                     res.push_str(&c.to_lowercase().to_string());
                 }
-                insert_index += 1;
+                insert_index += c.len_utf8();
             }
 
             let c = iter.next().expect("title string terminates before word start");
@@ -371,7 +398,7 @@ impl CaseTransformer for SentenceCaseTransformer {
                 }
             }
 
-            insert_index += 1;
+            insert_index += c.len_utf8();
         }
 
         // Deplete iterator
@@ -433,6 +460,16 @@ mod tests {
 
         let title = props.apply("a holistic investigation of me in general so ");
         assert_eq!("A Holistic Investigation of Me in General So", title);
+    }
+
+    #[test]
+    fn title_case_char_segmentation() {
+        let props = TitleCaseTransformer::new();
+        let title = props.apply("She AiN’T Be Getting on my Nerves");
+        assert_eq!("She Ain’t Be Getting on My Nerves", title);
+
+        let title = props.apply("We don’t bank on the Pope’s decisions being sensible");
+        assert_eq!("We Don’t Bank on the Pope’s Decisions Being Sensible", title);
     }
 
     #[test]
@@ -514,6 +551,16 @@ mod tests {
             "This page is not for discussions. Please use the table below to find the most appropriate section to post.",
             title
         );
+    }
+
+    #[test]
+    fn sentence_case_char_segmentation() {
+        let props = SentenceCaseTransformer::new();
+        let title = props.apply("She AIN’T Be Getting on my Nerves");
+        assert_eq!("She AIN’T be getting on my nerves", title);
+
+        let title = props.apply("We don’t bank on the Pope’s decisions being sensible");
+        assert_eq!("We don’t bank on the pope’s decisions being sensible", title);
     }
 
     #[test]

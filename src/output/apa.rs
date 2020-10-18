@@ -253,7 +253,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     "({:04}, {} {}).",
                     date.year,
                     get_month_name(month).unwrap(),
-                    day,
+                    day + 1,
                 ),
             }
         } else {

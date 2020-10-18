@@ -26,6 +26,7 @@ wwdc-network:
         - type: Conference
           title:
               value: World Wide Developer Conference 2020
+              verbatim: true
               shorthand: WWDC 2020
           organization: Apple, Inc.
         - type: Video
@@ -35,7 +36,9 @@ wwdc-network:
 omarova-libra:
     type: Article
     author: ["Omarova, Saule", "Steele, Graham"]
-    title: There’s a Lot We Still Don’t Know About Libra
+    title:
+        value: There’s a Lot We Still Don’t Know About Libra
+        sentence-case: There’s a lot we still don’t know about Libra
     date: 2019-11-04
     url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
     parent: { type: NewspaperIssue, title: The New York Times, location: "New York, NY, USA" }
