@@ -7,8 +7,7 @@ use crate::types::{
 use std::ops::Range;
 
 #[derive(Clone, Debug)]
-pub struct ApaBibliographyGenerator<'s> {
-    entries: &'s [Entry],
+pub struct ApaBibliographyGenerator {
     formatter: SentenceCaseTransformer,
 }
 
@@ -64,6 +63,10 @@ impl<'s> SourceType<'s> {
             EntryTypeModality::Alternate(vec![EntryType::Artwork, EntryType::Exhibition]),
             vec![],
         );
+        let news_item = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Specific(EntryType::NewspaperIssue),
+        );
         let web_standalone = EntryTypeSpec::with_single(EntryType::WebItem);
         let web_contained_a = EntryTypeSpec::single_parent(
             EntryTypeModality::Any,
@@ -109,6 +112,9 @@ impl<'s> SourceType<'s> {
         }
         if entry.check_with_spec(art).is_ok() {
             return Self::StandaloneArt;
+        }
+        if let Ok(i) = entry.check_with_spec(news_item) {
+            return Self::NewsItem(&entry.get_parents_ref().unwrap()[i[0]]);
         }
         if entry.check_with_spec(web_standalone).is_ok() {
             return Self::StandaloneWebItem;
@@ -217,17 +223,73 @@ fn ed_vol_str(entry: &Entry) -> String {
     }
 }
 
-impl<'s> ApaBibliographyGenerator<'s> {
-    pub fn new(entries: &'s [Entry]) -> Self {
+impl ApaBibliographyGenerator {
+    pub fn new() -> Self {
         Self {
-            entries,
             formatter: SentenceCaseTransformer::default(),
         }
     }
 
-    fn get_author(&self, index: usize) -> String {
-        let entry = &self.entries[index];
-        let mut al = ampersand_list(name_list(&entry.get_authors()));
+    fn get_author(&self, entry: &Entry) -> String {
+        let authors = entry.get_authors();
+        let mut al = if !authors.is_empty() {
+            ampersand_list(name_list(&authors))
+        } else if let Ok(eds) = entry.get_editors() {
+            if !eds.is_empty() {
+                format!(
+                    "{} ({})",
+                    ampersand_list(name_list(&eds)),
+                    if eds.len() == 1 { "Ed." } else { "Eds." }
+                )
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let mut details = vec![];
+        let booklike = EntryTypeModality::Alternate(vec![
+            EntryType::Book,
+            EntryType::Proceedings,
+            EntryType::Anthology,
+        ]);
+        if entry.entry_type.check(booklike) {
+            let affs = entry
+                .get_affiliated_persons()
+                .unwrap_or_else(|_| vec![])
+                .into_iter()
+                .filter(|(_, role)| {
+                    [
+                        PersonRole::Foreword,
+                        PersonRole::Afterword,
+                        PersonRole::Introduction,
+                        PersonRole::Annotator,
+                        PersonRole::Commentator,
+                    ]
+                    .contains(role)
+                })
+                .map(|(v, _)| v)
+                .flatten()
+                .collect::<Vec<Person>>();
+
+            if !affs.is_empty() {
+                details.push(format!("with {}", ampersand_list(name_list(&affs))));
+            }
+        }
+
+        if !details.is_empty() {
+            if !al.is_empty() {
+                al.push(' ');
+            }
+
+            al += &details[0];
+
+            for e in &details[1..] {
+                al += "; ";
+                al += e;
+            }
+        }
 
         if !al.is_empty() {
             let lc = al.chars().last().unwrap_or('a');
@@ -240,10 +302,8 @@ impl<'s> ApaBibliographyGenerator<'s> {
         al
     }
 
-    fn get_date(&self, index: usize) -> String {
-        let date = &self.entries[index].get_date();
-
-        if let Ok(date) = date {
+    fn get_date(&self, entry: &Entry) -> String {
+        if let Ok(date) = entry.get_date() {
             match (date.month, date.day) {
                 (None, _) => format!("({:04}).", date.year),
                 (Some(month), None) => {
@@ -261,8 +321,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
         }
     }
 
-    fn get_retreival_date(&self, index: usize, use_date: bool) -> Option<String> {
-        let entry = &self.entries[index];
+    fn get_retreival_date(&self, entry: &Entry, use_date: bool) -> Option<String> {
         let url = entry.get_url().ok().or_else(|| {
             let urls = entry
                 .get_parents()
@@ -311,8 +370,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
         }
     }
 
-    fn get_title(&self, index: usize) -> Option<String> {
-        let entry = &self.entries[index];
+    fn get_title(&self, entry: &Entry) -> Option<String> {
         if let Ok(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
             let multivol_spec = EntryTypeSpec::with_parents(EntryType::Book, vec![
                 EntryTypeSpec::with_single(EntryType::Book),
@@ -365,9 +423,8 @@ impl<'s> ApaBibliographyGenerator<'s> {
         }
     }
 
-    fn get_source(&self, index: usize) -> String {
-        let entry = &self.entries[index];
-        let st = SourceType::for_entry(&entry);
+    fn get_source(&self, entry: &Entry) -> String {
+        let st = SourceType::for_entry(entry);
         let mut res = String::new();
 
         match st {
@@ -406,12 +463,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     } else if let Ok(pages) = entry.get_page_range() {
                         res += &format_range("", "", &pages);
                     }
-
-                    comma = true;
-                }
-
-                if comma {
-                    res.push('.');
                 }
             }
             SourceType::CollectionItem(parent) => {
@@ -438,7 +489,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     }
 
                     res += &title.sentence_case;
-                    comma = false;
+                    comma = true;
 
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
                         res.push(' ');
@@ -462,8 +513,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     } else if let Ok(organization) = parent.get_organization() {
                         res += &organization;
                     }
-
-                    res.push('.');
                 }
             }
             SourceType::TvSeries(parent) => {
@@ -530,23 +579,18 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     } else if let Ok(organization) = parent.get_organization() {
                         res += &organization;
                     }
-
-                    res.push('.');
                 }
             }
             SourceType::Thesis => {
                 if let Ok(archive) = entry.get_archive() {
                     res += &archive.value;
-                    res.push('.');
                 } else if let Ok(org) = entry.get_organization() {
                     res += &org;
-                    res.push('.');
                 }
             }
             SourceType::Manuscript => {
                 if let Ok(archive) = entry.get_archive() {
                     res += &archive.value;
-                    res.push('.');
                 }
             }
             SourceType::ArtContainer(parent) => {
@@ -562,7 +606,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                         res += &format!("{}, {}.", org, loc.value);
                     } else {
                         res += &org;
-                        res.push('.');
                     }
                 }
             }
@@ -579,7 +622,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                         res += &format!("{}, {}.", org, loc.value);
                     } else {
                         res += &org;
-                        res.push('.');
                     }
                 }
             }
@@ -595,7 +637,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                         || authors.get(0).map(|a| &a.name) != Some(&publisher)
                     {
                         res += &publisher;
-                        res.push('.');
                     }
                 }
             }
@@ -606,12 +647,11 @@ impl<'s> ApaBibliographyGenerator<'s> {
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {
                         res += &title.sentence_case;
-                        res.push('.');
                     }
                 }
             }
             SourceType::NewsItem(parent) => {
-                let mut comma = if let Ok(title) =
+                let comma = if let Ok(title) =
                     parent.get_title_fmt(None, Some(&self.formatter))
                 {
                     res += &title.sentence_case;
@@ -626,15 +666,10 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     }
 
                     res += &format_range("", "", &pps);
-                    comma = true;
-                }
-
-                if comma {
-                    res.push('.');
                 }
             }
             SourceType::ConferenceTalk(parent) => {
-                let mut comma = if let Ok(title) =
+                let comma = if let Ok(title) =
                     parent.get_title_fmt(None, Some(&self.formatter))
                 {
                     res += &title.sentence_case;
@@ -649,11 +684,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     }
 
                     res += &loc.value;
-                    comma = true;
-                }
-
-                if comma {
-                    res.push('.');
                 }
             }
             SourceType::Generic => {
@@ -663,8 +693,6 @@ impl<'s> ApaBibliographyGenerator<'s> {
                     } else if let Ok(organization) = entry.get_organization() {
                         res += &organization;
                     }
-
-                    res.push('.');
                 }
             }
         }
@@ -687,7 +715,7 @@ impl<'s> ApaBibliographyGenerator<'s> {
                 EntryTypeModality::Specific(EntryType::Reference),
             );
             let url_str = self.get_retreival_date(
-                index,
+                entry,
                 entry.get_date().is_err()
                     || entry.check_with_spec(reference_entry).is_ok()
                     || (matches!(st, SourceType::StandaloneWebItem)
@@ -704,43 +732,44 @@ impl<'s> ApaBibliographyGenerator<'s> {
         res
     }
 
-    pub fn get_reference(&self, index: usize) -> Result<String, ()> {
-        if index < self.entries.len() {
-            let authors = self.get_author(index);
-            let date = self.get_date(index);
-            let title = self.get_title(index);
-            let source = self.get_source(index);
+    pub fn get_reference(&self, entry: &Entry) -> String {
+        let authors = self.get_author(entry);
+        let date = self.get_date(entry);
+        let title = self.get_title(entry);
+        let source = self.get_source(entry);
 
-            let mut res = authors;
+        let mut res = authors;
 
-            if !res.is_empty() {
-                if !date.is_empty() {
-                    res += &format!(" {}", date);
-                }
-            } else {
-                res += &date;
+        if !res.is_empty() {
+            if !date.is_empty() {
+                res += &format!(" {}", date);
             }
-
-            if let Some(title) = title {
-                if !res.is_empty() {
-                    res += &format!(" {}", title);
-                } else {
-                    res += &title;
-                }
-            }
-
-            if !source.is_empty() {
-                if !res.is_empty() {
-                    res += &format!(" {}", source);
-                } else {
-                    res += &source;
-                }
-            }
-
-            Ok(res)
         } else {
-            Err(())
+            res += &date;
         }
+
+        if let Some(title) = title {
+            if !res.is_empty() {
+                res += &format!(" {}", title);
+            } else {
+                res += &title;
+            }
+        }
+
+        if !source.is_empty() {
+            if !res.is_empty() {
+                res += &format!(" {}", source);
+            } else {
+                res += &source;
+            }
+        }
+
+        if let Ok(note) = entry.get_note() {
+            if !res.is_empty() { res.push(' '); }
+            res += &format!("({})", note);
+        }
+
+        res
     }
 }
 
@@ -763,12 +792,11 @@ mod tests {
         .collect();
         let mut entry = Entry::new("test", EntryType::NewspaperIssue);
         entry.set_authors(p);
-        let ets = vec![entry];
 
-        let apa = ApaBibliographyGenerator::new(&ets);
+        let apa = ApaBibliographyGenerator::new();
         assert_eq!(
             "van de Graf, J., Günther, H.-J., & Mädje, L. E.",
-            apa.get_author(0)
+            apa.get_author(&entry)
         );
     }
 }

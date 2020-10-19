@@ -6,6 +6,7 @@ zygos:
         - Bugnion, Edouard
     title:
         value: "ZygOS: Achieving Low Tail Latency for Microsecond-Scale Networked Tasks"
+        sentence-case: "ZygOS: Achieving low tail latency for microsecond-scale networked tasks"
         verbatim: true
     date: 2017
     page-range: 325-341
@@ -41,7 +42,12 @@ omarova-libra:
         sentence-case: There’s a lot we still don’t know about Libra
     date: 2019-11-04
     url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
-    parent: { type: NewspaperIssue, title: The New York Times, location: "New York, NY, USA" }
+    parent:
+        type: NewspaperIssue,
+        title:
+            value: The New York Times
+            verbatim: true
+        location: "New York, NY, USA"
 
 harry:
     type: Chapter
@@ -70,6 +76,7 @@ science-e-issue:
 terminator-2:
     type: Video
     title: "Terminator 2: Judgment Day"
+    publisher: Carolco Pictures; Pacific Western Productions; Lightstorm Entertainment; Le Studio Canal+ S.A.
     affiliated:
         - role: Director
           names: Cameron, James

@@ -416,7 +416,7 @@ fn person_from_yaml(
             )
         })?;
 
-        let optionals = ["given_name", "prefix", "suffix", "alias"];
+        let optionals = ["given-name", "prefix", "suffix", "alias"];
         let mut values = vec![];
 
         for &field in optionals.iter() {
@@ -831,10 +831,10 @@ mod tests {
     fn it_works() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let apa = apa::ApaBibliographyGenerator::new(&entries);
+        let apa = apa::ApaBibliographyGenerator::new();
 
-        for i in 0..entries.len() {
-            println!("{}", apa.get_reference(i).unwrap());
+        for entry in &entries {
+            println!("{}", apa.get_reference(&entry));
         }
     }
 }

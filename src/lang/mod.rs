@@ -1,5 +1,4 @@
 use super::types::{FormattableString, FormattedString};
-use super::{Entry, FieldTypes};
 use usize;
 
 pub(crate) mod en;
@@ -469,7 +468,10 @@ mod tests {
         assert_eq!("She Ain’t Be Getting on My Nerves", title);
 
         let title = props.apply("We don’t bank on the Pope’s decisions being sensible");
-        assert_eq!("We Don’t Bank on the Pope’s Decisions Being Sensible", title);
+        assert_eq!(
+            "We Don’t Bank on the Pope’s Decisions Being Sensible",
+            title
+        );
     }
 
     #[test]
@@ -560,7 +562,10 @@ mod tests {
         assert_eq!("She AIN’T be getting on my nerves", title);
 
         let title = props.apply("We don’t bank on the Pope’s decisions being sensible");
-        assert_eq!("We don’t bank on the pope’s decisions being sensible", title);
+        assert_eq!(
+            "We don’t bank on the pope’s decisions being sensible",
+            title
+        );
     }
 
     #[test]
