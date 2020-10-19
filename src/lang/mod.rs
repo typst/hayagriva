@@ -12,7 +12,7 @@ pub trait CaseTransformer {
 
 /// Rules for the title case transformation.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TitleCaseTransformer {
+pub struct TitleCase {
     /// Always capitalize after a full stop, question or exclamation mark, and
     /// colon even if the punctuation is followed by a word on the
     /// capitalization blacklist.
@@ -37,7 +37,7 @@ pub struct TitleCaseTransformer {
     pub trim_end: bool,
 }
 
-impl Default for TitleCaseTransformer {
+impl Default for TitleCase {
     fn default() -> Self {
         Self {
             always_capitalize_after_punctuation: true,
@@ -52,14 +52,14 @@ impl Default for TitleCaseTransformer {
     }
 }
 
-impl TitleCaseTransformer {
+impl TitleCase {
     /// Construct TitleCaseProperties with the default values.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl CaseTransformer for TitleCaseTransformer {
+impl CaseTransformer for TitleCase {
     /// Put the `title` argument into title case (every word starts with a capital
     /// letter, except for some prepositions...) as specified by `&self`.
     fn apply(&self, title: &str) -> String {
@@ -103,8 +103,8 @@ impl CaseTransformer for TitleCaseTransformer {
                 || c == '{'
                 || c == ','
                 || c == ';'
-                || c == '\'' && self.use_exception_dictionary
-                || c == '’' && self.use_exception_dictionary
+                || (c == '\'' && self.use_exception_dictionary)
+                || (c == '’' && self.use_exception_dictionary)
                 || c.is_whitespace()
             {
                 if !resume_word {
@@ -203,7 +203,7 @@ impl CaseTransformer for TitleCaseTransformer {
 
 /// Rules for the sentence case transformation.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SentenceCaseTransformer {
+pub struct SentenceCase {
     /// Capitalize words that contain caps
     /// in a non-start position (e.g. `fahrCard`).
     pub capitalize_words_with_caps_inside: bool,
@@ -221,7 +221,7 @@ pub struct SentenceCaseTransformer {
     pub trim_end: bool,
 }
 
-impl Default for SentenceCaseTransformer {
+impl Default for SentenceCase {
     fn default() -> Self {
         Self {
             capitalize_words_with_caps_inside: true,
@@ -234,14 +234,14 @@ impl Default for SentenceCaseTransformer {
     }
 }
 
-impl SentenceCaseTransformer {
+impl SentenceCase {
     /// Construct TitleCaseProperties with the default values.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl CaseTransformer for SentenceCaseTransformer {
+impl CaseTransformer for SentenceCase {
     /// Put the `title` argument into sentence case (capitalize only after
     /// sentence ends or at the start, as well as (if the whitelist is used)
     /// select exceptions).
@@ -451,11 +451,11 @@ impl FormattableString {
 
 #[cfg(test)]
 mod tests {
-    use super::{CaseTransformer, SentenceCaseTransformer, TitleCaseTransformer};
+    use super::{CaseTransformer, SentenceCase, TitleCase};
 
     #[test]
     fn title_case_last_word() {
-        let props = TitleCaseTransformer::new();
+        let props = TitleCase::new();
 
         let title = props.apply("a holistic investigation of me in general so ");
         assert_eq!("A Holistic Investigation of Me in General So", title);
@@ -463,7 +463,7 @@ mod tests {
 
     #[test]
     fn title_case_char_segmentation() {
-        let props = TitleCaseTransformer::new();
+        let props = TitleCase::new();
         let title = props.apply("She AiN’T Be Getting on my Nerves");
         assert_eq!("She Ain’t Be Getting on My Nerves", title);
 
@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn title_case_edge_cases() {
-        let mut props = TitleCaseTransformer::new();
+        let mut props = TitleCase::new();
         props.trim_start = false;
         props.trim_end = false;
 
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn title_case_punctuation() {
-        let props = TitleCaseTransformer::new();
+        let props = TitleCase::new();
 
         let title = props.apply("Around a table: the reason why we just could not care");
         assert_eq!(
@@ -500,7 +500,7 @@ mod tests {
 
     #[test]
     fn title_case_word_length() {
-        let mut props = TitleCaseTransformer::new();
+        let mut props = TitleCase::new();
         props.always_capitalize_min_len = Some(4);
         props.keep_all_uppercase_words = false;
 
@@ -510,7 +510,7 @@ mod tests {
 
     #[test]
     fn title_case_name_detecion() {
-        let props = TitleCaseTransformer::new();
+        let props = TitleCase::new();
 
         let title = props.apply("Exploring NASA's new moon strategy");
         assert_eq!("Exploring NASA's New Moon Strategy", title);
@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn title_case_full_stop_handling() {
-        let mut props = TitleCaseTransformer::new();
+        let mut props = TitleCase::new();
         props.always_capitalize_min_len = Some(4);
 
         let title = props.apply("Facebook.com and aHo are corporate behemoths");
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn title_case_hyphens() {
-        let props = TitleCaseTransformer::new();
+        let props = TitleCase::new();
 
         let title =
             props.apply("Comparative study of Self-reporting students' performance");
@@ -545,7 +545,7 @@ mod tests {
 
     #[test]
     fn sentence_case() {
-        let props = SentenceCaseTransformer::new();
+        let props = SentenceCase::new();
 
         let title =
             props.apply("This page is not for Discussions. Please Use the Table below to Find the Most Appropriate Section to Post.");
@@ -557,7 +557,7 @@ mod tests {
 
     #[test]
     fn sentence_case_char_segmentation() {
-        let props = SentenceCaseTransformer::new();
+        let props = SentenceCase::new();
         let title = props.apply("She AIN’T Be Getting on my Nerves");
         assert_eq!("She AIN’T be getting on my nerves", title);
 
@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn sentence_case_edge_cases() {
-        let mut props = SentenceCaseTransformer::new();
+        let mut props = SentenceCase::new();
         props.trim_start = false;
         props.trim_end = false;
 
@@ -583,7 +583,7 @@ mod tests {
 
     #[test]
     fn sentence_case_dictionary() {
-        let props = SentenceCaseTransformer::new();
+        let props = SentenceCase::new();
 
         let title = props
             .apply("if i distance myself from the europe-centric mindset for a moment");
@@ -595,7 +595,7 @@ mod tests {
 
     #[test]
     fn sentence_case_no_transform() {
-        let props = SentenceCaseTransformer::new();
+        let props = SentenceCase::new();
 
         let title = props.apply(
             "As seen in Figure 4.A, we achieved a significant performance increase",
@@ -608,7 +608,7 @@ mod tests {
 
     #[test]
     fn sentence_case_name_detection() {
-        let props = SentenceCaseTransformer::new();
+        let props = SentenceCase::new();
 
         let title = props.apply("We want to present GRAL, a localization algorithm for Wireless Sensor Networks");
         assert_eq!(

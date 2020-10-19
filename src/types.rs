@@ -35,9 +35,6 @@ pub enum EntryType {
     /// A short text, possibly of journalistic or scientific nature,
     /// appearing in some greater publication.
     Article,
-    // / A scientific, trade, or policy paper published within
-    // / the scope of a conference.
-    // ConferencePaper,
     /// A section of a greater containing work.
     Chapter,
     /// A short segment of media pertaining to some subject matter.

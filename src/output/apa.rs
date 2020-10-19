@@ -1,6 +1,6 @@
 use super::Entry;
 use crate::lang::en::{get_month_name, get_ordinal};
-use crate::lang::SentenceCaseTransformer;
+use crate::lang::SentenceCase;
 use crate::types::{
     EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole,
 };
@@ -8,7 +8,7 @@ use std::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator {
-    formatter: SentenceCaseTransformer,
+    formatter: SentenceCase,
 }
 
 #[derive(Clone, Debug)]
@@ -199,41 +199,147 @@ fn ampersand_list(names: Vec<String>) -> String {
     res
 }
 
-fn ed_vol_str(entry: &Entry) -> String {
+fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
     let vstr = if let Ok(vols) = entry.get_volume() {
-        Some(format_range("Vol.", "Vols.", &vols))
+        if is_tv_show {
+            Some(format_range("Episode", "Episodes", &vols))
+        } else {
+            Some(format_range("Vol.", "Vols.", &vols))
+        }
     } else {
         None
     };
 
     let estr = if let Ok(ed) = entry.get_edition() {
-        Some(match ed {
-            NumOrStr::Number(e) => get_ordinal(e),
-            NumOrStr::Str(s) => s,
-        })
+        if is_tv_show {
+            Some(format!("Season {}", ed))
+        } else {
+            Some(format!("{} ed.", match ed {
+                NumOrStr::Number(e) => get_ordinal(e),
+                NumOrStr::Str(s) => s,
+            }))
+        }
     } else {
         None
     };
 
     match (estr, vstr) {
         (None, None) => String::new(),
-        (Some(e), None) => format!(" ({} ed.).", e),
-        (None, Some(v)) => format!(" ({}).", v),
-        (Some(e), Some(v)) => format!(" ({} ed., {}).", e, v),
+        (Some(e), None) => format!(" ({})", e),
+        (None, Some(v)) => format!(" ({})", v),
+        (Some(e), Some(v)) => format!(" ({}, {})", e, v),
     }
 }
 
 impl ApaBibliographyGenerator {
     pub fn new() -> Self {
-        Self {
-            formatter: SentenceCaseTransformer::default(),
-        }
+        Self { formatter: SentenceCase::default() }
     }
 
     fn get_author(&self, entry: &Entry) -> String {
-        let authors = entry.get_authors();
+        #[derive(Clone, Debug)]
+        enum AuthorRole {
+            Normal,
+            Director,
+            ExecutiveProducer,
+        }
+
+        impl Default for AuthorRole {
+            fn default() -> Self {
+                Self::Normal
+            }
+        }
+
+        let mut names = None;
+        let mut role = AuthorRole::default();
+        if entry.entry_type == EntryType::Video {
+            let tv_series = EntryTypeSpec::single_parent(
+                EntryTypeModality::Specific(EntryType::Video),
+                EntryTypeModality::Specific(EntryType::Video),
+            );
+
+            if entry.get_issue().is_ok()
+                && entry.get_edition().is_ok()
+                && entry.check_with_spec(tv_series).is_ok()
+            {
+                // TV episode
+                let dirs = entry
+                    .get_affiliated_persons()
+                    .unwrap_or_else(|_| vec![])
+                    .into_iter()
+                    .filter(|(_, role)| role == &PersonRole::Director)
+                    .map(|(v, _)| v)
+                    .flatten()
+                    .collect::<Vec<Person>>();
+                let mut dir_name_list = name_list(&dirs)
+                    .into_iter()
+                    .map(|s| format!("{} (Director)", s))
+                    .collect::<Vec<String>>();
+                let writers = entry
+                    .get_affiliated_persons()
+                    .unwrap_or_else(|_| vec![])
+                    .into_iter()
+                    .filter(|(_, role)| role == &PersonRole::Director)
+                    .map(|(v, _)| v)
+                    .flatten()
+                    .collect::<Vec<Person>>();
+                let mut writers_name_list = name_list(&writers)
+                    .into_iter()
+                    .map(|s| format!("{} (Director)", s))
+                    .collect::<Vec<String>>();
+                dir_name_list.append(&mut writers_name_list);
+
+                if !dirs.is_empty() {
+                    names = Some(name_list(&dirs));
+                }
+            } else {
+                // Film
+                let dirs = entry
+                    .get_affiliated_persons()
+                    .unwrap_or_else(|_| vec![])
+                    .into_iter()
+                    .filter(|(_, role)| role == &PersonRole::Director)
+                    .map(|(v, _)| v)
+                    .flatten()
+                    .collect::<Vec<Person>>();
+
+                if !dirs.is_empty() {
+                    names = Some(name_list(&dirs));
+                    role = AuthorRole::Director;
+                } else {
+                    // TV show
+                    let prods = entry
+                        .get_affiliated_persons()
+                        .unwrap_or_else(|_| vec![])
+                        .into_iter()
+                        .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
+                        .map(|(v, _)| v)
+                        .flatten()
+                        .collect::<Vec<Person>>();
+
+                    if !prods.is_empty() {
+                        names = Some(name_list(&prods));
+                        role = AuthorRole::ExecutiveProducer;
+                    }
+                }
+            }
+        }
+
+        let authors = names.unwrap_or_else(|| name_list(&entry.get_authors()));
+        let count = authors.len();
         let mut al = if !authors.is_empty() {
-            ampersand_list(name_list(&authors))
+            let amps = ampersand_list(authors);
+            match role {
+                AuthorRole::Normal => amps,
+                AuthorRole::ExecutiveProducer if count == 1 => {
+                    format!("{} (Executive Producer)", amps)
+                }
+                AuthorRole::ExecutiveProducer => {
+                    format!("{} (Executive Producers)", amps)
+                }
+                AuthorRole::Director if count == 1 => format!("{} (Director)", amps),
+                AuthorRole::Director => format!("{} (Directors)", amps),
+            }
         } else if let Ok(eds) = entry.get_editors() {
             if !eds.is_empty() {
                 format!(
@@ -285,7 +391,7 @@ impl ApaBibliographyGenerator {
 
             al += &details[0];
 
-            for e in &details[1..] {
+            for e in &details[1 ..] {
                 al += "; ";
                 al += e;
             }
@@ -370,7 +476,10 @@ impl ApaBibliographyGenerator {
         }
     }
 
-    fn get_title(&self, entry: &Entry) -> Option<String> {
+    fn get_title(&self, entry: &Entry) -> String {
+        let mut res = String::new();
+        let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Specific(EntryType::Conference)));
+
         if let Ok(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
             let multivol_spec = EntryTypeSpec::with_parents(EntryType::Book, vec![
                 EntryTypeSpec::with_single(EntryType::Book),
@@ -394,13 +503,13 @@ impl ApaBibliographyGenerator {
                 vec![],
             );
 
-            let mut res = title.sentence_case;
+            res += &title.sentence_case;
 
             if let Some(mv_parent) = multivolume_parent {
                 let p: &Entry = &entry.get_parents().unwrap()[mv_parent];
                 let vols = entry.get_volume().unwrap();
                 res = format!(
-                    "{}: {} {}.",
+                    "{}: {} {}",
                     p.get_title_fmt(None, Some(&self.formatter)).unwrap().sentence_case,
                     format_range("Vol.", "Vols.", &vols),
                     res
@@ -408,19 +517,142 @@ impl ApaBibliographyGenerator {
             } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok())
                 && entry.check_with_spec(book_spec).is_ok()
             {
-                res += &ed_vol_str(entry);
-            } else {
-                let lc = res.chars().last().unwrap_or('a');
+                res += &ed_vol_str(entry, vid_match.is_ok());
+            }
+        }
 
-                if lc != '?' && lc != '.' && lc != '!' {
-                    res.push('.');
+        #[derive(Clone, Debug)]
+        enum TitleSpec {
+            Normal,
+            LegalProceedings,
+            PaperPresentation,
+            ConferenceSession,
+            Thesis,
+            UnpublishedThesis,
+            SoftwareRepository,
+            SoftwareRepositoryItem,
+            Exhibition,
+            Audio,
+            Video,
+            TvShow,
+            TvEpisode,
+            Film,
+            Tweet,
+        }
+
+        let conf_spec = EntryTypeSpec::single_parent(EntryTypeModality::Specific(EntryType::Article), EntryTypeModality::Specific(EntryType::Proceedings));
+        let talk_spec = EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Specific(EntryType::Conference));
+        let repo_item = EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Specific(EntryType::Repository));
+
+        let spec = if entry.entry_type == EntryType::Case {
+            TitleSpec::LegalProceedings
+        } else if entry.check_with_spec(conf_spec).is_ok() {
+            TitleSpec::PaperPresentation
+        } else if entry.check_with_spec(talk_spec).is_ok() {
+            TitleSpec::ConferenceSession
+        } else if entry.entry_type == EntryType::Thesis {
+            if entry.get_archive().is_ok() || entry.get_url().is_ok() {
+                TitleSpec::Thesis
+            } else {
+                TitleSpec::UnpublishedThesis
+            }
+        } else if entry.entry_type == EntryType::Exhibition {
+            TitleSpec::Exhibition
+        } else if entry.entry_type == EntryType::Repository {
+            TitleSpec::SoftwareRepository
+        } else if entry.check_with_spec(repo_item).is_ok() {
+            TitleSpec::SoftwareRepositoryItem
+        } else if entry.entry_type == EntryType::Audio {
+            TitleSpec::Audio
+        } else if entry.entry_type == EntryType::Video {
+            let dirs = entry
+                .get_affiliated_persons()
+                .unwrap_or_else(|_| vec![])
+                .into_iter()
+                .filter(|(_, role)| role == &PersonRole::Director)
+                .map(|(v, _)| v)
+                .flatten()
+                .collect::<Vec<Person>>();
+            if !dirs.is_empty() && entry.get_total_volumes().is_err() && entry.get_parents_ref().is_none() {
+                TitleSpec::Film
+            } else {
+                let is_online_vid = if let Ok(url) = entry.get_url() {
+                    match url.value.host_str().unwrap_or("").to_lowercase().as_ref() {
+                        "youtube.com" => true,
+                        "dailymotion.com" => true,
+                        "vimeo.com" => true,
+                        _ => false,
+                    }
+                } else {
+                    false
+                };
+
+                if is_online_vid {
+                    TitleSpec::Video
+                } else {
+                    let prods = entry
+                        .get_affiliated_persons()
+                        .unwrap_or_else(|_| vec![])
+                        .into_iter()
+                        .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
+                        .map(|(v, _)| v)
+                        .flatten()
+                        .collect::<Vec<Person>>();
+
+                    if vid_match.is_ok() && entry.get_issue().is_ok() && entry.get_edition().is_ok() {
+                        TitleSpec::TvEpisode
+                    } else if !prods.is_empty() || entry.get_total_volumes().is_ok() {
+                        TitleSpec::TvShow
+                    } else {
+                        TitleSpec::Video
+                    }
                 }
             }
-
-            Some(res)
+        } else if entry.entry_type == EntryType::Tweet {
+            TitleSpec::Tweet
         } else {
-            None
+            TitleSpec::Normal
+        };
+
+        let append = match spec {
+            TitleSpec::Normal => String::new(),
+            TitleSpec::LegalProceedings => "Legal proceedings".to_string(),
+            TitleSpec::PaperPresentation => "Paper presentation".to_string(),
+            TitleSpec::ConferenceSession => "Conference session".to_string(),
+            TitleSpec::Thesis => {
+                if let Ok(org) = entry.get_organization() {
+                    format!("Thesis, {}", org)
+                } else {
+                    "Thesis".to_string()
+                }
+            },
+            TitleSpec::UnpublishedThesis => "Unpublished thesis".to_string(),
+            TitleSpec::SoftwareRepository => "Software repository".to_string(),
+            TitleSpec::SoftwareRepositoryItem => "Software repository item".to_string(),
+            TitleSpec::Exhibition => "Exhibiton".to_string(),
+            TitleSpec::Audio => "Audio".to_string(),
+            TitleSpec::Video => "Video".to_string(),
+            TitleSpec::TvShow => "TV series".to_string(),
+            TitleSpec::TvEpisode => "TV series episode".to_string(),
+            TitleSpec::Film => "Film".to_string(),
+            TitleSpec::Tweet => "Tweet".to_string(),
+        };
+
+        if !append.is_empty() {
+            if !res.is_empty() {
+                res.push(' ');
+            }
+
+            res += &format!("[{}]", append);
         }
+
+        if let Some(lc) = res.chars().last() {
+            if lc != '?' && lc != '.' && lc != '!' {
+                res.push('.');
+            }
+        }
+
+        res
     }
 
     fn get_source(&self, entry: &Entry) -> String {
@@ -493,7 +725,8 @@ impl ApaBibliographyGenerator {
 
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
                         res.push(' ');
-                        res += &ed_vol_str(entry);
+                        res += &ed_vol_str(entry, false);
+                        res.push('.');
                     }
                 }
 
@@ -553,7 +786,8 @@ impl ApaBibliographyGenerator {
 
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
                         res.push(' ');
-                        res += &ed_vol_str(entry);
+                        res += &ed_vol_str(entry, true);
+                        res.push('.');
                     } else {
                         let lc = res.chars().last().unwrap_or('a');
 
@@ -585,7 +819,9 @@ impl ApaBibliographyGenerator {
                 if let Ok(archive) = entry.get_archive() {
                     res += &archive.value;
                 } else if let Ok(org) = entry.get_organization() {
-                    res += &org;
+                    if entry.get_url().is_err() {
+                        res += &org;
+                    }
                 }
             }
             SourceType::Manuscript => {
@@ -748,7 +984,7 @@ impl ApaBibliographyGenerator {
             res += &date;
         }
 
-        if let Some(title) = title {
+        if !title.is_empty() {
             if !res.is_empty() {
                 res += &format!(" {}", title);
             } else {
@@ -765,7 +1001,9 @@ impl ApaBibliographyGenerator {
         }
 
         if let Ok(note) = entry.get_note() {
-            if !res.is_empty() { res.push(' '); }
+            if !res.is_empty() {
+                res.push(' ');
+            }
             res += &format!("({})", note);
         }
 
