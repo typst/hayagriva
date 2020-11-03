@@ -87,3 +87,63 @@ terminator-2:
     date: 1991-07-01
     runtime: "137:00"
     time-range: "17:05-17:48"
+
+interior:
+    type: Video
+    title: "Conspiracy Theories and Interior Design"
+    affiliated:
+        - role: Director
+          names: Davidson, Adam
+        - role: Writer
+          names: McKenna, Chris
+    date: 2010-11-18
+    runtime: "22:00"
+    volume: 2
+    issue: 9
+    parent:
+        title: Community
+        affiliated:
+            - role: ExecutiveProducer
+              names: Dan Harmon
+        publisher: Universal Television; Sony Pictures Television; Krasnoff Foster Productions; Harmonious Claptrap; Russo Brothers Film
+        volume-total: 6
+
+wire:
+    type: Video
+    title: The wire
+    date: 2002
+    publisher: Blown Deadline Productions
+    volume-total: 5
+    affiliated:
+        - role: ExecutiveProducer
+          names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
+
+kinetics:
+    type: Article
+    title: Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate
+    author: ["Doan, T. D.", "Tran Thoai, D. B.", "Haug, Hartmut"]
+    doi: 10.1103/PhysRevB.102.165126
+    page-total: 13
+    page-range: 165126-165139
+    date: 2020-10-14
+    parent:
+        title:
+            value: Physical Review B
+            verbatim: true
+        volume: 102
+        issue: 16
+        publisher: American Physical Society
+
+house:
+    type: Article
+    title: Teaching medicine with the help of "Dr. House"
+    author: ["Jerrentrup, Andreas", "Mueller, Tobias", "Glowalla, Ulrich", "Herder, Meike", "Henrichs, Nadine", "Neubauer, Andreas", "Schaefer, Juergen R."]
+    doi: 10.1371/journal.pone.0193972
+    date: 2018-03-13
+    serial-number: e0193972
+    parent:
+        title:
+            value: PLoS ONE
+            verbatim: true
+        volume: 13
+        issue: 3

@@ -210,7 +210,13 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
         None
     };
 
-    let estr = if let Ok(ed) = entry.get_edition() {
+    let ed = if is_tv_show {
+        entry.get_issue()
+    } else {
+        entry.get_edition()
+    };
+
+    let estr = if let Ok(ed) = ed {
         if is_tv_show {
             Some(format!("Season {}", ed))
         } else {
@@ -259,7 +265,7 @@ impl ApaBibliographyGenerator {
             );
 
             if entry.get_issue().is_ok()
-                && entry.get_edition().is_ok()
+                && entry.get_volume().is_ok()
                 && entry.check_with_spec(tv_series).is_ok()
             {
                 // TV episode
@@ -279,18 +285,18 @@ impl ApaBibliographyGenerator {
                     .get_affiliated_persons()
                     .unwrap_or_else(|_| vec![])
                     .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Director)
+                    .filter(|(_, role)| role == &PersonRole::Writer)
                     .map(|(v, _)| v)
                     .flatten()
                     .collect::<Vec<Person>>();
                 let mut writers_name_list = name_list(&writers)
                     .into_iter()
-                    .map(|s| format!("{} (Director)", s))
+                    .map(|s| format!("{} (Writer)", s))
                     .collect::<Vec<String>>();
                 dir_name_list.append(&mut writers_name_list);
 
                 if !dirs.is_empty() {
-                    names = Some(name_list(&dirs));
+                    names = Some(dir_name_list);
                 }
             } else {
                 // Film
@@ -478,7 +484,7 @@ impl ApaBibliographyGenerator {
 
     fn get_title(&self, entry: &Entry) -> String {
         let mut res = String::new();
-        let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Specific(EntryType::Conference)));
+        let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(EntryTypeModality::Specific(EntryType::Video), EntryTypeModality::Specific(EntryType::Video)));
 
         if let Ok(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
             let multivol_spec = EntryTypeSpec::with_parents(EntryType::Book, vec![
@@ -515,9 +521,13 @@ impl ApaBibliographyGenerator {
                     res
                 );
             } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok())
-                && entry.check_with_spec(book_spec).is_ok()
+            && entry.check_with_spec(book_spec).is_ok()
             {
-                res += &ed_vol_str(entry, vid_match.is_ok());
+                res += &ed_vol_str(entry, false);
+            } else if (entry.get_volume().is_ok() || entry.get_issue().is_ok())
+            && vid_match.is_ok()
+            {
+                res += &ed_vol_str(entry, true);
             }
         }
 
@@ -599,7 +609,7 @@ impl ApaBibliographyGenerator {
                         .flatten()
                         .collect::<Vec<Person>>();
 
-                    if vid_match.is_ok() && entry.get_issue().is_ok() && entry.get_edition().is_ok() {
+                    if vid_match.is_ok() && entry.get_issue().is_ok() && entry.get_volume().is_ok() {
                         TitleSpec::TvEpisode
                     } else if !prods.is_empty() || entry.get_total_volumes().is_ok() {
                         TitleSpec::TvShow
@@ -691,6 +701,7 @@ impl ApaBibliographyGenerator {
                     }
 
                     if let Ok(sn) = entry.get_serial_number() {
+                        res += "Article ";
                         res += &sn;
                     } else if let Ok(pages) = entry.get_page_range() {
                         res += &format_range("", "", &pages);
@@ -764,11 +775,11 @@ impl ApaBibliographyGenerator {
                     match names.len() {
                         0 => false,
                         1 => {
-                            res += &format!("{} (Ed.)", names[0]);
+                            res += &format!("{} (Executive Producer)", names[0]);
                             true
                         }
                         _ => {
-                            res += &format!("{} (Eds.)", ampersand_list(names));
+                            res += &format!("{} (Executive Producers)", ampersand_list(names));
                             true
                         }
                     }
@@ -968,7 +979,14 @@ impl ApaBibliographyGenerator {
         res
     }
 
-    pub fn get_reference(&self, entry: &Entry) -> String {
+    pub fn get_reference(&self, mut entry: &Entry) -> String {
+        let parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+        if entry.entry_type.check(EntryTypeModality::Alternate(vec![EntryType::Chapter, EntryType::Scene])) {
+            if let Some(p) = parent {
+                entry = &p;
+            }
+        }
+
         let authors = self.get_author(entry);
         let date = self.get_date(entry);
         let title = self.get_title(entry);
