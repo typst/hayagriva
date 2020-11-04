@@ -12,7 +12,7 @@ use regex::Regex;
 use strum_macros::EnumString;
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
-use url::Url;
+use url::{Host, Url};
 
 #[rustfmt::skip]
 lazy_static! {
@@ -120,6 +120,47 @@ pub(crate) enum EntryTypeModality {
     Disallowed(Vec<EntryType>),
     /// Any `EntryType is allowed`.
     Any,
+}
+
+impl Entry {
+    /// Extract the twitter handle for the nth author from their alias.
+    /// Will make sure the handle starts with `@`.
+    ///
+    /// If the `user_index` is 0, the function will try to extract
+    /// the handle from the URL.
+    pub(crate) fn get_twitter_handle(&self, user_index: usize) -> Option<String> {
+        if self.entry_type != EntryType::Tweet {
+            return None;
+        }
+
+        let authors = self.get_authors();
+
+        if user_index > 0 && user_index >= authors.len() {
+            return None;
+        }
+
+        if let Some(alias) = &authors[user_index].alias {
+            return if alias.chars().next().unwrap_or('a') == '@' {
+                Some(alias.clone())
+            } else {
+                Some(format!("@{}", alias))
+            };
+        }
+
+        if user_index == 0 {
+            if let Ok(url) = self.get_url().map(|u| u.value) {
+                if url.host() != Some(Host::Domain("twitter.com")) {
+                    return None;
+                }
+
+                if let Some(handle) = url.path_segments().and_then(|mut c| c.next()) {
+                    return Some(format!("@{}", handle));
+                }
+            }
+        }
+
+        None
+    }
 }
 
 impl EntryType {
@@ -361,6 +402,51 @@ impl Person {
         } else {
             None
         }
+    }
+
+    /// Get the name with the family name fist, the initials
+    /// afterwards, seperated by a comma.
+    pub fn get_name_first(&self) -> String {
+        let mut res = if let Some(prefix) = &self.prefix {
+            format!("{} {}", prefix, self.name)
+        } else {
+            self.name.clone()
+        };
+
+        if let Some(initials) = self.get_initials(Some(".")) {
+            res += ", ";
+            res += &initials;
+        }
+
+        if let Some(suffix) = &self.suffix {
+            res += ", ";
+            res += suffix;
+        }
+        res
+    }
+
+    /// Get the name with the initials fist, the family name
+    /// afterwards, seperated by a comma.
+    pub fn get_given_name_initials_first(&self) -> String {
+        let mut res = if let Some(initials) = self.get_initials(Some(".")) {
+            format!("{} ", initials)
+        } else {
+            String::new()
+        };
+
+        if let Some(prefix) = &self.prefix {
+            res += prefix;
+            res += " ";
+        }
+
+        res += &self.name;
+
+        if let Some(suffix) = &self.suffix {
+            res += " ";
+            res += suffix;
+        }
+
+        res
     }
 }
 

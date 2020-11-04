@@ -24,6 +24,7 @@ enum SourceType<'s> {
     WebItem(&'s Entry),
     NewsItem(&'s Entry),
     ConferenceTalk(&'s Entry),
+    GenericParent(&'s Entry),
     Generic,
 }
 
@@ -85,6 +86,11 @@ impl<'s> SourceType<'s> {
             EntryTypeModality::Specific(EntryType::Conference),
         );
 
+        let generic_parent = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Any,
+        );
+
         if let Ok(i) = entry.check_with_spec(periodical) {
             return Self::PeriodicalItem(&entry.get_parents_ref().unwrap()[i[0]]);
         }
@@ -128,6 +134,9 @@ impl<'s> SourceType<'s> {
         if let Ok(i) = entry.check_with_spec(talk) {
             return Self::ConferenceTalk(&entry.get_parents_ref().unwrap()[i[0]]);
         }
+        if let Ok(i) = entry.check_with_spec(generic_parent) {
+            return Self::GenericParent(&entry.get_parents_ref().unwrap()[i[0]]);
+        }
 
         return Self::Generic;
     }
@@ -150,23 +159,17 @@ fn name_list(persons: &[Person]) -> Vec<String> {
     let mut names = vec![];
 
     for author in persons.iter() {
-        let mut single = if let Some(prefix) = &author.prefix {
-            format!("{} {}", prefix, author.name)
-        } else {
-            author.name.clone()
-        };
+        names.push(author.get_name_first());
+    }
 
-        if let Some(initials) = author.get_initials(Some(".")) {
-            single += ", ";
-            single += &initials;
-        }
+    names
+}
 
-        if let Some(suffix) = &author.suffix {
-            single += ", ";
-            single += suffix;
-        }
+fn name_list_straight(persons: &[Person]) -> Vec<String> {
+    let mut names = vec![];
 
-        names.push(single);
+    for author in persons.iter() {
+        names.push(author.get_given_name_initials_first());
     }
 
     names
@@ -216,6 +219,21 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
         entry.get_edition()
     };
 
+    let translator = entry
+        .get_affiliated_persons()
+        .unwrap_or_else(|_| vec![])
+        .into_iter()
+        .filter(|(_, role)| role == &PersonRole::Translator)
+        .map(|(v, _)| v)
+        .flatten()
+        .collect::<Vec<Person>>();
+
+    let translator = if translator.is_empty() {
+        None
+    } else {
+        Some(format!("{}, Trans.", ampersand_list(name_list_straight(&translator))))
+    };
+
     let estr = if let Ok(ed) = ed {
         if is_tv_show {
             Some(format!("Season {}", ed))
@@ -229,11 +247,15 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
         None
     };
 
-    match (estr, vstr) {
-        (None, None) => String::new(),
-        (Some(e), None) => format!(" ({})", e),
-        (None, Some(v)) => format!(" ({})", v),
-        (Some(e), Some(v)) => format!(" ({}, {})", e, v),
+    match (translator, estr, vstr) {
+        (Some(t), None, None) => format!(" ({})", t),
+        (Some(t), Some(e), None) => format!(" ({}; {})", t, e),
+        (Some(t), None, Some(v)) => format!(" ({}; {})", t, v),
+        (Some(t), Some(e), Some(v)) => format!(" ({}; {}, {})", t, e, v),
+        (None, None, None) => String::new(),
+        (None, Some(e), None) => format!(" ({})", e),
+        (None, None, Some(v)) => format!(" ({})", v),
+        (None, Some(e), Some(v)) => format!(" ({}, {})", e, v),
     }
 }
 
@@ -331,9 +353,23 @@ impl ApaBibliographyGenerator {
             }
         }
 
-        let authors = names.unwrap_or_else(|| name_list(&entry.get_authors()));
+        let mut authors = names.unwrap_or_else(|| name_list(&entry.get_authors()));
         let count = authors.len();
         let mut al = if !authors.is_empty() {
+            if entry.entry_type == EntryType::Tweet {
+                authors = authors
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, n)| {
+                        if let Some(handle) = entry.get_twitter_handle(i) {
+                            format!("{} [{}]", n, handle)
+                        } else {
+                            n
+                        }
+                    })
+                    .collect();
+            }
+
             let amps = ampersand_list(authors);
             match role {
                 AuthorRole::Normal => amps,
@@ -482,9 +518,25 @@ impl ApaBibliographyGenerator {
         }
     }
 
-    fn get_title(&self, entry: &Entry) -> String {
+    fn get_title(&self, entry: &Entry, wrap: bool) -> String {
         let mut res = String::new();
-        let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(EntryTypeModality::Specific(EntryType::Video), EntryTypeModality::Specific(EntryType::Video)));
+        let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::Video),
+            EntryTypeModality::Specific(EntryType::Video),
+        ));
+
+        let book = entry
+            .check_with_spec(EntryTypeSpec::new(
+                EntryTypeModality::Alternate(vec![
+                    EntryType::Book,
+                    EntryType::Report,
+                    EntryType::Reference,
+                    EntryType::Anthology,
+                    EntryType::Proceedings,
+                ]),
+                vec![],
+            ))
+            .is_ok();
 
         if let Ok(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
             let multivol_spec = EntryTypeSpec::with_parents(EntryType::Book, vec![
@@ -498,18 +550,13 @@ impl ApaBibliographyGenerator {
                 }
             }
 
-            let book_spec = EntryTypeSpec::new(
-                EntryTypeModality::Alternate(vec![
-                    EntryType::Book,
-                    EntryType::Report,
-                    EntryType::Reference,
-                    EntryType::Anthology,
-                    EntryType::Proceedings,
-                ]),
-                vec![],
-            );
-
-            res += &title.sentence_case;
+            if entry.entry_type == EntryType::Tweet {
+                let words = &title.value.split_whitespace().collect::<Vec<_>>();
+                res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
+                    .join(" ");
+            } else {
+                res += &title.sentence_case;
+            }
 
             if let Some(mv_parent) = multivolume_parent {
                 let p: &Entry = &entry.get_parents().unwrap()[mv_parent];
@@ -520,16 +567,59 @@ impl ApaBibliographyGenerator {
                     format_range("Vol.", "Vols.", &vols),
                     res
                 );
-            } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok())
-            && entry.check_with_spec(book_spec).is_ok()
+            } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok()) && book
             {
                 res += &ed_vol_str(entry, false);
             } else if (entry.get_volume().is_ok() || entry.get_issue().is_ok())
-            && vid_match.is_ok()
+                && vid_match.is_ok()
             {
                 res += &ed_vol_str(entry, true);
             }
         }
+
+        let mut items: Vec<String> = vec![];
+        if book {
+            let illustrators = entry
+                .get_affiliated_persons()
+                .unwrap_or_else(|_| vec![])
+                .into_iter()
+                .filter(|(_, role)| role == &PersonRole::Illustrator)
+                .map(|(v, _)| v)
+                .flatten()
+                .collect::<Vec<Person>>();
+
+            if !illustrators.is_empty() {
+                items.push(format!("{}, Illus.", ampersand_list(name_list_straight(&illustrators))));
+            }
+
+            if entry.get_note().and_then(|_| entry.get_editors()).is_ok() && !entry.get_authors().is_empty() {
+                let editors = entry.get_editors().unwrap();
+                let amp_list = ampersand_list(name_list_straight(&editors));
+                if editors.len() == 1 {
+                    items.push(format!("{}, Ed.", amp_list));
+                } else if editors.len() > 1 {
+                    items.push(format!("{}, Eds.", amp_list));
+                }
+            }
+        } else if entry.entry_type == EntryType::Report {
+            if let Ok(serial) = entry.get_serial_number() {
+                items.push(serial);
+            }
+        } else if entry.entry_type == EntryType::Thesis {
+            if let Ok(serial) = entry.get_serial_number() {
+                items.push(format!("Publication No. {}", serial));
+            }
+        }
+
+        let items = items.join("; ");
+        if !items.is_empty() {
+            if !res.is_empty() {
+                res += " ";
+            }
+
+            res += &format!("({})", items);
+        }
+
 
         #[derive(Clone, Debug)]
         enum TitleSpec {
@@ -550,9 +640,22 @@ impl ApaBibliographyGenerator {
             Tweet,
         }
 
-        let conf_spec = EntryTypeSpec::single_parent(EntryTypeModality::Specific(EntryType::Article), EntryTypeModality::Specific(EntryType::Proceedings));
-        let talk_spec = EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Specific(EntryType::Conference));
-        let repo_item = EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Specific(EntryType::Repository));
+        let conf_spec = EntryTypeSpec::single_parent(
+            EntryTypeModality::Specific(EntryType::Article),
+            EntryTypeModality::Specific(EntryType::Proceedings),
+        );
+        let talk_spec = EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Specific(EntryType::Conference),
+        );
+        let repo_item = EntryTypeSpec::single_parent(
+            EntryTypeModality::Disallowed(vec![
+                EntryType::Article,
+                EntryType::Report,
+                EntryType::Thesis,
+            ]),
+            EntryTypeModality::Specific(EntryType::Repository),
+        );
 
         let spec = if entry.entry_type == EntryType::Case {
             TitleSpec::LegalProceedings
@@ -583,7 +686,10 @@ impl ApaBibliographyGenerator {
                 .map(|(v, _)| v)
                 .flatten()
                 .collect::<Vec<Person>>();
-            if !dirs.is_empty() && entry.get_total_volumes().is_err() && entry.get_parents_ref().is_none() {
+            if !dirs.is_empty()
+                && entry.get_total_volumes().is_err()
+                && entry.get_parents_ref().is_none()
+            {
                 TitleSpec::Film
             } else {
                 let is_online_vid = if let Ok(url) = entry.get_url() {
@@ -609,7 +715,10 @@ impl ApaBibliographyGenerator {
                         .flatten()
                         .collect::<Vec<Person>>();
 
-                    if vid_match.is_ok() && entry.get_issue().is_ok() && entry.get_volume().is_ok() {
+                    if vid_match.is_ok()
+                        && entry.get_issue().is_ok()
+                        && entry.get_volume().is_ok()
+                    {
                         TitleSpec::TvEpisode
                     } else if !prods.is_empty() || entry.get_total_volumes().is_ok() {
                         TitleSpec::TvShow
@@ -635,7 +744,7 @@ impl ApaBibliographyGenerator {
                 } else {
                     "Thesis".to_string()
                 }
-            },
+            }
             TitleSpec::UnpublishedThesis => "Unpublished thesis".to_string(),
             TitleSpec::SoftwareRepository => "Software repository".to_string(),
             TitleSpec::SoftwareRepositoryItem => "Software repository item".to_string(),
@@ -654,6 +763,10 @@ impl ApaBibliographyGenerator {
             }
 
             res += &format!("[{}]", append);
+        }
+
+        if wrap && !res.is_empty() {
+            res = format!("[{}]", res);
         }
 
         if let Some(lc) = res.chars().last() {
@@ -779,7 +892,10 @@ impl ApaBibliographyGenerator {
                             true
                         }
                         _ => {
-                            res += &format!("{} (Executive Producers)", ampersand_list(names));
+                            res += &format!(
+                                "{} (Executive Producers)",
+                                ampersand_list(names)
+                            );
                             true
                         }
                     }
@@ -844,11 +960,17 @@ impl ApaBibliographyGenerator {
                 let org = parent
                     .get_organization()
                     .or_else(|_| parent.get_archive().map(|o| o.value))
-                    .or_else(|_| parent.get_publisher().map(|o| o.value));
+                    .or_else(|_| parent.get_publisher().map(|o| o.value))
+                    .or_else(|_| entry.get_organization().map(|o| o))
+                    .or_else(|_| entry.get_archive().map(|o| o.value))
+                    .or_else(|_| entry.get_publisher().map(|o| o.value));
 
                 if let Ok(org) = org {
-                    if let Ok(loc) =
-                        parent.get_location().or_else(|_| parent.get_archive_location())
+                    if let Ok(loc) = parent
+                        .get_location()
+                        .or_else(|_| parent.get_archive_location())
+                        .or_else(|_| entry.get_location())
+                        .or_else(|_| entry.get_archive_location())
                     {
                         res += &format!("{}, {}.", org, loc.value);
                     } else {
@@ -933,6 +1055,11 @@ impl ApaBibliographyGenerator {
                     res += &loc.value;
                 }
             }
+            SourceType::GenericParent(parent) => {
+                if let Ok(title) = parent.get_title() {
+                    res += &title.value;
+                }
+            }
             SourceType::Generic => {
                 if entry.get_publisher().is_ok() || entry.get_organization().is_ok() {
                     if let Ok(publisher) = entry.get_publisher() {
@@ -981,32 +1108,50 @@ impl ApaBibliographyGenerator {
 
     pub fn get_reference(&self, mut entry: &Entry) -> String {
         let parent = entry.get_parents_ref().and_then(|v| v.first().clone());
-        if entry.entry_type.check(EntryTypeModality::Alternate(vec![EntryType::Chapter, EntryType::Scene])) {
+        if entry.entry_type.check(EntryTypeModality::Alternate(vec![
+            EntryType::Chapter,
+            EntryType::Scene,
+        ])) {
             if let Some(p) = parent {
                 entry = &p;
             }
         }
 
+        let art_plaque = entry
+            .check_with_spec(EntryTypeSpec::single_parent(
+                EntryTypeModality::Any,
+                EntryTypeModality::Specific(EntryType::Artwork),
+            ))
+            .is_ok();
+
         let authors = self.get_author(entry);
         let date = self.get_date(entry);
-        let title = self.get_title(entry);
+        let title = self.get_title(entry, art_plaque);
         let source = self.get_source(entry);
 
         let mut res = authors;
 
-        if !res.is_empty() {
+        if res.is_empty() {
+            res += &title;
+
+            if !date.is_empty() {
+                if !res.is_empty() {
+                    res += &format!(" {}", date);
+                } else {
+                    res += &date;
+                }
+            }
+        } else {
             if !date.is_empty() {
                 res += &format!(" {}", date);
             }
-        } else {
-            res += &date;
-        }
 
-        if !title.is_empty() {
-            if !res.is_empty() {
-                res += &format!(" {}", title);
-            } else {
-                res += &title;
+            if !title.is_empty() {
+                if !res.is_empty() {
+                    res += &format!(" {}", title);
+                } else {
+                    res += &title;
+                }
             }
         }
 

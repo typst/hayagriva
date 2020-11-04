@@ -104,7 +104,7 @@ interior:
         title: Community
         affiliated:
             - role: ExecutiveProducer
-              names: Dan Harmon
+              names: Harmon, Dan
         publisher: Universal Television; Sony Pictures Television; Krasnoff Foster Productions; Harmonious Claptrap; Russo Brothers Film
         volume-total: 6
 
@@ -147,3 +147,60 @@ house:
             verbatim: true
         volume: 13
         issue: 3
+
+plaque:
+    type: Misc
+    title: Informational plaque about Jacoby's 1967 photos
+    publisher: Stiftung Reinbeckhallen
+    location: Berlin, Germany
+    date: 2020
+    parent:
+        type: Artwork
+        date: 1967
+        author: Max Jacoby
+        parent:
+            type: Anthology
+            title: Bleibtreustraße
+            archive: Landesmuseum Koblenz
+            archive-location: Koblenz, Germany
+
+oiseau:
+    type: Exhibition
+    title: L'oiseau rare, de l'hirondelle au kakapo
+    date: 2020-12-18
+    organization: Musée des Confluences
+    location: Lyon, France
+    url:
+        value: https://www.museedesconfluences.fr/fr/evenements/l%E2%80%99oiseau-rare-de-l%E2%80%99hirondelle-au-kakapo
+        date: 2020-11-04
+
+renaissance:
+    type: Book
+    title: Renaissance, Les Déracinés
+    author: Duval, Fred
+    affiliated:
+        - role: Illustrator
+          names: ["Emem", "Blanchard, Fred"]
+    date: 2018
+    publisher: Dargaud
+    edition: 1
+    volume: 1
+    volume-total: 3
+
+georgia:
+    type: Tweet
+    author: Silver, Nate
+    title: Trump's claim to have won Georgia is highly dubious. No network has called it. He's only ahead by 2.5 points there, and the outstanding votes are mostly mail votes in very blue counties, likely very Democratic. Biden may even be a slight favorite there.
+    url: https://twitter.com/NateSilver538/status/1323889051037028353
+    date: 2020-11-04
+
+really-habitable:
+    type: Article
+    title: Defining the Really Habitable Zone
+    author: ["Pedbost, Marven F.", "Pomalgu, Trillean", "Lintott, Chris", "Eisner, Nora", "Nicholson, Belinda"]
+    date: 2020
+    serial-number: 2003.13722
+    url: https://arxiv.org/abs/2003.13722
+    parent:
+        type: Repository
+        title: arXiv
