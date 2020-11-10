@@ -834,7 +834,8 @@ mod tests {
         let apa = apa::ApaBibliographyGenerator::new();
 
         for entry in &entries {
-            println!("{}", apa.get_reference(&entry));
+            let refs = apa.get_reference(&entry);
+            println!("{}", refs.print_ansi_vt100());
         }
     }
 }

@@ -2,7 +2,8 @@ use super::Entry;
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
 use crate::types::{
-    EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole,
+    DisplayString, EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr, Person,
+    PersonRole, FormatVariantOptions
 };
 use std::ops::Range;
 
@@ -86,10 +87,8 @@ impl<'s> SourceType<'s> {
             EntryTypeModality::Specific(EntryType::Conference),
         );
 
-        let generic_parent = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Any,
-        );
+        let generic_parent =
+            EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Any);
 
         if let Ok(i) = entry.check_with_spec(periodical) {
             return Self::PeriodicalItem(&entry.get_parents_ref().unwrap()[i[0]]);
@@ -231,7 +230,10 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
     let translator = if translator.is_empty() {
         None
     } else {
-        Some(format!("{}, Trans.", ampersand_list(name_list_straight(&translator))))
+        Some(format!(
+            "{}, Trans.",
+            ampersand_list(name_list_straight(&translator))
+        ))
     };
 
     let estr = if let Ok(ed) = ed {
@@ -518,8 +520,23 @@ impl ApaBibliographyGenerator {
         }
     }
 
-    fn get_title(&self, entry: &Entry, wrap: bool) -> String {
-        let mut res = String::new();
+    fn get_title(&self, entry: &Entry, wrap: bool) -> DisplayString {
+        let italicise = if entry.get_parents().unwrap_or_else(|_| vec![]).into_iter().any(|p| p.get_title().is_ok()) {
+            let talk = EntryTypeSpec::single_parent(
+                EntryTypeModality::Any,
+                EntryTypeModality::Specific(EntryType::Conference),
+            );
+            let preprint = EntryTypeSpec::single_parent(
+                EntryTypeModality::Alternate(vec![EntryType::Article, EntryType::Book, EntryType::Entry]),
+                EntryTypeModality::Specific(EntryType::Repository),
+            );
+
+            entry.check_with_spec(talk).is_ok() || entry.check_with_spec(preprint).is_ok()
+        } else {
+            true
+        };
+
+        let mut res = DisplayString::new();
         let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(
             EntryTypeModality::Specific(EntryType::Video),
             EntryTypeModality::Specific(EntryType::Video),
@@ -550,6 +567,9 @@ impl ApaBibliographyGenerator {
                 }
             }
 
+            if italicise {
+                res.start_format(FormatVariantOptions::Italic);
+            }
             if entry.entry_type == EntryType::Tweet {
                 let words = &title.value.split_whitespace().collect::<Vec<_>>();
                 res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
@@ -557,16 +577,18 @@ impl ApaBibliographyGenerator {
             } else {
                 res += &title.sentence_case;
             }
+            res.commit_formats();
 
             if let Some(mv_parent) = multivolume_parent {
                 let p: &Entry = &entry.get_parents().unwrap()[mv_parent];
                 let vols = entry.get_volume().unwrap();
-                res = format!(
-                    "{}: {} {}",
+                let mut new = DisplayString::from_string(format!(
+                    "{}: {} ",
                     p.get_title_fmt(None, Some(&self.formatter)).unwrap().sentence_case,
                     format_range("Vol.", "Vols.", &vols),
-                    res
-                );
+                ));
+                new += res;
+                res = new;
             } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok()) && book
             {
                 res += &ed_vol_str(entry, false);
@@ -589,10 +611,15 @@ impl ApaBibliographyGenerator {
                 .collect::<Vec<Person>>();
 
             if !illustrators.is_empty() {
-                items.push(format!("{}, Illus.", ampersand_list(name_list_straight(&illustrators))));
+                items.push(format!(
+                    "{}, Illus.",
+                    ampersand_list(name_list_straight(&illustrators))
+                ));
             }
 
-            if entry.get_note().and_then(|_| entry.get_editors()).is_ok() && !entry.get_authors().is_empty() {
+            if entry.get_note().and_then(|_| entry.get_editors()).is_ok()
+                && !entry.get_authors().is_empty()
+            {
                 let editors = entry.get_editors().unwrap();
                 let amp_list = ampersand_list(name_list_straight(&editors));
                 if editors.len() == 1 {
@@ -619,7 +646,6 @@ impl ApaBibliographyGenerator {
 
             res += &format!("({})", items);
         }
-
 
         #[derive(Clone, Debug)]
         enum TitleSpec {
@@ -766,10 +792,13 @@ impl ApaBibliographyGenerator {
         }
 
         if wrap && !res.is_empty() {
-            res = format!("[{}]", res);
+            let mut new = DisplayString::from_str("[");
+            new += res;
+            new += "]";
+            res = new;
         }
 
-        if let Some(lc) = res.chars().last() {
+        if let Some(lc) = res.last() {
             if lc != '?' && lc != '.' && lc != '!' {
                 res.push('.');
             }
@@ -778,16 +807,18 @@ impl ApaBibliographyGenerator {
         res
     }
 
-    fn get_source(&self, entry: &Entry) -> String {
+    fn get_source(&self, entry: &Entry) -> DisplayString {
         let st = SourceType::for_entry(entry);
-        let mut res = String::new();
+        let mut res = DisplayString::new();
 
         match st {
             SourceType::PeriodicalItem(parent) => {
                 let mut comma = if let Ok(title) =
                     parent.get_title_fmt(None, Some(&self.formatter))
                 {
+                    res.start_format(FormatVariantOptions::Italic);
                     res += &title.sentence_case;
+                    res.commit_formats();
                     true
                 } else {
                     false
@@ -844,7 +875,9 @@ impl ApaBibliographyGenerator {
                         res += ", ";
                     }
 
+                    res.start_format(FormatVariantOptions::Italic);
                     res += &title.sentence_case;
+                    res.commit_formats();
                     comma = true;
 
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
@@ -859,7 +892,9 @@ impl ApaBibliographyGenerator {
                 }
 
                 if !res.is_empty() {
-                    res = format!("In {}", res);
+                    let mut new = DisplayString::from_str("In ");
+                    new += res;
+                    res = new;
                 }
 
                 if parent.get_publisher().is_ok() || parent.get_organization().is_ok() {
@@ -908,7 +943,9 @@ impl ApaBibliographyGenerator {
                         res += ", ";
                     }
 
+                    res.start_format(FormatVariantOptions::Italic);
                     res += &title.sentence_case;
+                    res.commit_formats();
                     comma = false;
 
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
@@ -916,7 +953,7 @@ impl ApaBibliographyGenerator {
                         res += &ed_vol_str(entry, true);
                         res.push('.');
                     } else {
-                        let lc = res.chars().last().unwrap_or('a');
+                        let lc = res.last().unwrap_or('a');
 
                         if lc != '?' && lc != '.' && lc != '!' {
                             res.push('.');
@@ -929,7 +966,9 @@ impl ApaBibliographyGenerator {
                 }
 
                 if !res.is_empty() {
-                    res = format!("In {}", res);
+                    let mut new = DisplayString::from_str("In ");
+                    new += res;
+                    res = new;
                 }
 
                 if parent.get_publisher().is_ok() || parent.get_organization().is_ok() {
@@ -1015,7 +1054,9 @@ impl ApaBibliographyGenerator {
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {
+                        res.start_format(FormatVariantOptions::Italic);
                         res += &title.sentence_case;
+                        res.commit_formats();
                     }
                 }
             }
@@ -1023,7 +1064,9 @@ impl ApaBibliographyGenerator {
                 let comma = if let Ok(title) =
                     parent.get_title_fmt(None, Some(&self.formatter))
                 {
+                    res.start_format(FormatVariantOptions::Italic);
                     res += &title.sentence_case;
+                    res.commit_formats();
                     true
                 } else {
                     false
@@ -1057,7 +1100,16 @@ impl ApaBibliographyGenerator {
             }
             SourceType::GenericParent(parent) => {
                 if let Ok(title) = parent.get_title() {
+                    let preprint = EntryTypeSpec::single_parent(
+                        EntryTypeModality::Alternate(vec![EntryType::Article, EntryType::Book, EntryType::Entry]),
+                        EntryTypeModality::Specific(EntryType::Repository),
+                    );
+
+                    if !entry.check_with_spec(preprint).is_ok() {
+                        res.start_format(FormatVariantOptions::Italic);
+                    }
                     res += &title.value;
+                    res.commit_formats();
                 }
             }
             SourceType::Generic => {
@@ -1071,7 +1123,7 @@ impl ApaBibliographyGenerator {
             }
         }
 
-        let lc = res.chars().last().unwrap_or('a');
+        let lc = res.last().unwrap_or('a');
 
         if !res.is_empty() && lc != '?' && lc != '.' && lc != '!' {
             res.push('.');
@@ -1106,7 +1158,7 @@ impl ApaBibliographyGenerator {
         res
     }
 
-    pub fn get_reference(&self, mut entry: &Entry) -> String {
+    pub fn get_reference(&self, mut entry: &Entry) -> DisplayString {
         let parent = entry.get_parents_ref().and_then(|v| v.first().clone());
         if entry.entry_type.check(EntryTypeModality::Alternate(vec![
             EntryType::Chapter,
@@ -1129,10 +1181,10 @@ impl ApaBibliographyGenerator {
         let title = self.get_title(entry, art_plaque);
         let source = self.get_source(entry);
 
-        let mut res = authors;
+        let mut res = DisplayString::from_string(authors);
 
         if res.is_empty() {
-            res += &title;
+            res += title;
 
             if !date.is_empty() {
                 if !res.is_empty() {
@@ -1148,18 +1200,20 @@ impl ApaBibliographyGenerator {
 
             if !title.is_empty() {
                 if !res.is_empty() {
-                    res += &format!(" {}", title);
+                    res += " ";
+                    res += title;
                 } else {
-                    res += &title;
+                    res += title;
                 }
             }
         }
 
         if !source.is_empty() {
             if !res.is_empty() {
-                res += &format!(" {}", source);
+                res += " ";
+                res += source;
             } else {
-                res += &source;
+                res += source;
             }
         }
 
