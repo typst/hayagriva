@@ -166,13 +166,10 @@ impl Entry {
     pub fn get_any_date(&self) -> Option<Date> {
         self.get_date().ok().or_else(|| {
             self.get_parents()
-                .unwrap_or_else(|_| vec![])
                 .into_iter()
-                .map(|p| p.get_any_date())
-                .filter(|d| d.is_some())
-                .collect::<Vec<_>>()
-                .get(0)
-                .map(|o| o.as_ref().unwrap().clone())
+                .flat_map(|v| v)
+                .filter_map(|p| p.get_any_date())
+                .next()
         })
     }
 
