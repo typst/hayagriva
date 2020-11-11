@@ -19,7 +19,7 @@ use unic_langid::LanguageIdentifier;
 use url::Url;
 use yaml_rust::{Yaml, YamlLoader};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FieldTypes {
     FormattableString(FormattableString),
     FormattedString(FormattedString),
@@ -38,7 +38,7 @@ pub enum FieldTypes {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Entry {
     key: String,
     entry_type: EntryType,
@@ -161,6 +161,20 @@ impl Entry {
         total_volumes: "volume-total" => i64,
         page_range: "page-range" => std::ops::Range<i64>
     );
+
+    /// Will recursively get a date off either the entry or its parents.
+    pub fn get_any_date(&self) -> Option<Date> {
+        self.get_date().ok().or_else(|| {
+            self.get_parents()
+                .unwrap_or_else(|_| vec![])
+                .into_iter()
+                .map(|p| p.get_any_date())
+                .filter(|d| d.is_some())
+                .collect::<Vec<_>>()
+                .get(0)
+                .map(|o| o.as_ref().unwrap().clone())
+        })
+    }
 
     /// Get and parse the `page-total` field, falling back on
     /// `page-range` if not specified.
@@ -824,11 +838,11 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::apa;
+    use crate::output::{apa, ieee};
     use std::fs;
 
     #[test]
-    fn it_works() {
+    fn apa() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let apa = apa::ApaBibliographyGenerator::new();
@@ -836,6 +850,18 @@ mod tests {
         for entry in &entries {
             let refs = apa.get_reference(&entry);
             println!("{}", refs.print_ansi_vt100());
+        }
+    }
+
+    #[test]
+    fn ieee() {
+        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let entries = load_yaml_structure(&contents).unwrap();
+        let ieee = ieee::IeeeBibliographyGenerator::new();
+
+        for entry in &entries {
+            let refs = ieee.get_title_element(&entry);
+            println!("{}, {}", ieee.get_author(&entry), ieee.get_title_element(&entry).print_ansi_vt100());
         }
     }
 }

@@ -71,7 +71,7 @@ science-e-issue:
           given-name: "Laurenz"
           alias: "laurmaedje"
     date: 2020-07-18
-    parent: { type: Repository, title: typstc, url: https://github.com/typst/typstc }
+    parent: { type: Repository, title: Typst, url: https://github.com/typst/typst }
 
 terminator-2:
     type: Video
@@ -186,6 +186,24 @@ renaissance:
     edition: 1
     volume: 1
     volume-total: 3
+
+gedanken:
+    type: InAnthology
+    title: Gedanken-experiments on sequential machines
+    author: Moore, Edward F.
+    page-range: 129-153
+    parent:
+        type: Anthology
+        title: Automata studies
+        editor: ["Shannon, C. E.", "McCarthy, J."]
+        volume: 34
+        date: 1956-04
+        isbn: 978-0-691-07916-5
+        location: Princeton, NJ, USA
+        publisher: NBS
+        parent:
+            type: Anthology
+            title: Annals of Mathematics Studies
 
 georgia:
     type: Tweet

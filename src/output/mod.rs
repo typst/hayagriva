@@ -4,6 +4,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
 
 pub mod apa;
+pub mod ieee;
 
 /// Will be raised if a user-specified citation is not possible with the given
 /// database.
@@ -282,4 +283,37 @@ impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
     fn used_keys(&self) -> Vec<String> {
         self.cited_keys.iter().flat_map(|s| s.iter()).cloned().collect()
     }
+}
+
+fn format_range<T: std::fmt::Display + PartialEq>(
+    prefix_s: &str,
+    prefix_m: &str,
+    range: &std::ops::Range<T>,
+) -> String {
+    let space = if prefix_s.is_empty() { "" } else { " " };
+    if range.start == range.end {
+        format!("{}{}{}", prefix_s, space, range.start)
+    } else {
+        format!("{}{}{}–{}", prefix_m, space, range.start, range.end)
+    }
+}
+
+fn name_list(persons: &[Person]) -> Vec<String> {
+    let mut names = vec![];
+
+    for author in persons.iter() {
+        names.push(author.get_name_first());
+    }
+
+    names
+}
+
+fn name_list_straight(persons: &[Person]) -> Vec<String> {
+    let mut names = vec![];
+
+    for author in persons.iter() {
+        names.push(author.get_given_name_initials_first());
+    }
+
+    names
 }

@@ -1,11 +1,11 @@
-use super::Entry;
+use crate::Entry;
+use super::{format_range, name_list, name_list_straight};
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
 use crate::types::{
-    DisplayString, EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr, Person,
-    PersonRole, FormatVariantOptions
+    DisplayString, EntryType, EntryTypeModality, EntryTypeSpec, FormatVariantOptions,
+    NumOrStr, Person, PersonRole,
 };
-use std::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator {
@@ -139,39 +139,6 @@ impl<'s> SourceType<'s> {
 
         return Self::Generic;
     }
-}
-
-fn format_range<T: std::fmt::Display + PartialEq>(
-    prefix_s: &str,
-    prefix_m: &str,
-    range: &Range<T>,
-) -> String {
-    let space = if prefix_s.is_empty() { "" } else { " " };
-    if range.start == range.end {
-        format!("{}{}{}", prefix_s, space, range.start)
-    } else {
-        format!("{}{}{}–{}", prefix_m, space, range.start, range.end)
-    }
-}
-
-fn name_list(persons: &[Person]) -> Vec<String> {
-    let mut names = vec![];
-
-    for author in persons.iter() {
-        names.push(author.get_name_first());
-    }
-
-    names
-}
-
-fn name_list_straight(persons: &[Person]) -> Vec<String> {
-    let mut names = vec![];
-
-    for author in persons.iter() {
-        names.push(author.get_given_name_initials_first());
-    }
-
-    names
 }
 
 fn ampersand_list(names: Vec<String>) -> String {
@@ -453,7 +420,7 @@ impl ApaBibliographyGenerator {
     }
 
     fn get_date(&self, entry: &Entry) -> String {
-        if let Ok(date) = entry.get_date() {
+        if let Some(date) = entry.get_any_date() {
             match (date.month, date.day) {
                 (None, _) => format!("({:04}).", date.year),
                 (Some(month), None) => {
@@ -521,13 +488,22 @@ impl ApaBibliographyGenerator {
     }
 
     fn get_title(&self, entry: &Entry, wrap: bool) -> DisplayString {
-        let italicise = if entry.get_parents().unwrap_or_else(|_| vec![]).into_iter().any(|p| p.get_title().is_ok()) {
+        let italicise = if entry
+            .get_parents()
+            .unwrap_or_else(|_| vec![])
+            .into_iter()
+            .any(|p| p.get_title().is_ok())
+        {
             let talk = EntryTypeSpec::single_parent(
                 EntryTypeModality::Any,
                 EntryTypeModality::Specific(EntryType::Conference),
             );
             let preprint = EntryTypeSpec::single_parent(
-                EntryTypeModality::Alternate(vec![EntryType::Article, EntryType::Book, EntryType::Entry]),
+                EntryTypeModality::Alternate(vec![
+                    EntryType::Article,
+                    EntryType::Book,
+                    EntryType::Entry,
+                ]),
                 EntryTypeModality::Specific(EntryType::Repository),
             );
 
@@ -881,9 +857,9 @@ impl ApaBibliographyGenerator {
                     comma = true;
 
                     if parent.get_volume().is_ok() || parent.get_edition().is_ok() {
-                        res.push(' ');
-                        res += &ed_vol_str(entry, false);
+                        res += &ed_vol_str(parent, false);
                         res.push('.');
+                        comma = false;
                     }
                 }
 
@@ -1101,7 +1077,11 @@ impl ApaBibliographyGenerator {
             SourceType::GenericParent(parent) => {
                 if let Ok(title) = parent.get_title() {
                     let preprint = EntryTypeSpec::single_parent(
-                        EntryTypeModality::Alternate(vec![EntryType::Article, EntryType::Book, EntryType::Entry]),
+                        EntryTypeModality::Alternate(vec![
+                            EntryType::Article,
+                            EntryType::Book,
+                            EntryType::Entry,
+                        ]),
                         EntryTypeModality::Specific(EntryType::Repository),
                     );
 
@@ -1160,12 +1140,14 @@ impl ApaBibliographyGenerator {
 
     pub fn get_reference(&self, mut entry: &Entry) -> DisplayString {
         let parent = entry.get_parents_ref().and_then(|v| v.first().clone());
-        if entry.entry_type.check(EntryTypeModality::Alternate(vec![
+        while entry.entry_type.check(EntryTypeModality::Alternate(vec![
             EntryType::Chapter,
             EntryType::Scene,
         ])) {
             if let Some(p) = parent {
                 entry = &p;
+            } else {
+                break;
             }
         }
 

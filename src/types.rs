@@ -267,7 +267,7 @@ pub enum PersonRole {
     Unknown(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Person {
     pub name: String,
     pub given_name: Option<String>,
@@ -450,7 +450,7 @@ impl Person {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NumOrStr {
     Number(i64),
     Str(String),
@@ -465,7 +465,7 @@ impl Display for NumOrStr {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Date {
     pub year: i32,
     pub month: Option<u8>,
@@ -521,7 +521,7 @@ impl Date {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FormattableString {
     pub(crate) value: String,
     pub(crate) title_case: Option<String>,
@@ -529,7 +529,7 @@ pub struct FormattableString {
     pub(crate) verbatim: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FormattedString {
     pub value: String,
     pub title_case: String,
@@ -615,7 +615,11 @@ impl FormatVariants {
         self.get_min() .. self.get_max()
     }
 
-    pub(crate) fn from_option(opt: FormatVariantOptions, start: usize, end: usize) -> Self {
+    pub(crate) fn from_option(
+        opt: FormatVariantOptions,
+        start: usize,
+        end: usize,
+    ) -> Self {
         let tuple = (start, end);
 
         match opt {
@@ -701,15 +705,27 @@ impl Into<String> for DisplayString {
 
 impl DisplayString {
     pub fn new() -> Self {
-        Self { value: String::new(), formatting: vec![], pending_formatting: vec![] }
+        Self {
+            value: String::new(),
+            formatting: vec![],
+            pending_formatting: vec![],
+        }
     }
 
     pub fn from_str(s: &str) -> Self {
-        Self { value: s.to_string(), formatting: vec![], pending_formatting: vec![] }
+        Self {
+            value: s.to_string(),
+            formatting: vec![],
+            pending_formatting: vec![],
+        }
     }
 
     pub fn from_string(s: String) -> Self {
-        Self { value: s, formatting: vec![], pending_formatting: vec![] }
+        Self {
+            value: s,
+            formatting: vec![],
+            pending_formatting: vec![],
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -735,10 +751,38 @@ impl DisplayString {
 
     pub(crate) fn commit_formats(&mut self) {
         for (f, start) in &self.pending_formatting {
-            self.formatting.push(FormatVariants::from_option(f.clone(), *start, self.len()))
+            self.formatting.push(FormatVariants::from_option(
+                f.clone(),
+                *start,
+                self.len(),
+            ))
         }
 
         self.pending_formatting.clear();
+    }
+
+    pub(crate) fn add_if_some<S: Into<String>>(&mut self, item: Option<S>, prefix: Option<&str>, postfix: Option<&str>) {
+        if let Some(item) = item {
+            if let Some(prefix) = prefix {
+                *self += prefix;
+            }
+            *self += &item.into();
+            if let Some(postfix) = postfix {
+                *self += postfix;
+            }
+        }
+    }
+
+    pub(crate) fn add_if_ok<S: Into<String>, T>(&mut self, item: Result<S, T>, prefix: Option<&str>, postfix: Option<&str>) {
+        if let Ok(item) = item {
+            if let Some(prefix) = prefix {
+                *self += prefix;
+            }
+            *self += &item.into();
+            if let Some(postfix) = postfix {
+                *self += postfix;
+            }
+        }
     }
 
     pub fn print_ansi_vt100(&self) -> String {
@@ -753,15 +797,13 @@ impl DisplayString {
             start_end.push((opt, max, true));
         }
 
-        start_end.sort_by(|a, b| {
-            a.1.cmp(&b.1).reverse()
-        });
+        start_end.sort_by(|a, b| a.1.cmp(&b.1).reverse());
 
         let mut res = String::new();
         let mut pointer = self.len();
 
         for (f, index, end) in &start_end {
-            res = (&self.value[*index..pointer]).to_string() + &res;
+            res = (&self.value[*index .. pointer]).to_string() + &res;
             pointer = *index;
 
             let code = if *end {
@@ -774,13 +816,13 @@ impl DisplayString {
             };
             res = format!("\x1b[{}m", code) + &res;
         }
-        res = (&self.value[0..pointer]).to_string() + &res;
+        res = (&self.value[0 .. pointer]).to_string() + &res;
 
         res
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct QualifiedUrl {
     pub value: Url,
     pub visit_date: Option<Date>,
