@@ -52,6 +52,7 @@ omarova-libra:
 harry:
     type: Chapter
     page-range: 135-139
+    serial-number: 3
     parent:
         title: Harry Potter and the Order of the Phoenix
         author: Rowling, J. K.

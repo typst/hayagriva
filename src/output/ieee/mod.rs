@@ -5,7 +5,9 @@ use super::{
 };
 use crate::lang::{en, SentenceCase, TitleCase};
 use crate::types::EntryType::*;
-use crate::types::{Date, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole};
+use crate::types::{
+    Date, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole,
+};
 use crate::Entry;
 use isolang::Language;
 
@@ -90,7 +92,7 @@ impl IeeeBibliographyGenerator {
         entry.get_any_url().is_some()
     }
 
-    fn get_author(&self, entry: &Entry) -> String {
+    fn get_author(&self, entry: &Entry, canonical: &Entry) -> String {
         #[derive(Clone, Debug)]
         enum AuthorRole {
             Normal,
@@ -179,7 +181,11 @@ impl IeeeBibliographyGenerator {
             }
         }
 
-        let authors = names.unwrap_or_else(|| name_list_straight(&entry.get_authors()));
+        let mut authors = entry.get_authors();
+        if authors.is_empty() {
+            authors = canonical.get_authors();
+        }
+        let authors = names.unwrap_or_else(|| name_list_straight(&authors));
         let count = authors.len();
         let al = if !authors.is_empty() {
             let amps = self.and_list(authors);
@@ -855,11 +861,7 @@ impl IeeeBibliographyGenerator {
         let mut res = String::new();
         if let Some(month) = date.month {
             res += &(if let Some(day) = date.day {
-                format!(
-                    "{} {},",
-                    en::get_month_abbr(month, true).unwrap(),
-                    day + 1
-                )
+                format!("{} {},", en::get_month_abbr(month, true).unwrap(), day + 1)
             } else {
                 en::get_month_abbr(month, true).unwrap()
             });
@@ -872,15 +874,53 @@ impl IeeeBibliographyGenerator {
 }
 
 impl BibliographyGenerator for IeeeBibliographyGenerator {
-    fn get_reference(&self, entry: &Entry) -> DisplayString {
+    fn get_reference(&self, mut entry: &Entry) -> DisplayString {
+        let mut parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+        let mut sn_stack = vec![];
+        while entry.get_title().is_err()
+            && entry
+                .entry_type
+                .check(EntryTypeModality::Alternate(vec![Chapter, Scene]))
+        {
+            if let Ok(sn) = entry.get_serial_number() {
+                sn_stack.push(sn);
+            }
+            if let Some(p) = parent {
+                entry = &p;
+                parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+            } else {
+                break;
+            }
+        }
+
+        if entry.entry_type == Chapter {
+            if let Ok(sn) = entry.get_serial_number() {
+                sn_stack.push(sn);
+            }
+        }
+
+        let mut secs = sn_stack
+            .into_iter()
+            .map(|s| str::parse::<u32>(&s))
+            .filter(|s| s.is_ok())
+            .map(|s| s.unwrap())
+            .collect::<Vec<_>>();
+
+        let chapter = secs.get(0).map(|c| c.clone());
+        let section = if secs.len() > 1 {
+            secs.last().map(|c| c.clone())
+        } else {
+            None
+        };
+
         let url = self.show_url(entry);
-        let authors = self.get_author(entry);
 
         let parent = get_canonical_parent(entry);
         let canonical = parent.unwrap_or(entry);
 
+        let authors = self.get_author(entry, canonical);
         let title = self.get_title_element(entry, canonical);
-        let addons = self.get_addons(entry, canonical, None, None);
+        let addons = self.get_addons(entry, canonical, chapter, section);
 
         let mut res = DisplayString::from_string(authors);
 
@@ -900,7 +940,10 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
                 }
                 res += &location.value;
             }
-        } else if canonical.entry_type == Legislation || ((canonical.entry_type == Conference || canonical.entry_type == Patent) && url) {
+        } else if canonical.entry_type == Legislation
+            || ((canonical.entry_type == Conference || canonical.entry_type == Patent)
+                && url)
+        {
             if let Some(date) = entry.get_any_date() {
                 if !res.is_empty() {
                     res += ". ";
@@ -912,7 +955,12 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
         }
 
         if !res.is_empty() && !title.is_empty() {
-            if canonical.entry_type == Legislation || canonical.entry_type == Video || ((canonical.entry_type == Conference || canonical.entry_type == Patent) && url) {
+            if canonical.entry_type == Legislation
+                || canonical.entry_type == Video
+                || ((canonical.entry_type == Conference
+                    || canonical.entry_type == Patent)
+                    && url)
+            {
                 res += ". ";
             } else {
                 res += ", ";
@@ -921,9 +969,12 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
         res += title;
 
         let cur_len = res.len();
-        if cur_len > 4 && res.value.is_char_boundary(cur_len - 4) && &res.value[cur_len - 4..] == ",”" {
+        if cur_len > 4
+            && res.value.is_char_boundary(cur_len - 4)
+            && &res.value[cur_len - 4 ..] == ",”"
+        {
             if addons.is_empty() {
-                res.value = (&res.value[..cur_len - 4]).to_string();
+                res.value = (&res.value[.. cur_len - 4]).to_string();
                 res.value += "”";
             } else {
                 res.push(' ');
@@ -941,8 +992,11 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
         }
 
         let cur_len = res.len();
-        if cur_len > 3 && res.value.is_char_boundary(cur_len - 3) && &res.value[cur_len - 3..] == "”" {
-            res.value = (&res.value[..cur_len - 3]).to_string();
+        if cur_len > 3
+            && res.value.is_char_boundary(cur_len - 3)
+            && &res.value[cur_len - 3 ..] == "”"
+        {
+            res.value = (&res.value[.. cur_len - 3]).to_string();
             res.value += ".”";
         } else if !res.is_empty() {
             res += ".";

@@ -1130,13 +1130,14 @@ impl ApaBibliographyGenerator {
 
 impl BibliographyGenerator for ApaBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
-        let parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+        let mut parent = entry.get_parents_ref().and_then(|v| v.first().clone());
         while entry.entry_type.check(EntryTypeModality::Alternate(vec![
             EntryType::Chapter,
             EntryType::Scene,
         ])) {
             if let Some(p) = parent {
                 entry = &p;
+                parent = entry.get_parents_ref().and_then(|v| v.first().clone());
             } else {
                 break;
             }
