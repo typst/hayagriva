@@ -1,11 +1,11 @@
 mod abbreviations;
-use super::{format_range, name_list_straight};
+use super::{
+    format_range, name_list_straight, BibliographyGenerator, DisplayString,
+    FormatVariantOptions,
+};
 use crate::lang::{en, SentenceCase, TitleCase};
 use crate::types::EntryType::*;
-use crate::types::{
-    DisplayString, EntryTypeModality, EntryTypeSpec, FormatVariantOptions,
-    FormattableString, FormattedString, NumOrStr, Person, PersonRole,
-};
+use crate::types::{Date, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole};
 use crate::Entry;
 use isolang::Language;
 
@@ -31,7 +31,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
     );
     let proc_spec = EntryTypeSpec::single_parent(
         EntryTypeModality::Any,
-        EntryTypeModality::Specific(Proceedings),
+        EntryTypeModality::Alternate(vec![Conference, Proceedings]),
     );
     let periodical_spec = EntryTypeSpec::single_parent(
         EntryTypeModality::Specific(Article),
@@ -90,7 +90,7 @@ impl IeeeBibliographyGenerator {
         entry.get_any_url().is_some()
     }
 
-    pub fn get_author(&self, entry: &Entry) -> String {
+    fn get_author(&self, entry: &Entry) -> String {
         #[derive(Clone, Debug)]
         enum AuthorRole {
             Normal,
@@ -181,14 +181,14 @@ impl IeeeBibliographyGenerator {
 
         let authors = names.unwrap_or_else(|| name_list_straight(&entry.get_authors()));
         let count = authors.len();
-        let mut al = if !authors.is_empty() {
+        let al = if !authors.is_empty() {
             let amps = self.and_list(authors);
             match role {
                 AuthorRole::Normal => amps,
                 AuthorRole::ExecutiveProducer if count == 1 => {
-                    format!("{}, Executive Prod.", amps)
+                    format!("{}, Executive Prod", amps)
                 }
-                AuthorRole::ExecutiveProducer => format!("{}, Executive Prods.", amps),
+                AuthorRole::ExecutiveProducer => format!("{}, Executive Prods", amps),
                 AuthorRole::Director if count == 1 => format!("{}, Director", amps),
                 AuthorRole::Director => format!("{}, Directors", amps),
             }
@@ -209,10 +209,7 @@ impl IeeeBibliographyGenerator {
         al
     }
 
-    pub fn get_title_element(&self, entry: &Entry) -> DisplayString {
-        let parent = get_canonical_parent(entry);
-        let canonical = parent.unwrap_or(entry);
-
+    fn get_title_element(&self, entry: &Entry, canonical: &Entry) -> DisplayString {
         // Article > Periodical: "<SC>," _<abbr(TC)>_
         // Any > Conference:     <SC>. Presented at <abbr(TC)>
         // Any > Anthology:      "<SC>," in _<TC>_ (TC, no. <issue>)
@@ -363,16 +360,10 @@ impl IeeeBibliographyGenerator {
             EntryTypeModality::Specific(Repository),
         ));
 
-        let web = entry.check_with_spec(EntryTypeSpec::new(
-            EntryTypeModality::Alternate(vec![Blog, WebItem]),
-            vec![],
-        ));
-
         let web_parented = entry.check_with_spec(EntryTypeSpec::single_parent(
             EntryTypeModality::Any,
             EntryTypeModality::Alternate(vec![Blog, WebItem]),
         ));
-
 
         match (entry.entry_type, canonical.entry_type) {
             (_, Conference) | (_, Proceedings) => {
@@ -409,20 +400,22 @@ impl IeeeBibliographyGenerator {
                     res.push(location.value);
                 }
 
-                if let Some(date) = entry.get_any_date() {
-                    if let Some(month) = date.month {
-                        res.push(if let Some(day) = date.day {
-                            format!(
-                                "{} {}",
-                                en::get_month_abbr(month, true).unwrap(),
-                                day + 1
-                            )
-                        } else {
-                            en::get_month_abbr(month, true).unwrap()
-                        });
-                    }
+                if canonical.entry_type != Conference || !self.show_url(entry) {
+                    if let Some(date) = entry.get_any_date() {
+                        if let Some(month) = date.month {
+                            res.push(if let Some(day) = date.day {
+                                format!(
+                                    "{} {}",
+                                    en::get_month_abbr(month, true).unwrap(),
+                                    day + 1
+                                )
+                            } else {
+                                en::get_month_abbr(month, true).unwrap()
+                            });
+                        }
 
-                    res.push(date.year.to_string());
+                        res.push(date.year.to_string());
+                    }
                 }
 
                 if canonical.entry_type == Conference {
@@ -853,6 +846,143 @@ impl IeeeBibliographyGenerator {
                     res.push(format_range("p.", "pp.", &pages));
                 }
             }
+        }
+
+        res
+    }
+
+    fn formt_date(&self, date: &Date) -> String {
+        let mut res = String::new();
+        if let Some(month) = date.month {
+            res += &(if let Some(day) = date.day {
+                format!(
+                    "{} {},",
+                    en::get_month_abbr(month, true).unwrap(),
+                    day + 1
+                )
+            } else {
+                en::get_month_abbr(month, true).unwrap()
+            });
+            res += " ";
+        }
+
+        res += &date.year.to_string();
+        res
+    }
+}
+
+impl BibliographyGenerator for IeeeBibliographyGenerator {
+    fn get_reference(&self, entry: &Entry) -> DisplayString {
+        let url = self.show_url(entry);
+        let authors = self.get_author(entry);
+
+        let parent = get_canonical_parent(entry);
+        let canonical = parent.unwrap_or(entry);
+
+        let title = self.get_title_element(entry, canonical);
+        let addons = self.get_addons(entry, canonical, None, None);
+
+        let mut res = DisplayString::from_string(authors);
+
+        if canonical.entry_type == Legislation {
+            if let Ok(NumOrStr::Str(session)) = entry.get_edition() {
+                if !res.is_empty() {
+                    res += ". ";
+                }
+                res += &session;
+            }
+        }
+
+        if canonical.entry_type == Video {
+            if let Ok(location) = canonical.get_location() {
+                if !res.is_empty() {
+                    res += ", ";
+                }
+                res += &location.value;
+            }
+        } else if canonical.entry_type == Legislation || ((canonical.entry_type == Conference || canonical.entry_type == Patent) && url) {
+            if let Some(date) = entry.get_any_date() {
+                if !res.is_empty() {
+                    res += ". ";
+                }
+                res.push('(');
+                res += &self.formt_date(&date);
+                res.push(')');
+            }
+        }
+
+        if !res.is_empty() && !title.is_empty() {
+            if canonical.entry_type == Legislation || canonical.entry_type == Video || ((canonical.entry_type == Conference || canonical.entry_type == Patent) && url) {
+                res += ". ";
+            } else {
+                res += ", ";
+            }
+        }
+        res += title;
+
+        let cur_len = res.len();
+        if cur_len > 4 && res.value.is_char_boundary(cur_len - 4) && &res.value[cur_len - 4..] == ",”" {
+            if addons.is_empty() {
+                res.value = (&res.value[..cur_len - 4]).to_string();
+                res.value += "”";
+            } else {
+                res.push(' ');
+            }
+        } else if !res.is_empty() && !addons.is_empty() {
+            res += ", ";
+        }
+
+        let addon_count = addons.len();
+        for (index, addon) in addons.into_iter().enumerate() {
+            res += &addon;
+            if index + 1 < addon_count {
+                res += ", "
+            }
+        }
+
+        let cur_len = res.len();
+        if cur_len > 3 && res.value.is_char_boundary(cur_len - 3) && &res.value[cur_len - 3..] == "”" {
+            res.value = (&res.value[..cur_len - 3]).to_string();
+            res.value += ".”";
+        } else if !res.is_empty() {
+            res += ".";
+        }
+
+        if url {
+            if let Some(url) = entry.get_any_url() {
+                if !res.is_empty() {
+                    res += " ";
+                }
+
+                if canonical.entry_type != WebItem && canonical.entry_type != Blog {
+                    if let Some(date) = url.visit_date {
+                        res += &format!("Accessed: {}. ", self.formt_date(&date));
+                    }
+
+                    if canonical.entry_type == Video {
+                        res += "[Online Video]";
+                    } else {
+                        res += "[Online]";
+                    }
+
+                    res += ". Available: ";
+                    res += url.value.as_str();
+                } else {
+                    res += url.value.as_str();
+
+                    if let Some(date) = url.visit_date {
+                        res += &format!(" (accessed: {}).", self.formt_date(&date));
+                    }
+                }
+            }
+        }
+
+        if let Ok(note) = entry.get_note() {
+            if !res.is_empty() {
+                res += " ";
+            }
+
+            res += &format!("({})", note);
         }
 
         res

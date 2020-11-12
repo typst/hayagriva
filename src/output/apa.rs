@@ -1,9 +1,11 @@
-use super::{format_range, name_list, name_list_straight};
+use super::{
+    format_range, name_list, name_list_straight, BibliographyGenerator, DisplayString,
+    FormatVariantOptions,
+};
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
 use crate::types::{
-    DisplayString, EntryType, EntryTypeModality, EntryTypeSpec, FormatVariantOptions,
-    NumOrStr, Person, PersonRole,
+    EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole,
 };
 use crate::Entry;
 
@@ -1124,8 +1126,10 @@ impl ApaBibliographyGenerator {
 
         res
     }
+}
 
-    pub fn get_reference(&self, mut entry: &Entry) -> DisplayString {
+impl BibliographyGenerator for ApaBibliographyGenerator {
+    fn get_reference(&self, mut entry: &Entry) -> DisplayString {
         let parent = entry.get_parents_ref().and_then(|v| v.first().clone());
         while entry.entry_type.check(EntryTypeModality::Alternate(vec![
             EntryType::Chapter,

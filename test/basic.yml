@@ -222,3 +222,10 @@ really-habitable:
     parent:
         type: Repository
         title: arXiv
+
+electronic-music:
+    type: WebItem
+    title: Ishkur's Guide to Electronic Music
+    serial-number: v2.5
+    author: Ishkur
+    url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-12 }

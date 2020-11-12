@@ -1,6 +1,8 @@
 use super::types::Person;
 use super::{Entry, FieldTypes};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::convert::Into;
+use std::ops::{Add, AddAssign};
 use thiserror::Error;
 
 pub mod apa;
@@ -18,6 +20,14 @@ pub enum CitationError {
     NoAuthorField(String),
     #[error("key {0} does not contain the date field required for this style")]
     NoYearField(String),
+}
+
+/// Structs that implement this can be used to generate bibliography references
+/// for sources.
+pub trait BibliographyGenerator {
+    /// Get a string with optional formatting that describes `Entry` in
+    /// accordance with the implementing struct's style.
+    fn get_reference(&self, entry: &Entry) -> DisplayString;
 }
 
 /// Represents a citation of one or more database entries.
@@ -316,4 +326,266 @@ fn name_list_straight(persons: &[Person]) -> Vec<String> {
     }
 
     names
+}
+
+/// Formatting modifiers for strings.
+/// Each variant holds a tuple with a start and
+/// an end index.
+#[derive(Clone, Debug)]
+pub enum FormatVariants {
+    Bold((usize, usize)),
+    Italic((usize, usize)),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FormatVariantOptions {
+    Bold,
+    Italic,
+}
+
+impl FormatVariants {
+    pub fn get_min(&self) -> usize {
+        match self {
+            Self::Bold((a, _)) => a,
+            Self::Italic((a, _)) => a,
+        }
+        .clone()
+    }
+    pub fn get_max(&self) -> usize {
+        match self {
+            Self::Bold((_, b)) => b,
+            Self::Italic((_, b)) => b,
+        }
+        .clone()
+    }
+    pub fn offset(self, o: i32) -> Self {
+        match self {
+            Self::Bold((a, b)) => {
+                Self::Bold(((a as i32 + o) as usize, (b as i32 + o) as usize))
+            }
+            Self::Italic((a, b)) => {
+                Self::Italic(((a as i32 + o) as usize, (b as i32 + o) as usize))
+            }
+        }
+        .clone()
+    }
+    pub fn get_range(&self) -> std::ops::Range<usize> {
+        self.get_min() .. self.get_max()
+    }
+
+    pub(crate) fn from_option(
+        opt: FormatVariantOptions,
+        start: usize,
+        end: usize,
+    ) -> Self {
+        let tuple = (start, end);
+
+        match opt {
+            FormatVariantOptions::Bold => Self::Bold(tuple),
+            FormatVariantOptions::Italic => Self::Italic(tuple),
+        }
+    }
+
+    pub(crate) fn get_option(&self) -> FormatVariantOptions {
+        match self {
+            Self::Bold(_) => FormatVariantOptions::Bold,
+            Self::Italic(_) => FormatVariantOptions::Italic,
+        }
+    }
+}
+
+/// A printable string with a list of formatting modifications
+#[derive(Clone, Debug)]
+pub struct DisplayString {
+    pub value: String,
+    pub formatting: Vec<FormatVariants>,
+
+    pending_formatting: Vec<(FormatVariantOptions, usize)>,
+}
+
+impl Add<&str> for DisplayString {
+    type Output = DisplayString;
+
+    #[inline]
+    fn add(mut self, other: &str) -> DisplayString {
+        self.value.push_str(other);
+        self
+    }
+}
+
+impl Add<Self> for DisplayString {
+    type Output = Self;
+
+    #[inline]
+    fn add(mut self, other: Self) -> Self {
+        self.formatting.append(
+            &mut other
+                .formatting
+                .into_iter()
+                .map(|e| e.offset(self.value.len() as i32))
+                .collect(),
+        );
+        self.value.push_str(&other.value);
+        self
+    }
+}
+
+impl AddAssign<&String> for DisplayString {
+    fn add_assign(&mut self, other: &String) {
+        self.value.push_str(other);
+    }
+}
+
+impl AddAssign<&str> for DisplayString {
+    fn add_assign(&mut self, other: &str) {
+        self.value.push_str(other);
+    }
+}
+
+impl AddAssign<Self> for DisplayString {
+    fn add_assign(&mut self, other: Self) {
+        self.formatting.append(
+            &mut other
+                .formatting
+                .into_iter()
+                .map(|e| e.offset(self.value.len() as i32))
+                .collect(),
+        );
+        self.value.push_str(&other.value);
+    }
+}
+
+impl Into<String> for DisplayString {
+    fn into(self) -> String {
+        self.value
+    }
+}
+
+impl DisplayString {
+    pub fn new() -> Self {
+        Self {
+            value: String::new(),
+            formatting: vec![],
+            pending_formatting: vec![],
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        Self {
+            value: s.to_string(),
+            formatting: vec![],
+            pending_formatting: vec![],
+        }
+    }
+
+    pub fn from_string(s: String) -> Self {
+        Self {
+            value: s,
+            formatting: vec![],
+            pending_formatting: vec![],
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
+
+    pub fn last(&self) -> Option<char> {
+        self.value.chars().last()
+    }
+
+    pub fn push(&mut self, ch: char) {
+        self.value.push(ch);
+    }
+
+    pub(crate) fn start_format(&mut self, f: FormatVariantOptions) {
+        debug_assert!(!self.pending_formatting.iter().any(|e| e.0 == f));
+        self.pending_formatting.push((f, self.len()));
+    }
+
+    pub(crate) fn commit_formats(&mut self) {
+        for (f, start) in &self.pending_formatting {
+            self.formatting.push(FormatVariants::from_option(
+                f.clone(),
+                *start,
+                self.len(),
+            ))
+        }
+
+        self.pending_formatting.clear();
+    }
+
+    pub(crate) fn add_if_some<S: Into<String>>(
+        &mut self,
+        item: Option<S>,
+        prefix: Option<&str>,
+        postfix: Option<&str>,
+    ) {
+        if let Some(item) = item {
+            if let Some(prefix) = prefix {
+                *self += prefix;
+            }
+            *self += &item.into();
+            if let Some(postfix) = postfix {
+                *self += postfix;
+            }
+        }
+    }
+
+    pub(crate) fn add_if_ok<S: Into<String>, T>(
+        &mut self,
+        item: Result<S, T>,
+        prefix: Option<&str>,
+        postfix: Option<&str>,
+    ) {
+        if let Ok(item) = item {
+            if let Some(prefix) = prefix {
+                *self += prefix;
+            }
+            *self += &item.into();
+            if let Some(postfix) = postfix {
+                *self += postfix;
+            }
+        }
+    }
+
+    pub fn print_ansi_vt100(&self) -> String {
+        let mut start_end = vec![];
+
+        for item in &self.formatting {
+            let opt = item.get_option();
+            let min = item.get_min();
+            let max = item.get_max();
+
+            start_end.push((opt.clone(), min, false));
+            start_end.push((opt, max, true));
+        }
+
+        start_end.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+
+        let mut res = String::new();
+        let mut pointer = self.len();
+
+        for (f, index, end) in &start_end {
+            res = (&self.value[*index .. pointer]).to_string() + &res;
+            pointer = *index;
+
+            let code = if *end {
+                "0"
+            } else {
+                match f {
+                    FormatVariantOptions::Bold => "1",
+                    FormatVariantOptions::Italic => "3",
+                }
+            };
+            res = format!("\x1b[{}m", code) + &res;
+        }
+        res = (&self.value[0 .. pointer]).to_string() + &res;
+
+        res
+    }
 }

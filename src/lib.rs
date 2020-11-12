@@ -156,7 +156,6 @@ impl Entry {
         organization: "organization",
         issue: "issue" => NumOrStr,
         edition: "edition" => NumOrStr,
-        version: "version",
         volume: "volume" => std::ops::Range<i64>,
         total_volumes: "volume-total" => i64,
         page_range: "page-range" => std::ops::Range<i64>
@@ -846,7 +845,7 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::{apa, ieee};
+    use crate::output::{apa, ieee, BibliographyGenerator};
     use std::fs;
 
     #[test]
@@ -868,11 +867,8 @@ mod tests {
         let ieee = ieee::IeeeBibliographyGenerator::new();
 
         for entry in &entries {
-            println!(
-                "{}, {}",
-                ieee.get_author(&entry),
-                ieee.get_title_element(&entry).print_ansi_vt100()
-            );
+            let refs = ieee.get_reference(&entry);
+            println!("{}", refs.print_ansi_vt100());
         }
     }
 }
