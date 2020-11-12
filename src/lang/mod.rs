@@ -386,10 +386,11 @@ impl CaseTransformer for SentenceCase {
                 res.push(c);
             } else {
                 // Collect word to check it against the database
-                let word = &title[index .. index + len].to_lowercase();
+                let word = &title[index .. index + len];
+                let uppercase = word.chars().any(|c| c.is_uppercase());
 
-                if self.use_exception_dictionary
-                    && en::ALWAYS_CAPITALIZE.binary_search(&word.as_str()).is_ok()
+                if self.use_exception_dictionary && uppercase
+                    && en::ALWAYS_CAPITALIZE.binary_search(&word.to_lowercase().as_str()).is_ok()
                 {
                     res.push_str(&c.to_uppercase().to_string());
                 } else {
