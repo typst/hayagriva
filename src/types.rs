@@ -761,7 +761,12 @@ impl DisplayString {
         self.pending_formatting.clear();
     }
 
-    pub(crate) fn add_if_some<S: Into<String>>(&mut self, item: Option<S>, prefix: Option<&str>, postfix: Option<&str>) {
+    pub(crate) fn add_if_some<S: Into<String>>(
+        &mut self,
+        item: Option<S>,
+        prefix: Option<&str>,
+        postfix: Option<&str>,
+    ) {
         if let Some(item) = item {
             if let Some(prefix) = prefix {
                 *self += prefix;
@@ -773,7 +778,12 @@ impl DisplayString {
         }
     }
 
-    pub(crate) fn add_if_ok<S: Into<String>, T>(&mut self, item: Result<S, T>, prefix: Option<&str>, postfix: Option<&str>) {
+    pub(crate) fn add_if_ok<S: Into<String>, T>(
+        &mut self,
+        item: Result<S, T>,
+        prefix: Option<&str>,
+        postfix: Option<&str>,
+    ) {
         if let Ok(item) = item {
             if let Some(prefix) = prefix {
                 *self += prefix;

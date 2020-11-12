@@ -499,8 +499,8 @@ pub fn get_month_name(month: u8) -> Result<String, ()> {
 
 /// Will get an english three-letter abbreviation for a zero-indexed month.
 /// Returns an error if month out of range.
-pub fn get_month_abbr(month: u8) -> Result<String, ()> {
-    Ok(match month {
+pub fn get_month_abbr(month: u8, dot: bool) -> Result<String, ()> {
+    let mut res = match month {
         0 => "Jan",
         1 => "Feb",
         2 => "Mar",
@@ -515,7 +515,13 @@ pub fn get_month_abbr(month: u8) -> Result<String, ()> {
         11 => "Dec",
         _ => return Err(()),
     }
-    .to_string())
+    .to_string();
+
+    if dot && month != 4 {
+        res.push('.');
+    }
+
+    Ok(res)
 }
 
 pub fn get_ordinal(num: i64) -> String {

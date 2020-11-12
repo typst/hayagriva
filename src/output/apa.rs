@@ -1,4 +1,3 @@
-use crate::Entry;
 use super::{format_range, name_list, name_list_straight};
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
@@ -6,6 +5,7 @@ use crate::types::{
     DisplayString, EntryType, EntryTypeModality, EntryTypeSpec, FormatVariantOptions,
     NumOrStr, Person, PersonRole,
 };
+use crate::Entry;
 
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator {
@@ -439,20 +439,7 @@ impl ApaBibliographyGenerator {
     }
 
     fn get_retreival_date(&self, entry: &Entry, use_date: bool) -> Option<String> {
-        let url = entry.get_url().ok().or_else(|| {
-            let urls = entry
-                .get_parents()
-                .unwrap_or_else(|_| vec![])
-                .into_iter()
-                .map(|p| p.get_url());
-            for u in urls {
-                if let Ok(url) = u {
-                    return Some(url);
-                }
-            }
-
-            None
-        });
+        let url = entry.get_any_url();
 
         if let Some(qurl) = url {
             let uv = qurl.value.as_str();
@@ -502,7 +489,7 @@ impl ApaBibliographyGenerator {
                 EntryTypeModality::Alternate(vec![
                     EntryType::Article,
                     EntryType::Book,
-                    EntryType::Entry,
+                    EntryType::InAnthology,
                 ]),
                 EntryTypeModality::Specific(EntryType::Repository),
             );

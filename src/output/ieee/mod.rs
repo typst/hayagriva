@@ -1,11 +1,13 @@
 mod abbreviations;
-use crate::lang::{SentenceCase, TitleCase};
-use super::{name_list_straight};
-use crate::types::{
-    DisplayString, EntryTypeModality, EntryTypeSpec, FormattableString, FormattedString, FormatVariantOptions, Person, PersonRole
-};
+use super::{format_range, name_list_straight};
+use crate::lang::{en, SentenceCase, TitleCase};
 use crate::types::EntryType::*;
+use crate::types::{
+    DisplayString, EntryTypeModality, EntryTypeSpec, FormatVariantOptions,
+    FormattableString, FormattedString, NumOrStr, Person, PersonRole,
+};
 use crate::Entry;
+use isolang::Language;
 
 #[derive(Clone, Debug)]
 pub struct IeeeBibliographyGenerator {
@@ -13,7 +15,6 @@ pub struct IeeeBibliographyGenerator {
     tc_formatter: TitleCase,
     et_al_threshold: Option<u32>,
 }
-
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
     let section_spec = EntryTypeSpec::single_parent(
@@ -83,6 +84,10 @@ impl IeeeBibliographyGenerator {
         }
 
         res
+    }
+
+    fn show_url(&self, entry: &Entry) -> bool {
+        entry.get_any_url().is_some()
     }
 
     pub fn get_author(&self, entry: &Entry) -> String {
@@ -183,9 +188,7 @@ impl IeeeBibliographyGenerator {
                 AuthorRole::ExecutiveProducer if count == 1 => {
                     format!("{}, Executive Prod.", amps)
                 }
-                AuthorRole::ExecutiveProducer => {
-                    format!("{}, Executive Prods.", amps)
-                }
+                AuthorRole::ExecutiveProducer => format!("{}, Executive Prods.", amps),
                 AuthorRole::Director if count == 1 => format!("{}, Director", amps),
                 AuthorRole::Director => format!("{}, Directors", amps),
             }
@@ -246,6 +249,16 @@ impl IeeeBibliographyGenerator {
                     res += "Presented at ";
                     res += &ct;
                 } else {
+                    if let Ok(lang) =
+                        entry.get_language().or_else(|_| canonical.get_language())
+                    {
+                        res += "(in ";
+                        res += Language::from_639_1(lang.language.as_str())
+                            .unwrap()
+                            .to_name();
+                        res += ") ";
+                    }
+
                     if entry.entry_type != Article || canonical.entry_type != Periodical {
                         res += "in ";
                     }
@@ -254,23 +267,45 @@ impl IeeeBibliographyGenerator {
                     res.commit_formats();
 
                     // Do the series parentheses thing here
-                    let spec = EntryTypeSpec::single_parent(EntryTypeModality::Specific(Anthology), EntryTypeModality::Specific(Anthology));
+                    let spec = EntryTypeSpec::single_parent(
+                        EntryTypeModality::Specific(Anthology),
+                        EntryTypeModality::Specific(Anthology),
+                    );
                     if let Ok(par_anth) = canonical.check_with_spec(spec) {
-                        let par_anth = canonical.get_parents_ref().unwrap().get(par_anth[0]).unwrap();
-                        if let Ok(par_t) = par_anth.get_title_fmt(Some(&self.tc_formatter), None) {
+                        let par_anth = canonical
+                            .get_parents_ref()
+                            .unwrap()
+                            .get(par_anth[0])
+                            .unwrap();
+                        if let Ok(par_t) =
+                            par_anth.get_title_fmt(Some(&self.tc_formatter), None)
+                        {
                             res += " (";
                             res += &par_t.title_case;
 
-                            res.add_if_ok(par_anth.get_issue().map(|v| v.to_string()), Some(", no. "), None);
+                            res.add_if_ok(
+                                par_anth.get_issue().map(|v| v.to_string()),
+                                Some(", no. "),
+                                None,
+                            );
                             res += ")";
                         }
                     }
 
                     // And the conference series thing as well
-                    let spec = EntryTypeSpec::single_parent(EntryTypeModality::Specific(Proceedings), EntryTypeModality::Alternate(vec![Proceedings, Anthology, Misc]));
+                    let spec = EntryTypeSpec::single_parent(
+                        EntryTypeModality::Specific(Proceedings),
+                        EntryTypeModality::Alternate(vec![Proceedings, Anthology, Misc]),
+                    );
                     if let Ok(par_conf) = canonical.check_with_spec(spec) {
-                        let par_conf = canonical.get_parents_ref().unwrap().get(par_conf[0]).unwrap();
-                        if let Ok(par_t) = par_conf.get_title_fmt(Some(&self.tc_formatter), None) {
+                        let par_conf = canonical
+                            .get_parents_ref()
+                            .unwrap()
+                            .get(par_conf[0])
+                            .unwrap();
+                        if let Ok(par_t) =
+                            par_conf.get_title_fmt(Some(&self.tc_formatter), None)
+                        {
                             res += " in ";
                             res += &par_t.title_case;
                         }
@@ -278,7 +313,17 @@ impl IeeeBibliographyGenerator {
                 }
             }
         // No canonical parent
-        } else if [Legislation, Repository, Video, Reference, Book, Proceedings, Anthology].contains(&entry.entry_type) {
+        } else if [
+            Legislation,
+            Repository,
+            Video,
+            Reference,
+            Book,
+            Proceedings,
+            Anthology,
+        ]
+        .contains(&entry.entry_type)
+        {
             res.start_format(FormatVariantOptions::Italic);
 
             if entry.entry_type == Legislation {
@@ -298,6 +343,515 @@ impl IeeeBibliographyGenerator {
                 res += "“";
                 res += &title.sentence_case;
                 res += ",”";
+            }
+        }
+
+        res
+    }
+
+    fn get_addons(
+        &self,
+        entry: &Entry,
+        canonical: &Entry,
+        chapter: Option<u32>,
+        section: Option<u32>,
+    ) -> Vec<String> {
+        let mut res = vec![];
+        let ident = entry == canonical;
+        let preprint = entry.check_with_spec(EntryTypeSpec::single_parent(
+            EntryTypeModality::Alternate(vec![Article, Book, InAnthology]),
+            EntryTypeModality::Specific(Repository),
+        ));
+
+        let web = entry.check_with_spec(EntryTypeSpec::new(
+            EntryTypeModality::Alternate(vec![Blog, WebItem]),
+            vec![],
+        ));
+
+        let web_parented = entry.check_with_spec(EntryTypeSpec::single_parent(
+            EntryTypeModality::Any,
+            EntryTypeModality::Alternate(vec![Blog, WebItem]),
+        ));
+
+
+        match (entry.entry_type, canonical.entry_type) {
+            (_, Conference) | (_, Proceedings) => {
+                if canonical.entry_type == Proceedings {
+                    if let Ok(eds) = canonical.get_editors() {
+                        let mut al = self.and_list(name_list_straight(&eds));
+                        if eds.len() > 1 {
+                            al += ", Eds."
+                        } else {
+                            al += ", Ed."
+                        }
+                        res.push(al);
+                    }
+
+                    if let Ok(vols) =
+                        entry.get_volume().or_else(|_| canonical.get_volume())
+                    {
+                        res.push(format_range("vol.", "vols.", &vols));
+                    }
+
+                    if let Ok(ed) = canonical.get_edition() {
+                        match ed {
+                            NumOrStr::Number(i) => {
+                                if i > 1 {
+                                    res.push(format!("{} ed.", en::get_ordinal(i)));
+                                }
+                            }
+                            NumOrStr::Str(s) => res.push(s),
+                        }
+                    }
+                }
+
+                if let Ok(location) = canonical.get_location() {
+                    res.push(location.value);
+                }
+
+                if let Some(date) = entry.get_any_date() {
+                    if let Some(month) = date.month {
+                        res.push(if let Some(day) = date.day {
+                            format!(
+                                "{} {}",
+                                en::get_month_abbr(month, true).unwrap(),
+                                day + 1
+                            )
+                        } else {
+                            en::get_month_abbr(month, true).unwrap()
+                        });
+                    }
+
+                    res.push(date.year.to_string());
+                }
+
+                if canonical.entry_type == Conference {
+                    if let Ok(sn) = entry.get_serial_number() {
+                        res.push(format!("Paper {}", sn));
+                    }
+                } else {
+                    if let Ok(pages) = entry.get_page_range() {
+                        res.push(format_range("p.", "pp.", &pages));
+                    }
+
+                    if let Ok(doi) = entry.get_doi() {
+                        res.push(format!("doi: {}", doi));
+                    }
+                }
+            }
+            (_, Reference) => {
+                let has_url = self.show_url(entry);
+                let date = entry.get_any_date().map(|date| {
+                    let mut res = if let Some(month) = date.month {
+                        if let Some(day) = date.day {
+                            format!(
+                                "{} {}, ",
+                                en::get_month_abbr(month, true).unwrap(),
+                                day + 1
+                            )
+                        } else {
+                            format!("{} ", en::get_month_abbr(month, true).unwrap())
+                        }
+                    } else {
+                        String::new()
+                    };
+
+                    res += &date.year.to_string();
+                    res
+                });
+
+                if let Ok(ed) = canonical.get_edition() {
+                    match ed {
+                        NumOrStr::Number(i) => {
+                            if i > 1 {
+                                res.push(format!("{} ed.", en::get_ordinal(i)));
+                            }
+                        }
+                        NumOrStr::Str(s) => res.push(s),
+                    }
+                }
+
+                if !has_url {
+                    if let Ok(publisher) = canonical
+                        .get_organization()
+                        .or_else(|_| canonical.get_publisher().map(|e| e.value))
+                    {
+                        res.push(publisher);
+
+                        if let Ok(location) = canonical.get_location() {
+                            res.push(location.value);
+                        }
+                    }
+
+                    if let Some(date) = date {
+                        res.push(date);
+                    }
+
+                    if let Ok(pages) = entry.get_page_range() {
+                        res.push(format_range("p.", "pp.", &pages));
+                    }
+                } else {
+                    if let Some(date) = date {
+                        res.push(format!("({})", date));
+                    }
+                }
+            }
+            (_, Repository) => {
+                if let Ok(sn) = canonical.get_serial_number() {
+                    res.push(format!("(version {})", sn));
+                } else if let Some(date) =
+                    canonical.get_date().ok().or_else(|| entry.get_any_date())
+                {
+                    res.push(format!("({})", date.year));
+                }
+
+                if let Ok(publisher) = canonical
+                    .get_publisher()
+                    .map(|e| e.value)
+                    .or_else(|_| canonical.get_organization())
+                {
+                    let mut publ = String::new();
+                    if let Ok(location) = canonical.get_location() {
+                        publ += &location.value;
+                        publ += ": ";
+                    }
+
+                    publ += &publisher;
+
+                    if let Ok(lang) =
+                        entry.get_language().or_else(|_| canonical.get_language())
+                    {
+                        publ += " (in ";
+                        publ += Language::from_639_1(lang.language.as_str())
+                            .unwrap()
+                            .to_name();
+                        publ.push(')');
+                    }
+
+                    res.push(publ);
+                }
+            }
+            (_, Video) => {
+                if let Some(date) =
+                    canonical.get_date().ok().or_else(|| entry.get_any_date())
+                {
+                    res.push(format!("({})", date.year));
+                }
+            }
+            (_, Patent) => {
+                let mut start = String::new();
+                if let Ok(location) = canonical.get_location() {
+                    start += &location.value;
+                    start.push(' ');
+                }
+
+                start += "Patent";
+
+                if let Ok(sn) = canonical.get_serial_number() {
+                    start += &format!(" {}", sn);
+                }
+
+                if self.show_url(entry) {
+                    let mut fin = String::new();
+                    if let Some(date) = entry.get_any_date() {
+                        fin += "(";
+                        fin += &date.year.to_string();
+                        if let Some(month) = date.month {
+                            fin += ", ";
+                            fin += &(if let Some(day) = date.day {
+                                format!(
+                                    "{} {}",
+                                    en::get_month_abbr(month, true).unwrap(),
+                                    day + 1
+                                )
+                            } else {
+                                en::get_month_abbr(month, true).unwrap()
+                            });
+                        }
+                        fin += "). ";
+                    }
+
+                    fin += &start;
+
+                    res.push(fin);
+                } else {
+                    res.push(start);
+
+                    if let Some(date) = entry.get_any_date() {
+                        if let Some(month) = date.month {
+                            res.push(if let Some(day) = date.day {
+                                format!(
+                                    "{} {}",
+                                    en::get_month_abbr(month, true).unwrap(),
+                                    day + 1
+                                )
+                            } else {
+                                en::get_month_abbr(month, true).unwrap()
+                            });
+                        }
+
+                        res.push(date.year.to_string());
+                    }
+                }
+            }
+            (_, Periodical) => {
+                if let Ok(vols) = canonical.get_volume() {
+                    res.push(format_range("vol.", "vols.", &vols));
+                }
+
+                if let Ok(iss) = canonical.get_issue() {
+                    res.push(format!("no. {}", iss));
+                }
+
+                let pages = if let Ok(pages) = entry.get_page_range() {
+                    res.push(format_range("p.", "pp.", &pages));
+                    true
+                } else {
+                    false
+                };
+
+                if let Some(date) = entry.get_any_date() {
+                    if let Some(month) = date.month {
+                        res.push(if let Some(day) = date.day {
+                            format!(
+                                "{} {}",
+                                en::get_month_abbr(month, true).unwrap(),
+                                day + 1
+                            )
+                        } else {
+                            en::get_month_abbr(month, true).unwrap()
+                        });
+                    }
+
+                    res.push(date.year.to_string());
+                }
+
+                if !pages {
+                    if let Ok(sn) = entry.get_serial_number() {
+                        res.push(format!("Art. no. {}", sn));
+                    }
+                }
+
+                if let Ok(doi) = entry.get_doi() {
+                    res.push(format!("doi: {}", doi));
+                }
+            }
+            (_, Report) => {
+                if let Ok(publisher) = canonical
+                    .get_organization()
+                    .or_else(|_| canonical.get_publisher().map(|e| e.value))
+                {
+                    res.push(publisher);
+
+                    if let Ok(location) = canonical.get_location() {
+                        res.push(location.value);
+                    }
+                }
+
+                if let Ok(sn) = canonical.get_serial_number() {
+                    res.push(format!("Rep. {}", sn));
+                }
+
+                let date = entry.get_any_date().map(|date| {
+                    let mut res = if let Some(month) = date.month {
+                        if let Some(day) = date.day {
+                            format!(
+                                "{} {}, ",
+                                en::get_month_abbr(month, true).unwrap(),
+                                day + 1
+                            )
+                        } else {
+                            format!("{} ", en::get_month_abbr(month, true).unwrap())
+                        }
+                    } else {
+                        String::new()
+                    };
+
+                    res += &date.year.to_string();
+                    res
+                });
+
+                if !self.show_url(entry) {
+                    if let Some(date) = date.clone() {
+                        res.push(date);
+                    }
+                }
+
+                if let Ok(vols) = canonical.get_volume().or_else(|_| entry.get_volume()) {
+                    res.push(format_range("vol.", "vols.", &vols));
+                }
+
+
+                if let Ok(iss) = canonical.get_issue() {
+                    res.push(format!("no. {}", iss));
+                }
+
+
+                if self.show_url(entry) {
+                    if let Some(date) = date {
+                        res.push(date);
+                    }
+                }
+            }
+            (_, Thesis) => {
+                res.push("Thesis".to_string());
+                if let Ok(org) = canonical.get_organization() {
+                    res.push(abbreviations::abbreviate_journal(&org));
+
+                    if let Ok(location) = canonical.get_location() {
+                        res.push(location.value);
+                    }
+                }
+
+                if let Ok(sn) = entry.get_serial_number() {
+                    res.push(sn);
+                }
+
+                if let Some(date) = entry.get_any_date() {
+                    res.push(date.year.to_string());
+                }
+            }
+            (_, Legislation) => {}
+            (_, Manuscript) => {
+                res.push("unpublished".to_string());
+            }
+            _ if preprint.is_ok() => {
+                let parent =
+                    entry.get_parents_ref().unwrap().get(preprint.unwrap()[0]).unwrap();
+                if let Ok(mut sn) = entry.get_serial_number() {
+                    if let Some(url) = entry.get_any_url() {
+                        if !sn.to_lowercase().contains("arxiv")
+                            && (url.value.host_str().unwrap_or("").to_lowercase()
+                                == "arxiv.org"
+                                || parent
+                                    .get_title()
+                                    .map(|e| e.value.to_lowercase())
+                                    .unwrap_or("".to_string())
+                                    == "arxiv")
+                        {
+                            sn = format!("arXiv: {}", sn);
+                        }
+                    }
+
+                    if let Ok(al) = entry.get_archive().or_else(|_| parent.get_archive())
+                    {
+                        sn += " [";
+                        sn += &al.value;
+                        sn += "]";
+                    }
+
+                    res.push(sn);
+                }
+
+                if let Some(date) = entry.get_any_date() {
+                    if let Some(month) = date.month {
+                        res.push(if let Some(day) = date.day {
+                            format!(
+                                "{} {}",
+                                en::get_month_abbr(month, true).unwrap(),
+                                day + 1
+                            )
+                        } else {
+                            en::get_month_abbr(month, true).unwrap()
+                        });
+                    }
+
+                    res.push(date.year.to_string());
+                }
+            }
+            (WebItem, _) | (Blog, _) => {
+                if let Ok(publisher) = entry
+                    .get_publisher()
+                    .map(|e| e.value)
+                    .or_else(|_| entry.get_organization())
+                {
+                    res.push(publisher);
+                }
+            }
+            _ if web_parented.is_ok() => {
+                let parent =
+                    entry.get_parents_ref().unwrap().get(preprint.unwrap()[0]).unwrap();
+                if let Ok(publisher) = parent
+                    .get_title()
+                    .or_else(|_| parent.get_publisher())
+                    .or_else(|_| entry.get_publisher())
+                    .map(|e| e.value)
+                    .or_else(|_| parent.get_organization())
+                    .or_else(|_| entry.get_organization())
+                {
+                    res.push(publisher);
+                }
+            }
+            _ => {
+                if let (Some(_), Ok(eds)) = (
+                    entry.get_authors().get(0),
+                    entry.get_editors().or_else(|_| canonical.get_editors()),
+                ) {
+                    let mut al = self.and_list(name_list_straight(&eds));
+                    if eds.len() > 1 {
+                        al += ", Eds."
+                    } else {
+                        al += ", Ed."
+                    }
+                    res.push(al);
+                }
+
+                if let Ok(vols) = entry.get_volume().or_else(|_| canonical.get_volume()) {
+                    res.push(format_range("vol.", "vols.", &vols));
+                }
+
+                if let Ok(ed) = canonical.get_edition() {
+                    match ed {
+                        NumOrStr::Number(i) => {
+                            if i > 1 {
+                                res.push(format!("{} ed.", en::get_ordinal(i)));
+                            }
+                        }
+                        NumOrStr::Str(s) => res.push(s),
+                    }
+                }
+
+                if let Ok(publisher) = canonical
+                    .get_publisher()
+                    .map(|e| e.value)
+                    .or_else(|_| canonical.get_organization())
+                {
+                    let mut publ = String::new();
+                    if let Ok(location) = canonical.get_location() {
+                        publ += &location.value;
+                        publ += ": ";
+                    }
+
+                    publ += &publisher;
+
+                    if let Ok(lang) =
+                        entry.get_language().or_else(|_| canonical.get_language())
+                    {
+                        publ += " (in ";
+                        publ += Language::from_639_1(lang.language.as_str())
+                            .unwrap()
+                            .to_name();
+                        publ.push(')');
+                    }
+
+                    res.push(publ);
+                }
+
+                if let Some(date) = canonical.get_any_date() {
+                    res.push(date.year.to_string());
+                }
+
+                if let Some(chapter) = chapter {
+                    res.push(format!("ch. {}", chapter));
+                }
+
+                if let Some(section) = section {
+                    res.push(format!("sec. {}", section));
+                }
+
+                if let Ok(pages) = entry.get_page_range() {
+                    res.push(format_range("p.", "pp.", &pages));
+                }
             }
         }
 

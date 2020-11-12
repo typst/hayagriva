@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 chrono = { version = "0.4.15", default-features = false }
+isolang = "1.0"
 lazy_static = "1.4.0"
 linked-hash-map = "0.5.3"
 paste = "1.0.0"

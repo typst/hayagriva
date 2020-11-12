@@ -176,6 +176,17 @@ impl Entry {
         })
     }
 
+    /// Will recursively get an url off either the entry or its parents.
+    pub fn get_any_url(&self) -> Option<QualifiedUrl> {
+        self.get_url().ok().or_else(|| {
+            self.get_parents()
+                .into_iter()
+                .flat_map(|v| v)
+                .filter_map(|p| p.get_any_url())
+                .next()
+        })
+    }
+
     /// Get and parse the `page-total` field, falling back on
     /// `page-range` if not specified.
     pub fn get_page_total(&self) -> Result<i64, EntryAccessError> {
@@ -860,8 +871,11 @@ mod tests {
         let ieee = ieee::IeeeBibliographyGenerator::new();
 
         for entry in &entries {
-            let refs = ieee.get_title_element(&entry);
-            println!("{}, {}", ieee.get_author(&entry), ieee.get_title_element(&entry).print_ansi_vt100());
+            println!(
+                "{}, {}",
+                ieee.get_author(&entry),
+                ieee.get_title_element(&entry).print_ansi_vt100()
+            );
         }
     }
 }
