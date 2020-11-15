@@ -110,37 +110,9 @@ fn value(p: &mut Parser) -> Option<Spanned<Expr>> {
     .transpose()
 }
 
-/// Parse a factor of the form `a:?value[attrs..]?`.
-fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
+fn factor_attr(p: &mut Parser) -> Option<Spanned<Expr>> {
     let start = p.pos();
-    let op = |token| match token {
-        Token::Ident(i) => {
-            Some(TagOp::Bind(i.into()))
-        }
-        _ => None,
-    };
-
-    let inner = p
-        .span(|p| {
-            if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
-                if p.peek() == Some(Token::Colon) {
-                    p.eat();
-                    if let Some(expr) = value(p) {
-                        Some(Expr::Tag(ExprTag { op, expr: expr.map(Box::new) }))
-                    } else {
-                        p.diag(error!(op.span, "missing factor"));
-                        None
-                    }
-                } else {
-                    p.jump(start);
-                    value(p).map(|v| v.v)
-                }
-            } else {
-                value(p).map(|v| v.v)
-            }
-        })
-        .transpose();
-
+    let inner = value(p);
     let pos = p.pos();
     let mut fail = false;
     let outer = p
@@ -208,6 +180,38 @@ fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
     } else {
         if fail { None } else { inner }
     }
+}
+
+/// Parse a factor of the form `a:?value[attrs..]?`.
+fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
+    let start = p.pos();
+    let op = |token| match token {
+        Token::Ident(i) => {
+            Some(TagOp::Bind(i.into()))
+        }
+        _ => None,
+    };
+
+    p
+        .span(|p| {
+            if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
+                if p.peek() == Some(Token::Colon) {
+                    p.eat();
+                    if let Some(expr) = factor_attr(p) {
+                        Some(Expr::Tag(ExprTag { op, expr: expr.map(Box::new) }))
+                    } else {
+                        p.diag(error!(op.span, "missing factor"));
+                        None
+                    }
+                } else {
+                    p.jump(start);
+                    factor_attr(p).map(|v| v.v)
+                }
+            } else {
+                factor_attr(p).map(|v| v.v)
+            }
+        })
+        .transpose()
 }
 
 /// Parse a term: `factor (* factor)*`.
