@@ -360,7 +360,6 @@ impl IeeeBibliographyGenerator {
         section: Option<u32>,
     ) -> Vec<String> {
         let mut res = vec![];
-        let ident = entry == canonical;
         let preprint = entry.check_with_spec(EntryTypeSpec::single_parent(
             EntryTypeModality::Alternate(vec![Article, Book, InAnthology]),
             EntryTypeModality::Specific(Repository),
@@ -899,7 +898,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
             }
         }
 
-        let mut secs = sn_stack
+        let secs = sn_stack
             .into_iter()
             .map(|s| str::parse::<u32>(&s))
             .filter(|s| s.is_ok())

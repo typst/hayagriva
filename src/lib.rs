@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 pub mod lang;
 pub mod output;
+pub mod selectors;
 pub mod types;
 
 use lang::CaseTransformer;

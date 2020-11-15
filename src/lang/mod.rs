@@ -389,8 +389,11 @@ impl CaseTransformer for SentenceCase {
                 let word = &title[index .. index + len];
                 let uppercase = word.chars().any(|c| c.is_uppercase());
 
-                if self.use_exception_dictionary && uppercase
-                    && en::ALWAYS_CAPITALIZE.binary_search(&word.to_lowercase().as_str()).is_ok()
+                if self.use_exception_dictionary
+                    && (uppercase || word.len() < 2)
+                    && en::ALWAYS_CAPITALIZE
+                        .binary_search(&word.to_lowercase().as_str())
+                        .is_ok()
                 {
                     res.push_str(&c.to_uppercase().to_string());
                 } else {
@@ -586,10 +589,11 @@ mod tests {
     fn sentence_case_dictionary() {
         let props = SentenceCase::new();
 
-        let title = props
-            .apply("if i distance myself from the europe-centric mindset for a moment");
+        let title = props.apply(
+            "if i may distance myself from the euroPe-centric mindset for a moment",
+        );
         assert_eq!(
-            "If I distance myself from the Europe-centric mindset for a moment",
+            "If I may distance myself from the Europe-centric mindset for a moment",
             title
         );
     }

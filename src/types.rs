@@ -2,7 +2,7 @@ use std::cmp::{Ordering, PartialOrd};
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 use std::ops::Range;
-use std::ops::{Add, AddAssign, Sub};
+use std::ops::{Add, Sub};
 
 use super::{Entry, EntryAccessError, FieldTypes};
 
