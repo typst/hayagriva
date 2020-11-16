@@ -44,7 +44,7 @@ pub enum Expr {
     Tag(ExprTag),
     /// A binary operation: `a & b`, `a | b`.
     Binary(ExprBinary),
-    /// A literal: `true`, `1cm`, `"hi"`, `{_Hey!_}`.
+    /// A literal: `*`, `Report`.
     Lit(Lit),
 }
 

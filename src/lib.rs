@@ -132,9 +132,9 @@ impl Entry {
     fields!(parents: "parent" => Vec<Entry>);
 
     /// Get the `parent` field as a reference.
-    pub(crate) fn get_parents_ref(&self) -> Option<&Vec<Entry>> {
+    pub(crate) fn get_parents_opt(&self) -> Option<&[Entry]> {
         self.get("parent").map(|item| match item {
-            FieldTypes::Entries(s) => s,
+            FieldTypes::Entries(s) => s.as_slice(),
             _ => panic!("parent type mismatch"),
         })
     }
@@ -847,6 +847,7 @@ fn entry_from_yaml(
 mod tests {
     use super::load_yaml_structure;
     use crate::output::{apa, ieee, BibliographyGenerator};
+    use crate::selectors::parse;
     use std::fs;
 
     #[test]
@@ -871,5 +872,55 @@ mod tests {
             let refs = ieee.get_reference(&entry);
             println!("{}", refs.print_ansi_vt100());
         }
+    }
+
+    macro_rules! select_all {
+        ($select:expr, $entries:tt, [$($key:expr),* $(,)*] $(,)*) => {
+            let keys = vec![ $( $key , )* ];
+            let expr = parse($select).output.unwrap();
+            for entry in &$entries {
+                let res = expr.apply(entry, true);
+                if keys.contains(&entry.key.as_str()) {
+                    if res.is_none() {
+                        panic!("Key {} not found in results", entry.key);
+                    }
+                } else {
+                    if res.is_some() {
+                        panic!("Key {} found in results", entry.key);
+                    }
+                }
+            }
+        }
+    }
+
+    macro_rules! select {
+        ($select:expr, $entry:expr, [$($key:expr),* $(,)*] $(,)*) => {
+            let keys = vec![ $( $key , )* ];
+            let expr = parse($select).output.unwrap();
+            let res = expr.apply($entry, true).unwrap();
+            if !keys.into_iter().all(|k| res.get(k).is_some()) {
+                panic!("Results do not contain binding");
+            }
+        }
+    }
+
+    #[test]
+    fn selectors() {
+        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let entries = load_yaml_structure(&contents).unwrap();
+
+        select_all!("Article > Proceedings", entries, ["zygos"]);
+        select_all!("Article > (Periodical | NewspaperIssue)", entries, ["omarova-libra", "kinetics", "house"]);
+        select_all!("(Chapter | InAnthology) > (Anthology | Book)", entries, ["harry", "gedanken"]);
+        select_all!("*[url]", entries, ["omarova-libra", "science-e-issue", "oiseau", "georgia", "really-habitable", "electronic-music"]);
+        select_all!("!(*[url] | (* > *[url]))", entries, ["zygos", "harry", "terminator-2", "interior", "wire", "kinetics", "house", "plaque", "renaissance", "gedanken"]);
+    }
+
+    #[test]
+    fn selector_bindings() {
+        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let entries = load_yaml_structure(&contents).unwrap();
+
+        select!("a:Article > (b:Conference & c:(Video|Blog|WebItem))", entries.iter().filter_map(|i| if i.key == "wwdc-network" {Some(i)} else {None}).next().unwrap(), ["a", "b", "c"]);
     }
 }

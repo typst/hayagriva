@@ -93,7 +93,7 @@ impl<'s> SourceType<'s> {
             EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Any);
 
         if let Ok(i) = entry.check_with_spec(periodical) {
-            return Self::PeriodicalItem(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::PeriodicalItem(&entry.get_parents_opt().unwrap()[i[0]]);
         }
         if let Ok(i) = entry
             .check_with_spec(collection_a)
@@ -101,11 +101,11 @@ impl<'s> SourceType<'s> {
             .or_else(|_| entry.check_with_spec(collection_c))
             .or_else(|_| entry.check_with_spec(collection_d))
         {
-            return Self::CollectionItem(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::CollectionItem(&entry.get_parents_opt().unwrap()[i[0]]);
         }
         if let Ok(i) = entry.check_with_spec(tv_series) {
             if entry.get_issue().is_ok() && entry.get_volume().is_ok() {
-                return Self::TvSeries(&entry.get_parents_ref().unwrap()[i[0]]);
+                return Self::TvSeries(&entry.get_parents_opt().unwrap()[i[0]]);
             }
         }
         if entry.check_with_spec(thesis).is_ok() {
@@ -115,13 +115,13 @@ impl<'s> SourceType<'s> {
             return Self::Manuscript;
         }
         if let Ok(i) = entry.check_with_spec(art_container) {
-            return Self::ArtContainer(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::ArtContainer(&entry.get_parents_opt().unwrap()[i[0]]);
         }
         if entry.check_with_spec(art).is_ok() {
             return Self::StandaloneArt;
         }
         if let Ok(i) = entry.check_with_spec(news_item) {
-            return Self::NewsItem(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::NewsItem(&entry.get_parents_opt().unwrap()[i[0]]);
         }
         if entry.check_with_spec(web_standalone).is_ok() {
             return Self::StandaloneWebItem;
@@ -130,13 +130,13 @@ impl<'s> SourceType<'s> {
             .check_with_spec(web_contained_a)
             .or_else(|_| entry.check_with_spec(web_contained_b))
         {
-            return Self::WebItem(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::WebItem(&entry.get_parents_opt().unwrap()[i[0]]);
         }
         if let Ok(i) = entry.check_with_spec(talk) {
-            return Self::ConferenceTalk(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::ConferenceTalk(&entry.get_parents_opt().unwrap()[i[0]]);
         }
         if let Ok(i) = entry.check_with_spec(generic_parent) {
-            return Self::GenericParent(&entry.get_parents_ref().unwrap()[i[0]]);
+            return Self::GenericParent(&entry.get_parents_opt().unwrap()[i[0]]);
         }
 
         return Self::Generic;
@@ -679,7 +679,7 @@ impl ApaBibliographyGenerator {
                 .collect::<Vec<Person>>();
             if !dirs.is_empty()
                 && entry.get_total_volumes().is_err()
-                && entry.get_parents_ref().is_none()
+                && entry.get_parents_opt().is_none()
             {
                 TitleSpec::Film
             } else {
@@ -1130,14 +1130,14 @@ impl ApaBibliographyGenerator {
 
 impl BibliographyGenerator for ApaBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
-        let mut parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+        let mut parent = entry.get_parents_opt().and_then(|v| v.first().clone());
         while entry.entry_type.check(EntryTypeModality::Alternate(vec![
             EntryType::Chapter,
             EntryType::Scene,
         ])) {
             if let Some(p) = parent {
                 entry = &p;
-                parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+                parent = entry.get_parents_opt().and_then(|v| v.first().clone());
             } else {
                 break;
             }

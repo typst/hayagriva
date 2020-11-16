@@ -6,6 +6,7 @@ mod scanner;
 mod span;
 mod syntax;
 mod token;
+mod exec;
 
 use crate::error;
 

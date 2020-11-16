@@ -47,7 +47,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
         .or_else(|_| entry.check_with_spec(proc_spec))
         .or_else(|_| entry.check_with_spec(section_spec))
         .ok()
-        .map(|r| entry.get_parents_ref().unwrap().get(r[0]).unwrap())
+        .map(|r| entry.get_parents_opt().unwrap().get(r[0]).unwrap())
 }
 
 impl IeeeBibliographyGenerator {
@@ -276,7 +276,7 @@ impl IeeeBibliographyGenerator {
                     );
                     if let Ok(par_anth) = canonical.check_with_spec(spec) {
                         let par_anth = canonical
-                            .get_parents_ref()
+                            .get_parents_opt()
                             .unwrap()
                             .get(par_anth[0])
                             .unwrap();
@@ -302,7 +302,7 @@ impl IeeeBibliographyGenerator {
                     );
                     if let Ok(par_conf) = canonical.check_with_spec(spec) {
                         let par_conf = canonical
-                            .get_parents_ref()
+                            .get_parents_opt()
                             .unwrap()
                             .get(par_conf[0])
                             .unwrap();
@@ -715,7 +715,7 @@ impl IeeeBibliographyGenerator {
             }
             _ if preprint.is_ok() => {
                 let parent =
-                    entry.get_parents_ref().unwrap().get(preprint.unwrap()[0]).unwrap();
+                    entry.get_parents_opt().unwrap().get(preprint.unwrap()[0]).unwrap();
                 if let Ok(mut sn) = entry.get_serial_number() {
                     if let Some(url) = entry.get_any_url() {
                         if !sn.to_lowercase().contains("arxiv")
@@ -768,7 +768,7 @@ impl IeeeBibliographyGenerator {
             }
             _ if web_parented.is_ok() => {
                 let parent =
-                    entry.get_parents_ref().unwrap().get(preprint.unwrap()[0]).unwrap();
+                    entry.get_parents_opt().unwrap().get(preprint.unwrap()[0]).unwrap();
                 if let Ok(publisher) = parent
                     .get_title()
                     .or_else(|_| parent.get_publisher())
@@ -874,7 +874,7 @@ impl IeeeBibliographyGenerator {
 
 impl BibliographyGenerator for IeeeBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
-        let mut parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+        let mut parent = entry.get_parents_opt().and_then(|v| v.first().clone());
         let mut sn_stack = vec![];
         while entry.get_title().is_err()
             && entry
@@ -886,7 +886,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
             }
             if let Some(p) = parent {
                 entry = &p;
-                parent = entry.get_parents_ref().and_then(|v| v.first().clone());
+                parent = entry.get_parents_opt().and_then(|v| v.first().clone());
             } else {
                 break;
             }
