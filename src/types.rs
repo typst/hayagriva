@@ -148,7 +148,7 @@ impl Entry {
         }
 
         if user_index == 0 {
-            if let Ok(url) = self.get_url().map(|u| u.value) {
+            if let Ok(url) = self.get_url().map(|u| &u.value) {
                 if url.host() != Some(Host::Domain("twitter.com")) {
                     return None;
                 }
@@ -731,6 +731,21 @@ impl Add for Duration {
 
 macro_rules! try_from_fieldtypes {
     ($variant:ident, $target:ty $(,)*) => {
+        try_from_fieldtypes!(noref $variant, $target);
+
+        impl<'s> TryFrom<&'s FieldTypes> for &'s $target {
+            type Error = EntryAccessError;
+
+            fn try_from(value: &'s FieldTypes) -> Result<Self, Self::Error> {
+                match value {
+                    FieldTypes::$variant(f) => Ok(f),
+                    _ => Err(EntryAccessError::WrongType),
+                }
+            }
+        }
+    };
+
+    (noref $variant:ident, $target:ty $(,)*) => {
         impl TryFrom<FieldTypes> for $target {
             type Error = EntryAccessError;
 
@@ -748,22 +763,41 @@ macro_rules! try_from_fieldtypes {
             }
         }
     };
+
+    ($variant:ident, $target:ty, $ref_target:ty $(,)*) => {
+        try_from_fieldtypes!(noref $variant, $target);
+
+        impl<'s> TryFrom<&'s FieldTypes> for &'s $ref_target {
+            type Error = EntryAccessError;
+
+            fn try_from(value: &'s FieldTypes) -> Result<Self, Self::Error> {
+                match value {
+                    FieldTypes::$variant(f) => Ok(f),
+                    _ => Err(EntryAccessError::WrongType),
+                }
+            }
+        }
+    }
 }
 
 try_from_fieldtypes!(FormattableString, FormattableString);
 try_from_fieldtypes!(FormattedString, FormattedString);
-try_from_fieldtypes!(Text, String);
+try_from_fieldtypes!(Text, String, str);
 try_from_fieldtypes!(Integer, i64);
 try_from_fieldtypes!(Date, Date);
-try_from_fieldtypes!(Persons, Vec<Person>);
-try_from_fieldtypes!(PersonsWithRoles, Vec<(Vec<Person>, PersonRole)>);
+try_from_fieldtypes!(Persons, Vec<Person>, [Person]);
+try_from_fieldtypes!(
+    PersonsWithRoles,
+    Vec<(Vec<Person>, PersonRole)>,
+    [(Vec<Person>, PersonRole)]
+);
 try_from_fieldtypes!(IntegerOrText, NumOrStr);
 try_from_fieldtypes!(Range, std::ops::Range<i64>);
 try_from_fieldtypes!(Duration, Duration);
 try_from_fieldtypes!(TimeRange, std::ops::Range<Duration>);
 try_from_fieldtypes!(Url, QualifiedUrl);
 try_from_fieldtypes!(Language, unic_langid::LanguageIdentifier);
-try_from_fieldtypes!(Entries, Vec<Entry>);
+try_from_fieldtypes!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {

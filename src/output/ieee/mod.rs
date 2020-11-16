@@ -47,7 +47,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
         .or_else(|_| entry.check_with_spec(proc_spec))
         .or_else(|_| entry.check_with_spec(section_spec))
         .ok()
-        .map(|r| entry.get_parents_opt().unwrap().get(r[0]).unwrap())
+        .map(|r| entry.get_parents().unwrap().get(r[0]).unwrap())
 }
 
 impl IeeeBibliographyGenerator {
@@ -121,11 +121,12 @@ impl IeeeBibliographyGenerator {
                 // TV episode
                 let dirs = entry
                     .get_affiliated_persons()
-                    .unwrap_or_else(|_| vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .filter(|(_, role)| role == &PersonRole::Director)
                     .map(|(v, _)| v)
                     .flatten()
+                    .cloned()
                     .collect::<Vec<Person>>();
                 let mut dir_name_list_straight = name_list_straight(&dirs)
                     .into_iter()
@@ -133,11 +134,12 @@ impl IeeeBibliographyGenerator {
                     .collect::<Vec<String>>();
                 let writers = entry
                     .get_affiliated_persons()
-                    .unwrap_or_else(|_| vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .filter(|(_, role)| role == &PersonRole::Writer)
                     .map(|(v, _)| v)
                     .flatten()
+                    .cloned()
                     .collect::<Vec<Person>>();
                 let mut writers_name_list_straight = name_list_straight(&writers)
                     .into_iter()
@@ -152,11 +154,12 @@ impl IeeeBibliographyGenerator {
                 // Film
                 let dirs = entry
                     .get_affiliated_persons()
-                    .unwrap_or_else(|_| vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .filter(|(_, role)| role == &PersonRole::Director)
                     .map(|(v, _)| v)
                     .flatten()
+                    .cloned()
                     .collect::<Vec<Person>>();
 
                 if !dirs.is_empty() {
@@ -166,11 +169,12 @@ impl IeeeBibliographyGenerator {
                     // TV show
                     let prods = entry
                         .get_affiliated_persons()
-                        .unwrap_or_else(|_| vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
                         .map(|(v, _)| v)
                         .flatten()
+                        .cloned()
                         .collect::<Vec<Person>>();
 
                     if !prods.is_empty() {
@@ -275,11 +279,8 @@ impl IeeeBibliographyGenerator {
                         EntryTypeModality::Specific(Anthology),
                     );
                     if let Ok(par_anth) = canonical.check_with_spec(spec) {
-                        let par_anth = canonical
-                            .get_parents_opt()
-                            .unwrap()
-                            .get(par_anth[0])
-                            .unwrap();
+                        let par_anth =
+                            canonical.get_parents().unwrap().get(par_anth[0]).unwrap();
                         if let Ok(par_t) =
                             par_anth.get_title_fmt(Some(&self.tc_formatter), None)
                         {
@@ -301,11 +302,8 @@ impl IeeeBibliographyGenerator {
                         EntryTypeModality::Alternate(vec![Proceedings, Anthology, Misc]),
                     );
                     if let Ok(par_conf) = canonical.check_with_spec(spec) {
-                        let par_conf = canonical
-                            .get_parents_opt()
-                            .unwrap()
-                            .get(par_conf[0])
-                            .unwrap();
+                        let par_conf =
+                            canonical.get_parents().unwrap().get(par_conf[0]).unwrap();
                         if let Ok(par_t) =
                             par_conf.get_title_fmt(Some(&self.tc_formatter), None)
                         {
@@ -392,17 +390,17 @@ impl IeeeBibliographyGenerator {
                     if let Ok(ed) = canonical.get_edition() {
                         match ed {
                             NumOrStr::Number(i) => {
-                                if i > 1 {
-                                    res.push(format!("{} ed.", en::get_ordinal(i)));
+                                if *i > 1 {
+                                    res.push(format!("{} ed.", en::get_ordinal(*i)));
                                 }
                             }
-                            NumOrStr::Str(s) => res.push(s),
+                            NumOrStr::Str(s) => res.push(s.to_string()),
                         }
                     }
                 }
 
                 if let Ok(location) = canonical.get_location() {
-                    res.push(location.value);
+                    res.push(location.value.clone());
                 }
 
                 if canonical.entry_type != Conference || !self.show_url(entry) {
@@ -461,23 +459,23 @@ impl IeeeBibliographyGenerator {
                 if let Ok(ed) = canonical.get_edition() {
                     match ed {
                         NumOrStr::Number(i) => {
-                            if i > 1 {
-                                res.push(format!("{} ed.", en::get_ordinal(i)));
+                            if *i > 1 {
+                                res.push(format!("{} ed.", en::get_ordinal(*i)));
                             }
                         }
-                        NumOrStr::Str(s) => res.push(s),
+                        NumOrStr::Str(s) => res.push(s.clone()),
                     }
                 }
 
                 if !has_url {
                     if let Ok(publisher) = canonical
                         .get_organization()
-                        .or_else(|_| canonical.get_publisher().map(|e| e.value))
+                        .or_else(|_| canonical.get_publisher().map(|e| e.value.as_ref()))
                     {
-                        res.push(publisher);
+                        res.push(publisher.to_string());
 
                         if let Ok(location) = canonical.get_location() {
-                            res.push(location.value);
+                            res.push(location.value.clone());
                         }
                     }
 
@@ -505,7 +503,7 @@ impl IeeeBibliographyGenerator {
 
                 if let Ok(publisher) = canonical
                     .get_publisher()
-                    .map(|e| e.value)
+                    .map(|e| e.value.as_ref())
                     .or_else(|_| canonical.get_organization())
                 {
                     let mut publ = String::new();
@@ -514,7 +512,7 @@ impl IeeeBibliographyGenerator {
                         publ += ": ";
                     }
 
-                    publ += &publisher;
+                    publ += publisher;
 
                     if let Ok(lang) =
                         entry.get_language().or_else(|_| canonical.get_language())
@@ -637,12 +635,12 @@ impl IeeeBibliographyGenerator {
             (_, Report) => {
                 if let Ok(publisher) = canonical
                     .get_organization()
-                    .or_else(|_| canonical.get_publisher().map(|e| e.value))
+                    .or_else(|_| canonical.get_publisher().map(|e| e.value.as_ref()))
                 {
-                    res.push(publisher);
+                    res.push(publisher.to_string());
 
                     if let Ok(location) = canonical.get_location() {
-                        res.push(location.value);
+                        res.push(location.value.clone());
                     }
                 }
 
@@ -697,12 +695,12 @@ impl IeeeBibliographyGenerator {
                     res.push(abbreviations::abbreviate_journal(&org));
 
                     if let Ok(location) = canonical.get_location() {
-                        res.push(location.value);
+                        res.push(location.value.clone());
                     }
                 }
 
                 if let Ok(sn) = entry.get_serial_number() {
-                    res.push(sn);
+                    res.push(sn.to_string());
                 }
 
                 if let Some(date) = entry.get_any_date() {
@@ -715,9 +713,9 @@ impl IeeeBibliographyGenerator {
             }
             _ if preprint.is_ok() => {
                 let parent =
-                    entry.get_parents_opt().unwrap().get(preprint.unwrap()[0]).unwrap();
-                if let Ok(mut sn) = entry.get_serial_number() {
-                    if let Some(url) = entry.get_any_url() {
+                    entry.get_parents().unwrap().get(preprint.unwrap()[0]).unwrap();
+                if let Ok(sn) = entry.get_serial_number() {
+                    let mut sn = if let Some(url) = entry.get_any_url() {
                         if !sn.to_lowercase().contains("arxiv")
                             && (url.value.host_str().unwrap_or("").to_lowercase()
                                 == "arxiv.org"
@@ -727,9 +725,13 @@ impl IeeeBibliographyGenerator {
                                     .unwrap_or("".to_string())
                                     == "arxiv")
                         {
-                            sn = format!("arXiv: {}", sn);
+                            format!("arXiv: {}", sn)
+                        } else {
+                            sn.to_string()
                         }
-                    }
+                    } else {
+                        sn.to_string()
+                    };
 
                     if let Ok(al) = entry.get_archive().or_else(|_| parent.get_archive())
                     {
@@ -760,22 +762,22 @@ impl IeeeBibliographyGenerator {
             (WebItem, _) | (Blog, _) => {
                 if let Ok(publisher) = entry
                     .get_publisher()
-                    .map(|e| e.value)
+                    .map(|e| e.value.as_ref())
                     .or_else(|_| entry.get_organization())
                 {
-                    res.push(publisher);
+                    res.push(publisher.to_string());
                 }
             }
             _ if web_parented.is_ok() => {
                 let parent =
-                    entry.get_parents_opt().unwrap().get(preprint.unwrap()[0]).unwrap();
+                    entry.get_parents().unwrap().get(preprint.unwrap()[0]).unwrap();
                 if let Ok(publisher) = parent
                     .get_title()
                     .or_else(|_| parent.get_publisher())
                     .or_else(|_| entry.get_publisher())
-                    .map(|e| e.value)
-                    .or_else(|_| parent.get_organization())
-                    .or_else(|_| entry.get_organization())
+                    .map(|e| e.value.clone())
+                    .or_else(|_| parent.get_organization().map(|o| o.to_string()))
+                    .or_else(|_| entry.get_organization().map(|o| o.to_string()))
                 {
                     res.push(publisher);
                 }
@@ -801,17 +803,17 @@ impl IeeeBibliographyGenerator {
                 if let Ok(ed) = canonical.get_edition() {
                     match ed {
                         NumOrStr::Number(i) => {
-                            if i > 1 {
-                                res.push(format!("{} ed.", en::get_ordinal(i)));
+                            if *i > 1 {
+                                res.push(format!("{} ed.", en::get_ordinal(*i)));
                             }
                         }
-                        NumOrStr::Str(s) => res.push(s),
+                        NumOrStr::Str(s) => res.push(s.clone()),
                     }
                 }
 
                 if let Ok(publisher) = canonical
                     .get_publisher()
-                    .map(|e| e.value)
+                    .map(|e| e.value.as_ref())
                     .or_else(|_| canonical.get_organization())
                 {
                     let mut publ = String::new();
@@ -874,7 +876,7 @@ impl IeeeBibliographyGenerator {
 
 impl BibliographyGenerator for IeeeBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
-        let mut parent = entry.get_parents_opt().and_then(|v| v.first().clone());
+        let mut parent = entry.get_parents().ok().and_then(|v| v.first());
         let mut sn_stack = vec![];
         while entry.get_title().is_err()
             && entry
@@ -886,7 +888,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
             }
             if let Some(p) = parent {
                 entry = &p;
-                parent = entry.get_parents_opt().and_then(|v| v.first().clone());
+                parent = entry.get_parents().ok().and_then(|v| v.first());
             } else {
                 break;
             }
@@ -928,7 +930,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
                 if !res.is_empty() {
                     res += ". ";
                 }
-                res += &session;
+                res += session;
             }
         }
 
@@ -1008,7 +1010,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
                 }
 
                 if canonical.entry_type != WebItem && canonical.entry_type != Blog {
-                    if let Some(date) = url.visit_date {
+                    if let Some(date) = &url.visit_date {
                         res += &format!("Accessed: {}. ", self.formt_date(&date));
                     }
 
@@ -1023,7 +1025,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
                 } else {
                     res += url.value.as_str();
 
-                    if let Some(date) = url.visit_date {
+                    if let Some(date) = &url.visit_date {
                         res += &format!(" (accessed: {}).", self.formt_date(&date));
                     }
                 }

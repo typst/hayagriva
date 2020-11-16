@@ -73,14 +73,14 @@ pub enum EntryAccessError {
 }
 
 macro_rules! fields {
-    ($($name:ident: $field_name:expr => FormattableString),* $(,)*) => {
+    ($($name:ident: $field_name:expr => &FormattableString),* $(,)*) => {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<get_ $name>](&self) -> Result<FormattableString, EntryAccessError> {
+                pub fn [<get_ $name>](&self) -> Result<&FormattableString, EntryAccessError> {
                     self.get($field_name)
                         .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| FormattableString::try_from(item.clone()))
+                        .and_then(|item| <&FormattableString>::try_from(item))
                 }
 
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
@@ -104,13 +104,28 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn [<get_ $name>](&self) -> Result<fields!(@type $($res)?), EntryAccessError> {
+                pub fn [<get_ $name>](&self) -> Result<fields!(@type ref $($res)?), EntryAccessError> {
                     self.get($field_name)
                         .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| <fields!(@type $($res)?)>::try_from(item.clone()))
+                        .and_then(|item| <fields!(@type ref $($res)?)>::try_from(item))
                 }
 
                 fields!(single_set $name => $field_name, fields!(@type $($res)?));
+            }
+        )*
+    };
+
+    ($($name:ident: $field_name:expr => $res:ty, $res_ref:ty),* $(,)*) => {
+        $(
+            paste! {
+                #[doc = "Get and parse the `" $field_name "` field."]
+                pub fn [<get_ $name>](&self) -> Result<$res_ref, EntryAccessError> {
+                    self.get($field_name)
+                        .ok_or(EntryAccessError::NoSuchField)
+                        .and_then(|item| <$res_ref>::try_from(item))
+                }
+
+                fields!(single_set $name => $field_name, $res);
             }
         )*
     };
@@ -126,34 +141,36 @@ macro_rules! fields {
 
     (@type) => {String};
     (@type $res:ty) => {$res};
+    (@type ref) => {&str};
+    (@type ref $res:ty) => {&$res};
 }
 
 impl Entry {
-    fields!(parents: "parent" => Vec<Entry>);
+    fields!(parents: "parent" => Vec<Entry>, &[Entry]);
 
-    /// Get the `parent` field as a reference.
-    pub(crate) fn get_parents_opt(&self) -> Option<&[Entry]> {
-        self.get("parent").map(|item| match item {
-            FieldTypes::Entries(s) => s.as_slice(),
-            _ => panic!("parent type mismatch"),
-        })
+    fields!(title: "title" => &FormattableString);
+
+    /// Get and parse the `author` field. This will always return a result
+    pub fn get_authors(&self) -> &[Person] {
+        self.get("author")
+            .and_then(|item| <&[Person]>::try_from(item).ok())
+            .unwrap_or_default()
     }
 
-    fields!(title: "title" => FormattableString);
-
     /// Get and parse the `author` field.
-    pub fn get_authors(&self) -> Vec<Person> {
-        self.get("author")
-            .map(|item| <Vec<Person>>::try_from(item.clone()).unwrap())
-            .unwrap_or_else(|| vec![])
+    /// This will fail if there are no authors.
+    pub fn get_authors_fallible(&self) -> Option<&[Person]> {
+        self.get("author").and_then(|item| <&[Person]>::try_from(item).ok())
     }
 
     fields!(single_set authors => "author", Vec<Person>);
 
+    fields!(date: "date" => Date);
     fields!(
-        date: "date" => Date,
-        editors: "editor" => Vec<Person>,
-        affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>,
+        editors: "editor" => Vec<Person>, &[Person],
+        affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>, &[(Vec<Person>, PersonRole)]
+    );
+    fields!(
         organization: "organization",
         issue: "issue" => NumOrStr,
         edition: "edition" => NumOrStr,
@@ -163,7 +180,7 @@ impl Entry {
     );
 
     /// Will recursively get a date off either the entry or its parents.
-    pub fn get_any_date(&self) -> Option<Date> {
+    pub fn get_any_date(&self) -> Option<&Date> {
         self.get_date().ok().or_else(|| {
             self.get_parents()
                 .into_iter()
@@ -174,7 +191,7 @@ impl Entry {
     }
 
     /// Will recursively get an url off either the entry or its parents.
-    pub fn get_any_url(&self) -> Option<QualifiedUrl> {
+    pub fn get_any_url(&self) -> Option<&QualifiedUrl> {
         self.get_url().ok().or_else(|| {
             self.get_parents()
                 .into_iter()
@@ -203,7 +220,10 @@ impl Entry {
         self.get("runtime")
             .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
-            .or_else(|_| self.get_time_range().map(|r| FieldTypes::from(r.end - r.start)))
+            .or_else(|_| {
+                self.get_time_range()
+                    .map(|r| FieldTypes::from(r.end.clone() - r.start.clone()))
+            })
             .and_then(|item| Duration::try_from(item.clone()))
     }
 
@@ -235,7 +255,7 @@ impl Entry {
             return Err(());
         }
 
-        let parents = self.get_parents().unwrap_or_else(|_| vec![]);
+        let parents = self.get_parents().unwrap_or_default();
         let mut matching_parents = vec![];
 
         for pc in &constraint.parents {
@@ -894,10 +914,11 @@ mod tests {
     }
 
     macro_rules! select {
-        ($select:expr, $entry:expr, [$($key:expr),* $(,)*] $(,)*) => {
+        ($select:expr, $entries:tt >> $entry_key:expr, [$($key:expr),* $(,)*] $(,)*) => {
             let keys = vec![ $( $key , )* ];
+            let entry = $entries.iter().filter_map(|i| if i.key == $entry_key {Some(i)} else {None}).next().unwrap();
             let expr = parse($select).output.unwrap();
-            let res = expr.apply($entry, true).unwrap();
+            let res = expr.apply(entry, true).unwrap();
             if !keys.into_iter().all(|k| res.get(k).is_some()) {
                 panic!("Results do not contain binding");
             }
@@ -910,10 +931,34 @@ mod tests {
         let entries = load_yaml_structure(&contents).unwrap();
 
         select_all!("Article > Proceedings", entries, ["zygos"]);
-        select_all!("Article > (Periodical | NewspaperIssue)", entries, ["omarova-libra", "kinetics", "house"]);
-        select_all!("(Chapter | InAnthology) > (Anthology | Book)", entries, ["harry", "gedanken"]);
-        select_all!("*[url]", entries, ["omarova-libra", "science-e-issue", "oiseau", "georgia", "really-habitable", "electronic-music"]);
-        select_all!("!(*[url] | (* > *[url]))", entries, ["zygos", "harry", "terminator-2", "interior", "wire", "kinetics", "house", "plaque", "renaissance", "gedanken"]);
+        select_all!("Article > (Periodical | NewspaperIssue)", entries, [
+            "omarova-libra",
+            "kinetics",
+            "house"
+        ]);
+        select_all!("(Chapter | InAnthology) > (Anthology | Book)", entries, [
+            "harry", "gedanken"
+        ]);
+        select_all!("*[url]", entries, [
+            "omarova-libra",
+            "science-e-issue",
+            "oiseau",
+            "georgia",
+            "really-habitable",
+            "electronic-music"
+        ]);
+        select_all!("!(*[url] | (* > *[url]))", entries, [
+            "zygos",
+            "harry",
+            "terminator-2",
+            "interior",
+            "wire",
+            "kinetics",
+            "house",
+            "plaque",
+            "renaissance",
+            "gedanken"
+        ]);
     }
 
     #[test]
@@ -921,6 +966,10 @@ mod tests {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
 
-        select!("a:Article > (b:Conference & c:(Video|Blog|WebItem))", entries.iter().filter_map(|i| if i.key == "wwdc-network" {Some(i)} else {None}).next().unwrap(), ["a", "b", "c"]);
+        select!(
+            "a:Article > (b:Conference & c:(Video|Blog|WebItem))",
+            entries >> "wwdc-network",
+            ["a", "b", "c"]
+        );
     }
 }

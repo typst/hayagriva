@@ -2,9 +2,9 @@
 
 use std::fmt::{self, Debug, Formatter};
 
-use super::{Pos, Scanner};
 #[cfg(test)]
 use super::Span;
+use super::{Pos, Scanner};
 
 use unicode_xid::UnicodeXID;
 

@@ -93,7 +93,7 @@ impl<'s> SourceType<'s> {
             EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Any);
 
         if let Ok(i) = entry.check_with_spec(periodical) {
-            return Self::PeriodicalItem(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::PeriodicalItem(&entry.get_parents().unwrap()[i[0]]);
         }
         if let Ok(i) = entry
             .check_with_spec(collection_a)
@@ -101,11 +101,11 @@ impl<'s> SourceType<'s> {
             .or_else(|_| entry.check_with_spec(collection_c))
             .or_else(|_| entry.check_with_spec(collection_d))
         {
-            return Self::CollectionItem(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::CollectionItem(&entry.get_parents().unwrap()[i[0]]);
         }
         if let Ok(i) = entry.check_with_spec(tv_series) {
             if entry.get_issue().is_ok() && entry.get_volume().is_ok() {
-                return Self::TvSeries(&entry.get_parents_opt().unwrap()[i[0]]);
+                return Self::TvSeries(&entry.get_parents().unwrap()[i[0]]);
             }
         }
         if entry.check_with_spec(thesis).is_ok() {
@@ -115,13 +115,13 @@ impl<'s> SourceType<'s> {
             return Self::Manuscript;
         }
         if let Ok(i) = entry.check_with_spec(art_container) {
-            return Self::ArtContainer(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::ArtContainer(&entry.get_parents().unwrap()[i[0]]);
         }
         if entry.check_with_spec(art).is_ok() {
             return Self::StandaloneArt;
         }
         if let Ok(i) = entry.check_with_spec(news_item) {
-            return Self::NewsItem(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::NewsItem(&entry.get_parents().unwrap()[i[0]]);
         }
         if entry.check_with_spec(web_standalone).is_ok() {
             return Self::StandaloneWebItem;
@@ -130,13 +130,13 @@ impl<'s> SourceType<'s> {
             .check_with_spec(web_contained_a)
             .or_else(|_| entry.check_with_spec(web_contained_b))
         {
-            return Self::WebItem(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::WebItem(&entry.get_parents().unwrap()[i[0]]);
         }
         if let Ok(i) = entry.check_with_spec(talk) {
-            return Self::ConferenceTalk(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::ConferenceTalk(&entry.get_parents().unwrap()[i[0]]);
         }
         if let Ok(i) = entry.check_with_spec(generic_parent) {
-            return Self::GenericParent(&entry.get_parents_opt().unwrap()[i[0]]);
+            return Self::GenericParent(&entry.get_parents().unwrap()[i[0]]);
         }
 
         return Self::Generic;
@@ -189,11 +189,12 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
 
     let translator = entry
         .get_affiliated_persons()
-        .unwrap_or_else(|_| vec![])
+        .unwrap_or_default()
         .into_iter()
         .filter(|(_, role)| role == &PersonRole::Translator)
         .map(|(v, _)| v)
         .flatten()
+        .cloned()
         .collect::<Vec<Person>>();
 
     let translator = if translator.is_empty() {
@@ -210,8 +211,8 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
             Some(format!("Season {}", ed))
         } else {
             Some(format!("{} ed.", match ed {
-                NumOrStr::Number(e) => get_ordinal(e),
-                NumOrStr::Str(s) => s,
+                NumOrStr::Number(e) => get_ordinal(*e),
+                NumOrStr::Str(s) => s.to_string(),
             }))
         }
     } else {
@@ -264,11 +265,12 @@ impl ApaBibliographyGenerator {
                 // TV episode
                 let dirs = entry
                     .get_affiliated_persons()
-                    .unwrap_or_else(|_| vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .filter(|(_, role)| role == &PersonRole::Director)
                     .map(|(v, _)| v)
                     .flatten()
+                    .cloned()
                     .collect::<Vec<Person>>();
                 let mut dir_name_list = name_list(&dirs)
                     .into_iter()
@@ -276,11 +278,12 @@ impl ApaBibliographyGenerator {
                     .collect::<Vec<String>>();
                 let writers = entry
                     .get_affiliated_persons()
-                    .unwrap_or_else(|_| vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .filter(|(_, role)| role == &PersonRole::Writer)
                     .map(|(v, _)| v)
                     .flatten()
+                    .cloned()
                     .collect::<Vec<Person>>();
                 let mut writers_name_list = name_list(&writers)
                     .into_iter()
@@ -295,11 +298,12 @@ impl ApaBibliographyGenerator {
                 // Film
                 let dirs = entry
                     .get_affiliated_persons()
-                    .unwrap_or_else(|_| vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .filter(|(_, role)| role == &PersonRole::Director)
                     .map(|(v, _)| v)
                     .flatten()
+                    .cloned()
                     .collect::<Vec<Person>>();
 
                 if !dirs.is_empty() {
@@ -309,11 +313,12 @@ impl ApaBibliographyGenerator {
                     // TV show
                     let prods = entry
                         .get_affiliated_persons()
-                        .unwrap_or_else(|_| vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
                         .map(|(v, _)| v)
                         .flatten()
+                        .cloned()
                         .collect::<Vec<Person>>();
 
                     if !prods.is_empty() {
@@ -376,7 +381,7 @@ impl ApaBibliographyGenerator {
         if entry.entry_type.check(booklike) {
             let affs = entry
                 .get_affiliated_persons()
-                .unwrap_or_else(|_| vec![])
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|(_, role)| {
                     [
@@ -390,6 +395,7 @@ impl ApaBibliographyGenerator {
                 })
                 .map(|(v, _)| v)
                 .flatten()
+                .cloned()
                 .collect::<Vec<Person>>();
 
             if !affs.is_empty() {
@@ -479,7 +485,7 @@ impl ApaBibliographyGenerator {
     fn get_title(&self, entry: &Entry, wrap: bool) -> DisplayString {
         let italicise = if entry
             .get_parents()
-            .unwrap_or_else(|_| vec![])
+            .unwrap_or_default()
             .into_iter()
             .any(|p| p.get_title().is_ok())
         {
@@ -568,11 +574,12 @@ impl ApaBibliographyGenerator {
         if book {
             let illustrators = entry
                 .get_affiliated_persons()
-                .unwrap_or_else(|_| vec![])
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|(_, role)| role == &PersonRole::Illustrator)
                 .map(|(v, _)| v)
                 .flatten()
+                .cloned()
                 .collect::<Vec<Person>>();
 
             if !illustrators.is_empty() {
@@ -595,7 +602,7 @@ impl ApaBibliographyGenerator {
             }
         } else if entry.entry_type == EntryType::Report {
             if let Ok(serial) = entry.get_serial_number() {
-                items.push(serial);
+                items.push(serial.to_string());
             }
         } else if entry.entry_type == EntryType::Thesis {
             if let Ok(serial) = entry.get_serial_number() {
@@ -671,15 +678,15 @@ impl ApaBibliographyGenerator {
         } else if entry.entry_type == EntryType::Video {
             let dirs = entry
                 .get_affiliated_persons()
-                .unwrap_or_else(|_| vec![])
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|(_, role)| role == &PersonRole::Director)
                 .map(|(v, _)| v)
                 .flatten()
-                .collect::<Vec<Person>>();
+                .collect::<Vec<&Person>>();
             if !dirs.is_empty()
                 && entry.get_total_volumes().is_err()
-                && entry.get_parents_opt().is_none()
+                && entry.get_parents().is_err()
             {
                 TitleSpec::Film
             } else {
@@ -699,12 +706,12 @@ impl ApaBibliographyGenerator {
                 } else {
                     let prods = entry
                         .get_affiliated_persons()
-                        .unwrap_or_else(|_| vec![])
+                        .unwrap_or_default()
                         .into_iter()
                         .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
                         .map(|(v, _)| v)
                         .flatten()
-                        .collect::<Vec<Person>>();
+                        .collect::<Vec<&Person>>();
 
                     if vid_match.is_ok()
                         && entry.get_issue().is_ok()
@@ -811,7 +818,7 @@ impl ApaBibliographyGenerator {
 
                     if let Ok(sn) = entry.get_serial_number() {
                         res += "Article ";
-                        res += &sn;
+                        res += sn;
                     } else if let Ok(pages) = entry.get_page_range() {
                         res += &format_range("", "", &pages);
                     }
@@ -868,7 +875,7 @@ impl ApaBibliographyGenerator {
                     if let Ok(publisher) = parent.get_publisher() {
                         res += &publisher.value;
                     } else if let Ok(organization) = parent.get_organization() {
-                        res += &organization;
+                        res += organization;
                     }
                 }
             }
@@ -878,11 +885,12 @@ impl ApaBibliographyGenerator {
                     .map(|p| {
                         p.into_iter()
                             .filter(|x| x.1 == PersonRole::ExecutiveProducer)
-                            .map(|x| x.0)
+                            .map(|x| &x.0)
                             .flatten()
+                            .cloned()
                             .collect::<Vec<Person>>()
                     })
-                    .unwrap_or_else(|_| entry.get_authors());
+                    .unwrap_or_else(|_| entry.get_authors().to_vec());
                 let mut comma = if !prods.is_empty() {
                     let names = name_list(&prods);
                     match names.len() {
@@ -942,7 +950,7 @@ impl ApaBibliographyGenerator {
                     if let Ok(publisher) = parent.get_publisher() {
                         res += &publisher.value;
                     } else if let Ok(organization) = parent.get_organization() {
-                        res += &organization;
+                        res += organization;
                     }
                 }
             }
@@ -951,7 +959,7 @@ impl ApaBibliographyGenerator {
                     res += &archive.value;
                 } else if let Ok(org) = entry.get_organization() {
                     if entry.get_url().is_err() {
-                        res += &org;
+                        res += org;
                     }
                 }
             }
@@ -963,11 +971,11 @@ impl ApaBibliographyGenerator {
             SourceType::ArtContainer(parent) => {
                 let org = parent
                     .get_organization()
-                    .or_else(|_| parent.get_archive().map(|o| o.value))
-                    .or_else(|_| parent.get_publisher().map(|o| o.value))
+                    .or_else(|_| parent.get_archive().map(|o| o.value.as_ref()))
+                    .or_else(|_| parent.get_publisher().map(|o| o.value.as_ref()))
                     .or_else(|_| entry.get_organization().map(|o| o))
-                    .or_else(|_| entry.get_archive().map(|o| o.value))
-                    .or_else(|_| entry.get_publisher().map(|o| o.value));
+                    .or_else(|_| entry.get_archive().map(|o| o.value.as_ref()))
+                    .or_else(|_| entry.get_publisher().map(|o| o.value.as_ref()));
 
                 if let Ok(org) = org {
                     if let Ok(loc) = parent
@@ -978,15 +986,15 @@ impl ApaBibliographyGenerator {
                     {
                         res += &format!("{}, {}.", org, loc.value);
                     } else {
-                        res += &org;
+                        res += org;
                     }
                 }
             }
             SourceType::StandaloneArt => {
                 let org = entry
                     .get_organization()
-                    .or_else(|_| entry.get_archive().map(|o| o.value))
-                    .or_else(|_| entry.get_publisher().map(|o| o.value));
+                    .or_else(|_| entry.get_archive().map(|o| o.value.as_str()))
+                    .or_else(|_| entry.get_publisher().map(|o| o.value.as_str()));
 
                 if let Ok(org) = org {
                     if let Ok(loc) =
@@ -994,22 +1002,22 @@ impl ApaBibliographyGenerator {
                     {
                         res += &format!("{}, {}.", org, loc.value);
                     } else {
-                        res += &org;
+                        res += org;
                     }
                 }
             }
             SourceType::StandaloneWebItem => {
                 let publisher = entry
                     .get_publisher()
-                    .map(|o| o.value)
+                    .map(|o| o.value.as_ref())
                     .or_else(|_| entry.get_organization());
 
                 if let Ok(publisher) = publisher {
                     let authors = entry.get_authors();
                     if authors.len() != 1
-                        || authors.get(0).map(|a| &a.name) != Some(&publisher)
+                        || authors.get(0).map(|a| a.name.as_ref()) != Some(publisher)
                     {
-                        res += &publisher;
+                        res += publisher;
                     }
                 }
             }
@@ -1086,7 +1094,7 @@ impl ApaBibliographyGenerator {
                     if let Ok(publisher) = entry.get_publisher() {
                         res += &publisher.value;
                     } else if let Ok(organization) = entry.get_organization() {
-                        res += &organization;
+                        res += organization;
                     }
                 }
             }
@@ -1114,7 +1122,7 @@ impl ApaBibliographyGenerator {
                 entry.get_date().is_err()
                     || entry.check_with_spec(reference_entry).is_ok()
                     || (matches!(st, SourceType::StandaloneWebItem)
-                        && entry.get_parents().unwrap_or_else(|_| vec![]).is_empty()),
+                        && entry.get_parents().unwrap_or_default().is_empty()),
             );
             if let Some(url) = url_str {
                 if !res.is_empty() {
@@ -1130,14 +1138,14 @@ impl ApaBibliographyGenerator {
 
 impl BibliographyGenerator for ApaBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
-        let mut parent = entry.get_parents_opt().and_then(|v| v.first().clone());
+        let mut parent = entry.get_parents().ok().and_then(|v| v.first());
         while entry.entry_type.check(EntryTypeModality::Alternate(vec![
             EntryType::Chapter,
             EntryType::Scene,
         ])) {
             if let Some(p) = parent {
                 entry = &p;
-                parent = entry.get_parents_opt().and_then(|v| v.first().clone());
+                parent = entry.get_parents().ok().and_then(|v| v.first());
             } else {
                 break;
             }

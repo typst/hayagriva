@@ -1,12 +1,12 @@
 //! Parsing and tokenization.
 
+mod exec;
 mod lines;
 mod parser;
 mod scanner;
 mod span;
 mod syntax;
 mod token;
-mod exec;
 
 use crate::error;
 
@@ -77,9 +77,7 @@ fn attr_value(p: &mut Parser) -> Option<Expr> {
             Expr::Lit(Lit::Ident(ident))
         }
 
-        Token::Star => {
-            Expr::Lit(Lit::Wildcard)
-        }
+        Token::Star => Expr::Lit(Lit::Wildcard),
 
         // No value.
         _ => {
@@ -187,32 +185,29 @@ fn factor_attr(p: &mut Parser) -> Option<Spanned<Expr>> {
 fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
     let start = p.pos();
     let op = |token| match token {
-        Token::Ident(i) => {
-            Some(TagOp::Bind(i.into()))
-        }
+        Token::Ident(i) => Some(TagOp::Bind(i.into())),
         _ => None,
     };
 
-    p
-        .span(|p| {
-            if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
-                if p.peek() == Some(Token::Colon) {
-                    p.eat();
-                    if let Some(expr) = factor_attr(p) {
-                        Some(Expr::Tag(ExprTag { op, expr: expr.map(Box::new) }))
-                    } else {
-                        p.diag(error!(op.span, "missing factor"));
-                        None
-                    }
+    p.span(|p| {
+        if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
+            if p.peek() == Some(Token::Colon) {
+                p.eat();
+                if let Some(expr) = factor_attr(p) {
+                    Some(Expr::Tag(ExprTag { op, expr: expr.map(Box::new) }))
                 } else {
-                    p.jump(start);
-                    factor_attr(p).map(|v| v.v)
+                    p.diag(error!(op.span, "missing factor"));
+                    None
                 }
             } else {
+                p.jump(start);
                 factor_attr(p).map(|v| v.v)
             }
-        })
-        .transpose()
+        } else {
+            factor_attr(p).map(|v| v.v)
+        }
+    })
+    .transpose()
 }
 
 /// Parse a term: `factor (* factor)*`.
@@ -312,7 +307,6 @@ mod tests {
         };
     }
 
-
     fn Id(ident: &str) -> Expr {
         Expr::Lit(Lit::Ident(Ident(ident.into())))
     }
@@ -320,19 +314,37 @@ mod tests {
         Expr::Lit(Lit::Wildcard)
     }
     fn Bind(binding: &str, expr: Expr) -> Expr {
-        Expr::Tag(ExprTag { op: Spanned::zero(TagOp::Bind(binding.into())), expr: Spanned::zero(Box::new(expr)) })
+        Expr::Tag(ExprTag {
+            op: Spanned::zero(TagOp::Bind(binding.into())),
+            expr: Spanned::zero(Box::new(expr)),
+        })
     }
     fn Neg(expr: Expr) -> Expr {
-        Expr::Unary(ExprUnary { op: Spanned::zero(UnOp::Neg), expr: Spanned::zero(Box::new(expr)) })
+        Expr::Unary(ExprUnary {
+            op: Spanned::zero(UnOp::Neg),
+            expr: Spanned::zero(Box::new(expr)),
+        })
     }
     fn Anc(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::Binary(ExprBinary { op: Spanned::zero(BinOp::Ancestrage), lhs: Spanned::zero(Box::new(lhs)), rhs: Spanned::zero(Box::new(rhs))})
+        Expr::Binary(ExprBinary {
+            op: Spanned::zero(BinOp::Ancestrage),
+            lhs: Spanned::zero(Box::new(lhs)),
+            rhs: Spanned::zero(Box::new(rhs)),
+        })
     }
     fn Alt(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::Binary(ExprBinary { op: Spanned::zero(BinOp::Alternative), lhs: Spanned::zero(Box::new(lhs)), rhs: Spanned::zero(Box::new(rhs))})
+        Expr::Binary(ExprBinary {
+            op: Spanned::zero(BinOp::Alternative),
+            lhs: Spanned::zero(Box::new(lhs)),
+            rhs: Spanned::zero(Box::new(rhs)),
+        })
     }
     fn Mul(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::Binary(ExprBinary { op: Spanned::zero(BinOp::MultiParent), lhs: Spanned::zero(Box::new(lhs)), rhs: Spanned::zero(Box::new(rhs))})
+        Expr::Binary(ExprBinary {
+            op: Spanned::zero(BinOp::MultiParent),
+            lhs: Spanned::zero(Box::new(lhs)),
+            rhs: Spanned::zero(Box::new(rhs)),
+        })
     }
 
     #[test]
