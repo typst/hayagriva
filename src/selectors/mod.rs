@@ -258,6 +258,103 @@ fn binops(
     Some(lhs)
 }
 
+#[macro_export]
+macro_rules! attrs {
+    ($src:expr, $($exp:expr),* $(,)?) => {
+        {
+            use crate::selectors::{ExprTag, TagOp, Ident};
+            let mut array = vec![];
+            $(
+                array.push(Spanned::zero(Ident::new($exp).unwrap()));
+            )*
+
+            Expr::Tag(ExprTag { op: Spanned::zero(TagOp::Attributes(array)), expr: Spanned::zero(Box::new($src)) })
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! sel {
+    ($variant:expr, $($item:expr),+ $(,)?) => {
+        {
+            use crate::selectors::{ExprBinary, Expr, BinOp, Spanned};
+            let mut exprs = vec![ $($item ,)+  ];
+            if exprs.len() == 1 {
+                exprs.pop().unwrap()
+            } else {
+                let mut root = Expr::Binary(ExprBinary {
+                    op: Spanned::zero($variant),
+                    lhs: Spanned::zero(Box::new(exprs.remove(0))),
+                    rhs: Spanned::zero(Box::new(exprs.remove(0))),
+                });
+
+                let mut pointer = &mut root;
+
+                for e in exprs {
+                    if let Expr::Binary(bex) = pointer {
+                        bex.rhs = Spanned::zero(Box::new(Expr::Binary(ExprBinary {
+                            op: Spanned::zero($variant),
+                            lhs: bex.rhs.clone(),
+                            rhs: Spanned::zero(Box::new(e)),
+                        })));
+
+                        pointer = &mut bex.rhs.v;
+                    } else {
+                        panic!("Not the expected binary expression")
+                    }
+                }
+
+                root
+            }
+        }
+    };
+
+    (alt $($item:expr),+ $(,)?) => {
+        sel!(BinOp::Alternative, $($item ,)+)
+    };
+
+    (mul $($item:expr),+ $(,)?) => {
+        sel!(BinOp::MultiParent, $($item ,)+)
+    };
+
+    ($lhs:expr => $rhs:expr) => {
+        {
+            use crate::selectors::{ExprBinary, Expr, BinOp, Spanned};
+            Expr::Binary(ExprBinary {
+                op: Spanned::zero(BinOp::Ancestrage),
+                lhs: Spanned::zero(Box::new($lhs)),
+                rhs: Spanned::zero(Box::new($rhs)),
+            })
+        }
+    };
+}
+
+#[allow(non_snake_case)]
+pub fn Id(ident: &str) -> Expr {
+    Expr::Lit(Lit::Ident(Ident(ident.into())))
+}
+
+#[allow(non_snake_case)]
+pub fn Wc() -> Expr {
+    Expr::Lit(Lit::Wildcard)
+}
+
+#[allow(non_snake_case)]
+pub fn Bind(binding: &str, expr: Expr) -> Expr {
+    Expr::Tag(ExprTag {
+        op: Spanned::zero(TagOp::Bind(binding.into())),
+        expr: Spanned::zero(Box::new(expr)),
+    })
+}
+
+#[allow(non_snake_case)]
+pub fn Neg(expr: Expr) -> Expr {
+    Expr::Unary(ExprUnary {
+        op: Spanned::zero(UnOp::Neg),
+        expr: Spanned::zero(Box::new(expr)),
+    })
+}
+
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
@@ -294,37 +391,7 @@ mod tests {
             check($src, $exp, res, false);
         };
     }
-    macro_rules! attrs {
-        ($src:expr, $($exp:expr),* $(,)?) => {
-            {
-                let mut array = vec![];
-                $(
-                    array.push(Spanned::zero(Ident::new($exp).unwrap()));
-                )*
 
-                Expr::Tag(ExprTag { op: Spanned::zero(TagOp::Attributes(array)), expr: Spanned::zero(Box::new($src)) })
-            }
-        };
-    }
-
-    fn Id(ident: &str) -> Expr {
-        Expr::Lit(Lit::Ident(Ident(ident.into())))
-    }
-    fn Wc() -> Expr {
-        Expr::Lit(Lit::Wildcard)
-    }
-    fn Bind(binding: &str, expr: Expr) -> Expr {
-        Expr::Tag(ExprTag {
-            op: Spanned::zero(TagOp::Bind(binding.into())),
-            expr: Spanned::zero(Box::new(expr)),
-        })
-    }
-    fn Neg(expr: Expr) -> Expr {
-        Expr::Unary(ExprUnary {
-            op: Spanned::zero(UnOp::Neg),
-            expr: Spanned::zero(Box::new(expr)),
-        })
-    }
     fn Anc(lhs: Expr, rhs: Expr) -> Expr {
         Expr::Binary(ExprBinary {
             op: Spanned::zero(BinOp::Ancestrage),
@@ -332,6 +399,7 @@ mod tests {
             rhs: Spanned::zero(Box::new(rhs)),
         })
     }
+
     fn Alt(lhs: Expr, rhs: Expr) -> Expr {
         Expr::Binary(ExprBinary {
             op: Spanned::zero(BinOp::Alternative),
@@ -339,6 +407,7 @@ mod tests {
             rhs: Spanned::zero(Box::new(rhs)),
         })
     }
+
     fn Mul(lhs: Expr, rhs: Expr) -> Expr {
         Expr::Binary(ExprBinary {
             op: Spanned::zero(BinOp::MultiParent),
@@ -353,7 +422,7 @@ mod tests {
         t!("bread:!!Blog" => Bind("bread", Neg(Neg(Id("Blog")))));
         t!("Anthology[title, author]" => attrs!(Id("Anthology"), "title", "author"));
         t!("Article > Proceedings" => Anc(Id("Article"), Id("Proceedings")));
-        t!("Artwork | Audio > Exhibiton" => Anc(Alt(Id("Artwork"), Id("Audio")), Id("Exhibiton")));
+        t!("Artwork | Audio > Exhibiton" => sel!(sel!(alt Id("Artwork"), Id("Audio")) => Id("Exhibiton")));
         t!("Article > (Book & (Repository | Anthology > Blog) & WebItem[url, title])" => Anc(Id("Article"), Mul(Mul(Id("Book"), Anc(Alt(Id("Repository"), Id("Anthology")), Id("Blog"))), attrs!(Id("WebItem"), "url", "title"))));
         t!("a:(Book | Anthology) > b:((Repository > WebItem) | Blog)" => Anc(Bind("a", Alt(Id("Book"), Id("Anthology"))), Bind("b", Alt(Anc(Id("Repository"), Id("WebItem")), Id("Blog")))));
         t!("a:!Audio > ((Blog[author] & WebItem) | (Video > WebItem))" => Anc(Bind("a", Neg(Id("Audio"))), Alt(Mul(attrs!(Id("Blog"), "author"), Id("WebItem")), Anc(Id("Video"), Id("WebItem")))));

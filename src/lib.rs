@@ -8,7 +8,7 @@ pub mod types;
 
 use lang::CaseTransformer;
 use types::{
-    get_range, Date, Duration, EntryType, EntryTypeSpec, FormattableString,
+    get_range, Date, Duration, EntryType, FormattableString,
     FormattedString, NumOrStr, Person, PersonRole, QualifiedUrl,
 };
 
@@ -252,38 +252,6 @@ impl Entry {
         archive: "archive" => FormattableString,
         archive_location: "archive-location" => FormattableString,
     );
-
-    /// Recursively checks if `EntryTypeSpec` is applicable.
-    /// Will return list of matching parent indices if spec applies.
-    pub(crate) fn check_with_spec(
-        &self,
-        constraint: EntryTypeSpec,
-    ) -> Result<Vec<usize>, ()> {
-        if !self.entry_type.check(constraint.here) {
-            return Err(());
-        }
-
-        let parents = self.get_parents().unwrap_or_default();
-        let mut matching_parents = vec![];
-
-        for pc in &constraint.parents {
-            let mut found = false;
-
-            for (index, p) in parents.iter().enumerate() {
-                if p.check_with_spec(pc.clone()).is_ok() {
-                    matching_parents.push(index);
-                    found = true;
-                    break;
-                }
-            }
-
-            if !found {
-                return Err(());
-            }
-        }
-
-        Ok(matching_parents)
-    }
 }
 
 #[derive(Clone, Error, Debug)]
@@ -907,7 +875,7 @@ mod tests {
             let keys = vec![ $( $key , )* ];
             let expr = parse($select).output.unwrap();
             for entry in &$entries {
-                let res = expr.apply(entry, true);
+                let res = expr.apply(entry);
                 if keys.contains(&entry.key.as_str()) {
                     if res.is_none() {
                         panic!("Key {} not found in results", entry.key);
@@ -926,7 +894,7 @@ mod tests {
             let keys = vec![ $( $key , )* ];
             let entry = $entries.iter().filter_map(|i| if i.key == $entry_key {Some(i)} else {None}).next().unwrap();
             let expr = parse($select).output.unwrap();
-            let res = expr.apply(entry, true).unwrap();
+            let res = expr.apply(entry).unwrap();
             if !keys.into_iter().all(|k| res.get(k).is_some()) {
                 panic!("Results do not contain binding");
             }

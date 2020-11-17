@@ -45,11 +45,7 @@ fn flatten_mp(expr: &Expr) -> Vec<&Expr> {
 }
 
 impl Expr {
-    pub fn apply<'s>(
-        &'s self,
-        entry: &'s Entry,
-        top: bool,
-    ) -> Option<HashMap<String, &'s Entry>> {
+    pub fn apply<'s>(&self, entry: &'s Entry) -> Option<HashMap<String, &'s Entry>> {
         match self {
             Expr::Lit(Lit::Ident(i)) => {
                 if Ok(entry.entry_type) == EntryType::from_str(&i.to_lowercase()) {
@@ -61,9 +57,9 @@ impl Expr {
             Expr::Lit(Lit::Wildcard) => Some(HashMap::new()),
             Expr::Binary(bop) => match bop.op.v {
                 BinOp::Alternative => {
-                    bop.lhs.v.apply(entry, top).or_else(|| bop.rhs.v.apply(entry, top))
+                    bop.lhs.v.apply(entry).or_else(|| bop.rhs.v.apply(entry))
                 }
-                BinOp::Ancestrage => bop.lhs.v.apply(entry, top).and_then(|mut r| {
+                BinOp::Ancestrage => bop.lhs.v.apply(entry).and_then(|mut r| {
                     let ps = entry.get_parents().unwrap_or_default();
                     let r2 = bop.rhs.v.apply_any(ps);
                     if let Some(r2) = r2 {
@@ -77,7 +73,7 @@ impl Expr {
             },
             Expr::Unary(uop) => match uop.op.v {
                 UnOp::Neg => {
-                    if let Some(_) = uop.expr.v.apply(entry, top) {
+                    if let Some(_) = uop.expr.v.apply(entry) {
                         None
                     } else {
                         Some(HashMap::new())
@@ -85,11 +81,11 @@ impl Expr {
                 }
             },
             Expr::Tag(taop) => match &taop.op.v {
-                TagOp::Bind(b) => taop.expr.v.apply(entry, top).map(|mut hm| {
+                TagOp::Bind(b) => taop.expr.v.apply(entry).map(|mut hm| {
                     hm.insert(b.to_string(), entry);
                     hm
                 }),
-                TagOp::Attributes(args) => taop.expr.v.apply(entry, top).and_then(|hm| {
+                TagOp::Attributes(args) => taop.expr.v.apply(entry).and_then(|hm| {
                     if args
                         .iter()
                         .map(|arg| &arg.v)
@@ -105,13 +101,13 @@ impl Expr {
     }
 
     fn apply_any<'s>(
-        &'s self,
+        &self,
         entries: &'s [Entry],
     ) -> Option<(HashMap<String, &'s Entry>, Vec<&'s Entry>)> {
         match self {
             Expr::Lit(Lit::Ident(_)) => entries
                 .iter()
-                .filter_map(|e| self.apply(e, false).map(|r| (r, vec![e])))
+                .filter_map(|e| self.apply(e).map(|r| (r, vec![e])))
                 .next(),
             Expr::Lit(Lit::Wildcard) => {
                 if entries.len() > 0 {
@@ -126,7 +122,7 @@ impl Expr {
                 }
                 BinOp::Ancestrage => entries
                     .iter()
-                    .filter_map(|e| self.apply(e, false).map(|r| (r, vec![e])))
+                    .filter_map(|e| self.apply(e).map(|r| (r, vec![e])))
                     .next(),
                 BinOp::MultiParent => {
                     let unnest = flatten_mp(self);
@@ -139,7 +135,7 @@ impl Expr {
                                 continue;
                             }
 
-                            item = spec.apply(e, false).map(|v| (i, v));
+                            item = spec.apply(e).map(|v| (i, v));
                             if item.is_some() {
                                 break;
                             }

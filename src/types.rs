@@ -109,19 +109,6 @@ pub enum EntryType {
     Exhibition,
 }
 
-/// Allows to formalize requirements for a single `EntryType`.
-#[derive(Clone, Debug)]
-pub(crate) enum EntryTypeModality {
-    /// `EntryType` must match exactly.
-    Specific(EntryType),
-    /// `EntryType` must be contained within this list.
-    Alternate(Vec<EntryType>),
-    /// `EntryType` must _not_ be contained within this list.
-    Disallowed(Vec<EntryType>),
-    /// Any `EntryType is allowed`.
-    Any,
-}
-
 impl Entry {
     /// Extract the twitter handle for the nth author from their alias.
     /// Will make sure the handle starts with `@`.
@@ -164,28 +151,6 @@ impl Entry {
 }
 
 impl EntryType {
-    /// Checks if the `EntryTypeModality` constraint is satisfied.
-    pub(crate) fn check(&self, constraint: EntryTypeModality) -> bool {
-        match constraint {
-            EntryTypeModality::Specific(tp) => &tp == self,
-            EntryTypeModality::Alternate(tps) => {
-                let mut found = false;
-                for tp in &tps {
-                    if tp == self {
-                        found = true;
-                        break;
-                    }
-                }
-
-                found
-            }
-            EntryTypeModality::Disallowed(tps) => {
-                !self.check(EntryTypeModality::Alternate(tps))
-            }
-            EntryTypeModality::Any => true,
-        }
-    }
-
     pub(crate) fn default_parent(&self) -> Self {
         match self {
             Self::Article => Self::Periodical,
@@ -200,42 +165,6 @@ impl EntryType {
             Self::Tweet => Self::Tweet,
             Self::Video => Self::Video,
             _ => Self::Misc,
-        }
-    }
-}
-
-/// Specifies the types of an entry, including its parents.
-#[derive(Clone, Debug)]
-pub(crate) struct EntryTypeSpec {
-    /// The top-level type has to satisfy these conditions.
-    pub(crate) here: EntryTypeModality,
-    /// For each entry in the list, there must be an according parent.
-    pub(crate) parents: Vec<EntryTypeSpec>,
-}
-
-impl EntryTypeSpec {
-    pub fn new(here: EntryTypeModality, parents: Vec<EntryTypeSpec>) -> Self {
-        Self { here, parents }
-    }
-
-    pub fn with_single(here: EntryType) -> Self {
-        Self {
-            here: EntryTypeModality::Specific(here),
-            parents: vec![],
-        }
-    }
-
-    pub fn with_parents(here: EntryType, parents: Vec<EntryTypeSpec>) -> Self {
-        Self {
-            here: EntryTypeModality::Specific(here),
-            parents,
-        }
-    }
-
-    pub fn single_parent(here: EntryTypeModality, parent: EntryTypeModality) -> Self {
-        Self {
-            here,
-            parents: vec![Self::new(parent, vec![])],
         }
     }
 }

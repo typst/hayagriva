@@ -4,10 +4,9 @@ use super::{
 };
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
-use crate::types::{
-    EntryType, EntryTypeModality, EntryTypeSpec, NumOrStr, Person, PersonRole,
-};
-use crate::Entry;
+use crate::selectors::{Bind, Id, Neg, Wc};
+use crate::types::{EntryType, NumOrStr, Person, PersonRole};
+use crate::{attrs, sel, Entry};
 
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator {
@@ -33,113 +32,55 @@ enum SourceType<'s> {
 
 impl<'s> SourceType<'s> {
     fn for_entry(entry: &'s Entry) -> Self {
-        let periodical = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Specific(EntryType::Periodical),
+        let periodical = sel!(Wc() => Bind("p", Id("Periodical")));
+        let collection = sel!(alt
+            sel!(Id("InAnthology") => Bind("p", Id("Anthology"))),
+            sel!(Id("Entry") => Bind("p", Wc())),
+            sel!(Wc() => Bind("p", Id("Reference"))),
+            sel!(Id("Article") => Bind("p", Id("Proceedings"))),
         );
-        let collection_a = EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::InAnthology),
-            EntryTypeModality::Specific(EntryType::Anthology),
+        let tv_series =
+            sel!(attrs!(Id("Video"), "issue", "volume") => Bind("p", Id("Video")));
+        let thesis = Id("Thesis");
+        let manuscript = Id("Manuscript");
+        let art_container = sel!(Wc() => Bind("p", Id("Artwork")));
+        let art = sel!(alt Id("Artwork"), Id("Exhibition"));
+        let news_item = sel!(Wc() => Bind("p", Id("NewspaperIssue")));
+        let web_standalone = Id("WebItem");
+        let web_contained = sel!(alt
+            sel!(Id("WebItem") => Bind("p", Wc())),
+            sel!(Wc() => Bind("p", sel!(alt attrs!(Id("Misc"), "url"), Id("Blog"), Id("WebItem")))),
         );
-        let collection_b = EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::Entry),
-            EntryTypeModality::Any,
-        );
-        let collection_c = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Specific(EntryType::Reference),
-        );
-        let collection_d = EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::Article),
-            EntryTypeModality::Specific(EntryType::Proceedings),
-        );
-        let tv_series = EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::Video),
-            EntryTypeModality::Specific(EntryType::Video),
-        );
-        let thesis = EntryTypeSpec::with_single(EntryType::Thesis);
-        let manuscript = EntryTypeSpec::with_single(EntryType::Manuscript);
-        let art_container = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Specific(EntryType::Artwork),
-        );
-        let art = EntryTypeSpec::new(
-            EntryTypeModality::Alternate(vec![EntryType::Artwork, EntryType::Exhibition]),
-            vec![],
-        );
-        let news_item = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Specific(EntryType::NewspaperIssue),
-        );
-        let web_standalone = EntryTypeSpec::with_single(EntryType::WebItem);
-        let web_contained_a = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Alternate(vec![
-                EntryType::Misc,
-                EntryType::Blog,
-                EntryType::WebItem,
-            ]),
-        );
-        let web_contained_b = EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::WebItem),
-            EntryTypeModality::Any,
-        );
-        let talk = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Specific(EntryType::Conference),
-        );
+        let talk = sel!(Wc() => Bind("p", Id("Conference")));
+        let generic_parent = sel!(Wc() => Bind("p", Wc()));
 
-        let generic_parent =
-            EntryTypeSpec::single_parent(EntryTypeModality::Any, EntryTypeModality::Any);
-
-        if let Ok(i) = entry.check_with_spec(periodical) {
-            return Self::PeriodicalItem(&entry.get_parents().unwrap()[i[0]]);
+        if let Some(mut hm) = periodical.apply(entry) {
+            Self::PeriodicalItem(hm.remove("p").unwrap())
+        } else if let Some(mut hm) = collection.apply(entry) {
+            Self::CollectionItem(hm.remove("p").unwrap())
+        } else if let Some(mut hm) = tv_series.apply(entry) {
+            Self::TvSeries(hm.remove("p").unwrap())
+        } else if thesis.apply(entry).is_some() {
+            Self::Thesis
+        } else if manuscript.apply(entry).is_some() {
+            Self::Manuscript
+        } else if let Some(mut hm) = art_container.apply(entry) {
+            Self::ArtContainer(hm.remove("p").unwrap())
+        } else if art.apply(entry).is_some() {
+            Self::StandaloneArt
+        } else if let Some(mut hm) = news_item.apply(entry) {
+            Self::NewsItem(hm.remove("p").unwrap())
+        } else if web_standalone.apply(entry).is_some() {
+            Self::StandaloneWebItem
+        } else if let Some(mut hm) = web_contained.apply(entry) {
+            Self::WebItem(hm.remove("p").unwrap())
+        } else if let Some(mut hm) = talk.apply(entry) {
+            Self::ConferenceTalk(hm.remove("p").unwrap())
+        } else if let Some(mut hm) = generic_parent.apply(entry) {
+            Self::GenericParent(hm.remove("p").unwrap())
+        } else {
+            Self::Generic
         }
-        if let Ok(i) = entry
-            .check_with_spec(collection_a)
-            .or_else(|_| entry.check_with_spec(collection_b))
-            .or_else(|_| entry.check_with_spec(collection_c))
-            .or_else(|_| entry.check_with_spec(collection_d))
-        {
-            return Self::CollectionItem(&entry.get_parents().unwrap()[i[0]]);
-        }
-        if let Ok(i) = entry.check_with_spec(tv_series) {
-            if entry.get_issue().is_ok() && entry.get_volume().is_ok() {
-                return Self::TvSeries(&entry.get_parents().unwrap()[i[0]]);
-            }
-        }
-        if entry.check_with_spec(thesis).is_ok() {
-            return Self::Thesis;
-        }
-        if entry.check_with_spec(manuscript).is_ok() {
-            return Self::Manuscript;
-        }
-        if let Ok(i) = entry.check_with_spec(art_container) {
-            return Self::ArtContainer(&entry.get_parents().unwrap()[i[0]]);
-        }
-        if entry.check_with_spec(art).is_ok() {
-            return Self::StandaloneArt;
-        }
-        if let Ok(i) = entry.check_with_spec(news_item) {
-            return Self::NewsItem(&entry.get_parents().unwrap()[i[0]]);
-        }
-        if entry.check_with_spec(web_standalone).is_ok() {
-            return Self::StandaloneWebItem;
-        }
-        if let Ok(i) = entry
-            .check_with_spec(web_contained_a)
-            .or_else(|_| entry.check_with_spec(web_contained_b))
-        {
-            return Self::WebItem(&entry.get_parents().unwrap()[i[0]]);
-        }
-        if let Ok(i) = entry.check_with_spec(talk) {
-            return Self::ConferenceTalk(&entry.get_parents().unwrap()[i[0]]);
-        }
-        if let Ok(i) = entry.check_with_spec(generic_parent) {
-            return Self::GenericParent(&entry.get_parents().unwrap()[i[0]]);
-        }
-
-        return Self::Generic;
     }
 }
 
@@ -253,15 +194,9 @@ impl ApaBibliographyGenerator {
         let mut names = None;
         let mut role = AuthorRole::default();
         if entry.entry_type == EntryType::Video {
-            let tv_series = EntryTypeSpec::single_parent(
-                EntryTypeModality::Specific(EntryType::Video),
-                EntryTypeModality::Specific(EntryType::Video),
-            );
+            let tv_series = sel!(attrs!(Id("Video"), "issue", "volume") => Id("Video"));
 
-            if entry.get_issue().is_ok()
-                && entry.get_volume().is_ok()
-                && entry.check_with_spec(tv_series).is_ok()
-            {
+            if tv_series.apply(entry).is_some() {
                 // TV episode
                 let dirs = entry
                     .get_affiliated_persons()
@@ -373,12 +308,8 @@ impl ApaBibliographyGenerator {
         };
 
         let mut details = vec![];
-        let booklike = EntryTypeModality::Alternate(vec![
-            EntryType::Book,
-            EntryType::Proceedings,
-            EntryType::Anthology,
-        ]);
-        if entry.entry_type.check(booklike) {
+        let booklike = sel!(alt Id("Book"), Id("Proceedings"), Id("Anthology"));
+        if booklike.apply(entry).is_some() {
             let affs = entry
                 .get_affiliated_persons()
                 .unwrap_or_default()
@@ -489,54 +420,29 @@ impl ApaBibliographyGenerator {
             .into_iter()
             .any(|p| p.get_title().is_ok())
         {
-            let talk = EntryTypeSpec::single_parent(
-                EntryTypeModality::Any,
-                EntryTypeModality::Specific(EntryType::Conference),
-            );
-            let preprint = EntryTypeSpec::single_parent(
-                EntryTypeModality::Alternate(vec![
-                    EntryType::Article,
-                    EntryType::Book,
-                    EntryType::InAnthology,
-                ]),
-                EntryTypeModality::Specific(EntryType::Repository),
-            );
+            let talk = sel!(Wc() => Id("Conference"));
+            let preprint = sel!(sel!(alt Id("Article"), Id("Book"), Id("InAnthology")) => Id("Repository"));
 
-            entry.check_with_spec(talk).is_ok() || entry.check_with_spec(preprint).is_ok()
+            talk.apply(entry).is_some() || preprint.apply(entry).is_some()
         } else {
             true
         };
 
         let mut res = DisplayString::new();
-        let vid_match = entry.check_with_spec(EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::Video),
-            EntryTypeModality::Specific(EntryType::Video),
-        ));
+        let vid_match = sel!(attrs!(Id("Video"), "issue", "volume") => Id("Video"));
 
-        let book = entry
-            .check_with_spec(EntryTypeSpec::new(
-                EntryTypeModality::Alternate(vec![
-                    EntryType::Book,
-                    EntryType::Report,
-                    EntryType::Reference,
-                    EntryType::Anthology,
-                    EntryType::Proceedings,
-                ]),
-                vec![],
-            ))
-            .is_ok();
+        let book = sel!(alt Id("Book"), Id("Report"), Id("Reference"), Id("Anthology"), Id("Proceedings"))
+            .apply(entry)
+            .is_some();
 
         if let Ok(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
-            let multivol_spec = EntryTypeSpec::with_parents(EntryType::Book, vec![
-                EntryTypeSpec::with_single(EntryType::Book),
-            ]);
+            let multivol_spec = sel!(
+                attrs!(sel!(alt Id("Book"), Id("Proceedings"), Id("Anthology")), "volume") =>
+                Bind("p", sel!(alt Id("Book"), Id("Proceedings"), Id("Anthology")))
+            );
 
-            let mut multivolume_parent = None;
-            if let Ok(parents) = entry.check_with_spec(multivol_spec) {
-                if entry.get_volume().is_ok() {
-                    multivolume_parent = Some(parents[0]);
-                }
-            }
+            let multivolume_parent =
+                multivol_spec.apply(entry).and_then(|mut hm| hm.remove("p"));
 
             if italicise {
                 res.start_format(FormatVariantOptions::Italic);
@@ -551,11 +457,10 @@ impl ApaBibliographyGenerator {
             res.commit_formats();
 
             if let Some(mv_parent) = multivolume_parent {
-                let p: &Entry = &entry.get_parents().unwrap()[mv_parent];
                 let vols = entry.get_volume().unwrap();
                 let mut new = DisplayString::from_string(format!(
                     "{}: {} ",
-                    p.get_title_fmt(None, Some(&self.formatter)).unwrap().sentence_case,
+                    mv_parent.get_title_fmt(None, Some(&self.formatter)).unwrap().sentence_case,
                     format_range("Vol.", "Vols.", &vols),
                 ));
                 new += res;
@@ -563,9 +468,7 @@ impl ApaBibliographyGenerator {
             } else if (entry.get_volume().is_ok() || entry.get_edition().is_ok()) && book
             {
                 res += &ed_vol_str(entry, false);
-            } else if (entry.get_volume().is_ok() || entry.get_issue().is_ok())
-                && vid_match.is_ok()
-            {
+            } else if vid_match.apply(entry).is_some() {
                 res += &ed_vol_str(entry, true);
             }
         }
@@ -638,28 +541,14 @@ impl ApaBibliographyGenerator {
             Tweet,
         }
 
-        let conf_spec = EntryTypeSpec::single_parent(
-            EntryTypeModality::Specific(EntryType::Article),
-            EntryTypeModality::Specific(EntryType::Proceedings),
-        );
-        let talk_spec = EntryTypeSpec::single_parent(
-            EntryTypeModality::Any,
-            EntryTypeModality::Specific(EntryType::Conference),
-        );
-        let repo_item = EntryTypeSpec::single_parent(
-            EntryTypeModality::Disallowed(vec![
-                EntryType::Article,
-                EntryType::Report,
-                EntryType::Thesis,
-            ]),
-            EntryTypeModality::Specific(EntryType::Repository),
-        );
-
+        let conf_spec = sel!(Id("Article") => Id("Proceedings"));
+        let talk_spec = sel!(Wc() => Id("Conference"));
+        let repo_item = sel!(Neg(sel!(alt Id("Article"), Id("Report"), Id("Thesis"))) => Id("Repository"));
         let spec = if entry.entry_type == EntryType::Case {
             TitleSpec::LegalProceedings
-        } else if entry.check_with_spec(conf_spec).is_ok() {
+        } else if conf_spec.apply(entry).is_some() {
             TitleSpec::PaperPresentation
-        } else if entry.check_with_spec(talk_spec).is_ok() {
+        } else if talk_spec.apply(entry).is_some() {
             TitleSpec::ConferenceSession
         } else if entry.entry_type == EntryType::Thesis {
             if entry.get_archive().is_ok() || entry.get_url().is_ok() {
@@ -671,7 +560,7 @@ impl ApaBibliographyGenerator {
             TitleSpec::Exhibition
         } else if entry.entry_type == EntryType::Repository {
             TitleSpec::SoftwareRepository
-        } else if entry.check_with_spec(repo_item).is_ok() {
+        } else if repo_item.apply(entry).is_some() {
             TitleSpec::SoftwareRepositoryItem
         } else if entry.entry_type == EntryType::Audio {
             TitleSpec::Audio
@@ -713,10 +602,7 @@ impl ApaBibliographyGenerator {
                         .flatten()
                         .collect::<Vec<&Person>>();
 
-                    if vid_match.is_ok()
-                        && entry.get_issue().is_ok()
-                        && entry.get_volume().is_ok()
-                    {
+                    if vid_match.apply(entry).is_some() {
                         TitleSpec::TvEpisode
                     } else if !prods.is_empty() || entry.get_total_volumes().is_ok() {
                         TitleSpec::TvShow
@@ -754,14 +640,16 @@ impl ApaBibliographyGenerator {
                 res.push(' ');
             }
 
-            let  printed = if spec == TitleSpec::Thesis {
+            let printed = if spec == TitleSpec::Thesis {
                 if let Ok(org) = entry.get_organization() {
                     res += &format!("[{}, {}]", append, org);
                     true
                 } else {
                     false
                 }
-            } else { false };
+            } else {
+                false
+            };
 
             if !printed {
                 res += &format!("[{}]", append);
@@ -1012,9 +900,8 @@ impl ApaBibliographyGenerator {
                 }
             }
             SourceType::StandaloneWebItem => {
-                let publisher = entry
-                    .get_publisher()
-                    .or_else(|_| entry.get_organization());
+                let publisher =
+                    entry.get_publisher().or_else(|_| entry.get_organization());
 
                 if let Ok(publisher) = publisher {
                     let authors = entry.get_authors();
@@ -1077,16 +964,9 @@ impl ApaBibliographyGenerator {
             }
             SourceType::GenericParent(parent) => {
                 if let Ok(title) = parent.get_title() {
-                    let preprint = EntryTypeSpec::single_parent(
-                        EntryTypeModality::Alternate(vec![
-                            EntryType::Article,
-                            EntryType::Book,
-                            EntryType::Entry,
-                        ]),
-                        EntryTypeModality::Specific(EntryType::Repository),
-                    );
+                    let preprint = sel!(sel!(alt Id("Article"), Id("Book"), Id("InAnthology")) => Id("Repository"));
 
-                    if !entry.check_with_spec(preprint).is_ok() {
+                    if preprint.apply(entry).is_none() {
                         res.start_format(FormatVariantOptions::Italic);
                     }
                     res += title;
@@ -1117,14 +997,11 @@ impl ApaBibliographyGenerator {
 
             res += &format!("https://doi.org/{}", doi);
         } else {
-            let reference_entry = EntryTypeSpec::single_parent(
-                EntryTypeModality::Specific(EntryType::Entry),
-                EntryTypeModality::Specific(EntryType::Reference),
-            );
+            let reference_entry = sel!(Id("Reference") => Id("Entry"));
             let url_str = self.get_retreival_date(
                 entry,
                 entry.get_date().is_err()
-                    || entry.check_with_spec(reference_entry).is_ok()
+                    || reference_entry.apply(entry).is_some()
                     || (matches!(st, SourceType::StandaloneWebItem)
                         && entry.get_parents().unwrap_or_default().is_empty()),
             );
@@ -1143,10 +1020,7 @@ impl ApaBibliographyGenerator {
 impl BibliographyGenerator for ApaBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
         let mut parent = entry.get_parents().ok().and_then(|v| v.first());
-        while entry.entry_type.check(EntryTypeModality::Alternate(vec![
-            EntryType::Chapter,
-            EntryType::Scene,
-        ])) {
+        while sel!(alt Id("Chapter"), Id("Scene")).apply(entry).is_some() {
             if let Some(p) = parent {
                 entry = &p;
                 parent = entry.get_parents().ok().and_then(|v| v.first());
@@ -1155,12 +1029,7 @@ impl BibliographyGenerator for ApaBibliographyGenerator {
             }
         }
 
-        let art_plaque = entry
-            .check_with_spec(EntryTypeSpec::single_parent(
-                EntryTypeModality::Any,
-                EntryTypeModality::Specific(EntryType::Artwork),
-            ))
-            .is_ok();
+        let art_plaque = sel!(Wc() => Bind("p", Id("Artwork"))).apply(entry).is_some();
 
         let authors = self.get_author(entry);
         let date = self.get_date(entry);

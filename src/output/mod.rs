@@ -35,6 +35,7 @@ pub struct Citation<'s> {
     /// Cited entry keys.
     keys: Vec<&'s str>,
     /// Supplements for each entry key such as page or chapter number.
+    #[allow(dead_code)]
     supplements: Vec<Option<&'s str>>,
 }
 
@@ -517,23 +518,6 @@ impl DisplayString {
         }
 
         self.pending_formatting.clear();
-    }
-
-    pub(crate) fn add_if_some<S: Into<String>>(
-        &mut self,
-        item: Option<S>,
-        prefix: Option<&str>,
-        postfix: Option<&str>,
-    ) {
-        if let Some(item) = item {
-            if let Some(prefix) = prefix {
-                *self += prefix;
-            }
-            *self += &item.into();
-            if let Some(postfix) = postfix {
-                *self += postfix;
-            }
-        }
     }
 
     pub(crate) fn add_if_ok<S: Into<String>, T>(
