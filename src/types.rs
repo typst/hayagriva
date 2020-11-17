@@ -465,6 +465,12 @@ impl Display for NumOrStr {
     }
 }
 
+impl Into<String> for NumOrStr {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Date {
     pub year: i32,

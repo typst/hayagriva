@@ -619,7 +619,7 @@ impl ApaBibliographyGenerator {
             res += &format!("({})", items);
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, PartialEq)]
         enum TitleSpec {
             Normal,
             LegalProceedings,
@@ -732,27 +732,21 @@ impl ApaBibliographyGenerator {
         };
 
         let append = match spec {
-            TitleSpec::Normal => String::new(),
-            TitleSpec::LegalProceedings => "Legal proceedings".to_string(),
-            TitleSpec::PaperPresentation => "Paper presentation".to_string(),
-            TitleSpec::ConferenceSession => "Conference session".to_string(),
-            TitleSpec::Thesis => {
-                if let Ok(org) = entry.get_organization() {
-                    format!("Thesis, {}", org)
-                } else {
-                    "Thesis".to_string()
-                }
-            }
-            TitleSpec::UnpublishedThesis => "Unpublished thesis".to_string(),
-            TitleSpec::SoftwareRepository => "Software repository".to_string(),
-            TitleSpec::SoftwareRepositoryItem => "Software repository item".to_string(),
-            TitleSpec::Exhibition => "Exhibiton".to_string(),
-            TitleSpec::Audio => "Audio".to_string(),
-            TitleSpec::Video => "Video".to_string(),
-            TitleSpec::TvShow => "TV series".to_string(),
-            TitleSpec::TvEpisode => "TV series episode".to_string(),
-            TitleSpec::Film => "Film".to_string(),
-            TitleSpec::Tweet => "Tweet".to_string(),
+            TitleSpec::Normal => "",
+            TitleSpec::LegalProceedings => "Legal proceedings",
+            TitleSpec::PaperPresentation => "Paper presentation",
+            TitleSpec::ConferenceSession => "Conference session",
+            TitleSpec::Thesis => "Thesis",
+            TitleSpec::UnpublishedThesis => "Unpublished thesis",
+            TitleSpec::SoftwareRepository => "Software repository",
+            TitleSpec::SoftwareRepositoryItem => "Software repository item",
+            TitleSpec::Exhibition => "Exhibiton",
+            TitleSpec::Audio => "Audio",
+            TitleSpec::Video => "Video",
+            TitleSpec::TvShow => "TV series",
+            TitleSpec::TvEpisode => "TV series episode",
+            TitleSpec::Film => "Film",
+            TitleSpec::Tweet => "Tweet",
         };
 
         if !append.is_empty() {
@@ -760,7 +754,18 @@ impl ApaBibliographyGenerator {
                 res.push(' ');
             }
 
-            res += &format!("[{}]", append);
+            let  printed = if spec == TitleSpec::Thesis {
+                if let Ok(org) = entry.get_organization() {
+                    res += &format!("[{}, {}]", append, org);
+                    true
+                } else {
+                    false
+                }
+            } else { false };
+
+            if !printed {
+                res += &format!("[{}]", append);
+            }
         }
 
         if wrap && !res.is_empty() {
@@ -873,7 +878,7 @@ impl ApaBibliographyGenerator {
                     res.push(' ');
 
                     if let Ok(publisher) = parent.get_publisher() {
-                        res += &publisher.value;
+                        res += publisher;
                     } else if let Ok(organization) = parent.get_organization() {
                         res += organization;
                     }
@@ -948,7 +953,7 @@ impl ApaBibliographyGenerator {
                     res.push(' ');
 
                     if let Ok(publisher) = parent.get_publisher() {
-                        res += &publisher.value;
+                        res += publisher;
                     } else if let Ok(organization) = parent.get_organization() {
                         res += organization;
                     }
@@ -956,7 +961,7 @@ impl ApaBibliographyGenerator {
             }
             SourceType::Thesis => {
                 if let Ok(archive) = entry.get_archive() {
-                    res += &archive.value;
+                    res += archive;
                 } else if let Ok(org) = entry.get_organization() {
                     if entry.get_url().is_err() {
                         res += org;
@@ -965,17 +970,17 @@ impl ApaBibliographyGenerator {
             }
             SourceType::Manuscript => {
                 if let Ok(archive) = entry.get_archive() {
-                    res += &archive.value;
+                    res += archive;
                 }
             }
             SourceType::ArtContainer(parent) => {
                 let org = parent
                     .get_organization()
-                    .or_else(|_| parent.get_archive().map(|o| o.value.as_ref()))
-                    .or_else(|_| parent.get_publisher().map(|o| o.value.as_ref()))
-                    .or_else(|_| entry.get_organization().map(|o| o))
-                    .or_else(|_| entry.get_archive().map(|o| o.value.as_ref()))
-                    .or_else(|_| entry.get_publisher().map(|o| o.value.as_ref()));
+                    .or_else(|_| parent.get_archive())
+                    .or_else(|_| parent.get_publisher())
+                    .or_else(|_| entry.get_organization())
+                    .or_else(|_| entry.get_archive())
+                    .or_else(|_| entry.get_publisher());
 
                 if let Ok(org) = org {
                     if let Ok(loc) = parent
@@ -984,7 +989,7 @@ impl ApaBibliographyGenerator {
                         .or_else(|_| entry.get_location())
                         .or_else(|_| entry.get_archive_location())
                     {
-                        res += &format!("{}, {}.", org, loc.value);
+                        res += &format!("{}, {}.", org, loc);
                     } else {
                         res += org;
                     }
@@ -993,14 +998,14 @@ impl ApaBibliographyGenerator {
             SourceType::StandaloneArt => {
                 let org = entry
                     .get_organization()
-                    .or_else(|_| entry.get_archive().map(|o| o.value.as_str()))
-                    .or_else(|_| entry.get_publisher().map(|o| o.value.as_str()));
+                    .or_else(|_| entry.get_archive())
+                    .or_else(|_| entry.get_publisher());
 
                 if let Ok(org) = org {
                     if let Ok(loc) =
                         entry.get_location().or_else(|_| entry.get_archive_location())
                     {
-                        res += &format!("{}, {}.", org, loc.value);
+                        res += &format!("{}, {}.", org, loc);
                     } else {
                         res += org;
                     }
@@ -1009,7 +1014,6 @@ impl ApaBibliographyGenerator {
             SourceType::StandaloneWebItem => {
                 let publisher = entry
                     .get_publisher()
-                    .map(|o| o.value.as_ref())
                     .or_else(|_| entry.get_organization());
 
                 if let Ok(publisher) = publisher {
@@ -1068,7 +1072,7 @@ impl ApaBibliographyGenerator {
                         res += ", ";
                     }
 
-                    res += &loc.value;
+                    res += loc;
                 }
             }
             SourceType::GenericParent(parent) => {
@@ -1085,14 +1089,14 @@ impl ApaBibliographyGenerator {
                     if !entry.check_with_spec(preprint).is_ok() {
                         res.start_format(FormatVariantOptions::Italic);
                     }
-                    res += &title.value;
+                    res += title;
                     res.commit_formats();
                 }
             }
             SourceType::Generic => {
                 if entry.get_publisher().is_ok() || entry.get_organization().is_ok() {
                     if let Ok(publisher) = entry.get_publisher() {
-                        res += &publisher.value;
+                        res += publisher;
                     } else if let Ok(organization) = entry.get_organization() {
                         res += organization;
                     }

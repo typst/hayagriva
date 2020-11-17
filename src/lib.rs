@@ -73,14 +73,22 @@ pub enum EntryAccessError {
 }
 
 macro_rules! fields {
-    ($($name:ident: $field_name:expr => &FormattableString),* $(,)*) => {
+    ($($name:ident: $field_name:expr => FormattableString),* $(,)*) => {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<get_ $name>](&self) -> Result<&FormattableString, EntryAccessError> {
+                pub fn [<get_ $name _raw>](&self) -> Result<&FormattableString, EntryAccessError> {
                     self.get($field_name)
                         .ok_or(EntryAccessError::NoSuchField)
                         .and_then(|item| <&FormattableString>::try_from(item))
+                }
+
+                #[doc = "Get and parse the `" $field_name "` field's value.'"]
+                pub fn [<get_ $name>](&self) -> Result<&str, EntryAccessError> {
+                    self.get($field_name)
+                        .ok_or(EntryAccessError::NoSuchField)
+                        .and_then(|item| <&FormattableString>::try_from(item))
+                        .map(|fstr| fstr.value.as_ref())
                 }
 
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
@@ -148,7 +156,7 @@ macro_rules! fields {
 impl Entry {
     fields!(parents: "parent" => Vec<Entry>, &[Entry]);
 
-    fields!(title: "title" => &FormattableString);
+    fields!(title: "title" => FormattableString);
 
     /// Get and parse the `author` field. This will always return a result
     pub fn get_authors(&self) -> &[Person] {
