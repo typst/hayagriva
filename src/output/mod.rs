@@ -31,10 +31,10 @@ pub enum CitationError {
 
 /// Structs that implement this can be used to generate bibliography references
 /// for sources.
-pub trait BibliographyGenerator {
+pub trait BibliographyGenerator<'s> {
     /// Get a string with optional formatting that describes `Entry` in
     /// accordance with the implementing struct's style.
-    fn get_reference(&self, entry: &Entry) -> DisplayString;
+    fn get_reference(&mut self, entry: &'s Entry) -> DisplayString;
 }
 
 /// Represents a citation of one or more database entries.
@@ -317,7 +317,7 @@ fn name_list(persons: &[Person]) -> Vec<String> {
     let mut names = vec![];
 
     for author in persons.iter() {
-        names.push(author.get_name_first());
+        names.push(author.get_name_first(true));
     }
 
     names
@@ -327,7 +327,7 @@ fn name_list_straight(persons: &[Person]) -> Vec<String> {
     let mut names = vec![];
 
     for author in persons.iter() {
-        names.push(author.get_given_name_initials_first());
+        names.push(author.get_given_name_initials_first(true));
     }
 
     names

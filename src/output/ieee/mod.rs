@@ -802,8 +802,8 @@ impl IeeeBibliographyGenerator {
     }
 }
 
-impl BibliographyGenerator for IeeeBibliographyGenerator {
-    fn get_reference(&self, mut entry: &Entry) -> DisplayString {
+impl<'a> BibliographyGenerator<'a> for IeeeBibliographyGenerator {
+    fn get_reference(&mut self, mut entry: &Entry) -> DisplayString {
         let mut parent = entry.get_parents().ok().and_then(|v| v.first());
         let mut sn_stack = vec![];
         while entry.get_title().is_err()

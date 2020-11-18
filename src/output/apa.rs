@@ -978,8 +978,8 @@ impl ApaBibliographyGenerator {
     }
 }
 
-impl BibliographyGenerator for ApaBibliographyGenerator {
-    fn get_reference(&self, mut entry: &Entry) -> DisplayString {
+impl<'a> BibliographyGenerator<'a> for ApaBibliographyGenerator {
+    fn get_reference(&mut self, mut entry: &Entry) -> DisplayString {
         let mut parent = entry.get_parents().ok().and_then(|v| v.first());
         while sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some() {
             if let Some(p) = parent {

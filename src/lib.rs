@@ -936,7 +936,7 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::{apa, ieee, BibliographyGenerator};
+    use crate::output::{apa, mla, ieee, BibliographyGenerator};
     use crate::selectors::parse;
     use std::fs;
 
@@ -944,7 +944,7 @@ mod tests {
     fn apa() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let apa = apa::ApaBibliographyGenerator::new();
+        let mut apa = apa::ApaBibliographyGenerator::new();
 
         for entry in &entries {
             let refs = apa.get_reference(&entry);
@@ -956,10 +956,22 @@ mod tests {
     fn ieee() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let ieee = ieee::IeeeBibliographyGenerator::new();
+        let mut ieee = ieee::IeeeBibliographyGenerator::new();
 
         for entry in &entries {
             let refs = ieee.get_reference(&entry);
+            println!("{}", refs.print_ansi_vt100());
+        }
+    }
+
+    #[test]
+    fn mla() {
+        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let entries = load_yaml_structure(&contents).unwrap();
+        let mut mla = mla::MlaBibliographyGenerator::new();
+
+        for entry in &entries {
+            let refs = mla.get_reference(&entry);
             println!("{}", refs.print_ansi_vt100());
         }
     }
