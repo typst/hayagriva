@@ -1,3 +1,8 @@
+//! Consolidated IEEE bibliography style as defined in the
+//! [2018 IEEE Reference Guide](https://ieeeauthorcenter.ieee.org/wp-content/uploads/IEEE-Reference-Guide.pdf)
+//! and the document
+//! ["How to Cite References: The IEEE Citation Style"](https://ieee-dataport.org/sites/default/files/analysis/27/IEEE%20Citation%20Guidelines.pdf).
+
 mod abbreviations;
 use super::{
     format_range, name_list_straight, BibliographyGenerator, DisplayString,
@@ -10,6 +15,7 @@ use crate::types::{Date, NumOrStr, PersonRole};
 use crate::{attrs, sel, Entry};
 use isolang::Language;
 
+/// Generator for the IEEE reference list.
 #[derive(Clone, Debug)]
 pub struct IeeeBibliographyGenerator {
     sc_formatter: SentenceCase,
@@ -33,6 +39,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
 }
 
 impl IeeeBibliographyGenerator {
+    /// Creates a new IEEE bibliography generator.
     pub fn new() -> Self {
         let mut tc_formatter = TitleCase::default();
         tc_formatter.always_capitalize_min_len = Some(4);

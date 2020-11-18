@@ -152,7 +152,7 @@ impl Debug for Tokens<'_> {
     }
 }
 
-pub fn is_ident(text: &str) -> bool {
+pub(super) fn is_ident(text: &str) -> bool {
     let mut chars = text.chars();
     if matches!(chars.next(), Some(c) if c.is_xid_start() || c == '_' || c == '-') {
         chars.all(|c| c.is_xid_continue() || c == '_' || c == '-')

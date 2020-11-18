@@ -1,3 +1,12 @@
+//! Hayagriva provides a YAML-backed format and data model for various
+//! bibliography items as well as formatting for both in-text citations and
+//! reference lists based on these literature databases.
+//!
+//! The crate is intended to assist scholarly writing and reference management
+//! and can be used both through a CLI and an API.
+
+#![warn(missing_docs)]
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -20,33 +29,55 @@ use unic_langid::LanguageIdentifier;
 use url::Url;
 use yaml_rust::{Yaml, YamlLoader};
 
+/// The field type enum variants describe what data types can possibly be held
+/// by the various content items of an [Entry].
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldTypes {
+    /// A [FormattableString] with which the user can override various
+    /// automatic formatters.
     FormattableString(FormattableString),
+    /// A [FormattedString] is a [FormattableString] to which all desired
+    /// formatters have been applied.
     FormattedString(FormattedString),
+    /// A string to be reproduced as-is.
     Text(String),
+    /// An integer.
     Integer(i64),
+    /// A date, possibly only a year.
     Date(Date),
+    /// A number of [Person]s.
     Persons(Vec<Person>),
+    /// A list of [roles](PersonRole) with their assigned [Person]s.
     PersonsWithRoles(Vec<(Vec<Person>, PersonRole)>),
+    /// This could be both an Integer or a Number.
     IntegerOrText(NumOrStr),
+    /// A range between two integers.
     Range(std::ops::Range<i64>),
+    /// A duration (of a song or an performance for example).
     Duration(Duration),
+    /// A part of a period.
     TimeRange(std::ops::Range<Duration>),
+    /// An [URL, possibly with a date of when it has been consulted](QualifiedUrl).
     Url(QualifiedUrl),
+    /// A [Unicode Language Identifier](LanguageIdentifier).
     Language(LanguageIdentifier),
+    /// Other [entries](Entry).
     Entries(Vec<Entry>),
 }
 
-#[allow(dead_code)]
+/// A citable item in a bibliography.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Entry {
+    /// A string by which the Entry can be identified.
     key: String,
+    /// The kind of media this Entry represents.
     entry_type: EntryType,
+    /// Information about the Entry.
     content: HashMap<String, FieldTypes>,
 }
 
 impl Entry {
+    /// Construct a new, empty entry.
     pub fn new(key: &str, entry_type: EntryType) -> Self {
         Self {
             key: key.to_string(),
@@ -55,20 +86,25 @@ impl Entry {
         }
     }
 
+    /// Get the unconverted value of a certain key.
     pub fn get(&self, key: &str) -> Option<&FieldTypes> {
         self.content.get(key)
     }
 
+    /// Set [any data type](FieldTypes) as value for a given key.
     pub fn set(&mut self, key: String, value: FieldTypes) {
         self.content.insert(key, value);
     }
 }
 
+/// Error which occurs if the value of an entry field could not be retrieved.
 #[derive(Clone, Error, Debug)]
 pub enum EntryAccessError {
+    /// The field is not set.
     #[error("the queried field is not present")]
     NoSuchField,
-    #[error("datatype mismatch in the queried field")]
+    /// The [field type enum](FieldTypes) does not match the expected variant(s).
+    #[error("data type mismatch in the queried field")]
     WrongType,
 }
 
@@ -179,6 +215,8 @@ impl Entry {
         affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>, &[(Vec<Person>, PersonRole)]
     );
 
+    /// Get and parse the `affiliated` field and only return persons of a given
+    /// [role](PersonRole).
     pub fn get_affiliated_filtered(&self, role: PersonRole) -> Vec<Person> {
         self.get_affiliated_persons()
             .into_iter()
@@ -262,65 +300,96 @@ impl Entry {
     );
 }
 
+/// Errors which could occur when reading a Yaml bibliography file.
 #[derive(Clone, Error, Debug)]
 pub enum YamlBibliographyError {
+    /// The file is no valid Yaml.
     #[error("string could not be read as yaml")]
     Scan(#[from] yaml_rust::ScanError),
+    /// The file does not contain a hash map at the top level.
     #[error("file has no top-level hash map")]
     Structure,
+    /// An entry is not structured as a hash map.
     #[error("the entry with key `{0}` does not contain a hash map")]
     EntryStructure(String),
+    /// A field name cannot be read as a string.
     #[error("a field name in the entry with key `{0}` cannot be read as a string")]
     FieldNameUnparsable(String),
+    /// An entry key is not a string.
     #[error("a entry key cannot be parsed as a string")]
     KeyUnparsable,
+    /// An entry field is not of the right data type.
     #[error(
         "wrong data type for field `{field}` in entry `{key}` (expected {expected:?})"
     )]
     DataTypeMismatch {
+        /// Key of the offending entry.
         key: String,
+        /// Name of the offending field.
         field: String,
+        /// Expected data type.
         expected: String,
     },
+    /// An error occured when trying to parse the data in an entry field
+    /// to a given type.
     #[error("error when parsing data for field `{field}` in entry `{key}` ({source})")]
     DataType {
+        /// Key of the offending entry.
         key: String,
+        /// Name of the offending field.
         field: String,
+        /// Error that occurred when parsing.
         #[source]
         source: YamlDataTypeError,
     },
 }
 
+/// Errors that can occur when reading a [FormattableString] from the yaml
+/// bibliography file
 #[derive(Clone, Error, Debug)]
 pub enum YamlFormattableStringError {
+    /// A key of a sub-field cannot be parsed as a string.
     #[error("key cannot be parsed as a string")]
     KeyIsNoString,
+    /// A value could not be read as a string.
     #[error("value cannot be parsed as a string")]
     ValueIsNoString,
+    /// Missing value.
     #[error("no value was found")]
     NoValue,
+    /// The `verbatim` property must be `true` or `false`.
     #[error("the `verbatim` property must be boolean")]
     VerbatimNotBool,
 }
 
+/// An error that can occur for each of the parsable data types.
 #[derive(Clone, Error, Debug)]
 pub enum YamlDataTypeError {
+    /// [Error](YamlFormattableStringError) with parsing a [FormattableString].
     #[error("formattable string structurally malformed")]
     FormattableString(#[from] YamlFormattableStringError),
+    /// [Error](types::DateError) with parsing a [Date].
     #[error("date string structurally malformed")]
     Date(#[from] types::DateError),
+    /// [Error](types::PersonError) with parsing a [Person].
     #[error("person string structurally malformed")]
     Person(#[from] types::PersonError),
+    /// [Error](types::DurationError) with parsing a [Duration].
     #[error("duration string structurally malformed")]
     Duration(#[from] types::DurationError),
+    /// [Error](url::ParseError) with parsing an [QualifiedUrl].
     #[error("invalid url")]
     Url(#[from] url::ParseError),
+    /// A string does not represent a [std::ops::Range].
     #[error("string is not a range")]
     Range,
+    /// An element of an array is unexpectedly empty.
     #[error("array element empty")]
     EmptyArrayElement,
+    /// A required field is missing.
     #[error("missing required field in details hash map")]
     MissingRequiredField,
+    /// Wrong primitive yaml type in entry field.
     #[error("mismatched primitive type")]
     MismatchedPrimitive,
 }
@@ -347,6 +416,23 @@ impl YamlBibliographyError {
     }
 }
 
+/// This loads a string as a yaml bibliography file.
+///
+/// ```
+/// use hayagriva::load_yaml_structure;
+///
+/// let yaml = r#"
+/// crazy-rich:
+///     type: Book
+///     title: Crazy Rich Asians
+///     author: Kwan, Kevin
+///     date: 2014
+///     publisher: Anchor Books
+///     location: New York, NY, US
+/// "#;
+/// let bib = load_yaml_structure(yaml).unwrap();
+/// assert_eq!(bib[0].get_date().unwrap().year, 2014);
+/// ```
 pub fn load_yaml_structure(file: &str) -> Result<Vec<Entry>, YamlBibliographyError> {
     let docs = YamlLoader::load_from_str(file)?;
     let doc = docs[0].clone().into_hash().ok_or(YamlBibliographyError::Structure)?;

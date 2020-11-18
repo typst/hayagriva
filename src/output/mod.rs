@@ -1,3 +1,5 @@
+//! Citation and bibliography styles.
+
 use super::types::Person;
 use super::{Entry, FieldTypes};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -7,17 +9,22 @@ use thiserror::Error;
 
 pub mod apa;
 pub mod ieee;
+pub mod mla;
 
 /// Will be raised if a user-specified citation is not possible with the given
 /// database.
 #[derive(Debug, Error)]
 pub enum CitationError {
+    /// A key could not be found.
     #[error("key {0} could not be fount in the citation database")]
     KeyNotFound(String),
+    /// A citation contains no keys.
     #[error("the citation contains no keys")]
     EmptyCitation,
+    /// An Entry does not have the author field when it is required.
     #[error("key {0} does not contain the author field required for this style")]
     NoAuthorField(String),
+    /// An Entry does not have the year field when it is required.
     #[error("key {0} does not contain the date field required for this style")]
     NoYearField(String),
 }
@@ -64,7 +71,9 @@ pub trait ImmediateReferenceGenerator {
 /// `ImmediateReferenceGenerator` and you will receive a blanket implementation
 /// for the more generic `ReferenceGenerator`.
 pub trait StringMemory {
+    /// Saves a string to memory
     fn save_string(&mut self, val: String);
+    /// Dumps all strings saved in the order that they were stored in.
     fn dump_memory(&self) -> Vec<String>;
 }
 
@@ -329,17 +338,22 @@ fn name_list_straight(persons: &[Person]) -> Vec<String> {
 /// an end index.
 #[derive(Clone, Debug)]
 pub enum FormatVariants {
+    /// **Bold print**
     Bold((usize, usize)),
+    /// _italic print_
     Italic((usize, usize)),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FormatVariantOptions {
+    /// **Bold print**
     Bold,
+    /// _italic print_
     Italic,
 }
 
 impl FormatVariants {
+    /// Gets the start index (inclusive) of the formatting.
     pub fn get_min(&self) -> usize {
         match self {
             Self::Bold((a, _)) => a,
@@ -347,6 +361,8 @@ impl FormatVariants {
         }
         .clone()
     }
+
+    /// Gets the end index (exclusive) of the formatting.
     pub fn get_max(&self) -> usize {
         match self {
             Self::Bold((_, b)) => b,
@@ -354,6 +370,8 @@ impl FormatVariants {
         }
         .clone()
     }
+
+    /// Offsets the indices of the formatting by a constant value.
     pub fn offset(self, o: i32) -> Self {
         match self {
             Self::Bold((a, b)) => {
@@ -365,6 +383,8 @@ impl FormatVariants {
         }
         .clone()
     }
+
+    /// Get the formatting index span as a Range.
     pub fn get_range(&self) -> std::ops::Range<usize> {
         self.get_min() .. self.get_max()
     }
@@ -393,7 +413,9 @@ impl FormatVariants {
 /// A printable string with a list of formatting modifications
 #[derive(Clone, Debug)]
 pub struct DisplayString {
+    /// The string content.
     pub value: String,
+    /// Information about formatted ranges.
     pub formatting: Vec<FormatVariants>,
 
     pending_formatting: Vec<(FormatVariantOptions, usize)>,
@@ -458,6 +480,7 @@ impl Into<String> for DisplayString {
 }
 
 impl DisplayString {
+    /// Constructs a new DisplayString.
     pub fn new() -> Self {
         Self {
             value: String::new(),
@@ -466,6 +489,7 @@ impl DisplayString {
         }
     }
 
+    /// Uses a string reference to create a display string.
     pub fn from_str(s: &str) -> Self {
         Self {
             value: s.to_string(),
@@ -474,6 +498,7 @@ impl DisplayString {
         }
     }
 
+    /// Use a String to create a display string.
     pub fn from_string(s: String) -> Self {
         Self {
             value: s,
@@ -482,18 +507,22 @@ impl DisplayString {
         }
     }
 
+    /// Get the length of the string.
     pub fn len(&self) -> usize {
         self.value.len()
     }
 
+    /// Is the string empty?
     pub fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
 
+    /// Get the last character.
     pub fn last(&self) -> Option<char> {
         self.value.chars().last()
     }
 
+    /// Push onto the string.
     pub fn push(&mut self, ch: char) {
         self.value.push(ch);
     }
@@ -532,6 +561,8 @@ impl DisplayString {
         }
     }
 
+    /// Applies the formatting as ANSI / VT100 control sequences and
+    /// prints that formatted string to standard output.
     pub fn print_ansi_vt100(&self) -> String {
         let mut start_end = vec![];
 

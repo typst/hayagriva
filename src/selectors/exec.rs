@@ -43,6 +43,8 @@ fn flatten_mp(expr: &Expr) -> Vec<&Expr> {
 }
 
 impl Expr {
+    /// Applies the expression to an [Entry] and returns the bound variables in a hash
+    /// map if there was a match.
     pub fn apply<'s>(&self, entry: &'s Entry) -> Option<HashMap<String, &'s Entry>> {
         match self {
             Expr::Lit(Lit::Ident(i)) => {

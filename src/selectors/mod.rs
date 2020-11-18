@@ -269,6 +269,7 @@ fn binops(
     Some(lhs)
 }
 
+/// This macro allows to specify attribute requirements for an expression.
 #[macro_export]
 macro_rules! attrs {
     ($src:expr, $($exp:expr),* $(,)?) => {
@@ -284,6 +285,9 @@ macro_rules! attrs {
     };
 }
 
+/// This macro allows to create [binary expressions](crate::selectors::BinOp)
+/// (MultiParent `sel!(mul Id(Video), Id(Web))`, Alternative
+/// `sel!(alt Id(Reference), Id(Book))`, and Ancestrage `sel!(Id(Anthos) => Id(Anthology)))`.
 #[macro_export]
 macro_rules! sel {
     ($variant:expr, $($item:expr),+ $(,)?) => {
@@ -340,16 +344,19 @@ macro_rules! sel {
     };
 }
 
+/// Creates an identifier expression.
 #[allow(non_snake_case)]
 pub fn Id(ident: EntryType) -> Expr {
     Expr::Lit(Lit::Ident(ident))
 }
 
+/// Creates a wildcard expression.
 #[allow(non_snake_case)]
 pub fn Wc() -> Expr {
     Expr::Lit(Lit::Wildcard)
 }
 
+/// Binds an expression to a variable name.
 #[allow(non_snake_case)]
 pub fn Bind(binding: &str, expr: Expr) -> Expr {
     Expr::Tag(ExprTag {
@@ -358,6 +365,7 @@ pub fn Bind(binding: &str, expr: Expr) -> Expr {
     })
 }
 
+/// Negates an expression.
 #[allow(non_snake_case)]
 pub fn Neg(expr: Expr) -> Expr {
     Expr::Unary(ExprUnary {

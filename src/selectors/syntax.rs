@@ -2,6 +2,7 @@ use super::{is_ident, SpanVec, Spanned};
 use crate::types::EntryType;
 use std::ops::Deref;
 
+/// An Identifier, used to hold attribute names.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Ident(pub String);
 

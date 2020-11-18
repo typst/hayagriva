@@ -1,3 +1,6 @@
+//! Style for entries in a reference list [as defined in the 7th edition of the
+//! APA Publication Manual](https://apastyle.apa.org/style-grammar-guidelines/references/).
+
 use super::{
     format_range, name_list, name_list_straight, BibliographyGenerator, DisplayString,
     FormatVariantOptions,
@@ -9,6 +12,7 @@ use crate::types::EntryType::*;
 use crate::types::{NumOrStr, Person, PersonRole};
 use crate::{attrs, sel, Entry};
 
+/// Generates APA reference list entries.
 #[derive(Clone, Debug)]
 pub struct ApaBibliographyGenerator {
     formatter: SentenceCase,
@@ -166,6 +170,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
 }
 
 impl ApaBibliographyGenerator {
+    /// Creates a new bibliography generator.
     pub fn new() -> Self {
         Self { formatter: SentenceCase::default() }
     }

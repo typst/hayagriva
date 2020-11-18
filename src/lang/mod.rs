@@ -1,3 +1,5 @@
+//! Language-dependant string transformations.
+
 use super::types::{FormattableString, FormattedString};
 use usize;
 
@@ -414,6 +416,8 @@ impl CaseTransformer for SentenceCase {
 }
 
 impl FormattableString {
+    /// Apply title and sentence case formatting, if the formatters are provided
+    /// and the user did not override.
     pub fn format(
         self,
         title: Option<&dyn CaseTransformer>,

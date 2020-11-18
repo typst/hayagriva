@@ -1,76 +1,36 @@
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::{self, Debug, Formatter};
 
 use super::token::Tokens;
 use super::Scanner;
 use super::{Pos, Span, SpanVec, SpanWith, Spanned, Token};
 
-/// Construct a diagnostic with [`Error`] level.
+/// Construct a new error.
 #[macro_export]
 macro_rules! error {
-    ($($tts:tt)*) => {
-        $crate::__impl_diagnostic!($crate::selectors::parser::Level::Error; $($tts)*)
-    };
-}
-
-/// Construct a diagnostic with [`Warning`] level.
-///
-/// This works exactly like `error!`. See its documentation for more
-/// information.
-#[macro_export]
-macro_rules! warning {
-    ($($tts:tt)*) => {
-        $crate::__impl_diagnostic!($crate::selectors::parser::Level::Warning; $($tts)*)
-    };
-}
-
-/// Backs the `error!` and `warning!` macros.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_diagnostic {
-    ($level:expr; $fmt:literal $($tts:tt)*) => {
-        $crate::selectors::parser::Diag::new($level, format!($fmt $($tts)*))
+    ($fmt:literal $($tts:tt)*) => {
+        $crate::selectors::parser::Diag::new(format!($fmt $($tts)*))
     };
 
-    ($level:expr; $span:expr, $fmt:literal $($tts:tt)*) => {
+    ($span:expr, $fmt:literal $($tts:tt)*) => {
         $crate::selectors::Spanned::new(
-            $crate::__impl_diagnostic!($level; $fmt $($tts)*),
+            $crate::error!($fmt $($tts)*),
             $span,
         )
     };
-}
-
-/// How severe / important a diagnostic is.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub enum Level {
-    Warning,
-    Error,
 }
 
 /// A diagnostic that arose in parsing.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Diag {
-    /// How severe / important the diagnostic is.
-    pub level: Level,
     /// A message describing the diagnostic.
     pub message: String,
 }
 
 impl Diag {
     /// Create a new diagnostic from message and level.
-    pub fn new(level: Level, message: impl Into<String>) -> Self {
-        Self { level, message: message.into() }
-    }
-}
-
-impl Display for Level {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        f.pad(match self {
-            Self::Warning => "warning",
-            Self::Error => "error",
-        })
+    pub fn new(message: impl Into<String>) -> Self {
+        Self { message: message.into() }
     }
 }
 

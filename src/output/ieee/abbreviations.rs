@@ -1,3 +1,5 @@
+//! IEEE journal and conference abbreviations.
+
 macro_rules! journal_abbrv {
     ($count:expr, [$($value:expr => $abbr:expr),* $(,)*] $(,)*) => {
         const JOURNAL_HOTWORDS: [&str; $count] = [

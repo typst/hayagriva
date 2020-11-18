@@ -1,3 +1,5 @@
+//! Base types for the bibliography items and their content.
+
 use std::cmp::{Ordering, PartialOrd};
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
@@ -169,51 +171,96 @@ impl EntryType {
     }
 }
 
+/// Specifies the role a group of persons had in the creation to the
+/// cited item.
 #[derive(Clone, Debug, EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "lowercase")]
 pub enum PersonRole {
+    /// Translated the work from a foreign language to the cited edition.
     Translator,
+    /// Authored an afterword.
     Afterword,
+    /// Authored an foreword.
     Foreword,
+    /// Authored an introduction.
     Introduction,
+    /// Provided value-adding annotations.
     Annotator,
+    /// Commented the work.
     Commentator,
+    /// Holds a patent or similar.
     Holder,
+    /// Compiled the works in an [Anthology](EntryType::Anthology).
     Compiler,
+    /// Founded the publication.
     Founder,
+    /// Collaborated on the cited item.
     Collaborator,
+    /// Organized the creation of the cited item.
     Organizer,
+    /// Performed in the cited item.
     CastMember,
+    /// Composed all or parts of the cited item's musical / audible components.
     Composer,
+    /// Produced the cited item.
     Producer,
+    /// Lead Producer for the cited item.
     ExecutiveProducer,
+    /// Did the writing for the cited item.
     Writer,
+    /// Shot film/video for the cited item.
     Cinematography,
+    /// Directed the cited item.
     Director,
+    /// Illustrated the cited item.
     Illustrator,
 
+    /// Various other roles described by the contained string.
     #[strum(disabled)]
     Unknown(String),
 }
 
+/// Holds the name of a person.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Person {
+    /// The family name.
     pub name: String,
+    /// The given name / forename.
     pub given_name: Option<String>,
+    /// A prefix of the family name such as 'van' or 'de'.
     pub prefix: Option<String>,
+    /// A suffix of the family name such as 'Jr.' or 'IV'.
     pub suffix: Option<String>,
+    /// Another name (often user name) the person might be known under.
     pub alias: Option<String>,
 }
 
+/// Error that may occur when parsing a slice of strings as a name.
 #[derive(Clone, Debug, Error)]
 pub enum PersonError {
+    /// The name has too many parts to be appropriately parsed.
     #[error("too many parts")]
     TooManyParts,
+    /// The name is empty.
     #[error("part list is empty")]
     Empty,
 }
 
 impl Person {
+    /// This function expects a `parts` &str slice of the length between one
+    /// and three. The first part will be interpreted as the <prefix> <Name>,
+    /// the second part as the given name and the third part as the suffix.
+    ///
+    /// The prefix and name are seperated just like in BiBTeX, as described
+    /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The
+    /// gist is that the given name will start at the first word with a capital
+    /// letter, if there are any such words.
+    ///
+    /// The call site of this function in the library obtains the slice by
+    /// calling `split(",")` on a string like `"Des Egdens, Britta"`.
+    ///
+    /// [taming]: https://ftp.rrze.uni-erlangen.de/ctan/info/bibtex/tamethebeast/ttb_en.pdf
+
     pub fn from_strings(parts: &[&str]) -> Result<Self, PersonError> {
         if parts.is_empty() {
             return Err(PersonError::Empty);
@@ -379,9 +426,12 @@ impl Person {
     }
 }
 
+/// A value that could be either a number or a string.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumOrStr {
+    /// It's a number!
     Number(i64),
+    /// It's a string!
     Str(String),
 }
 
@@ -400,17 +450,24 @@ impl Into<String> for NumOrStr {
     }
 }
 
+/// A date that can be as coarse as a year and as fine-grained as a day.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Date {
+    /// The year (1 B.C.E. is represented as 0 and so forth).
     pub year: i32,
+    /// The optional month (0-11).
     pub month: Option<u8>,
+    /// The optional day (0-30).
     pub day: Option<u8>,
 }
 
+/// This error can occur when trying to get a date from a string.
 #[derive(Clone, Debug, Error)]
 pub enum DateError {
+    /// The string does not conform to the date interval.
     #[error("date format unknown")]
     UnknownFormat,
+    /// The month is out of bounds.
     #[error("month not in interval 1-12")]
     MonthOutOfBounds,
 }
@@ -451,27 +508,39 @@ impl Date {
         }
     }
 
+    /// Get a date from an integer.
     pub fn from_year(year: i32) -> Self {
         Self { year, month: None, day: None }
     }
 }
 
+/// A string with a value and possibly user-defined overrides for various
+/// formattings.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormattableString {
+    /// Canonical string value.
     pub(crate) value: String,
+    /// User-defined title case override.
     pub(crate) title_case: Option<String>,
+    /// User-defined sentence case override.
     pub(crate) sentence_case: Option<String>,
+    /// If true, the user opts out of all automatic formatting for this string.
     pub(crate) verbatim: bool,
 }
 
+/// A string with a canonical value and title and sentence formatted variants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormattedString {
+    /// Canonical string value.
     pub value: String,
+    /// String formatted as title case.
     pub title_case: String,
+    /// String formatted as sentence case.
     pub sentence_case: String,
 }
 
 impl FormattableString {
+    /// Creates a new formattable string.
     pub fn new(
         value: String,
         title_case: Option<String>,
@@ -486,6 +555,7 @@ impl FormattableString {
         }
     }
 
+    /// Creates a new formattable string from just a string.
     pub fn new_shorthand(value: String) -> Self {
         Self {
             value,
@@ -495,6 +565,8 @@ impl FormattableString {
         }
     }
 
+    /// Creates a new formattable string that opts out of automatic
+    /// formatting.
     pub fn new_verbatim(value: String, verbatim: bool) -> Self {
         Self {
             value,
@@ -505,12 +577,16 @@ impl FormattableString {
     }
 }
 
+/// An URL, possibly with a last visited date.
 #[derive(Clone, Debug, PartialEq)]
 pub struct QualifiedUrl {
+    /// The [Url].
     pub value: Url,
+    /// The possible last visited Date.
     pub visit_date: Option<Date>,
 }
 
+/// Parses an integer range from a string reference.
 pub fn get_range(source: &str) -> Option<Range<i64>> {
     RANGE_REGEX.captures(source).map(|caps| {
         let start: i64 = str::parse(caps.name("s").expect("start is mandatory").as_str())
@@ -524,6 +600,7 @@ pub fn get_range(source: &str) -> Option<Range<i64>> {
     })
 }
 
+/// A duration.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Duration {
     days: u32,
@@ -533,10 +610,13 @@ pub struct Duration {
     milliseconds: f64,
 }
 
+/// Errors that can occur when parsing a string to a duration
 #[derive(Clone, Error, Debug)]
 pub enum DurationError {
+    /// The string is malformed.
     #[error("string does not match duration regex")]
     NoMatch,
+    /// The value is out of bounds when another, subsequent value is present (i.e. `01:61:48`).
     #[error("out of bounds value when greater order value is specified")]
     TooLarge,
 }
@@ -572,6 +652,7 @@ impl Duration {
         }
     }
 
+    /// Tries to create a duration from a string.
     pub fn from_str(source: &str) -> Result<Self, DurationError> {
         let capt =
             DURATION_REGEX.captures(source.trim()).ok_or(DurationError::NoMatch)?;
@@ -616,6 +697,7 @@ impl Duration {
         })
     }
 
+    /// Tries to get a duration range from a string.
     pub fn range_from_str(source: &str) -> Result<std::ops::Range<Self>, DurationError> {
         let caps = DURATION_RANGE_REGEX
             .captures(source.trim())
