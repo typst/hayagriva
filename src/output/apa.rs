@@ -129,15 +129,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
         entry.get_edition()
     };
 
-    let translator = entry
-        .get_affiliated_persons()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|(_, role)| role == &PersonRole::Translator)
-        .map(|(v, _)| v)
-        .flatten()
-        .cloned()
-        .collect::<Vec<Person>>();
+    let translator = entry.get_affiliated_filtered(PersonRole::Translator);
 
     let translator = if translator.is_empty() {
         None
@@ -196,31 +188,16 @@ impl ApaBibliographyGenerator {
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
             let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
+            let dirs = entry.get_affiliated_filtered(PersonRole::Director);
 
             if tv_series.apply(entry).is_some() {
                 // TV episode
-                let dirs = entry
-                    .get_affiliated_persons()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Director)
-                    .map(|(v, _)| v)
-                    .flatten()
-                    .cloned()
-                    .collect::<Vec<Person>>();
                 let mut dir_name_list = name_list(&dirs)
                     .into_iter()
                     .map(|s| format!("{} (Director)", s))
                     .collect::<Vec<String>>();
-                let writers = entry
-                    .get_affiliated_persons()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Writer)
-                    .map(|(v, _)| v)
-                    .flatten()
-                    .cloned()
-                    .collect::<Vec<Person>>();
+
+                let writers = entry.get_affiliated_filtered(PersonRole::Writer);
                 let mut writers_name_list = name_list(&writers)
                     .into_iter()
                     .map(|s| format!("{} (Writer)", s))
@@ -232,30 +209,13 @@ impl ApaBibliographyGenerator {
                 }
             } else {
                 // Film
-                let dirs = entry
-                    .get_affiliated_persons()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Director)
-                    .map(|(v, _)| v)
-                    .flatten()
-                    .cloned()
-                    .collect::<Vec<Person>>();
-
                 if !dirs.is_empty() {
                     names = Some(name_list(&dirs));
                     role = AuthorRole::Director;
                 } else {
                     // TV show
-                    let prods = entry
-                        .get_affiliated_persons()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
-                        .map(|(v, _)| v)
-                        .flatten()
-                        .cloned()
-                        .collect::<Vec<Person>>();
+                    let prods =
+                        entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
 
                     if !prods.is_empty() {
                         names = Some(name_list(&prods));
@@ -265,9 +225,10 @@ impl ApaBibliographyGenerator {
             }
         }
 
-        let mut authors = names.unwrap_or_else(|| name_list(&entry.get_authors()));
-        let count = authors.len();
-        let mut al = if !authors.is_empty() {
+        let authors =
+            names.or_else(|| entry.get_authors_fallible().map(|n| name_list(n)));
+        let mut al = if let Some(mut authors) = authors {
+            let count = authors.len();
             if entry.entry_type == Tweet {
                 authors = authors
                     .into_iter()
@@ -600,14 +561,8 @@ impl ApaBibliographyGenerator {
                 if is_online_vid {
                     TitleSpec::Video
                 } else {
-                    let prods = entry
-                        .get_affiliated_persons()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
-                        .map(|(v, _)| v)
-                        .flatten()
-                        .collect::<Vec<&Person>>();
+                    let prods =
+                        entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
 
                     if vid_match.apply(entry).is_some() {
                         TitleSpec::TvEpisode
@@ -780,17 +735,11 @@ impl ApaBibliographyGenerator {
                 }
             }
             SourceType::TvSeries(parent) => {
-                let prods = parent
-                    .get_affiliated_persons()
-                    .map(|p| {
-                        p.into_iter()
-                            .filter(|x| x.1 == PersonRole::ExecutiveProducer)
-                            .map(|x| &x.0)
-                            .flatten()
-                            .cloned()
-                            .collect::<Vec<Person>>()
-                    })
-                    .unwrap_or_else(|_| entry.get_authors().to_vec());
+                let mut prods =
+                    entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
+                if prods.is_empty() {
+                    prods = entry.get_authors().to_vec();
+                }
                 let mut comma = if !prods.is_empty() {
                     let names = name_list(&prods);
                     match names.len() {

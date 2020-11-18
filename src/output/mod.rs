@@ -200,11 +200,6 @@ fn author_list_names(authors: &Vec<Person>) -> String {
     }
 }
 
-const ASCII_ALPH: [char; 26] = [
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',
-    'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-];
-
 impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
     fn push_citation(&mut self, citation: Citation) -> Result<(), CitationError> {
         for &key in &citation.keys {
@@ -279,7 +274,7 @@ impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
                 let is_alph =
                     count > 0 || *count_map.get(&(names.clone(), year)).unwrap() > 0;
                 let letter = if is_alph {
-                    ASCII_ALPH[count as usize % ASCII_ALPH.len()].to_string()
+                    ((b'a' + (count as u8 % 26)) as char).to_string()
                 } else {
                     String::new()
                 };

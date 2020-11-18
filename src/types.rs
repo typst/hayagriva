@@ -524,7 +524,7 @@ pub fn get_range(source: &str) -> Option<Range<i64>> {
     })
 }
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Duration {
     days: u32,
     hours: u32,

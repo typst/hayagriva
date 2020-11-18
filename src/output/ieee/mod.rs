@@ -6,7 +6,7 @@ use super::{
 use crate::lang::{en, SentenceCase, TitleCase};
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
-use crate::types::{Date, NumOrStr, Person, PersonRole};
+use crate::types::{Date, NumOrStr, PersonRole};
 use crate::{attrs, sel, Entry};
 use isolang::Language;
 
@@ -92,31 +92,16 @@ impl IeeeBibliographyGenerator {
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
             let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
+            let dirs = entry.get_affiliated_filtered(PersonRole::Director);
 
             if tv_series.apply(entry).is_some() {
                 // TV episode
-                let dirs = entry
-                    .get_affiliated_persons()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Director)
-                    .map(|(v, _)| v)
-                    .flatten()
-                    .cloned()
-                    .collect::<Vec<Person>>();
                 let mut dir_name_list_straight = name_list_straight(&dirs)
                     .into_iter()
                     .map(|s| format!("{} (Director)", s))
                     .collect::<Vec<String>>();
-                let writers = entry
-                    .get_affiliated_persons()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Writer)
-                    .map(|(v, _)| v)
-                    .flatten()
-                    .cloned()
-                    .collect::<Vec<Person>>();
+
+                let writers = entry.get_affiliated_filtered(PersonRole::Writer);
                 let mut writers_name_list_straight = name_list_straight(&writers)
                     .into_iter()
                     .map(|s| format!("{} (Writer)", s))
@@ -128,30 +113,13 @@ impl IeeeBibliographyGenerator {
                 }
             } else {
                 // Film
-                let dirs = entry
-                    .get_affiliated_persons()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, role)| role == &PersonRole::Director)
-                    .map(|(v, _)| v)
-                    .flatten()
-                    .cloned()
-                    .collect::<Vec<Person>>();
-
                 if !dirs.is_empty() {
                     names = Some(name_list_straight(&dirs));
                     role = AuthorRole::Director;
                 } else {
                     // TV show
-                    let prods = entry
-                        .get_affiliated_persons()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|(_, role)| role == &PersonRole::ExecutiveProducer)
-                        .map(|(v, _)| v)
-                        .flatten()
-                        .cloned()
-                        .collect::<Vec<Person>>();
+                    let prods =
+                        entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
 
                     if !prods.is_empty() {
                         names = Some(name_list_straight(&prods));
@@ -161,13 +129,14 @@ impl IeeeBibliographyGenerator {
             }
         }
 
-        let mut authors = entry.get_authors();
-        if authors.is_empty() {
-            authors = canonical.get_authors();
-        }
-        let authors = names.unwrap_or_else(|| name_list_straight(&authors));
-        let count = authors.len();
-        let al = if !authors.is_empty() {
+        let authors = names.or_else(|| {
+            entry
+                .get_authors_fallible()
+                .or_else(|| canonical.get_authors_fallible())
+                .map(|n| name_list_straight(n))
+        });
+        let al = if let Some(authors) = authors {
+            let count = authors.len();
             let amps = self.and_list(authors);
             match role {
                 AuthorRole::Normal => amps,

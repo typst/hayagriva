@@ -178,6 +178,17 @@ impl Entry {
         editors: "editor" => Vec<Person>, &[Person],
         affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>, &[(Vec<Person>, PersonRole)]
     );
+
+    pub fn get_affiliated_filtered(&self, role: PersonRole) -> Vec<Person> {
+        self.get_affiliated_persons()
+            .into_iter()
+            .flat_map(|v| v)
+            .filter_map(|(v, erole)| if erole == &role { Some(v) } else { None })
+            .flatten()
+            .cloned()
+            .collect::<Vec<Person>>()
+    }
+
     fields!(
         organization: "organization",
         issue: "issue" => NumOrStr,
@@ -216,7 +227,7 @@ impl Entry {
             .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
             .or_else(|_| self.get_page_range().map(|r| FieldTypes::from(r.end - r.start)))
-            .and_then(|item| i64::try_from(item.clone()))
+            .and_then(|item| i64::try_from(item))
     }
 
     fields!(single_set total_pages => "page-total", i64);
@@ -228,11 +239,8 @@ impl Entry {
         self.get("runtime")
             .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
-            .or_else(|_| {
-                self.get_time_range()
-                    .map(|r| FieldTypes::from(r.end.clone() - r.start.clone()))
-            })
-            .and_then(|item| Duration::try_from(item.clone()))
+            .or_else(|_| self.get_time_range().map(|r| FieldTypes::from(r.end - r.start)))
+            .and_then(|item| Duration::try_from(item))
     }
 
     fields!(single_set runtime => "runtime", Duration);
