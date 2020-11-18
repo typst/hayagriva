@@ -4,12 +4,10 @@ use super::{
     FormatVariantOptions,
 };
 use crate::lang::{en, SentenceCase, TitleCase};
+use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
-use crate::types::{
-    Date, NumOrStr, Person, PersonRole,
-};
-use crate::{Entry, sel, attrs};
-use crate::selectors::{Id, Wc, Bind};
+use crate::types::{Date, NumOrStr, Person, PersonRole};
+use crate::{attrs, sel, Entry};
 use isolang::Language;
 
 #[derive(Clone, Debug)]
@@ -20,12 +18,14 @@ pub struct IeeeBibliographyGenerator {
 }
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
-    let section = sel!(sel!(alt Id("Chapter"), Id("Scene"), Id("WebItem")) => Bind("p", Wc()));
-    let anthology = sel!(Id("InAnthology") => Bind("p", Id("Anthology")));
-    let entry_spec = sel!(Id("Entry") => Bind("p", sel!(alt Id("Reference"), Id("Repository"))));
-    let proceedings = sel!(Wc() => Bind("p", sel!(alt Id("Conference"), Id("Proceedings"))));
+    let section = sel!(sel!(alt Id(Chapter), Id(Scene), Id(Web)) => Bind("p", Wc()));
+    let anthology = sel!(Id(Anthos) => Bind("p", Id(Anthology)));
+    let entry_spec =
+        sel!(Id(Entry) => Bind("p", sel!(alt Id(Reference), Id(Repository))));
+    let proceedings = sel!(Wc() => Bind("p", sel!(alt Id(Conference), Id(Proceedings))));
 
-    section.apply(entry)
+    section
+        .apply(entry)
         .or_else(|| anthology.apply(entry))
         .or_else(|| entry_spec.apply(entry))
         .or_else(|| proceedings.apply(entry))
@@ -91,7 +91,7 @@ impl IeeeBibliographyGenerator {
         let mut names = None;
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
-            let tv_series = sel!(attrs!(Id("Video"), "issue", "volume") => Id("Video"));
+            let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
 
             if tv_series.apply(entry).is_some() {
                 // TV episode
@@ -250,7 +250,7 @@ impl IeeeBibliographyGenerator {
                     res.commit_formats();
 
                     // Do the series parentheses thing here
-                    let spec = sel!(Id("Anthology") => Bind("p", Id("Anthology")));
+                    let spec = sel!(Id(Anthology) => Bind("p", Id(Anthology)));
                     if let Some(mut hm) = spec.apply(canonical) {
                         let par_anth = hm.remove("p").unwrap();
                         if let Ok(par_t) =
@@ -269,7 +269,7 @@ impl IeeeBibliographyGenerator {
                     }
 
                     // And the conference series thing as well
-                    let spec = sel!(Id("Proceedings") => Bind("p", sel!(alt Id("Proceedings"), Id("Anthology"), Id("Misc"))));
+                    let spec = sel!(Id(Proceedings) => Bind("p", sel!(alt Id(Proceedings), Id(Anthology), Id(Misc))));
                     if let Some(mut hm) = spec.apply(canonical) {
                         let par_conf = hm.remove("p").unwrap();
                         if let Ok(par_t) =
@@ -326,8 +326,9 @@ impl IeeeBibliographyGenerator {
         section: Option<u32>,
     ) -> Vec<String> {
         let mut res = vec![];
-        let preprint = sel!(sel!(alt Id("Article"), Id("Book"), Id("InAnthology")) => Bind("p", Id("Repository"))).apply(entry);
-        let web_parented = sel!(Wc() => Bind("p", sel!(alt Id("Blog"), Id("WebItem")))).apply(entry);
+        let preprint = sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Bind("p", Id(Repository))).apply(entry);
+        let web_parented =
+            sel!(Wc() => Bind("p", sel!(alt Id(Blog), Id(Web)))).apply(entry);
 
         match (entry.entry_type, canonical.entry_type) {
             (_, Conference) | (_, Proceedings) => {
@@ -716,7 +717,7 @@ impl IeeeBibliographyGenerator {
                     res.push(date.year.to_string());
                 }
             }
-            (WebItem, _) | (Blog, _) => {
+            (Web, _) | (Blog, _) => {
                 if let Ok(publisher) =
                     entry.get_publisher().or_else(|_| entry.get_organization())
                 {
@@ -830,7 +831,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
         let mut parent = entry.get_parents().ok().and_then(|v| v.first());
         let mut sn_stack = vec![];
         while entry.get_title().is_err()
-            && sel!(alt Id("Chapter"), Id("Scene")).apply(entry).is_some()
+            && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
         {
             if let Ok(sn) = entry.get_serial_number() {
                 sn_stack.push(sn);
@@ -958,7 +959,7 @@ impl BibliographyGenerator for IeeeBibliographyGenerator {
                     res += " ";
                 }
 
-                if canonical.entry_type != WebItem && canonical.entry_type != Blog {
+                if canonical.entry_type != Web && canonical.entry_type != Blog {
                     if let Some(date) = &url.visit_date {
                         res += &format!("Accessed: {}. ", self.formt_date(&date));
                     }

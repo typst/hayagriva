@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 
-use crate::types::EntryType;
 use crate::Entry;
 
 use super::syntax::*;
@@ -48,7 +46,7 @@ impl Expr {
     pub fn apply<'s>(&self, entry: &'s Entry) -> Option<HashMap<String, &'s Entry>> {
         match self {
             Expr::Lit(Lit::Ident(i)) => {
-                if Ok(entry.entry_type) == EntryType::from_str(&i.to_lowercase()) {
+                if &entry.entry_type == i {
                     Some(HashMap::new())
                 } else {
                     None

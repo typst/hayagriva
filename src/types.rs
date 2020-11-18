@@ -41,7 +41,7 @@ pub enum EntryType {
     /// Could appear in a work of reference or a data set.
     Entry,
     /// Text published within an Anthology.
-    InAnthology,
+    Anthos,
     /// A document compiled by authors that may be affiliated to an organisation.
     /// Presents information for a specific audience or purpose.
     Report,
@@ -53,7 +53,7 @@ pub enum EntryType {
     /// found elsewhere. Do not use this entry type when
     /// referencing a textual blog article, instead use an `Article` with
     /// a `Blog` parent.
-    WebItem,
+    Web,
     /// A part of a show or another type of performed media, typically all
     /// taking place in the same location.
     Scene,
@@ -66,7 +66,7 @@ pub enum EntryType {
     /// Reference to a legal case that was or is to be heared at a court of law.
     Case,
     /// The issue of a newspaper that was published on a given day.
-    NewspaperIssue,
+    Newspaper,
     /// Legal document or draft there of that is, is to be, or was to be
     /// enacted into binding law.
     Legislation,
@@ -157,8 +157,8 @@ impl EntryType {
             // Self::ConferencePaper => Self::Proceedings,
             Self::Chapter => Self::Book,
             Self::Entry => Self::Reference,
-            Self::InAnthology => Self::Anthology,
-            Self::WebItem => Self::WebItem,
+            Self::Anthos => Self::Anthology,
+            Self::Web => Self::Web,
             Self::Scene => Self::Video,
             Self::Artwork => Self::Exhibition,
             Self::Legislation => Self::Anthology,

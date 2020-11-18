@@ -8,8 +8,8 @@ pub mod types;
 
 use lang::CaseTransformer;
 use types::{
-    get_range, Date, Duration, EntryType, FormattableString,
-    FormattedString, NumOrStr, Person, PersonRole, QualifiedUrl,
+    get_range, Date, Duration, EntryType, FormattableString, FormattedString, NumOrStr,
+    Person, PersonRole, QualifiedUrl,
 };
 
 use linked_hash_map::LinkedHashMap;
@@ -907,12 +907,12 @@ mod tests {
         let entries = load_yaml_structure(&contents).unwrap();
 
         select_all!("Article > Proceedings", entries, ["zygos"]);
-        select_all!("Article > (Periodical | NewspaperIssue)", entries, [
+        select_all!("Article > (Periodical | Newspaper)", entries, [
             "omarova-libra",
             "kinetics",
             "house"
         ]);
-        select_all!("(Chapter | InAnthology) > (Anthology | Book)", entries, [
+        select_all!("(Chapter | Anthos) > (Anthology | Book)", entries, [
             "harry", "gedanken"
         ]);
         select_all!("*[url]", entries, [
@@ -943,7 +943,7 @@ mod tests {
         let entries = load_yaml_structure(&contents).unwrap();
 
         select!(
-            "a:Article > (b:Conference & c:(Video|Blog|WebItem))",
+            "a:Article > (b:Conference & c:(Video|Blog|Web))",
             entries >> "wwdc-network",
             ["a", "b", "c"]
         );

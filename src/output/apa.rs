@@ -5,7 +5,8 @@ use super::{
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
 use crate::selectors::{Bind, Id, Neg, Wc};
-use crate::types::{EntryType, NumOrStr, Person, PersonRole};
+use crate::types::EntryType::*;
+use crate::types::{NumOrStr, Person, PersonRole};
 use crate::{attrs, sel, Entry};
 
 #[derive(Clone, Debug)]
@@ -22,8 +23,8 @@ enum SourceType<'s> {
     Manuscript,
     ArtContainer(&'s Entry),
     StandaloneArt,
-    StandaloneWebItem,
-    WebItem(&'s Entry),
+    StandaloneWeb,
+    Web(&'s Entry),
     NewsItem(&'s Entry),
     ConferenceTalk(&'s Entry),
     GenericParent(&'s Entry),
@@ -32,26 +33,26 @@ enum SourceType<'s> {
 
 impl<'s> SourceType<'s> {
     fn for_entry(entry: &'s Entry) -> Self {
-        let periodical = sel!(Wc() => Bind("p", Id("Periodical")));
+        let periodical = sel!(Wc() => Bind("p", Id(Periodical)));
         let collection = sel!(alt
-            sel!(Id("InAnthology") => Bind("p", Id("Anthology"))),
-            sel!(Id("Entry") => Bind("p", Wc())),
-            sel!(Wc() => Bind("p", Id("Reference"))),
-            sel!(Id("Article") => Bind("p", Id("Proceedings"))),
+            sel!(Id(Anthos) => Bind("p", Id(Anthology))),
+            sel!(Id(Entry) => Bind("p", Wc())),
+            sel!(Wc() => Bind("p", Id(Reference))),
+            sel!(Id(Article) => Bind("p", Id(Proceedings))),
         );
         let tv_series =
-            sel!(attrs!(Id("Video"), "issue", "volume") => Bind("p", Id("Video")));
-        let thesis = Id("Thesis");
-        let manuscript = Id("Manuscript");
-        let art_container = sel!(Wc() => Bind("p", Id("Artwork")));
-        let art = sel!(alt Id("Artwork"), Id("Exhibition"));
-        let news_item = sel!(Wc() => Bind("p", Id("NewspaperIssue")));
-        let web_standalone = Id("WebItem");
+            sel!(attrs!(Id(Video), "issue", "volume") => Bind("p", Id(Video)));
+        let thesis = Id(Thesis);
+        let manuscript = Id(Manuscript);
+        let art_container = sel!(Wc() => Bind("p", Id(Artwork)));
+        let art = sel!(alt Id(Artwork), Id(Exhibition));
+        let news_item = sel!(Wc() => Bind("p", Id(Newspaper)));
+        let web_standalone = Id(Web);
         let web_contained = sel!(alt
-            sel!(Id("WebItem") => Bind("p", Wc())),
-            sel!(Wc() => Bind("p", sel!(alt attrs!(Id("Misc"), "url"), Id("Blog"), Id("WebItem")))),
+            sel!(Id(Web) => Bind("p", Wc())),
+            sel!(Wc() => Bind("p", sel!(alt attrs!(Id(Misc), "url"), Id(Blog), Id(Web)))),
         );
-        let talk = sel!(Wc() => Bind("p", Id("Conference")));
+        let talk = sel!(Wc() => Bind("p", Id(Conference)));
         let generic_parent = sel!(Wc() => Bind("p", Wc()));
 
         if let Some(mut hm) = periodical.apply(entry) {
@@ -71,9 +72,9 @@ impl<'s> SourceType<'s> {
         } else if let Some(mut hm) = news_item.apply(entry) {
             Self::NewsItem(hm.remove("p").unwrap())
         } else if web_standalone.apply(entry).is_some() {
-            Self::StandaloneWebItem
+            Self::StandaloneWeb
         } else if let Some(mut hm) = web_contained.apply(entry) {
-            Self::WebItem(hm.remove("p").unwrap())
+            Self::Web(hm.remove("p").unwrap())
         } else if let Some(mut hm) = talk.apply(entry) {
             Self::ConferenceTalk(hm.remove("p").unwrap())
         } else if let Some(mut hm) = generic_parent.apply(entry) {
@@ -193,8 +194,8 @@ impl ApaBibliographyGenerator {
 
         let mut names = None;
         let mut role = AuthorRole::default();
-        if entry.entry_type == EntryType::Video {
-            let tv_series = sel!(attrs!(Id("Video"), "issue", "volume") => Id("Video"));
+        if entry.entry_type == Video {
+            let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
 
             if tv_series.apply(entry).is_some() {
                 // TV episode
@@ -267,7 +268,7 @@ impl ApaBibliographyGenerator {
         let mut authors = names.unwrap_or_else(|| name_list(&entry.get_authors()));
         let count = authors.len();
         let mut al = if !authors.is_empty() {
-            if entry.entry_type == EntryType::Tweet {
+            if entry.entry_type == Tweet {
                 authors = authors
                     .into_iter()
                     .enumerate()
@@ -308,7 +309,7 @@ impl ApaBibliographyGenerator {
         };
 
         let mut details = vec![];
-        let booklike = sel!(alt Id("Book"), Id("Proceedings"), Id("Anthology"));
+        let booklike = sel!(alt Id(Book), Id(Proceedings), Id(Anthology));
         if booklike.apply(entry).is_some() {
             let affs = entry
                 .get_affiliated_persons()
@@ -420,8 +421,9 @@ impl ApaBibliographyGenerator {
             .into_iter()
             .any(|p| p.get_title().is_ok())
         {
-            let talk = sel!(Wc() => Id("Conference"));
-            let preprint = sel!(sel!(alt Id("Article"), Id("Book"), Id("InAnthology")) => Id("Repository"));
+            let talk = sel!(Wc() => Id(Conference));
+            let preprint =
+                sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Id(Repository));
 
             talk.apply(entry).is_some() || preprint.apply(entry).is_some()
         } else {
@@ -429,16 +431,17 @@ impl ApaBibliographyGenerator {
         };
 
         let mut res = DisplayString::new();
-        let vid_match = sel!(attrs!(Id("Video"), "issue", "volume") => Id("Video"));
+        let vid_match = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
 
-        let book = sel!(alt Id("Book"), Id("Report"), Id("Reference"), Id("Anthology"), Id("Proceedings"))
-            .apply(entry)
-            .is_some();
+        let book =
+            sel!(alt Id(Book), Id(Report), Id(Reference), Id(Anthology), Id(Proceedings))
+                .apply(entry)
+                .is_some();
 
         if let Ok(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
             let multivol_spec = sel!(
-                attrs!(sel!(alt Id("Book"), Id("Proceedings"), Id("Anthology")), "volume") =>
-                Bind("p", sel!(alt Id("Book"), Id("Proceedings"), Id("Anthology")))
+                attrs!(sel!(alt Id(Book), Id(Proceedings), Id(Anthology)), "volume") =>
+                Bind("p", sel!(alt Id(Book), Id(Proceedings), Id(Anthology)))
             );
 
             let multivolume_parent =
@@ -447,7 +450,7 @@ impl ApaBibliographyGenerator {
             if italicise {
                 res.start_format(FormatVariantOptions::Italic);
             }
-            if entry.entry_type == EntryType::Tweet {
+            if entry.entry_type == Tweet {
                 let words = &title.value.split_whitespace().collect::<Vec<_>>();
                 res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
                     .join(" ");
@@ -460,7 +463,10 @@ impl ApaBibliographyGenerator {
                 let vols = entry.get_volume().unwrap();
                 let mut new = DisplayString::from_string(format!(
                     "{}: {} ",
-                    mv_parent.get_title_fmt(None, Some(&self.formatter)).unwrap().sentence_case,
+                    mv_parent
+                        .get_title_fmt(None, Some(&self.formatter))
+                        .unwrap()
+                        .sentence_case,
                     format_range("Vol.", "Vols.", &vols),
                 ));
                 new += res;
@@ -503,11 +509,11 @@ impl ApaBibliographyGenerator {
                     items.push(format!("{}, Eds.", amp_list));
                 }
             }
-        } else if entry.entry_type == EntryType::Report {
+        } else if entry.entry_type == Report {
             if let Ok(serial) = entry.get_serial_number() {
                 items.push(serial.to_string());
             }
-        } else if entry.entry_type == EntryType::Thesis {
+        } else if entry.entry_type == Thesis {
             if let Ok(serial) = entry.get_serial_number() {
                 items.push(format!("Publication No. {}", serial));
             }
@@ -541,30 +547,31 @@ impl ApaBibliographyGenerator {
             Tweet,
         }
 
-        let conf_spec = sel!(Id("Article") => Id("Proceedings"));
-        let talk_spec = sel!(Wc() => Id("Conference"));
-        let repo_item = sel!(Neg(sel!(alt Id("Article"), Id("Report"), Id("Thesis"))) => Id("Repository"));
-        let spec = if entry.entry_type == EntryType::Case {
+        let conf_spec = sel!(Id(Article) => Id(Proceedings));
+        let talk_spec = sel!(Wc() => Id(Conference));
+        let repo_item =
+            sel!(Neg(sel!(alt Id(Article), Id(Report), Id(Thesis))) => Id(Repository));
+        let spec = if entry.entry_type == Case {
             TitleSpec::LegalProceedings
         } else if conf_spec.apply(entry).is_some() {
             TitleSpec::PaperPresentation
         } else if talk_spec.apply(entry).is_some() {
             TitleSpec::ConferenceSession
-        } else if entry.entry_type == EntryType::Thesis {
+        } else if entry.entry_type == Thesis {
             if entry.get_archive().is_ok() || entry.get_url().is_ok() {
                 TitleSpec::Thesis
             } else {
                 TitleSpec::UnpublishedThesis
             }
-        } else if entry.entry_type == EntryType::Exhibition {
+        } else if entry.entry_type == Exhibition {
             TitleSpec::Exhibition
-        } else if entry.entry_type == EntryType::Repository {
+        } else if entry.entry_type == Repository {
             TitleSpec::SoftwareRepository
         } else if repo_item.apply(entry).is_some() {
             TitleSpec::SoftwareRepositoryItem
-        } else if entry.entry_type == EntryType::Audio {
+        } else if entry.entry_type == Audio {
             TitleSpec::Audio
-        } else if entry.entry_type == EntryType::Video {
+        } else if entry.entry_type == Video {
             let dirs = entry
                 .get_affiliated_persons()
                 .unwrap_or_default()
@@ -611,7 +618,7 @@ impl ApaBibliographyGenerator {
                     }
                 }
             }
-        } else if entry.entry_type == EntryType::Tweet {
+        } else if entry.entry_type == Tweet {
             TitleSpec::Tweet
         } else {
             TitleSpec::Normal
@@ -899,7 +906,7 @@ impl ApaBibliographyGenerator {
                     }
                 }
             }
-            SourceType::StandaloneWebItem => {
+            SourceType::StandaloneWeb => {
                 let publisher =
                     entry.get_publisher().or_else(|_| entry.get_organization());
 
@@ -912,7 +919,7 @@ impl ApaBibliographyGenerator {
                     }
                 }
             }
-            SourceType::WebItem(parent) => {
+            SourceType::Web(parent) => {
                 if let Ok(title) = parent.get_title_fmt(None, Some(&self.formatter)) {
                     let authors = entry.get_authors();
                     if authors.len() != 1
@@ -964,7 +971,7 @@ impl ApaBibliographyGenerator {
             }
             SourceType::GenericParent(parent) => {
                 if let Ok(title) = parent.get_title() {
-                    let preprint = sel!(sel!(alt Id("Article"), Id("Book"), Id("InAnthology")) => Id("Repository"));
+                    let preprint = sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Id(Repository));
 
                     if preprint.apply(entry).is_none() {
                         res.start_format(FormatVariantOptions::Italic);
@@ -997,12 +1004,12 @@ impl ApaBibliographyGenerator {
 
             res += &format!("https://doi.org/{}", doi);
         } else {
-            let reference_entry = sel!(Id("Reference") => Id("Entry"));
+            let reference_entry = sel!(Id(Reference) => Id(Entry));
             let url_str = self.get_retreival_date(
                 entry,
                 entry.get_date().is_err()
                     || reference_entry.apply(entry).is_some()
-                    || (matches!(st, SourceType::StandaloneWebItem)
+                    || (matches!(st, SourceType::StandaloneWeb)
                         && entry.get_parents().unwrap_or_default().is_empty()),
             );
             if let Some(url) = url_str {
@@ -1020,7 +1027,7 @@ impl ApaBibliographyGenerator {
 impl BibliographyGenerator for ApaBibliographyGenerator {
     fn get_reference(&self, mut entry: &Entry) -> DisplayString {
         let mut parent = entry.get_parents().ok().and_then(|v| v.first());
-        while sel!(alt Id("Chapter"), Id("Scene")).apply(entry).is_some() {
+        while sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some() {
             if let Some(p) = parent {
                 entry = &p;
                 parent = entry.get_parents().ok().and_then(|v| v.first());
@@ -1029,7 +1036,7 @@ impl BibliographyGenerator for ApaBibliographyGenerator {
             }
         }
 
-        let art_plaque = sel!(Wc() => Bind("p", Id("Artwork"))).apply(entry).is_some();
+        let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).apply(entry).is_some();
 
         let authors = self.get_author(entry);
         let date = self.get_date(entry);
@@ -1100,7 +1107,7 @@ mod tests {
         .into_iter()
         .map(|e| e.unwrap())
         .collect();
-        let mut entry = Entry::new("test", EntryType::NewspaperIssue);
+        let mut entry = Entry::new("test", EntryType::Newspaper);
         entry.set_authors(p);
 
         let apa = ApaBibliographyGenerator::new();

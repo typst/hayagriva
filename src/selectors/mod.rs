@@ -9,6 +9,8 @@ mod syntax;
 mod token;
 
 use crate::error;
+use crate::types::EntryType;
+use std::str::FromStr;
 
 pub use lines::*;
 pub use parser::*;
@@ -74,7 +76,16 @@ fn attr_value(p: &mut Parser) -> Option<Expr> {
         Token::Ident(id) => {
             let ident = Ident(id.into());
 
-            Expr::Lit(Lit::Ident(ident))
+            let kind = EntryType::from_str(&ident.to_lowercase());
+            if let Ok(kind) = kind {
+                Expr::Lit(Lit::Ident(kind))
+            } else {
+                p.diag(error!(
+                    Span::new(start, p.pos()),
+                    "unknown entry type identifier"
+                ));
+                return None;
+            }
         }
 
         Token::Star => Expr::Lit(Lit::Wildcard),
@@ -330,8 +341,8 @@ macro_rules! sel {
 }
 
 #[allow(non_snake_case)]
-pub fn Id(ident: &str) -> Expr {
-    Expr::Lit(Lit::Ident(Ident(ident.into())))
+pub fn Id(ident: EntryType) -> Expr {
+    Expr::Lit(Lit::Ident(ident))
 }
 
 #[allow(non_snake_case)]
@@ -359,6 +370,7 @@ pub fn Neg(expr: Expr) -> Expr {
 #[allow(non_snake_case)]
 mod tests {
     use super::*;
+    use crate::types::EntryType::*;
     use std::fmt::Debug;
 
     /// Assert that expected and found are equal, printing both and panicking
@@ -418,16 +430,16 @@ mod tests {
 
     #[test]
     fn expressions() {
-        t!("a:Misc" => Bind("a", Id("Misc")));
-        t!("bread:!!Blog" => Bind("bread", Neg(Neg(Id("Blog")))));
-        t!("Anthology[title, author]" => attrs!(Id("Anthology"), "title", "author"));
-        t!("Article > Proceedings" => Anc(Id("Article"), Id("Proceedings")));
-        t!("Artwork | Audio > Exhibiton" => sel!(sel!(alt Id("Artwork"), Id("Audio")) => Id("Exhibiton")));
-        t!("Article > (Book & (Repository | Anthology > Blog) & WebItem[url, title])" => Anc(Id("Article"), Mul(Mul(Id("Book"), Anc(Alt(Id("Repository"), Id("Anthology")), Id("Blog"))), attrs!(Id("WebItem"), "url", "title"))));
-        t!("a:(Book | Anthology) > b:((Repository > WebItem) | Blog)" => Anc(Bind("a", Alt(Id("Book"), Id("Anthology"))), Bind("b", Alt(Anc(Id("Repository"), Id("WebItem")), Id("Blog")))));
-        t!("a:!Audio > ((Blog[author] & WebItem) | (Video > WebItem))" => Anc(Bind("a", Neg(Id("Audio"))), Alt(Mul(attrs!(Id("Blog"), "author"), Id("WebItem")), Anc(Id("Video"), Id("WebItem")))));
+        t!("a:Misc" => Bind("a", Id(Misc)));
+        t!("bread:!!Blog" => Bind("bread", Neg(Neg(Id(Blog)))));
+        t!("Anthology[title, author]" => attrs!(Id(Anthology), "title", "author"));
+        t!("Article > Proceedings" => Anc(Id(Article), Id(Proceedings)));
+        t!("Artwork | Audio > Exhibition" => sel!(sel!(alt Id(Artwork), Id(Audio)) => Id(Exhibition)));
+        t!("Article > (Book & (Repository | Anthology > Blog) & Web[url, title])" => Anc(Id(Article), Mul(Mul(Id(Book), Anc(Alt(Id(Repository), Id(Anthology)), Id(Blog))), attrs!(Id(Web), "url", "title"))));
+        t!("a:(Book | Anthology) > b:((Repository > Web) | Blog)" => Anc(Bind("a", Alt(Id(Book), Id(Anthology))), Bind("b", Alt(Anc(Id(Repository), Id(Web)), Id(Blog)))));
+        t!("a:!Audio > ((Blog[author] & Web) | (Video > Web))" => Anc(Bind("a", Neg(Id(Audio))), Alt(Mul(attrs!(Id(Blog), "author"), Id(Web)), Anc(Id(Video), Id(Web)))));
         t!("*[title]" => attrs!(Wc(), "title"));
         t!("* > i:*[url]" => Anc(Wc(), Bind("i", attrs!(Wc(), "url"))));
-        t!("* > i:!Blog" => Anc(Wc(), Bind("i", Neg(Id("Blog")))));
+        t!("* > i:!Blog" => Anc(Wc(), Bind("i", Neg(Id(Blog)))));
     }
 }

@@ -1,4 +1,5 @@
 use super::{is_ident, SpanVec, Spanned};
+use crate::types::EntryType;
 use std::ops::Deref;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -108,7 +109,7 @@ pub enum BinOp {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Lit {
     /// A identifier literal: `Patent`.
-    Ident(Ident),
+    Ident(EntryType),
     /// A wildcard literal: `*`.
     Wildcard,
 }

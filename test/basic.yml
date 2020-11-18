@@ -43,7 +43,7 @@ omarova-libra:
     date: 2019-11-04
     url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
     parent:
-        type: NewspaperIssue,
+        type: Newspaper,
         title:
             value: The New York Times
             verbatim: true
@@ -63,7 +63,7 @@ harry:
         date: 2003-06-21
 
 science-e-issue:
-    type: WebItem
+    type: Web
     title: Tokenization of + and - with scientific notation
     url: https://github.com/typst/typstc/issues/3
     serial-number: 3
@@ -189,7 +189,7 @@ renaissance:
     volume-total: 3
 
 gedanken:
-    type: InAnthology
+    type: Anthos
     title: Gedanken-experiments on sequential machines
     author: Moore, Edward F.
     page-range: 129-153
@@ -225,7 +225,7 @@ really-habitable:
         title: arXiv
 
 electronic-music:
-    type: WebItem
+    type: Web
     title: Ishkur's Guide to Electronic Music
     serial-number: v2.5
     author: Ishkur
