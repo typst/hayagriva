@@ -98,7 +98,7 @@ impl Entry {
 }
 
 /// Error which occurs if the value of an entry field could not be retrieved.
-#[derive(Clone, Error, Debug)]
+#[derive(Clone, Error, Debug, PartialEq)]
 pub enum EntryAccessError {
     /// The field is not set.
     #[error("the queried field is not present")]
@@ -936,7 +936,7 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::{apa, mla, ieee, BibliographyGenerator};
+    use crate::output::{apa, ieee, mla, BibliographyGenerator};
     use crate::selectors::parse;
     use std::fs;
 

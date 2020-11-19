@@ -214,6 +214,8 @@ pub enum PersonRole {
     Director,
     /// Illustrated the cited item.
     Illustrator,
+    /// Provided narration or voice-over for the cited item.
+    Narrator,
 
     /// Various other roles described by the contained string.
     #[strum(disabled)]
@@ -395,8 +397,8 @@ impl Person {
                 res += &initials;
             }
         } else if let Some(given_name) = self.given_name.clone() {
-                res += ", ";
-                res += &given_name;
+            res += ", ";
+            res += &given_name;
         }
 
 
