@@ -317,7 +317,7 @@ fn name_list(persons: &[Person]) -> Vec<String> {
     let mut names = vec![];
 
     for author in persons.iter() {
-        names.push(author.get_name_first(true));
+        names.push(author.get_name_first(true, false));
     }
 
     names

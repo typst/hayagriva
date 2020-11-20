@@ -29,7 +29,7 @@ wwdc-network:
               value: World Wide Developer Conference 2020
               verbatim: true
               shorthand: WWDC 2020
-          organization: Apple, Inc.
+          organization: Apple Inc.
         - type: Video
           runtime: "00:13:42"
           url: { value: https://developer.apple.com/videos/play/wwdc2020/10111/, date: 2020-09-17 }

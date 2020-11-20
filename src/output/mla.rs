@@ -7,6 +7,7 @@ use crate::selectors::{Bind, Id, Neg, Wc};
 use crate::types::EntryType::*;
 use crate::types::{Date, NumOrStr, Person, PersonRole};
 use crate::{attrs, sel, Entry};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Generates the "Works Cited" entries
 pub struct MlaBibliographyGenerator<'s> {
@@ -15,6 +16,9 @@ pub struct MlaBibliographyGenerator<'s> {
     /// Forces location element to appear whenever given.
     /// Otherwise, location will only appear for physical items.
     pub always_use_location: bool,
+    /// Forces all dates to be printed if true. Otherwise,
+    /// only the most top-level date field will be printed.
+    pub always_print_date: bool,
 }
 
 struct ContainerInfo {
@@ -112,6 +116,20 @@ impl ContainerInfo {
             }
         }
 
+        if res.len() < 4
+            || !res.value.is_char_boundary(4)
+            || !(&res.value[.. 4] == "http" || &res.value[.. 4] == "doi:")
+        {
+            if let Some(gc) = res.value.graphemes(true).next() {
+                let len = gc.len();
+                let new = gc.to_uppercase();
+                let diff = new.len() - len;
+                res.value = new + &res.value[len ..];
+                res.formatting =
+                    res.formatting.into_iter().map(|f| f.offset(diff as i32)).collect();
+            }
+        }
+
         res
     }
 }
@@ -134,6 +152,51 @@ fn format_date(d: &Date) -> String {
     res
 }
 
+fn is_religious(s: &str) -> bool {
+    let reference = [
+        "Bible",
+        "Genesis",
+        "Gospels",
+        "Koran",
+        "New Testament",
+        "Old Testament",
+        "Qur'an",
+        "Quran",
+        "Talmud",
+        "The Bible",
+        "Upanishads",
+    ];
+    reference.binary_search(&s).is_ok()
+}
+
+fn abbreviate_publisher(s: &str) -> String {
+    let s1 = s
+        .replace("University Press", "UP")
+        .replace("University", "U")
+        .replace("Universität", "U")
+        .replace("Université", "U")
+        .replace("Press", "P")
+        .replace("Presse", "P");
+    let business_words = [
+        "Co",
+        "Co.",
+        "Corp",
+        "Corp.",
+        "Corporated",
+        "Corporation",
+        "Inc",
+        "Inc.",
+        "Incorporated",
+        "Limited",
+        "Ltd",
+        "Ltd.",
+    ];
+    s1.split(' ')
+        .filter(|w| !w.is_empty() && business_words.binary_search(w).is_err())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 impl<'s> MlaBibliographyGenerator<'s> {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
@@ -144,6 +207,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
             tc_formatter,
             prev_entry: None,
             always_use_location: false,
+            always_print_date: false,
         }
     }
 
@@ -229,7 +293,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
                     author.get_given_name_initials_first(false)
                 )
             } else {
-                author.get_name_first(false)
+                author.get_name_first(false, true)
             });
         }
 
@@ -237,7 +301,19 @@ impl<'s> MlaBibliographyGenerator<'s> {
     }
 
     /// Prints the names of the main creators of the item.
-    fn get_author(&self, entry: &Entry) -> String {
+    fn get_author(&self, mut entry: &Entry) -> String {
+        while entry.get_authors_fallible().is_none()
+            && entry.get_affiliated_persons().is_err()
+            && entry.get_editors().is_err()
+            && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
+        {
+            if let Some(p) = entry.get_parents().ok().and_then(|ps| ps.get(0)) {
+                entry = &p;
+            } else {
+                break;
+            }
+        }
+
         let main_contribs = self.get_main_contributors(entry);
         let (mut res, previous) = if main_contribs.is_some()
             && Some(main_contribs)
@@ -360,9 +436,12 @@ impl<'s> MlaBibliographyGenerator<'s> {
         }
 
         if let Ok(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
-            if sc {
+            if sc
+                && sel!(alt Id(Legislation), Id(Conference)).apply(entry).is_none()
+                && !is_religious(&title.title_case)
+            {
                 res.start_format(FormatVariantOptions::Italic)
-            } else {
+            } else if !sc {
                 res += "“"
             }
             res += &title.title_case;
@@ -388,7 +467,8 @@ impl<'s> MlaBibliographyGenerator<'s> {
         entry: &Entry,
         root: &Entry,
         mut has_date: bool,
-    ) -> Vec<ContainerInfo> {
+        mut has_url: bool,
+    ) -> (Vec<ContainerInfo>, bool) {
         let mut containers: Vec<ContainerInfo> = vec![];
         let series: Option<&Entry> =
             sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))
@@ -475,7 +555,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
             // Version
             if let Ok(edition) = entry.get_edition() {
                 match edition {
-                    NumOrStr::Str(i) => container.version = i.clone(),
+                    NumOrStr::Str(i) => container.version = i.replace("revised", "rev."),
                     NumOrStr::Number(i) => container.version = format!("{} ed.", i),
                 }
             } else if let Ok(serial_number) = entry.get_serial_number() {
@@ -515,14 +595,13 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 if let Ok(publisher) =
                     entry.get_publisher().or_else(|_| entry.get_organization())
                 {
-                    // TODO Abbreviations
-                    container.publisher = publisher.to_string();
+                    container.publisher = abbreviate_publisher(publisher);
                 }
             }
 
             // Date
             if let Ok(date) = entry.get_date() {
-                if !has_date {
+                if !has_date || self.always_print_date {
                     has_date = true;
                     container.date = format_date(&date);
                 }
@@ -556,20 +635,22 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 location.push(archive.into());
             }
 
-            // Location: URL stuff has to come last because it may print a full stop.
+            let mut supplemental = vec![];
+
+            // Location: May also produce a supplemental item.
             if let Ok(doi) = entry.get_doi() {
                 location.push(format!("doi:{}", doi));
+                has_url = true;
             } else if let Ok(qurl) = entry.get_url() {
                 let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
                 if vdate {
-                    location.push(format!(
-                        "{}. Accessed {}",
-                        qurl.value.as_str(),
+                    supplemental.push(format!(
+                        "Accessed {}",
                         format_date(qurl.visit_date.as_ref().unwrap())
                     ));
-                } else {
-                    location.push(qurl.value.to_string());
                 }
+                location.push(qurl.value.to_string());
+                has_url = true;
             }
 
             if !location.is_empty() {
@@ -577,7 +658,6 @@ impl<'s> MlaBibliographyGenerator<'s> {
             }
 
             // Supplemental
-            let mut supplemental = vec![];
             if let Ok(&tvol) = entry.get_total_volumes() {
                 if tvol > 1 {
                     supplemental.push(format!("{} vols", tvol));
@@ -607,16 +687,61 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 continue;
             }
 
-            containers
-                .extend(self.get_parent_container_infos(p, root, has_date).into_iter());
+            let parents = self.get_parent_container_infos(p, root, has_date, has_url);
+            has_url = has_url || parents.1;
+            containers.extend(parents.0.into_iter());
         }
 
-        containers
+        if entry == root && !has_url {
+            if let Some(lc) = containers.last_mut() {
+                if let Ok(doi) = entry.get_doi() {
+                    if !lc.location.is_empty() {
+                        lc.location += ", ";
+                    }
+                    lc.location += &format!("doi:{}", doi);
+                } else if let Some(qurl) = entry.get_any_url() {
+                    let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                    if vdate {
+                        if !lc.optionals.is_empty() {
+                            lc.optionals += ". ";
+                        }
+
+                        lc.optionals += &format!(
+                            "Accessed {}",
+                            format_date(qurl.visit_date.as_ref().unwrap())
+                        );
+                    }
+                    if !lc.location.is_empty() {
+                        lc.location += ", ";
+                    }
+                    lc.location += qurl.value.as_str();
+                    has_url = true;
+                }
+            } else if let Ok(doi) = entry.get_doi() {
+                let mut nc = ContainerInfo::new();
+                nc.location += &format!("doi:{}", doi);
+                containers.push(nc);
+            } else if let Some(qurl) = entry.get_any_url() {
+                let mut nc = ContainerInfo::new();
+                nc.location = qurl.value.to_string();
+                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                if vdate {
+                    nc.optionals = format!(
+                        "Accessed {}",
+                        format_date(qurl.visit_date.as_ref().unwrap())
+                    );
+                }
+                containers.push(nc);
+            }
+        }
+
+        (containers, has_url)
     }
 
     fn get_container_info(&self, entry: &Entry) -> DisplayString {
         let ds = self
-            .get_parent_container_infos(entry, entry, false)
+            .get_parent_container_infos(entry, entry, false, false)
+            .0
             .into_iter()
             .map(|p| p.into_display_string())
             .collect::<Vec<_>>();

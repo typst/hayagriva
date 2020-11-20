@@ -384,9 +384,13 @@ impl Person {
 
     /// Get the name with the family name fist, the initials
     /// afterwards, seperated by a comma.
-    pub fn get_name_first(&self, initials: bool) -> String {
-        let mut res = if let Some(prefix) = &self.prefix {
-            format!("{} {}", prefix, self.name)
+    pub fn get_name_first(&self, initials: bool, prefix_given_name: bool) -> String {
+        let mut res = if !prefix_given_name {
+            if let Some(prefix) = &self.prefix {
+                format!("{} {}", prefix, self.name)
+            } else {
+                self.name.clone()
+            }
         } else {
             self.name.clone()
         };
@@ -399,6 +403,16 @@ impl Person {
         } else if let Some(given_name) = self.given_name.clone() {
             res += ", ";
             res += &given_name;
+        }
+
+        if prefix_given_name {
+            if let Some(prefix) = &self.prefix {
+                if self.given_name.is_some() {
+                    res.push(' ');
+                }
+
+                res += prefix;
+            }
         }
 
 
