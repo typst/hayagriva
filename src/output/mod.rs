@@ -1,13 +1,14 @@
 //! Citation and bibliography styles.
 
 use super::types::Person;
-use super::{Entry, FieldTypes};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use super::{Entry};
+use std::collections::{HashMap};
 use std::convert::Into;
 use std::ops::{Add, AddAssign};
 use thiserror::Error;
 
 pub mod apa;
+// pub mod chicago;
 pub mod ieee;
 pub mod mla;
 
@@ -18,285 +19,141 @@ pub enum CitationError {
     /// A key could not be found.
     #[error("key {0} could not be fount in the citation database")]
     KeyNotFound(String),
-    /// A citation contains no keys.
-    #[error("the citation contains no keys")]
-    EmptyCitation,
-    /// An Entry does not have the author field when it is required.
-    #[error("key {0} does not contain the author field required for this style")]
-    NoAuthorField(String),
-    /// An Entry does not have the year field when it is required.
-    #[error("key {0} does not contain the date field required for this style")]
-    NoYearField(String),
+    /// A number was required for this citation format but not found.
+    #[error("key {0} did not contain a number")]
+    NoNumber(String),
 }
 
 /// Structs that implement this can be used to generate bibliography references
 /// for sources.
-pub trait BibliographyGenerator<'s> {
+pub trait BibliographyFormatter {
     /// Get a string with optional formatting that describes `Entry` in
     /// accordance with the implementing struct's style.
-    fn get_reference(&mut self, entry: &'s Entry) -> DisplayString;
+    fn get_reference(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString;
 }
 
 /// Represents a citation of one or more database entries.
-pub struct Citation<'s> {
+#[derive(Clone, Debug)]
+pub struct AtomicCitation<'s> {
     /// Cited entry keys.
-    keys: Vec<&'s str>,
+    pub key: &'s str,
     /// Supplements for each entry key such as page or chapter number.
-    #[allow(dead_code)]
-    supplements: Vec<Option<&'s str>>,
-}
-
-/// Structs implementing this trait can generate the appropriate reference
-/// markers for a list of `Citation` structs.
-pub trait ReferenceGenerator {
-    /// Add a new citation struct. Has to be called in the desired order.
-    fn push_citation(&mut self, citation: Citation) -> Result<(), CitationError>;
-    /// Dump the citation references for each pushed citation in push order.
-    fn dump(&self) -> Result<Vec<String>, CitationError>;
-    /// List the cited keys.
-    fn used_keys(&self) -> Vec<String>;
+    pub supplement: Option<&'s str>,
+    /// Assigned number of the citation.
+    pub number: Option<usize>,
 }
 
 /// Structs implementing this trait can generate the appropriate reference
 /// markers for a single `Citation` struct. They do not have to see subsequent
 /// citations to determine the marker value.
-pub trait ImmediateReferenceGenerator {
+pub trait CitationFormatter<'s> {
     /// Get a reference for the passed citation struct.
-    fn get_reference(&mut self, citation: Citation) -> Result<String, CitationError>;
-    /// List the cited keys.
-    fn used_keys(&self) -> Vec<String>;
-}
-
-/// Saves strings and retreives them. Implement this if you are implementing the
-/// `ImmediateReferenceGenerator` and you will receive a blanket implementation
-/// for the more generic `ReferenceGenerator`.
-pub trait StringMemory {
-    /// Saves a string to memory
-    fn save_string(&mut self, val: String);
-    /// Dumps all strings saved in the order that they were stored in.
-    fn dump_memory(&self) -> Vec<String>;
-}
-
-impl<T: ImmediateReferenceGenerator + StringMemory> ReferenceGenerator for T {
-    fn push_citation(&mut self, citation: Citation) -> Result<(), CitationError> {
-        let cit = self.get_reference(citation)?;
-        self.save_string(cit);
-        Ok(())
-    }
-
-    fn dump(&self) -> Result<Vec<String>, CitationError> {
-        Ok(self.dump_memory())
-    }
-
-    fn used_keys(&self) -> Vec<String> {
-        self.used_keys()
-    }
+    fn get_reference(
+        &self,
+        citation: impl Iterator<Item = AtomicCitation<'s>>,
+    ) -> Result<String, CitationError>;
 }
 
 /// Checks if the keys are in the database and returns them as reference
 /// markers, since they are already unique.
-pub struct KeyReferenceGenerator<'s> {
-    memory: Vec<String>,
+pub struct KeyCitationFormatter<'s> {
     entries: &'s HashMap<String, Entry>,
-    cited: HashSet<String>,
 }
 
-impl ImmediateReferenceGenerator for KeyReferenceGenerator<'_> {
-    fn get_reference(&mut self, citation: Citation) -> Result<String, CitationError> {
-        for &key in &citation.keys {
-            if !self.entries.contains_key(key) {
-                return Err(CitationError::KeyNotFound(key.to_string()));
+impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
+    fn get_reference(
+        &self,
+        citation: impl Iterator<Item = AtomicCitation<'s>>,
+    ) -> Result<String, CitationError> {
+        let mut items = vec![];
+        for atomic in citation {
+            if !self.entries.contains_key(atomic.key) {
+                return Err(CitationError::KeyNotFound(atomic.key.to_string()));
             }
 
-            self.cited.insert(key.to_string());
+            items.push(if let Some(supplement) = atomic.supplement {
+                format!("{} ({})", atomic.key, supplement)
+            } else {
+                atomic.key.to_string()
+            });
         }
 
-        let mut res =
-            citation.keys.first().ok_or(CitationError::EmptyCitation)?.to_string();
-
-        for key in &citation.keys[1 ..] {
-            res += ", ";
-            res += key;
-        }
-
-        Ok(res)
-    }
-
-    fn used_keys(&self) -> Vec<String> {
-        self.cited.iter().cloned().collect()
-    }
-}
-
-impl StringMemory for KeyReferenceGenerator<'_> {
-    fn save_string(&mut self, val: String) {
-        self.memory.push(val);
-    }
-
-    fn dump_memory(&self) -> Vec<String> {
-        self.memory.clone()
+        Ok(items.join(", "))
     }
 }
 
 /// Output IEEE-style numerical reference markers.
-pub struct NumericalReferenceGenerator<'s> {
-    memory: Vec<String>,
+pub struct NumericalCitationFormatter<'s> {
     entries: &'s HashMap<String, Entry>,
-    unique_works_cited: u32,
-    num_map: HashMap<String, u32>,
 }
 
-impl ImmediateReferenceGenerator for NumericalReferenceGenerator<'_> {
-    fn get_reference(&mut self, citation: Citation) -> Result<String, CitationError> {
+impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
+    fn get_reference(
+        &self,
+        citation: impl Iterator<Item = AtomicCitation<'s>>,
+    ) -> Result<String, CitationError> {
         let mut ids = vec![];
-        for &key in &citation.keys {
-            if !self.entries.contains_key(key) {
-                return Err(CitationError::KeyNotFound(key.to_string()));
+        for atomic in citation {
+            if !self.entries.contains_key(atomic.key) {
+                return Err(CitationError::KeyNotFound(atomic.key.to_string()));
             }
 
-            let id = if let Some(&val) = self.num_map.get(key) {
-                val
-            } else {
-                self.unique_works_cited += 1;
-                self.num_map.insert(key.to_string(), self.unique_works_cited);
-                self.unique_works_cited
-            };
-
-            ids.push(id);
+            let number = atomic
+                .number
+                .ok_or_else(|| CitationError::NoNumber(atomic.key.to_string()))?;
+            ids.push((number, atomic.supplement));
         }
 
-        Ok(ids
-            .into_iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-            .join(", "))
-    }
+        ids.sort_by(|(a, _), (b, _)| a.cmp(&b));
 
-    fn used_keys(&self) -> Vec<String> {
-        self.num_map.keys().cloned().collect()
-    }
-}
-
-impl StringMemory for NumericalReferenceGenerator<'_> {
-    fn save_string(&mut self, val: String) {
-        self.memory.push(val);
-    }
-
-    fn dump_memory(&self) -> Vec<String> {
-        self.memory.clone()
-    }
-}
-
-/// Get Harvard-style Author-Year citations like "Howard, 1997; Jean et al. 2001"
-pub struct AuthorYearReferenceGenerator<'s> {
-    cited_keys: Vec<Vec<String>>,
-    entries: &'s HashMap<String, Entry>,
-}
-
-fn author_list_names(authors: &Vec<Person>) -> String {
-    if authors.len() == 0 {
-        return String::new();
-    }
-
-    if authors.len() > 3 {
-        format!("{} et al.", authors.first().unwrap().name)
-    } else {
-        let mut res = authors.first().unwrap().name.clone();
-        for author in &authors[1 ..] {
-            res += ", ";
-            res += &author.name;
-        }
-        res
-    }
-}
-
-impl ReferenceGenerator for AuthorYearReferenceGenerator<'_> {
-    fn push_citation(&mut self, citation: Citation) -> Result<(), CitationError> {
-        for &key in &citation.keys {
-            if let Some(e) = self.entries.get(key) {
-                if !e.content.contains_key("author") {
-                    Err(CitationError::NoAuthorField(key.to_string()))?
-                } else if !e.content.contains_key("date") {
-                    Err(CitationError::NoYearField(key.to_string()))?
-                }
-            } else {
-                Err(CitationError::KeyNotFound(key.to_string()))?
-            }
+        enum CiteElement<'a> {
+            Range(std::ops::Range<usize>),
+            Single((usize, Option<&'a str>)),
         }
 
-        self.cited_keys
-            .push(citation.keys.into_iter().map(|s| s.to_string()).collect());
+        let mut res_elems = vec![];
 
-        Ok(())
-    }
-
-    fn dump(&self) -> Result<Vec<String>, CitationError> {
-        let unique_ordered: BTreeSet<String> = self.used_keys().into_iter().collect();
-
-        let mut triple: HashMap<&str, (String, i32, u32)> = HashMap::new();
-        let mut count_map: HashMap<(String, i32), u32> = HashMap::new();
-
-        for key in &unique_ordered {
-            if triple.contains_key(&key.as_ref()) {
+        for (number, supplement) in ids {
+            if let Some(s) = supplement {
+                res_elems.push(CiteElement::Single((number, Some(s))));
                 continue;
             }
 
-            let e = self.entries.get(key).unwrap();
-            let name = e
-                .content
-                .get("author")
-                .map(|a| match a {
-                    FieldTypes::Persons(ps) => author_list_names(ps),
-                    _ => panic!("author field should have person type"),
-                })
-                .unwrap();
-            let year = e
-                .content
-                .get("date")
-                .map(|a| match a {
-                    FieldTypes::Date(d) => d.year,
-                    _ => panic!("date field should have date type"),
-                })
-                .unwrap();
-
-            let val = if let Some(val) = count_map.get(&(name.clone(), year)) {
-                val + 1
-            } else {
-                0
-            };
-
-            count_map.insert((name.clone(), year), val);
-            triple.insert(key.as_ref(), (name, year, val));
-        }
-
-        let mut coll = vec![];
-        for citation in &self.cited_keys {
-            let mut res = String::new();
-            let mut first = true;
-            for key in citation {
-                if !first {
-                    res += "; ";
-                } else {
-                    first = false;
+            match res_elems.last() {
+                Some(CiteElement::Range(r)) if r.end == number - 1 => {
+                    let mut r = r.clone();
+                    res_elems.pop().unwrap();
+                    r.end = number;
+                    res_elems.push(CiteElement::Range(r));
                 }
-
-                let (names, year, count) = triple.get(&key.as_ref()).unwrap().clone();
-                let is_alph =
-                    count > 0 || *count_map.get(&(names.clone(), year)).unwrap() > 0;
-                let letter = if is_alph {
-                    ((b'a' + (count as u8 % 26)) as char).to_string()
-                } else {
-                    String::new()
-                };
-                res += &format!("{}, {:04}{}", names, year, letter);
+                _ if supplement.is_some() => {
+                    res_elems.push(CiteElement::Single((number, supplement)));
+                }
+                _ => {
+                    res_elems.push(CiteElement::Range(number .. number));
+                }
             }
-            coll.push(res);
         }
 
-        Ok(coll)
-    }
+        let re = res_elems
+            .into_iter()
+            .map(|e| match e {
+                CiteElement::Range(r) if r.start != r.end => {
+                    format!("{}-{}", r.start, r.end)
+                }
+                CiteElement::Range(r) => r.start.to_string(),
+                CiteElement::Single((n, s)) => {
+                    if let Some(sup) = s {
+                        format!("{}, {}", n, sup)
+                    } else {
+                        n.to_string()
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
 
-    fn used_keys(&self) -> Vec<String> {
-        self.cited_keys.iter().flat_map(|s| s.iter()).cloned().collect()
+        Ok(format!("[{}]", re))
     }
 }
 
@@ -334,80 +191,20 @@ fn name_list_straight(persons: &[Person]) -> Vec<String> {
 }
 
 /// Formatting modifiers for strings.
-/// Each variant holds a tuple with a start and
-/// an end index.
-#[derive(Clone, Debug)]
-pub enum FormatVariants {
-    /// **Bold print**
-    Bold((usize, usize)),
-    /// _italic print_
-    Italic((usize, usize)),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FormatVariantOptions {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Formatting {
     /// **Bold print**
     Bold,
     /// _italic print_
     Italic,
 }
 
-impl FormatVariants {
-    /// Gets the start index (inclusive) of the formatting.
-    pub fn get_min(&self) -> usize {
-        match self {
-            Self::Bold((a, _)) => a,
-            Self::Italic((a, _)) => a,
-        }
-        .clone()
-    }
-
-    /// Gets the end index (exclusive) of the formatting.
-    pub fn get_max(&self) -> usize {
-        match self {
-            Self::Bold((_, b)) => b,
-            Self::Italic((_, b)) => b,
-        }
-        .clone()
-    }
-
-    /// Offsets the indices of the formatting by a constant value.
-    pub fn offset(self, o: i32) -> Self {
-        match self {
-            Self::Bold((a, b)) => {
-                Self::Bold(((a as i32 + o) as usize, (b as i32 + o) as usize))
-            }
-            Self::Italic((a, b)) => {
-                Self::Italic(((a as i32 + o) as usize, (b as i32 + o) as usize))
-            }
-        }
-        .clone()
-    }
-
-    /// Get the formatting index span as a Range.
-    pub fn get_range(&self) -> std::ops::Range<usize> {
-        self.get_min() .. self.get_max()
-    }
-
-    pub(crate) fn from_option(
-        opt: FormatVariantOptions,
-        start: usize,
-        end: usize,
-    ) -> Self {
-        let tuple = (start, end);
-
-        match opt {
-            FormatVariantOptions::Bold => Self::Bold(tuple),
-            FormatVariantOptions::Italic => Self::Italic(tuple),
-        }
-    }
-
-    pub(crate) fn get_option(&self) -> FormatVariantOptions {
-        match self {
-            Self::Bold(_) => FormatVariantOptions::Bold,
-            Self::Italic(_) => FormatVariantOptions::Italic,
-        }
-    }
+/// Will move a format range's indicies by `o`.
+pub(crate) fn offset_format_range(
+    r: (std::ops::Range<usize>, Formatting),
+    o: usize,
+) -> (std::ops::Range<usize>, Formatting) {
+    ((r.0.start + o) .. (r.0.end + o), r.1)
 }
 
 /// A printable string with a list of formatting modifications
@@ -416,9 +213,9 @@ pub struct DisplayString {
     /// The string content.
     pub value: String,
     /// Information about formatted ranges.
-    pub formatting: Vec<FormatVariants>,
+    pub formatting: Vec<(std::ops::Range<usize>, Formatting)>,
 
-    pending_formatting: Vec<(FormatVariantOptions, usize)>,
+    pending_formatting: Vec<(usize, Formatting)>,
 }
 
 impl Add<&str> for DisplayString {
@@ -440,7 +237,7 @@ impl Add<Self> for DisplayString {
             &mut other
                 .formatting
                 .into_iter()
-                .map(|e| e.offset(self.value.len() as i32))
+                .map(|e| offset_format_range(e, self.value.len()))
                 .collect(),
         );
         self.value.push_str(&other.value);
@@ -466,7 +263,7 @@ impl AddAssign<Self> for DisplayString {
             &mut other
                 .formatting
                 .into_iter()
-                .map(|e| e.offset(self.value.len() as i32))
+                .map(|e| offset_format_range(e, self.value.len()))
                 .collect(),
         );
         self.value.push_str(&other.value);
@@ -527,30 +324,26 @@ impl DisplayString {
         self.value.push(ch);
     }
 
-    pub(crate) fn start_format(&mut self, f: FormatVariantOptions) {
-        debug_assert!(!self.pending_formatting.iter().any(|e| e.0 == f));
-        self.pending_formatting.push((f, self.len()));
+    pub(crate) fn start_format(&mut self, f: Formatting) {
+        debug_assert!(!self.pending_formatting.iter().any(|e| e.1 == f));
+        self.pending_formatting.push((self.len(), f));
     }
 
     pub(crate) fn commit_formats(&mut self) {
-        for (f, start) in &self.pending_formatting {
-            self.formatting.push(FormatVariants::from_option(
-                f.clone(),
-                *start,
-                self.len(),
-            ))
+        for (start, f) in self.pending_formatting.iter() {
+            self.formatting.push((*start .. self.len(), *f))
         }
 
         self.pending_formatting.clear();
     }
 
-    pub(crate) fn add_if_ok<S: Into<String>, T>(
+    pub(crate) fn add_if_some<S: Into<String>>(
         &mut self,
-        item: Result<S, T>,
+        item: Option<S>,
         prefix: Option<&str>,
         postfix: Option<&str>,
     ) {
-        if let Ok(item) = item {
+        if let Some(item) = item {
             if let Some(prefix) = prefix {
                 *self += prefix;
             }
@@ -567,9 +360,9 @@ impl DisplayString {
         let mut start_end = vec![];
 
         for item in &self.formatting {
-            let opt = item.get_option();
-            let min = item.get_min();
-            let max = item.get_max();
+            let opt = item.1;
+            let min = item.0.start;
+            let max = item.0.end;
 
             start_end.push((opt.clone(), min, false));
             start_end.push((opt, max, true));
@@ -588,8 +381,8 @@ impl DisplayString {
                 "0"
             } else {
                 match f {
-                    FormatVariantOptions::Bold => "1",
-                    FormatVariantOptions::Italic => "3",
+                    Formatting::Bold => "1",
+                    Formatting::Italic => "3",
                 }
             };
             res = format!("\x1b[{}m", code) + &res;

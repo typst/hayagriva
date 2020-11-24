@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::Range;
 use std::ops::{Add, Sub};
 
-use super::{Entry, EntryAccessError, FieldTypes};
+use super::{Entry, FieldType};
 
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
@@ -137,7 +137,7 @@ impl Entry {
         }
 
         if user_index == 0 {
-            if let Ok(url) = self.get_url().map(|u| &u.value) {
+            if let Some(url) = self.get_url().map(|u| &u.value) {
                 if url.host() != Some(Host::Domain("twitter.com")) {
                     return None;
                 }
@@ -774,75 +774,80 @@ impl Add for Duration {
     }
 }
 
-macro_rules! try_from_fieldtypes {
+/// Could not cast to the desired field type.
+#[derive(Error, Debug)]
+#[error("Got wrong type `{0}`.")]
+pub struct EntryTypeCastError(FieldType);
+
+macro_rules! try_from_FieldType {
     ($variant:ident, $target:ty $(,)*) => {
-        try_from_fieldtypes!(noref $variant, $target);
+        try_from_FieldType!(noref $variant, $target);
 
-        impl<'s> TryFrom<&'s FieldTypes> for &'s $target {
-            type Error = EntryAccessError;
+        impl<'s> TryFrom<&'s FieldType> for &'s $target {
+            type Error = EntryTypeCastError;
 
-            fn try_from(value: &'s FieldTypes) -> Result<Self, Self::Error> {
+            fn try_from(value: &'s FieldType) -> Result<Self, Self::Error> {
                 match value {
-                    FieldTypes::$variant(f) => Ok(f),
-                    _ => Err(EntryAccessError::WrongType),
+                    FieldType::$variant(f) => Ok(f),
+                    _ => Err(EntryTypeCastError(value.clone())),
                 }
             }
         }
     };
 
     (noref $variant:ident, $target:ty $(,)*) => {
-        impl TryFrom<FieldTypes> for $target {
-            type Error = EntryAccessError;
+        impl TryFrom<FieldType> for $target {
+            type Error = EntryTypeCastError;
 
-            fn try_from(value: FieldTypes) -> Result<Self, Self::Error> {
+            fn try_from(value: FieldType) -> Result<Self, Self::Error> {
                 match value {
-                    FieldTypes::$variant(f) => Ok(f),
-                    _ => Err(EntryAccessError::WrongType),
+                    FieldType::$variant(f) => Ok(f),
+                    _ => Err(EntryTypeCastError(value)),
                 }
             }
         }
 
-        impl From<$target> for FieldTypes {
+        impl From<$target> for FieldType {
             fn from(value: $target) -> Self {
-                FieldTypes::$variant(value)
+                FieldType::$variant(value)
             }
         }
     };
 
     ($variant:ident, $target:ty, $ref_target:ty $(,)*) => {
-        try_from_fieldtypes!(noref $variant, $target);
+        try_from_FieldType!(noref $variant, $target);
 
-        impl<'s> TryFrom<&'s FieldTypes> for &'s $ref_target {
-            type Error = EntryAccessError;
+        impl<'s> TryFrom<&'s FieldType> for &'s $ref_target {
+            type Error = EntryTypeCastError;
 
-            fn try_from(value: &'s FieldTypes) -> Result<Self, Self::Error> {
+            fn try_from(value: &'s FieldType) -> Result<Self, Self::Error> {
                 match value {
-                    FieldTypes::$variant(f) => Ok(f),
-                    _ => Err(EntryAccessError::WrongType),
+                    FieldType::$variant(f) => Ok(f),
+                    _ => Err(EntryTypeCastError(value.clone())),
                 }
             }
         }
     }
 }
 
-try_from_fieldtypes!(FormattableString, FormattableString);
-try_from_fieldtypes!(FormattedString, FormattedString);
-try_from_fieldtypes!(Text, String, str);
-try_from_fieldtypes!(Integer, i64);
-try_from_fieldtypes!(Date, Date);
-try_from_fieldtypes!(Persons, Vec<Person>, [Person]);
-try_from_fieldtypes!(
+try_from_FieldType!(FormattableString, FormattableString);
+try_from_FieldType!(FormattedString, FormattedString);
+try_from_FieldType!(Text, String, str);
+try_from_FieldType!(Integer, i64);
+try_from_FieldType!(Date, Date);
+try_from_FieldType!(Persons, Vec<Person>, [Person]);
+try_from_FieldType!(
     PersonsWithRoles,
     Vec<(Vec<Person>, PersonRole)>,
     [(Vec<Person>, PersonRole)]
 );
-try_from_fieldtypes!(IntegerOrText, NumOrStr);
-try_from_fieldtypes!(Range, std::ops::Range<i64>);
-try_from_fieldtypes!(Duration, Duration);
-try_from_fieldtypes!(TimeRange, std::ops::Range<Duration>);
-try_from_fieldtypes!(Url, QualifiedUrl);
-try_from_fieldtypes!(Language, unic_langid::LanguageIdentifier);
-try_from_fieldtypes!(Entries, Vec<Entry>, [Entry]);
+try_from_FieldType!(IntegerOrText, NumOrStr);
+try_from_FieldType!(Range, std::ops::Range<i64>);
+try_from_FieldType!(Duration, Duration);
+try_from_FieldType!(TimeRange, std::ops::Range<Duration>);
+try_from_FieldType!(Url, QualifiedUrl);
+try_from_FieldType!(Language, unic_langid::LanguageIdentifier);
+try_from_FieldType!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {

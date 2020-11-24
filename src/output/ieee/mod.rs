@@ -5,8 +5,7 @@
 
 mod abbreviations;
 use super::{
-    format_range, name_list_straight, BibliographyGenerator, DisplayString,
-    FormatVariantOptions,
+    format_range, name_list_straight, BibliographyFormatter, DisplayString, Formatting,
 };
 use crate::lang::{en, SentenceCase, TitleCase};
 use crate::selectors::{Bind, Id, Wc};
@@ -17,7 +16,7 @@ use isolang::Language;
 
 /// Generator for the IEEE reference list.
 #[derive(Clone, Debug)]
-pub struct IeeeBibliographyGenerator {
+pub struct IeeeBibliographyFormatter {
     sc_formatter: SentenceCase,
     tc_formatter: TitleCase,
     et_al_threshold: Option<u32>,
@@ -38,7 +37,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
         .and_then(|mut hm| hm.remove("p"))
 }
 
-impl IeeeBibliographyGenerator {
+impl IeeeBibliographyFormatter {
     /// Creates a new IEEE bibliography generator.
     pub fn new() -> Self {
         let mut tc_formatter = TitleCase::default();
@@ -154,7 +153,7 @@ impl IeeeBibliographyGenerator {
                 AuthorRole::Director if count == 1 => format!("{}, Director", amps),
                 AuthorRole::Director => format!("{}, Directors", amps),
             }
-        } else if let Ok(eds) = entry.get_editors() {
+        } else if let Some(eds) = entry.get_editors() {
             if !eds.is_empty() {
                 format!(
                     "{}, {}",
@@ -186,7 +185,7 @@ impl IeeeBibliographyGenerator {
             let entry_title = entry.get_title_fmt(None, Some(&self.sc_formatter));
             let canon_title = canonical.get_title_fmt(Some(&self.tc_formatter), None);
 
-            if let Ok(et) = entry_title {
+            if let Some(et) = entry_title {
                 if canonical.entry_type == Conference {
                     res += &et.sentence_case;
                     res.push('.');
@@ -196,20 +195,20 @@ impl IeeeBibliographyGenerator {
                     res += ",”";
                 }
 
-                if canon_title.is_ok() {
+                if canon_title.is_some() {
                     res.push(' ');
                 }
             }
 
-            if let Ok(ct) = canon_title {
+            if let Some(ct) = canon_title {
                 let ct = abbreviations::abbreviate_journal(&ct.title_case);
 
                 if canonical.entry_type == Conference {
                     res += "Presented at ";
                     res += &ct;
                 } else {
-                    if let Ok(lang) =
-                        entry.get_language().or_else(|_| canonical.get_language())
+                    if let Some(lang) =
+                        entry.get_language().or_else(|| canonical.get_language())
                     {
                         res += "(in ";
                         res += Language::from_639_1(lang.language.as_str())
@@ -221,7 +220,7 @@ impl IeeeBibliographyGenerator {
                     if entry.entry_type != Article || canonical.entry_type != Periodical {
                         res += "in ";
                     }
-                    res.start_format(FormatVariantOptions::Italic);
+                    res.start_format(Formatting::Italic);
                     res += &ct;
                     res.commit_formats();
 
@@ -229,13 +228,13 @@ impl IeeeBibliographyGenerator {
                     let spec = sel!(Id(Anthology) => Bind("p", Id(Anthology)));
                     if let Some(mut hm) = spec.apply(canonical) {
                         let par_anth = hm.remove("p").unwrap();
-                        if let Ok(par_t) =
+                        if let Some(par_t) =
                             par_anth.get_title_fmt(Some(&self.tc_formatter), None)
                         {
                             res += " (";
                             res += &par_t.title_case;
 
-                            res.add_if_ok(
+                            res.add_if_some(
                                 par_anth.get_issue().map(|i| i.to_string()),
                                 Some(", no. "),
                                 None,
@@ -248,7 +247,7 @@ impl IeeeBibliographyGenerator {
                     let spec = sel!(Id(Proceedings) => Bind("p", sel!(alt Id(Proceedings), Id(Anthology), Id(Misc))));
                     if let Some(mut hm) = spec.apply(canonical) {
                         let par_conf = hm.remove("p").unwrap();
-                        if let Ok(par_t) =
+                        if let Some(par_t) =
                             par_conf.get_title_fmt(Some(&self.tc_formatter), None)
                         {
                             res += " in ";
@@ -269,13 +268,13 @@ impl IeeeBibliographyGenerator {
         ]
         .contains(&entry.entry_type)
         {
-            res.start_format(FormatVariantOptions::Italic);
+            res.start_format(Formatting::Italic);
 
             if entry.entry_type == Legislation {
-                res.add_if_ok(entry.get_serial_number(), None, None);
+                res.add_if_some(entry.get_serial_number(), None, None);
             }
 
-            if let Ok(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
+            if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
                 if !res.is_empty() {
                     res += ", ";
                 }
@@ -284,7 +283,7 @@ impl IeeeBibliographyGenerator {
             }
             res.commit_formats();
         } else {
-            if let Ok(title) = entry.get_title_fmt(None, Some(&self.sc_formatter)) {
+            if let Some(title) = entry.get_title_fmt(None, Some(&self.sc_formatter)) {
                 res += "“";
                 res += &title.sentence_case;
                 res += ",”";
@@ -309,7 +308,7 @@ impl IeeeBibliographyGenerator {
         match (entry.entry_type, canonical.entry_type) {
             (_, Conference) | (_, Proceedings) => {
                 if canonical.entry_type == Proceedings {
-                    if let Ok(eds) = canonical.get_editors() {
+                    if let Some(eds) = canonical.get_editors() {
                         let mut al = self.and_list(name_list_straight(&eds));
                         if eds.len() > 1 {
                             al += ", Eds."
@@ -319,13 +318,13 @@ impl IeeeBibliographyGenerator {
                         res.push(al);
                     }
 
-                    if let Ok(vols) =
-                        entry.get_volume().or_else(|_| canonical.get_volume())
+                    if let Some(vols) =
+                        entry.get_volume().or_else(|| canonical.get_volume())
                     {
                         res.push(format_range("vol.", "vols.", &vols));
                     }
 
-                    if let Ok(ed) = canonical.get_edition() {
+                    if let Some(ed) = canonical.get_edition() {
                         match ed {
                             NumOrStr::Number(i) => {
                                 if *i > 1 {
@@ -337,7 +336,7 @@ impl IeeeBibliographyGenerator {
                     }
                 }
 
-                if let Ok(location) = canonical.get_location() {
+                if let Some(location) = canonical.get_location() {
                     res.push(location.into());
                 }
 
@@ -360,15 +359,15 @@ impl IeeeBibliographyGenerator {
                 }
 
                 if canonical.entry_type == Conference {
-                    if let Ok(sn) = entry.get_serial_number() {
+                    if let Some(sn) = entry.get_serial_number() {
                         res.push(format!("Paper {}", sn));
                     }
                 } else {
-                    if let Ok(pages) = entry.get_page_range() {
+                    if let Some(pages) = entry.get_page_range() {
                         res.push(format_range("p.", "pp.", &pages));
                     }
 
-                    if let Ok(doi) = entry.get_doi() {
+                    if let Some(doi) = entry.get_doi() {
                         res.push(format!("doi: {}", doi));
                     }
                 }
@@ -394,7 +393,7 @@ impl IeeeBibliographyGenerator {
                     res
                 });
 
-                if let Ok(ed) = canonical.get_edition() {
+                if let Some(ed) = canonical.get_edition() {
                     match ed {
                         NumOrStr::Number(i) => {
                             if *i > 1 {
@@ -406,13 +405,12 @@ impl IeeeBibliographyGenerator {
                 }
 
                 if !has_url {
-                    if let Ok(publisher) = canonical
-                        .get_organization()
-                        .or_else(|_| canonical.get_publisher())
+                    if let Some(publisher) =
+                        canonical.get_organization().or_else(|| canonical.get_publisher())
                     {
                         res.push(publisher.into());
 
-                        if let Ok(location) = canonical.get_location() {
+                        if let Some(location) = canonical.get_location() {
                             res.push(location.into());
                         }
                     }
@@ -421,7 +419,7 @@ impl IeeeBibliographyGenerator {
                         res.push(date);
                     }
 
-                    if let Ok(pages) = entry.get_page_range() {
+                    if let Some(pages) = entry.get_page_range() {
                         res.push(format_range("p.", "pp.", &pages));
                     }
                 } else {
@@ -431,27 +429,27 @@ impl IeeeBibliographyGenerator {
                 }
             }
             (_, Repository) => {
-                if let Ok(sn) = canonical.get_serial_number() {
+                if let Some(sn) = canonical.get_serial_number() {
                     res.push(format!("(version {})", sn));
                 } else if let Some(date) =
-                    canonical.get_date().ok().or_else(|| entry.get_any_date())
+                    canonical.get_date().or_else(|| entry.get_any_date())
                 {
                     res.push(format!("({})", date.year));
                 }
 
-                if let Ok(publisher) =
-                    canonical.get_publisher().or_else(|_| canonical.get_organization())
+                if let Some(publisher) =
+                    canonical.get_publisher().or_else(|| canonical.get_organization())
                 {
                     let mut publ = String::new();
-                    if let Ok(location) = canonical.get_location() {
+                    if let Some(location) = canonical.get_location() {
                         publ += location;
                         publ += ": ";
                     }
 
                     publ += publisher;
 
-                    if let Ok(lang) =
-                        entry.get_language().or_else(|_| canonical.get_language())
+                    if let Some(lang) =
+                        entry.get_language().or_else(|| canonical.get_language())
                     {
                         publ += " (in ";
                         publ += Language::from_639_1(lang.language.as_str())
@@ -464,22 +462,21 @@ impl IeeeBibliographyGenerator {
                 }
             }
             (_, Video) => {
-                if let Some(date) =
-                    canonical.get_date().ok().or_else(|| entry.get_any_date())
+                if let Some(date) = canonical.get_date().or_else(|| entry.get_any_date())
                 {
                     res.push(format!("({})", date.year));
                 }
             }
             (_, Patent) => {
                 let mut start = String::new();
-                if let Ok(location) = canonical.get_location() {
+                if let Some(location) = canonical.get_location() {
                     start += location;
                     start.push(' ');
                 }
 
                 start += "Patent";
 
-                if let Ok(sn) = canonical.get_serial_number() {
+                if let Some(sn) = canonical.get_serial_number() {
                     start += &format!(" {}", sn);
                 }
 
@@ -527,15 +524,15 @@ impl IeeeBibliographyGenerator {
                 }
             }
             (_, Periodical) => {
-                if let Ok(vols) = canonical.get_volume() {
+                if let Some(vols) = canonical.get_volume() {
                     res.push(format_range("vol.", "vols.", &vols));
                 }
 
-                if let Ok(iss) = canonical.get_issue() {
+                if let Some(iss) = canonical.get_issue() {
                     res.push(format!("no. {}", iss));
                 }
 
-                let pages = if let Ok(pages) = entry.get_page_range() {
+                let pages = if let Some(pages) = entry.get_page_range() {
                     res.push(format_range("p.", "pp.", &pages));
                     true
                 } else {
@@ -559,27 +556,27 @@ impl IeeeBibliographyGenerator {
                 }
 
                 if !pages {
-                    if let Ok(sn) = entry.get_serial_number() {
+                    if let Some(sn) = entry.get_serial_number() {
                         res.push(format!("Art. no. {}", sn));
                     }
                 }
 
-                if let Ok(doi) = entry.get_doi() {
+                if let Some(doi) = entry.get_doi() {
                     res.push(format!("doi: {}", doi));
                 }
             }
             (_, Report) => {
-                if let Ok(publisher) =
-                    canonical.get_organization().or_else(|_| canonical.get_publisher())
+                if let Some(publisher) =
+                    canonical.get_organization().or_else(|| canonical.get_publisher())
                 {
                     res.push(publisher.into());
 
-                    if let Ok(location) = canonical.get_location() {
+                    if let Some(location) = canonical.get_location() {
                         res.push(location.into());
                     }
                 }
 
-                if let Ok(sn) = canonical.get_serial_number() {
+                if let Some(sn) = canonical.get_serial_number() {
                     res.push(format!("Rep. {}", sn));
                 }
 
@@ -608,12 +605,13 @@ impl IeeeBibliographyGenerator {
                     }
                 }
 
-                if let Ok(vols) = canonical.get_volume().or_else(|_| entry.get_volume()) {
+                if let Some(vols) = canonical.get_volume().or_else(|| entry.get_volume())
+                {
                     res.push(format_range("vol.", "vols.", &vols));
                 }
 
 
-                if let Ok(iss) = canonical.get_issue() {
+                if let Some(iss) = canonical.get_issue() {
                     res.push(format!("no. {}", iss));
                 }
 
@@ -626,15 +624,15 @@ impl IeeeBibliographyGenerator {
             }
             (_, Thesis) => {
                 res.push("Thesis".to_string());
-                if let Ok(org) = canonical.get_organization() {
+                if let Some(org) = canonical.get_organization() {
                     res.push(abbreviations::abbreviate_journal(&org));
 
-                    if let Ok(location) = canonical.get_location() {
+                    if let Some(location) = canonical.get_location() {
                         res.push(location.into());
                     }
                 }
 
-                if let Ok(sn) = entry.get_serial_number() {
+                if let Some(sn) = entry.get_serial_number() {
                     res.push(sn.into());
                 }
 
@@ -648,7 +646,7 @@ impl IeeeBibliographyGenerator {
             }
             _ if preprint.is_some() => {
                 let parent = preprint.unwrap().remove("p").unwrap();
-                if let Ok(sn) = entry.get_serial_number() {
+                if let Some(sn) = entry.get_serial_number() {
                     let mut sn = if let Some(url) = entry.get_any_url() {
                         if !sn.to_lowercase().contains("arxiv")
                             && (url.value.host_str().unwrap_or("").to_lowercase()
@@ -667,7 +665,7 @@ impl IeeeBibliographyGenerator {
                         sn.to_string()
                     };
 
-                    if let Ok(al) = entry.get_archive().or_else(|_| parent.get_archive())
+                    if let Some(al) = entry.get_archive().or_else(|| parent.get_archive())
                     {
                         sn += " [";
                         sn += al;
@@ -694,28 +692,28 @@ impl IeeeBibliographyGenerator {
                 }
             }
             (Web, _) | (Blog, _) => {
-                if let Ok(publisher) =
-                    entry.get_publisher().or_else(|_| entry.get_organization())
+                if let Some(publisher) =
+                    entry.get_publisher().or_else(|| entry.get_organization())
                 {
                     res.push(publisher.into());
                 }
             }
             _ if web_parented.is_some() => {
                 let parent = web_parented.unwrap().remove("p").unwrap();
-                if let Ok(publisher) = parent
+                if let Some(publisher) = parent
                     .get_title()
-                    .or_else(|_| parent.get_publisher())
-                    .or_else(|_| entry.get_publisher())
-                    .or_else(|_| parent.get_organization())
-                    .or_else(|_| entry.get_organization())
+                    .or_else(|| parent.get_publisher())
+                    .or_else(|| entry.get_publisher())
+                    .or_else(|| parent.get_organization())
+                    .or_else(|| entry.get_organization())
                 {
                     res.push(publisher.into());
                 }
             }
             _ => {
-                if let (Some(_), Ok(eds)) = (
+                if let (Some(_), Some(eds)) = (
                     entry.get_authors().get(0),
-                    entry.get_editors().or_else(|_| canonical.get_editors()),
+                    entry.get_editors().or_else(|| canonical.get_editors()),
                 ) {
                     let mut al = self.and_list(name_list_straight(&eds));
                     if eds.len() > 1 {
@@ -726,11 +724,12 @@ impl IeeeBibliographyGenerator {
                     res.push(al);
                 }
 
-                if let Ok(vols) = entry.get_volume().or_else(|_| canonical.get_volume()) {
+                if let Some(vols) = entry.get_volume().or_else(|| canonical.get_volume())
+                {
                     res.push(format_range("vol.", "vols.", &vols));
                 }
 
-                if let Ok(ed) = canonical.get_edition() {
+                if let Some(ed) = canonical.get_edition() {
                     match ed {
                         NumOrStr::Number(i) => {
                             if *i > 1 {
@@ -741,19 +740,19 @@ impl IeeeBibliographyGenerator {
                     }
                 }
 
-                if let Ok(publisher) =
-                    canonical.get_publisher().or_else(|_| canonical.get_organization())
+                if let Some(publisher) =
+                    canonical.get_publisher().or_else(|| canonical.get_organization())
                 {
                     let mut publ = String::new();
-                    if let Ok(location) = canonical.get_location() {
+                    if let Some(location) = canonical.get_location() {
                         publ += location;
                         publ += ": ";
                     }
 
                     publ += &publisher;
 
-                    if let Ok(lang) =
-                        entry.get_language().or_else(|_| canonical.get_language())
+                    if let Some(lang) =
+                        entry.get_language().or_else(|| canonical.get_language())
                     {
                         publ += " (in ";
                         publ += Language::from_639_1(lang.language.as_str())
@@ -777,7 +776,7 @@ impl IeeeBibliographyGenerator {
                     res.push(format!("sec. {}", section));
                 }
 
-                if let Ok(pages) = entry.get_page_range() {
+                if let Some(pages) = entry.get_page_range() {
                     res.push(format_range("p.", "pp.", &pages));
                 }
             }
@@ -802,26 +801,26 @@ impl IeeeBibliographyGenerator {
     }
 }
 
-impl<'a> BibliographyGenerator<'a> for IeeeBibliographyGenerator {
-    fn get_reference(&mut self, mut entry: &Entry) -> DisplayString {
-        let mut parent = entry.get_parents().ok().and_then(|v| v.first());
+impl BibliographyFormatter for IeeeBibliographyFormatter {
+    fn get_reference(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
+        let mut parent = entry.get_parents().and_then(|v| v.first());
         let mut sn_stack = vec![];
-        while entry.get_title().is_err()
+        while entry.get_title().is_none()
             && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
         {
-            if let Ok(sn) = entry.get_serial_number() {
+            if let Some(sn) = entry.get_serial_number() {
                 sn_stack.push(sn);
             }
             if let Some(p) = parent {
                 entry = &p;
-                parent = entry.get_parents().ok().and_then(|v| v.first());
+                parent = entry.get_parents().and_then(|v| v.first());
             } else {
                 break;
             }
         }
 
         if entry.entry_type == Chapter {
-            if let Ok(sn) = entry.get_serial_number() {
+            if let Some(sn) = entry.get_serial_number() {
                 sn_stack.push(sn);
             }
         }
@@ -852,7 +851,7 @@ impl<'a> BibliographyGenerator<'a> for IeeeBibliographyGenerator {
         let mut res = DisplayString::from_string(authors);
 
         if canonical.entry_type == Legislation {
-            if let Ok(NumOrStr::Str(session)) = entry.get_edition() {
+            if let Some(NumOrStr::Str(session)) = entry.get_edition() {
                 if !res.is_empty() {
                     res += ". ";
                 }
@@ -861,7 +860,7 @@ impl<'a> BibliographyGenerator<'a> for IeeeBibliographyGenerator {
         }
 
         if canonical.entry_type == Video {
-            if let Ok(location) = canonical.get_location() {
+            if let Some(location) = canonical.get_location() {
                 if !res.is_empty() {
                     res += ", ";
                 }
@@ -958,7 +957,7 @@ impl<'a> BibliographyGenerator<'a> for IeeeBibliographyGenerator {
             }
         }
 
-        if let Ok(note) = entry.get_note() {
+        if let Some(note) = entry.get_note() {
             if !res.is_empty() {
                 res += " ";
             }

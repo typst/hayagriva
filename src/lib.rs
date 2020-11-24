@@ -24,6 +24,7 @@ use types::{
 use linked_hash_map::LinkedHashMap;
 use paste::paste;
 use std::convert::TryFrom;
+use strum_macros::Display;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 use url::Url;
@@ -31,8 +32,8 @@ use yaml_rust::{Yaml, YamlLoader};
 
 /// The field type enum variants describe what data types can possibly be held
 /// by the various content items of an [Entry].
-#[derive(Clone, Debug, PartialEq)]
-pub enum FieldTypes {
+#[derive(Clone, Debug, Display, PartialEq)]
+pub enum FieldType {
     /// A [FormattableString] with which the user can override various
     /// automatic formatters.
     FormattableString(FormattableString),
@@ -73,7 +74,7 @@ pub struct Entry {
     /// The kind of media this Entry represents.
     entry_type: EntryType,
     /// Information about the Entry.
-    content: HashMap<String, FieldTypes>,
+    content: HashMap<String, FieldType>,
 }
 
 impl Entry {
@@ -87,25 +88,48 @@ impl Entry {
     }
 
     /// Get the unconverted value of a certain key.
-    pub fn get(&self, key: &str) -> Option<&FieldTypes> {
+    pub fn get(&self, key: &str) -> Option<&FieldType> {
         self.content.get(key)
     }
 
-    /// Set [any data type](FieldTypes) as value for a given key.
-    pub fn set(&mut self, key: String, value: FieldTypes) {
-        self.content.insert(key, value);
+    /// Set [any data type](FieldType) as value for a given key.
+    pub fn set(&mut self, key: String, value: FieldType) -> Result<(), EntrySetError> {
+        let valid = match key.as_ref() {
+            "parent" => matches!(value, FieldType::Entries(_)),
+            "title" | "location" | "publisher" | "archive" | "archive-location" => {
+                matches!(value, FieldType::FormattableString(_))
+            }
+            "author" | "editor" => matches!(value, FieldType::Persons(_)),
+            "date" => matches!(value, FieldType::Date(_)),
+            "affiliated" => matches!(value, FieldType::PersonsWithRoles(_)),
+            "organization" | "issn" | "isbn" | "doi" | "serial-number" | "note" => {
+                matches!(value, FieldType::Text(_))
+            }
+            "issue" | "edition" => matches!(value, FieldType::IntegerOrText(_)),
+            "volume" | "page-range" => matches!(value, FieldType::Range(_)),
+            "volume-total" | "page-total" => matches!(value, FieldType::Integer(_)),
+            "time-range" => matches!(value, FieldType::TimeRange(_)),
+            "runtime" => matches!(value, FieldType::Duration(_)),
+            "url" => matches!(value, FieldType::Url(_)),
+            "language" => matches!(value, FieldType::Language(_)),
+            _ => true,
+        };
+
+        if valid {
+            self.content.insert(key, value);
+            Ok(())
+        } else {
+            Err(EntrySetError::WrongType(key, value))
+        }
     }
 }
 
 /// Error which occurs if the value of an entry field could not be retrieved.
 #[derive(Clone, Error, Debug, PartialEq)]
-pub enum EntryAccessError {
-    /// The field is not set.
-    #[error("the queried field is not present")]
-    NoSuchField,
-    /// The [field type enum](FieldTypes) does not match the expected variant(s).
-    #[error("data type mismatch in the queried field")]
-    WrongType,
+pub enum EntrySetError {
+    /// The [field type enum](FieldType) does not match the expected variant(s).
+    #[error("Type `{1}` not allowed in field `{0}`")]
+    WrongType(String, FieldType),
 }
 
 macro_rules! fields {
@@ -113,18 +137,15 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<get_ $name _raw>](&self) -> Result<&FormattableString, EntryAccessError> {
+                pub fn [<get_ $name _raw>](&self) -> Option<&FormattableString> {
                     self.get($field_name)
-                        .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| <&FormattableString>::try_from(item))
+                        .map(|item| <&FormattableString>::try_from(item).unwrap())
                 }
 
                 #[doc = "Get and parse the `" $field_name "` field's value.'"]
-                pub fn [<get_ $name>](&self) -> Result<&str, EntryAccessError> {
+                pub fn [<get_ $name>](&self) -> Option<&str> {
                     self.get($field_name)
-                        .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| <&FormattableString>::try_from(item))
-                        .map(|fstr| fstr.value.as_ref())
+                        .map(|item| <&FormattableString>::try_from(item).unwrap().value.as_ref())
                 }
 
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
@@ -132,11 +153,9 @@ macro_rules! fields {
                     &self,
                     title: Option<&dyn CaseTransformer>,
                     sentence: Option<&dyn CaseTransformer>,
-                ) -> Result<FormattedString, EntryAccessError> {
+                ) -> Option<FormattedString> {
                     self.get($field_name)
-                        .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| <FormattableString>::try_from(item.clone()))
-                        .map(|fstr| fstr.format(title, sentence))
+                        .map(|item| <FormattableString>::try_from(item.clone()).unwrap().format(title, sentence))
                 }
 
                 fields!(single_set $name => $field_name, FormattableString);
@@ -148,10 +167,9 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn [<get_ $name>](&self) -> Result<fields!(@type ref $($res)?), EntryAccessError> {
+                pub fn [<get_ $name>](&self) -> Option<fields!(@type ref $($res)?)> {
                     self.get($field_name)
-                        .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| <fields!(@type ref $($res)?)>::try_from(item))
+                        .map(|item| <fields!(@type ref $($res)?)>::try_from(item).unwrap())
                 }
 
                 fields!(single_set $name => $field_name, fields!(@type $($res)?));
@@ -163,10 +181,9 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn [<get_ $name>](&self) -> Result<$res_ref, EntryAccessError> {
+                pub fn [<get_ $name>](&self) -> Option<$res_ref> {
                     self.get($field_name)
-                        .ok_or(EntryAccessError::NoSuchField)
-                        .and_then(|item| <$res_ref>::try_from(item))
+                        .map(|item| <$res_ref>::try_from(item).unwrap())
                 }
 
                 fields!(single_set $name => $field_name, $res);
@@ -178,7 +195,7 @@ macro_rules! fields {
         paste! {
             #[doc = "Set a value in the `" $field_name "` field."]
             pub fn [<set_ $name>](&mut self, item: $other_type) {
-                self.set($field_name.to_string(), FieldTypes::from(item));
+                self.set($field_name.to_string(), FieldType::from(item)).unwrap();
             }
         }
     };
@@ -197,14 +214,14 @@ impl Entry {
     /// Get and parse the `author` field. This will always return a result
     pub fn get_authors(&self) -> &[Person] {
         self.get("author")
-            .and_then(|item| <&[Person]>::try_from(item).ok())
+            .map(|item| <&[Person]>::try_from(item).unwrap())
             .unwrap_or_default()
     }
 
     /// Get and parse the `author` field.
     /// This will fail if there are no authors.
     pub fn get_authors_fallible(&self) -> Option<&[Person]> {
-        self.get("author").and_then(|item| <&[Person]>::try_from(item).ok())
+        self.get("author").map(|item| <&[Person]>::try_from(item).unwrap())
     }
 
     fields!(single_set authors => "author", Vec<Person>);
@@ -238,7 +255,7 @@ impl Entry {
 
     /// Will recursively get a date off either the entry or its parents.
     pub fn get_any_date(&self) -> Option<&Date> {
-        self.get_date().ok().or_else(|| {
+        self.get_date().or_else(|| {
             self.get_parents()
                 .into_iter()
                 .flat_map(|v| v)
@@ -249,7 +266,7 @@ impl Entry {
 
     /// Will recursively get an url off either the entry or its parents.
     pub fn get_any_url(&self) -> Option<&QualifiedUrl> {
-        self.get_url().ok().or_else(|| {
+        self.get_url().or_else(|| {
             self.get_parents()
                 .into_iter()
                 .flat_map(|v| v)
@@ -260,12 +277,11 @@ impl Entry {
 
     /// Get and parse the `page-total` field, falling back on
     /// `page-range` if not specified.
-    pub fn get_page_total(&self) -> Result<i64, EntryAccessError> {
+    pub fn get_page_total(&self) -> Option<i64> {
         self.get("page-total")
-            .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
-            .or_else(|_| self.get_page_range().map(|r| FieldTypes::from(r.end - r.start)))
-            .and_then(|item| i64::try_from(item))
+            .or_else(|| self.get_page_range().map(|r| FieldType::from(r.end - r.start)))
+            .map(|item| i64::try_from(item).unwrap())
     }
 
     fields!(single_set total_pages => "page-total", i64);
@@ -273,12 +289,11 @@ impl Entry {
 
     /// Get and parse the `runtime` field, falling back on
     /// `time-range` if not specified.
-    pub fn get_runtime(&self) -> Result<Duration, EntryAccessError> {
+    pub fn get_runtime(&self) -> Option<Duration> {
         self.get("runtime")
-            .ok_or(EntryAccessError::NoSuchField)
             .map(|ft| ft.clone())
-            .or_else(|_| self.get_time_range().map(|r| FieldTypes::from(r.end - r.start)))
-            .and_then(|item| Duration::try_from(item))
+            .or_else(|| self.get_time_range().map(|r| FieldType::from(r.end - r.start)))
+            .map(|item| Duration::try_from(item).unwrap())
     }
 
     fields!(single_set runtime => "runtime", Duration);
@@ -615,7 +630,7 @@ fn entry_from_yaml(
         let value = match fname_str {
             "title" | "publisher" | "location" | "archive" | "archive-location" => {
                 if let Some(map) = value.clone().into_hash() {
-                    FieldTypes::FormattableString(
+                    FieldType::FormattableString(
                         formattable_str_from_hash_map(map).map_err(|e| {
                             YamlBibliographyError::new_data_type_src_error(
                                 &key,
@@ -625,7 +640,7 @@ fn entry_from_yaml(
                         })?,
                     )
                 } else if let Some(t) = value.into_string() {
-                    FieldTypes::FormattableString(FormattableString::new_shorthand(t))
+                    FieldType::FormattableString(FormattableString::new_shorthand(t))
                 } else {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
@@ -635,7 +650,7 @@ fn entry_from_yaml(
                 }
             }
             "author" | "editor" => {
-                FieldTypes::Persons(persons_from_yaml(value, &key, &field_name)?)
+                FieldType::Persons(persons_from_yaml(value, &key, &field_name)?)
             }
             "affiliated" => {
                 let mut res = vec![];
@@ -694,9 +709,9 @@ fn entry_from_yaml(
                     res.push((persons, role))
                 }
 
-                FieldTypes::PersonsWithRoles(res)
+                FieldType::PersonsWithRoles(res)
             }
-            "date" => FieldTypes::Date(if let Some(value) = value.as_i64() {
+            "date" => FieldType::Date(if let Some(value) = value.as_i64() {
                 Date::from_year(value as i32)
             } else if let Some(value) = value.into_string() {
                 Date::from_str(&value).map_err(|e| {
@@ -718,9 +733,9 @@ fn entry_from_yaml(
                 let as_str = if as_int == None { value.into_string() } else { None };
 
                 if let Some(i) = as_int {
-                    FieldTypes::IntegerOrText(NumOrStr::Number(i))
+                    FieldType::IntegerOrText(NumOrStr::Number(i))
                 } else if let Some(t) = as_str {
-                    FieldTypes::IntegerOrText(NumOrStr::Str(t))
+                    FieldType::IntegerOrText(NumOrStr::Str(t))
                 } else {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
@@ -730,7 +745,7 @@ fn entry_from_yaml(
                 }
             }
             "volume-total" | "page-total" => {
-                FieldTypes::Integer(value.into_i64().ok_or_else(|| {
+                FieldType::Integer(value.into_i64().ok_or_else(|| {
                     YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
@@ -739,7 +754,7 @@ fn entry_from_yaml(
                 })?)
             }
             "volume" | "page-range" => {
-                FieldTypes::Range(if let Some(value) = value.as_i64() {
+                FieldType::Range(if let Some(value) = value.as_i64() {
                     value .. value
                 } else if let Some(value) = value.into_string() {
                     get_range(&value).ok_or_else(|| {
@@ -777,7 +792,7 @@ fn entry_from_yaml(
                         })
                     })?;
 
-                FieldTypes::Duration(v)
+                FieldType::Duration(v)
             }
             "time-range" => {
                 let v = value
@@ -799,7 +814,7 @@ fn entry_from_yaml(
                         })
                     })?;
 
-                FieldTypes::TimeRange(v)
+                FieldType::TimeRange(v)
             }
             "url" => {
                 let (url, date) = if let Some(s) = value.as_str() {
@@ -876,9 +891,9 @@ fn entry_from_yaml(
                     ));
                 };
 
-                FieldTypes::Url(QualifiedUrl { value: url, visit_date: date })
+                FieldType::Url(QualifiedUrl { value: url, visit_date: date })
             }
-            "language" => FieldTypes::Language(
+            "language" => FieldType::Language(
                 value.into_string().and_then(|f| f.parse().ok()).ok_or_else(|| {
                     YamlBibliographyError::new_data_type_error(
                         &key,
@@ -899,9 +914,9 @@ fn entry_from_yaml(
                         )?)
                     }
 
-                    FieldTypes::Entries(entries)
+                    FieldType::Entries(entries)
                 } else {
-                    FieldTypes::Entries(vec![entry_from_yaml(
+                    FieldType::Entries(vec![entry_from_yaml(
                         key.clone(),
                         value,
                         entry.entry_type.default_parent(),
@@ -910,11 +925,11 @@ fn entry_from_yaml(
             }
             _ => {
                 if let Some(t) = value.clone().into_string() {
-                    FieldTypes::Text(t)
+                    FieldType::Text(t)
                 } else if let Some(i) = value.as_i64() {
-                    FieldTypes::Text(i.to_string())
+                    FieldType::Text(i.to_string())
                 } else if let Some(i) = value.as_f64() {
-                    FieldTypes::Text(i.to_string())
+                    FieldType::Text(i.to_string())
                 } else {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
@@ -936,7 +951,7 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::{apa, ieee, mla, BibliographyGenerator};
+    use crate::output::{apa, ieee, mla, BibliographyFormatter};
     use crate::selectors::parse;
     use std::fs;
 
@@ -944,11 +959,13 @@ mod tests {
     fn apa() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let mut apa = apa::ApaBibliographyGenerator::new();
+        let apa = apa::ApaBibliographyFormatter::new();
+        let mut last_entry = None;
 
         for entry in &entries {
-            let refs = apa.get_reference(&entry);
+            let refs = apa.get_reference(&entry, last_entry);
             println!("{}", refs.print_ansi_vt100());
+            last_entry = Some(entry);
         }
     }
 
@@ -956,11 +973,13 @@ mod tests {
     fn ieee() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let mut ieee = ieee::IeeeBibliographyGenerator::new();
+        let ieee = ieee::IeeeBibliographyFormatter::new();
+        let mut last_entry = None;
 
         for entry in &entries {
-            let refs = ieee.get_reference(&entry);
+            let refs = ieee.get_reference(&entry, last_entry);
             println!("{}", refs.print_ansi_vt100());
+            last_entry = Some(entry);
         }
     }
 
@@ -968,11 +987,13 @@ mod tests {
     fn mla() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let mut mla = mla::MlaBibliographyGenerator::new();
+        let mla = mla::MlaBibliographyFormatter::new();
+        let mut last_entry = None;
 
         for entry in &entries {
-            let refs = mla.get_reference(&entry);
+            let refs = mla.get_reference(&entry, last_entry);
             println!("{}", refs.print_ansi_vt100());
+            last_entry = Some(entry);
         }
     }
 

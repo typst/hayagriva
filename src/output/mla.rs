@@ -1,7 +1,9 @@
 //! Style for entries in the "Works Cited" listing as of the 8th edition
 //! of the MLA Handbook.
 
-use super::{format_range, BibliographyGenerator, DisplayString, FormatVariantOptions};
+use super::{
+    format_range, offset_format_range, BibliographyFormatter, DisplayString, Formatting,
+};
 use crate::lang::{en, TitleCase};
 use crate::selectors::{Bind, Id, Neg, Wc};
 use crate::types::EntryType::*;
@@ -10,9 +12,8 @@ use crate::{attrs, sel, Entry};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Generates the "Works Cited" entries
-pub struct MlaBibliographyGenerator<'s> {
+pub struct MlaBibliographyFormatter {
     tc_formatter: TitleCase,
-    prev_entry: Option<&'s Entry>,
     /// Forces location element to appear whenever given.
     /// Otherwise, location will only appear for physical items.
     pub always_use_location: bool,
@@ -125,8 +126,11 @@ impl ContainerInfo {
                 let new = gc.to_uppercase();
                 let diff = new.len() - len;
                 res.value = new + &res.value[len ..];
-                res.formatting =
-                    res.formatting.into_iter().map(|f| f.offset(diff as i32)).collect();
+                res.formatting = res
+                    .formatting
+                    .into_iter()
+                    .map(|f| offset_format_range(f, diff))
+                    .collect();
             }
         }
 
@@ -197,7 +201,7 @@ fn abbreviate_publisher(s: &str) -> String {
         .join(" ")
 }
 
-impl<'s> MlaBibliographyGenerator<'s> {
+impl MlaBibliographyFormatter {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
         let mut tc_formatter = TitleCase::new();
@@ -205,7 +209,6 @@ impl<'s> MlaBibliographyGenerator<'s> {
 
         Self {
             tc_formatter,
-            prev_entry: None,
             always_use_location: false,
             always_print_date: false,
         }
@@ -272,10 +275,9 @@ impl<'s> MlaBibliographyGenerator<'s> {
             .or_else(|| {
                 entry
                     .get_affiliated_persons()
-                    .ok()
                     .and_then(|a| if a.len() == 1 { Some(a[0].0.clone()) } else { None })
             })
-            .or_else(|| entry.get_editors().ok().map(|a| a.to_vec()))
+            .or_else(|| entry.get_editors().map(|a| a.to_vec()))
     }
 
     fn name_list(&self, persons: &[Person], tweet_entry: Option<&Entry>) -> Vec<String> {
@@ -301,13 +303,13 @@ impl<'s> MlaBibliographyGenerator<'s> {
     }
 
     /// Prints the names of the main creators of the item.
-    fn get_author(&self, mut entry: &Entry) -> String {
+    fn get_author(&self, mut entry: &Entry, prev_entry: Option<&Entry>) -> String {
         while entry.get_authors_fallible().is_none()
-            && entry.get_affiliated_persons().is_err()
-            && entry.get_editors().is_err()
+            && entry.get_affiliated_persons().is_none()
+            && entry.get_editors().is_none()
             && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
         {
-            if let Some(p) = entry.get_parents().ok().and_then(|ps| ps.get(0)) {
+            if let Some(p) = entry.get_parents().and_then(|ps| ps.get(0)) {
                 entry = &p;
             } else {
                 break;
@@ -316,8 +318,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
 
         let main_contribs = self.get_main_contributors(entry);
         let (mut res, previous) = if main_contribs.is_some()
-            && Some(main_contribs)
-                == self.prev_entry.map(|s| self.get_main_contributors(s))
+            && Some(main_contribs) == prev_entry.map(|s| self.get_main_contributors(s))
         {
             ("---".to_string(), true)
         } else {
@@ -331,7 +332,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
             } else {
                 String::new()
             }
-        } else if let Ok(affs) = entry.get_affiliated_persons() {
+        } else if let Some(affs) = entry.get_affiliated_persons() {
             let mut res = String::new();
             for (persons, role) in affs.iter() {
                 let plural = persons.len() > 1;
@@ -386,7 +387,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 res += desc;
             }
             res
-        } else if let Ok(eds) = entry.get_editors() {
+        } else if let Some(eds) = entry.get_editors() {
             let plural = eds.len() > 1;
             let mut res = if !previous {
                 self.and_list(self.name_list(eds, None), true)
@@ -411,7 +412,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
     }
 
     fn get_title(&self, mut entry: &Entry, use_quotes: bool) -> DisplayString {
-        let sc = !use_quotes || MlaBibliographyGenerator::own_container(entry);
+        let sc = !use_quotes || MlaBibliographyFormatter::own_container(entry);
         let mut res = DisplayString::new();
 
         if use_quotes {
@@ -421,7 +422,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 if ["preface", "introduction", "foreword", "afterword"]
                     .iter()
                     .position(|&x| {
-                        Ok(x.into()) == entry.get_title().map(|x| x.to_lowercase())
+                        Some(x.into()) == entry.get_title().map(|x| x.to_lowercase())
                     })
                     .is_some()
                 {
@@ -435,12 +436,12 @@ impl<'s> MlaBibliographyGenerator<'s> {
             }
         }
 
-        if let Ok(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
+        if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
             if sc
                 && sel!(alt Id(Legislation), Id(Conference)).apply(entry).is_none()
                 && !is_religious(&title.title_case)
             {
-                res.start_format(FormatVariantOptions::Italic)
+                res.start_format(Formatting::Italic)
             } else if !sc {
                 res += "“"
             }
@@ -452,7 +453,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
             if !sc {
                 res += "”";
             }
-        } else if let Ok(note) = entry.get_note() {
+        } else if let Some(note) = entry.get_note() {
             res += note;
             if !res.is_empty() && res.last() != Some('.') && use_quotes {
                 res.push('.');
@@ -475,7 +476,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 .apply(entry)
                 .map(|mut hm| hm.remove("p").unwrap());
 
-        if entry != root || MlaBibliographyGenerator::own_container(entry) {
+        if entry != root || MlaBibliographyFormatter::own_container(entry) {
             let mut container = ContainerInfo::new();
 
             // Title
@@ -485,7 +486,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
 
             // Other contributors.
             let mut contributors = vec![];
-            if let Ok(affiliated) = entry.get_affiliated_persons() {
+            if let Some(affiliated) = entry.get_affiliated_persons() {
                 if entry != root || entry.get_authors_fallible().is_some() {
                     for (ps, r) in affiliated.iter() {
                         if ps.is_empty() {
@@ -536,11 +537,11 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 }
             }
 
-            if let Ok(eds) = entry.get_editors() {
+            if let Some(eds) = entry.get_editors() {
                 if !eds.is_empty()
                     && (entry != root
                         || entry.get_authors_fallible().is_some()
-                        || entry.get_affiliated_persons().is_ok())
+                        || entry.get_affiliated_persons().is_some())
                 {
                     let mut res = "edited by ".to_string();
                     res += &self.and_list(self.name_list(eds, None), true);
@@ -553,19 +554,19 @@ impl<'s> MlaBibliographyGenerator<'s> {
             }
 
             // Version
-            if let Ok(edition) = entry.get_edition() {
+            if let Some(edition) = entry.get_edition() {
                 match edition {
                     NumOrStr::Str(i) => container.version = i.replace("revised", "rev."),
                     NumOrStr::Number(i) => container.version = format!("{} ed.", i),
                 }
-            } else if let Ok(serial_number) = entry.get_serial_number() {
+            } else if let Some(serial_number) = entry.get_serial_number() {
                 container.version = serial_number.to_string();
             }
 
             // Number
             let mut number = String::new();
             let tv = sel!(Id(Video) => Wc()).apply(entry).is_some();
-            if let Ok(vols) = entry.get_volume() {
+            if let Some(vols) = entry.get_volume() {
                 number += &if tv {
                     format_range("season", "seasons", &vols)
                 } else {
@@ -573,7 +574,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 }
             }
 
-            if let Ok(issue) = entry.get_issue() {
+            if let Some(issue) = entry.get_issue() {
                 let res = match issue {
                     NumOrStr::Str(i) => i.clone(),
                     NumOrStr::Number(i) if tv => format!("episode {}", i),
@@ -592,15 +593,15 @@ impl<'s> MlaBibliographyGenerator<'s> {
                 .apply(entry)
                 .is_none()
             {
-                if let Ok(publisher) =
-                    entry.get_publisher().or_else(|_| entry.get_organization())
+                if let Some(publisher) =
+                    entry.get_publisher().or_else(|| entry.get_organization())
                 {
                     container.publisher = abbreviate_publisher(publisher);
                 }
             }
 
             // Date
-            if let Ok(date) = entry.get_date() {
+            if let Some(date) = entry.get_date() {
                 if !has_date || self.always_print_date {
                     has_date = true;
                     container.date = format_date(&date);
@@ -610,25 +611,25 @@ impl<'s> MlaBibliographyGenerator<'s> {
             // Location
             let mut location = vec![];
             let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).apply(entry).is_some();
-            if physical || self.always_use_location || entry.get_publisher().is_err() {
-                if let Ok(loc) = entry.get_location() {
+            if physical || self.always_use_location || entry.get_publisher().is_none() {
+                if let Some(loc) = entry.get_location() {
                     location.push(loc.to_string());
                 }
             }
-            if let Ok(page_range) = entry.get_page_range() {
+            if let Some(page_range) = entry.get_page_range() {
                 location.push(format_range("p.", "pp.", page_range));
             }
 
-            if entry.get_publisher().is_ok() && entry.get_organization().is_ok() {
+            if entry.get_publisher().is_some() && entry.get_organization().is_some() {
                 location.push(entry.get_organization().unwrap().to_string());
             }
 
-            if entry.get_edition().is_ok() && entry.get_serial_number().is_ok() {
+            if entry.get_edition().is_some() && entry.get_serial_number().is_some() {
                 location.push(entry.get_serial_number().unwrap().to_string());
             }
 
-            if let Ok(archive) = entry.get_archive() {
-                if let Ok(aloc) = entry.get_archive_location() {
+            if let Some(archive) = entry.get_archive() {
+                if let Some(aloc) = entry.get_archive_location() {
                     location.push(aloc.into());
                 }
 
@@ -638,10 +639,10 @@ impl<'s> MlaBibliographyGenerator<'s> {
             let mut supplemental = vec![];
 
             // Location: May also produce a supplemental item.
-            if let Ok(doi) = entry.get_doi() {
+            if let Some(doi) = entry.get_doi() {
                 location.push(format!("doi:{}", doi));
                 has_url = true;
-            } else if let Ok(qurl) = entry.get_url() {
+            } else if let Some(qurl) = entry.get_url() {
                 let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
                 if vdate {
                     supplemental.push(format!(
@@ -658,7 +659,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
             }
 
             // Supplemental
-            if let Ok(&tvol) = entry.get_total_volumes() {
+            if let Some(&tvol) = entry.get_total_volumes() {
                 if tvol > 1 {
                     supplemental.push(format!("{} vols", tvol));
                 }
@@ -694,7 +695,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
 
         if entry == root && !has_url {
             if let Some(lc) = containers.last_mut() {
-                if let Ok(doi) = entry.get_doi() {
+                if let Some(doi) = entry.get_doi() {
                     if !lc.location.is_empty() {
                         lc.location += ", ";
                     }
@@ -717,7 +718,7 @@ impl<'s> MlaBibliographyGenerator<'s> {
                     lc.location += qurl.value.as_str();
                     has_url = true;
                 }
-            } else if let Ok(doi) = entry.get_doi() {
+            } else if let Some(doi) = entry.get_doi() {
                 let mut nc = ContainerInfo::new();
                 nc.location += &format!("doi:{}", doi);
                 containers.push(nc);
@@ -757,9 +758,9 @@ impl<'s> MlaBibliographyGenerator<'s> {
     }
 }
 
-impl<'s> BibliographyGenerator<'s> for MlaBibliographyGenerator<'s> {
-    fn get_reference(&mut self, entry: &'s Entry) -> DisplayString {
-        let mut res = DisplayString::from_string(self.get_author(entry));
+impl BibliographyFormatter for MlaBibliographyFormatter {
+    fn get_reference(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString {
+        let mut res = DisplayString::from_string(self.get_author(entry, prev_entry));
         let title = self.get_title(entry, true);
 
         if !res.is_empty() && !title.is_empty() {
@@ -772,8 +773,6 @@ impl<'s> BibliographyGenerator<'s> for MlaBibliographyGenerator<'s> {
             res.push(' ');
         }
         res += container_info;
-
-        self.prev_entry = Some(entry);
         res
     }
 }
