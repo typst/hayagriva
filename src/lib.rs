@@ -1000,7 +1000,7 @@ mod tests {
     macro_rules! select_all {
         ($select:expr, $entries:tt, [$($key:expr),* $(,)*] $(,)*) => {
             let keys = vec![ $( $key , )* ];
-            let expr = parse($select).output.unwrap();
+            let expr = parse($select).unwrap();
             for entry in &$entries {
                 let res = expr.apply(entry);
                 if keys.contains(&entry.key.as_str()) {
@@ -1020,7 +1020,7 @@ mod tests {
         ($select:expr, $entries:tt >> $entry_key:expr, [$($key:expr),* $(,)*] $(,)*) => {
             let keys = vec![ $( $key , )* ];
             let entry = $entries.iter().filter_map(|i| if i.key == $entry_key {Some(i)} else {None}).next().unwrap();
-            let expr = parse($select).output.unwrap();
+            let expr = parse($select).unwrap();
             let res = expr.apply(entry).unwrap();
             if !keys.into_iter().all(|k| res.get(k).is_some()) {
                 panic!("Results do not contain binding");

@@ -1,8 +1,7 @@
 use std::fmt::{self, Debug, Formatter};
 
 use super::token::Tokens;
-use super::Scanner;
-use super::{Pos, Span, SpanVec, SpanWith, Spanned, Token};
+use super::{Pos, SpanWith, Spanned, Token};
 
 /// Construct a new error.
 #[macro_export]
@@ -19,27 +18,11 @@ macro_rules! error {
     };
 }
 
-/// A diagnostic that arose in parsing.
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub struct Diag {
-    /// A message describing the diagnostic.
-    pub message: String,
-}
-
-impl Diag {
-    /// Create a new diagnostic from message and level.
-    pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
-    }
-}
-
 /// A convenient token-based parser.
 pub struct Parser<'s> {
     tokens: Tokens<'s>,
     peeked: Option<Token<'s>>,
     groups: Vec<Group>,
-    f: SpanVec<Diag>,
     pos: Pos,
 }
 
@@ -50,46 +33,8 @@ impl<'s> Parser<'s> {
             tokens: Tokens::new(src),
             peeked: None,
             groups: vec![],
-            f: vec![],
             pos: Pos::ZERO,
         }
-    }
-
-    /// Finish parsing and return the accumulated feedback.
-    pub fn finish(self) -> SpanVec<Diag> {
-        self.f
-    }
-
-    /// Add a diagnostic to the feedback.
-    pub fn diag(&mut self, diag: Spanned<Diag>) {
-        self.f.push(diag);
-    }
-
-    /// Eat the next token and add a diagnostic that it was not the expected
-    /// `thing`.
-    pub fn diag_expected(&mut self, thing: &str) {
-        let before = self.pos();
-        if let Some(found) = self.eat() {
-            let after = self.pos();
-            self.diag(error!(
-                before .. after,
-                "expected {}, found {}",
-                thing,
-                found.name(),
-            ));
-        } else {
-            self.diag_expected_at(thing, self.pos());
-        }
-    }
-
-    /// Add a diagnostic that the `thing` was expected at the given position.
-    pub fn diag_expected_at(&mut self, thing: &str, pos: Pos) {
-        self.diag(error!(pos, "expected {}", thing));
-    }
-
-    /// Add a diagnostic that the given `token` was unexpected.
-    pub fn diag_unexpected(&mut self, token: Spanned<Token>) {
-        self.diag(error!(token.span, "unexpected {}", token.v.name()));
     }
 
     /// Continues parsing in a group.
@@ -128,8 +73,6 @@ impl<'s> Parser<'s> {
             self.peek();
             if self.peeked == Some(token) {
                 self.bump();
-            } else {
-                self.diag(error!(self.pos(), "expected {}", token.name()));
             }
         }
     }
@@ -147,16 +90,6 @@ impl<'s> Parser<'s> {
         self.bump()
     }
 
-    /// Consume the next token if it is the given one.
-    pub fn eat_if(&mut self, t: Token) -> bool {
-        if self.peek() == Some(t) {
-            self.bump();
-            true
-        } else {
-            false
-        }
-    }
-
     /// Consume the next token if the closure maps it a to `Some`-variant.
     pub fn eat_map<T>(&mut self, f: impl FnOnce(Token<'s>) -> Option<T>) -> Option<T> {
         let token = self.peek()?;
@@ -171,28 +104,6 @@ impl<'s> Parser<'s> {
     pub fn eat_assert(&mut self, t: Token) {
         let next = self.eat();
         debug_assert_eq!(next, Some(t));
-    }
-
-    /// Consume tokens while the condition is true.
-    ///
-    /// Returns how many tokens were eaten.
-    pub fn eat_while(&mut self, mut f: impl FnMut(Token<'s>) -> bool) -> usize {
-        self.eat_until(|t| !f(t))
-    }
-
-    /// Consume tokens until the condition is true.
-    ///
-    /// Returns how many tokens were eaten.
-    pub fn eat_until(&mut self, mut f: impl FnMut(Token<'s>) -> bool) -> usize {
-        let mut count = 0;
-        while let Some(t) = self.peek() {
-            if f(t) {
-                break;
-            }
-            self.bump();
-            count += 1;
-        }
-        count
     }
 
     /// Peek at the next token without consuming it.
@@ -219,18 +130,6 @@ impl<'s> Parser<'s> {
         }
     }
 
-    /// Checks whether the next token fulfills a condition.
-    ///
-    /// Returns `false` if there is no next token.
-    pub fn check(&mut self, f: impl FnOnce(Token<'s>) -> bool) -> bool {
-        self.peek().map_or(false, f)
-    }
-
-    /// Whether the end of the source string or group is reached.
-    pub fn eof(&mut self) -> bool {
-        self.peek().is_none()
-    }
-
     /// The position in the string at which the last token ends and next token
     /// will start.
     pub fn pos(&self) -> Pos {
@@ -243,31 +142,14 @@ impl<'s> Parser<'s> {
         self.bump();
     }
 
-    /// Slice a part out of the source string.
-    pub fn get(&self, span: impl Into<Span>) -> &'s str {
-        self.tokens.scanner().get(span.into().to_range())
-    }
-
     /// The full source string up to the current index.
     pub fn eaten(&self) -> &'s str {
         self.tokens.scanner().get(.. self.pos.to_usize())
     }
 
-    /// The source string from `start` to the current index.
-    pub fn eaten_from(&self, start: Pos) -> &'s str {
-        self.tokens.scanner().get(start.to_usize() .. self.pos.to_usize())
-    }
-
     /// The remaining source string after the current index.
     pub fn rest(&self) -> &'s str {
         self.tokens.scanner().get(self.pos.to_usize() ..)
-    }
-
-    /// The underlying scanner.
-    pub fn scanner(&self) -> Scanner<'s> {
-        let mut scanner = self.tokens.scanner().clone();
-        scanner.jump(self.pos.to_usize());
-        scanner
     }
 
     /// Set the position to the tokenizer's position and take the peeked token.

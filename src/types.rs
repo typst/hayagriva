@@ -779,9 +779,9 @@ impl Add for Duration {
 #[error("Got wrong type `{0}`.")]
 pub struct EntryTypeCastError(FieldType);
 
-macro_rules! try_from_FieldType {
+macro_rules! try_from_fieldtype {
     ($variant:ident, $target:ty $(,)*) => {
-        try_from_FieldType!(noref $variant, $target);
+        try_from_fieldtype!(noref $variant, $target);
 
         impl<'s> TryFrom<&'s FieldType> for &'s $target {
             type Error = EntryTypeCastError;
@@ -815,7 +815,7 @@ macro_rules! try_from_FieldType {
     };
 
     ($variant:ident, $target:ty, $ref_target:ty $(,)*) => {
-        try_from_FieldType!(noref $variant, $target);
+        try_from_fieldtype!(noref $variant, $target);
 
         impl<'s> TryFrom<&'s FieldType> for &'s $ref_target {
             type Error = EntryTypeCastError;
@@ -830,24 +830,24 @@ macro_rules! try_from_FieldType {
     }
 }
 
-try_from_FieldType!(FormattableString, FormattableString);
-try_from_FieldType!(FormattedString, FormattedString);
-try_from_FieldType!(Text, String, str);
-try_from_FieldType!(Integer, i64);
-try_from_FieldType!(Date, Date);
-try_from_FieldType!(Persons, Vec<Person>, [Person]);
-try_from_FieldType!(
+try_from_fieldtype!(FormattableString, FormattableString);
+try_from_fieldtype!(FormattedString, FormattedString);
+try_from_fieldtype!(Text, String, str);
+try_from_fieldtype!(Integer, i64);
+try_from_fieldtype!(Date, Date);
+try_from_fieldtype!(Persons, Vec<Person>, [Person]);
+try_from_fieldtype!(
     PersonsWithRoles,
     Vec<(Vec<Person>, PersonRole)>,
     [(Vec<Person>, PersonRole)]
 );
-try_from_FieldType!(IntegerOrText, NumOrStr);
-try_from_FieldType!(Range, std::ops::Range<i64>);
-try_from_FieldType!(Duration, Duration);
-try_from_FieldType!(TimeRange, std::ops::Range<Duration>);
-try_from_FieldType!(Url, QualifiedUrl);
-try_from_FieldType!(Language, unic_langid::LanguageIdentifier);
-try_from_FieldType!(Entries, Vec<Entry>, [Entry]);
+try_from_fieldtype!(IntegerOrText, NumOrStr);
+try_from_fieldtype!(Range, std::ops::Range<i64>);
+try_from_fieldtype!(Duration, Duration);
+try_from_fieldtype!(TimeRange, std::ops::Range<Duration>);
+try_from_fieldtype!(Url, QualifiedUrl);
+try_from_fieldtype!(Language, unic_langid::LanguageIdentifier);
+try_from_fieldtype!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {

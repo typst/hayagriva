@@ -50,6 +50,7 @@ pub enum Token<'s> {
 
 impl<'s> Token<'s> {
     /// The natural-language name of this token for use in error messages.
+    #[allow(dead_code)]
     pub fn name(self) -> &'static str {
         match self {
             Self::LeftBracket => "opening bracket",

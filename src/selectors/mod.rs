@@ -1,7 +1,6 @@
 //! Parsing and tokenization.
 
 mod exec;
-mod lines;
 mod parser;
 mod scanner;
 mod span;
@@ -12,50 +11,34 @@ use crate::error;
 use crate::types::EntryType;
 use std::str::FromStr;
 
-pub use lines::*;
-pub use parser::*;
-pub use scanner::*;
-pub use span::*;
+use thiserror::Error;
+
+use parser::*;
+use scanner::*;
+use span::*;
+pub use span::Spanned;
 pub use syntax::*;
-pub use token::*;
+use token::*;
 
-/// The result of some pass: Some output `T` and feedback data.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Pass<T> {
-    /// The output of this compilation pass.
-    pub output: T,
-    /// User feedback data accumulated in this pass.
-    pub feedback: SpanVec<Diag>,
-}
-
-impl<T> Pass<T> {
-    /// Create a new pass from output and feedback data.
-    pub fn new(output: T, feedback: SpanVec<Diag>) -> Self {
-        Self { output, feedback }
-    }
-
-    /// Create a new pass with empty feedback.
-    pub fn okay(output: T) -> Self {
-        Self { output, feedback: vec![] }
-    }
-
-    /// Map the output type and keep the feedback data.
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Pass<U> {
-        Pass {
-            output: f(self.output),
-            feedback: self.feedback,
-        }
-    }
+/// This error occurs if the parsing of a selector expression failed.
+#[derive(Clone, Debug, Error)]
+pub enum SelectorError {
+    /// The selector expression matched for an unknown Entry type.
+    #[error("Unknown Entry type")]
+    UnknownEntryType,
+    /// The selector expression was malformed and, thus, could not be parsed.
+    #[error("The selector was malformed")]
+    MalformedSelector,
 }
 
 /// Parse a string of source code.
-pub fn parse(src: &str) -> Pass<Option<Expr>> {
+pub fn parse(src: &str) -> Result<Expr, SelectorError> {
     let mut p = Parser::new(src);
-    Pass::new(expr(&mut p).map(|n| n.v), p.finish())
+    expr(&mut p).map(|n| n.v)
 }
 
 /// Parse a parenthesized expression: `(a | b)`.
-fn parenthesized(p: &mut Parser) -> Option<Spanned<Expr>> {
+fn parenthesized(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
     p.start_group(Group::Paren);
     let expr = expr(p);
     p.end_group();
@@ -63,9 +46,9 @@ fn parenthesized(p: &mut Parser) -> Option<Spanned<Expr>> {
 }
 
 /// Parse a value.
-fn attr_value(p: &mut Parser) -> Option<Expr> {
+fn attr_value(p: &mut Parser) -> Result<Expr, SelectorError> {
     let start = p.pos();
-    Some(match p.eat()? {
+    Ok(match p.eat().ok_or_else(|| SelectorError::MalformedSelector)? {
         // Dictionary or just a parenthesized expression.
         Token::LeftParen => {
             p.jump(start);
@@ -80,11 +63,7 @@ fn attr_value(p: &mut Parser) -> Option<Expr> {
             if let Ok(kind) = kind {
                 Expr::Lit(Lit::Ident(kind))
             } else {
-                p.diag(error!(
-                    Span::new(start, p.pos()),
-                    "unknown entry type identifier"
-                ));
-                return None;
+                return Err(SelectorError::UnknownEntryType);
             }
         }
 
@@ -93,13 +72,13 @@ fn attr_value(p: &mut Parser) -> Option<Expr> {
         // No value.
         _ => {
             p.jump(start);
-            return None;
+            return Err(SelectorError::MalformedSelector);
         }
     })
 }
 
 /// Parse a value.
-fn value(p: &mut Parser) -> Option<Spanned<Expr>> {
+fn value(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
     let op = |token| match token {
         Token::ExclamationMark => Some(UnOp::Neg),
         _ => None,
@@ -107,12 +86,8 @@ fn value(p: &mut Parser) -> Option<Spanned<Expr>> {
 
     p.span(|p| {
         if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
-            if let Some(expr) = value(p) {
-                Some(Expr::Unary(ExprUnary { op, expr: expr.map(Box::new) }))
-            } else {
-                p.diag(error!(op.span, "missing factor"));
-                None
-            }
+            let expr = value(p)?;
+            Ok(Expr::Unary(ExprUnary { op, expr: expr.map(Box::new) }))
         } else {
             attr_value(p)
         }
@@ -120,9 +95,9 @@ fn value(p: &mut Parser) -> Option<Spanned<Expr>> {
     .transpose()
 }
 
-fn factor_attr(p: &mut Parser) -> Option<Spanned<Expr>> {
+fn factor_attr(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
     let start = p.pos();
-    let inner = value(p);
+    let inner = value(p)?;
     let pos = p.pos();
     let mut fail = false;
     let outer = p
@@ -138,10 +113,6 @@ fn factor_attr(p: &mut Parser) -> Option<Spanned<Expr>> {
                                 attrs.push(Spanned::new(Ident::new(i)?, st.span));
                                 last_ident = true;
                             } else {
-                                p.diag_expected_at(
-                                    "attribute name or right brace",
-                                    st.span.start,
-                                );
                                 ok = false;
                                 break;
                             }
@@ -151,7 +122,6 @@ fn factor_attr(p: &mut Parser) -> Option<Spanned<Expr>> {
                             if last_ident {
                                 last_ident = false;
                             } else {
-                                p.diag_expected_at("comma or right brace", st.span.start);
                                 ok = false;
                                 break;
                             }
@@ -180,20 +150,20 @@ fn factor_attr(p: &mut Parser) -> Option<Spanned<Expr>> {
         .transpose();
 
     if let Some(outer) = outer {
-        Some(Spanned::new(
+        Ok(Spanned::new(
             Expr::Tag(ExprTag {
                 op: outer.map(|args| TagOp::Attributes(args)),
-                expr: inner?.map(Box::new),
+                expr: inner.map(Box::new),
             }),
             Span::new(start, p.pos()),
         ))
     } else {
-        if fail { None } else { inner }
+        if fail { Err(SelectorError::MalformedSelector) } else { Ok(inner) }
     }
 }
 
 /// Parse a factor of the form `a:?value[attrs..]?`.
-fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
+fn factor(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
     let start = p.pos();
     let op = |token| match token {
         Token::Ident(i) => Some(TagOp::Bind(i.into())),
@@ -204,11 +174,10 @@ fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
         if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
             if p.peek() == Some(Token::Colon) {
                 p.eat();
-                if let Some(expr) = factor_attr(p) {
-                    Some(Expr::Tag(ExprTag { op, expr: expr.map(Box::new) }))
+                if let Ok(expr) = factor_attr(p) {
+                    Ok(Expr::Tag(ExprTag { op, expr: expr.map(Box::new) }))
                 } else {
-                    p.diag(error!(op.span, "missing factor"));
-                    None
+                    Err(SelectorError::MalformedSelector)
                 }
             } else {
                 p.jump(start);
@@ -222,16 +191,16 @@ fn factor(p: &mut Parser) -> Option<Spanned<Expr>> {
 }
 
 /// Parse a term: `factor (* factor)*`.
-fn term(p: &mut Parser) -> Option<Spanned<Expr>> {
-    binops(p, "factor", factor, |token| match token {
+fn term(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
+    binops(p, factor, |token| match token {
         Token::Ampersand => Some(BinOp::MultiParent),
         Token::Pipe => Some(BinOp::Alternative),
         _ => None,
     })
 }
 
-fn expr(p: &mut Parser) -> Option<Spanned<Expr>> {
-    binops(p, "summand", term, |token| match token {
+fn expr(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
+    binops(p, term, |token| match token {
         Token::Chevron => Some(BinOp::Ancestrage),
         _ => None,
     })
@@ -240,15 +209,14 @@ fn expr(p: &mut Parser) -> Option<Spanned<Expr>> {
 /// Parse binary operations of the from `a (<op> b)*`.
 fn binops(
     p: &mut Parser,
-    operand_name: &str,
-    operand: fn(&mut Parser) -> Option<Spanned<Expr>>,
+    operand: fn(&mut Parser) -> Result<Spanned<Expr>, SelectorError>,
     op: fn(Token) -> Option<BinOp>,
-) -> Option<Spanned<Expr>> {
+) -> Result<Spanned<Expr>, SelectorError> {
     let mut lhs = operand(p)?;
 
     loop {
         if let Some(op) = p.span(|p| p.eat_map(op)).transpose() {
-            if let Some(rhs) = operand(p) {
+            if let Ok(rhs) = operand(p) {
                 let span = lhs.span.join(rhs.span);
                 let expr = Expr::Binary(ExprBinary {
                     lhs: lhs.map(Box::new),
@@ -257,8 +225,8 @@ fn binops(
                 });
                 lhs = expr.span_with(span);
             } else {
-                let span = lhs.span.join(op.span);
-                p.diag(error!(span, "missing right {}", operand_name));
+                // No right-hand-side operator
+                Err(SelectorError::MalformedSelector)?;
                 break;
             }
         } else {
@@ -266,7 +234,7 @@ fn binops(
         }
     }
 
-    Some(lhs)
+    Ok(lhs)
 }
 
 /// This macro allows to specify attribute requirements for an expression.
@@ -407,7 +375,7 @@ mod tests {
     }
     macro_rules! t {
         ($src:expr => $exp:expr) => {
-            let res = parse($src).output.unwrap();
+            let res = parse($src).unwrap();
             check($src, $exp, res, false);
         };
     }

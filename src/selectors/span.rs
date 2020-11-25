@@ -90,6 +90,14 @@ impl<T> Spanned<Option<T>> {
     }
 }
 
+impl<S, T> Spanned<Result<S, T>> {
+    /// Swap the spanned and the option.
+    pub fn transpose(self) -> Result<Spanned<S>, T> {
+        let Spanned { v, span } = self;
+        v.map(|v| v.span_with(span))
+    }
+}
+
 impl<T> Offset for Spanned<T> {
     fn offset(self, by: Pos) -> Self {
         self.map_span(|span| span.offset(by))
@@ -261,13 +269,6 @@ pub struct Location {
     pub line: u32,
     /// The one-indexed column.
     pub column: u32,
-}
-
-impl Location {
-    /// Create a new location from line and column.
-    pub fn new(line: u32, column: u32) -> Self {
-        Self { line, column }
-    }
 }
 
 impl Debug for Location {
