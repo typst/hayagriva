@@ -17,8 +17,8 @@ pub mod types;
 
 use lang::CaseTransformer;
 use types::{
-    get_range, Date, Duration, EntryType, FormattableString, FormattedString, NumOrStr,
-    Person, PersonRole, QualifiedUrl, Title, FormattedTitle
+    get_range, Date, Duration, EntryType, FormattableString, FormattedString,
+    FormattedTitle, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
 };
 
 use linked_hash_map::LinkedHashMap;
@@ -1032,7 +1032,7 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::{apa, ieee, mla, BibliographyFormatter};
+    use crate::output::{apa, chicago, ieee, mla, BibliographyFormatter};
     use crate::selectors::parse;
     use std::fs;
 
@@ -1075,6 +1075,20 @@ mod tests {
             let refs = mla.get_reference(&entry, last_entry);
             println!("{}", refs.print_ansi_vt100());
             last_entry = Some(entry);
+        }
+    }
+
+    #[test]
+    fn chicago() {
+        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let entries = load_yaml_structure(&contents).unwrap();
+        let chicago = chicago::nb::notes::NoteCitationFormatter::new(entries.iter());
+
+        for entry in &entries {
+            let refs = chicago
+                .get_note(&entry.key, chicago::nb::notes::NoteType::Short)
+                .unwrap();
+            println!("{}", refs.print_ansi_vt100());
         }
     }
 

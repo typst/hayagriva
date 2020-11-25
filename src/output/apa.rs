@@ -906,7 +906,9 @@ impl ApaBibliographyFormatter {
                 }
             }
             SourceType::Web(parent) => {
-                if let Some(title) = parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value) {
+                if let Some(title) =
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+                {
                     let authors = entry.get_authors();
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
