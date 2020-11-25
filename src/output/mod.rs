@@ -12,6 +12,17 @@ pub mod apa;
 pub mod ieee;
 pub mod mla;
 
+/// This enum describes where the output string of the [CitationFormatter]
+/// should be set: Inside the text or in a
+pub enum CitationMode {
+    /// Set citation text in a footnote. Only produce a superscript footnote
+    /// symbol at the matching position of the text. (footnote numbers are
+    /// managed by the callee; may be rendered as endnotes).
+    Footnote,
+    /// The citation text should be set directly where the text appears.
+    InText,
+}
+
 /// Will be raised if a user-specified citation is not possible with the given
 /// database.
 #[derive(Debug, Error)]
@@ -197,6 +208,8 @@ pub enum Formatting {
     Bold,
     /// _italic print_
     Italic,
+    /// Do not hyphenate, e.g. for URLs.
+    NoHyphenation,
 }
 
 /// Will move a format range's indicies by `o`.
@@ -273,6 +286,18 @@ impl AddAssign<Self> for DisplayString {
 impl Into<String> for DisplayString {
     fn into(self) -> String {
         self.value
+    }
+}
+
+impl Into<DisplayString> for String {
+    fn into(self) -> DisplayString {
+        DisplayString::from_string(self)
+    }
+}
+
+impl Into<DisplayString> for &str {
+    fn into(self) -> DisplayString {
+        DisplayString::from_str(self)
     }
 }
 
@@ -354,6 +379,20 @@ impl DisplayString {
         }
     }
 
+    /// Joins a number of display strings with a seperator in-between.
+    pub fn join(items: &[Self], joiner: &str) -> Self {
+        let mut res = DisplayString::new();
+        for (i, e) in items.iter().enumerate() {
+            if i != 0 {
+                res += joiner;
+            }
+
+            res += e.clone();
+        }
+
+        res
+    }
+
     /// Applies the formatting as ANSI / VT100 control sequences and
     /// prints that formatted string to standard output.
     pub fn print_ansi_vt100(&self) -> String {
@@ -361,6 +400,7 @@ impl DisplayString {
 
         for item in &self.formatting {
             let opt = item.1;
+            if opt == Formatting::NoHyphenation { continue; }
             let min = item.0.start;
             let max = item.0.end;
 
@@ -383,6 +423,7 @@ impl DisplayString {
                 match f {
                     Formatting::Bold => "1",
                     Formatting::Italic => "3",
+                    Formatting::NoHyphenation => unreachable!(),
                 }
             };
             res = format!("\x1b[{}m", code) + &res;

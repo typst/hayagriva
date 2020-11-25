@@ -344,7 +344,7 @@ impl ApaBibliographyFormatter {
         }
     }
 
-    fn get_retreival_date(&self, entry: &Entry, use_date: bool) -> Option<String> {
+    fn get_retreival_date(&self, entry: &Entry, use_date: bool) -> Option<DisplayString> {
         let url = entry.get_any_url();
 
         if let Some(qurl) = url {
@@ -352,26 +352,50 @@ impl ApaBibliographyFormatter {
             let res = if use_date {
                 if let Some(date) = &qurl.visit_date {
                     match (date.month, date.day) {
-                        (None, _) => format!("Retrieved {:04}, from {}", date.year, uv),
-                        (Some(month), None) => format!(
-                            "Retrieved {} {:04}, from {}",
-                            get_month_name(month).unwrap(),
-                            date.year,
-                            uv,
-                        ),
-                        (Some(month), Some(day)) => format!(
-                            "(Retrieved {} {}, {:04}, from {})",
-                            get_month_name(month).unwrap(),
-                            day,
-                            date.year,
-                            uv,
-                        ),
+                        (None, _) => {
+                            let mut res = DisplayString::from_string(format!("Retrieved {:04}, from ", date.year));
+                            res.start_format(Formatting::NoHyphenation);
+                            res += uv;
+                            res.commit_formats();
+                            res
+                        },
+                        (Some(month), None) => {
+                            let mut res = DisplayString::from_string(format!(
+                                "Retrieved {} {:04}, from ",
+                                get_month_name(month).unwrap(),
+                                date.year,
+                            ));
+                            res.start_format(Formatting::NoHyphenation);
+                            res += uv;
+                            res.commit_formats();
+                            res
+                        },
+                        (Some(month), Some(day)) => {
+                            let mut res = DisplayString::from_string(format!(
+                                "(Retrieved {} {}, {:04}, from )",
+                                get_month_name(month).unwrap(),
+                                day,
+                                date.year,
+                            ));
+                            res.start_format(Formatting::NoHyphenation);
+                            res += uv;
+                            res.commit_formats();
+                            res
+                        },
                     }
                 } else {
-                    uv.to_string()
+                    let mut res = DisplayString::new();
+                    res.start_format(Formatting::NoHyphenation);
+                    res += uv;
+                    res.commit_formats();
+                    res
                 }
             } else {
-                uv.to_string()
+                let mut res = DisplayString::new();
+                res.start_format(Formatting::NoHyphenation);
+                res += uv;
+                res.commit_formats();
+                res
             };
 
             Some(res)
@@ -960,7 +984,9 @@ impl ApaBibliographyFormatter {
                 res.push(' ');
             }
 
+            res.start_format(Formatting::NoHyphenation);
             res += &format!("https://doi.org/{}", doi);
+            res.commit_formats();
         } else {
             let reference_entry = sel!(Id(Reference) => Id(Entry));
             let url_str = self.get_retreival_date(
@@ -974,7 +1000,7 @@ impl ApaBibliographyFormatter {
                 if !res.is_empty() {
                     res.push(' ');
                 }
-                res += &url;
+                res += url;
             }
         }
 

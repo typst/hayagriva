@@ -29,7 +29,7 @@ struct ContainerInfo {
     number: String,
     publisher: String,
     date: String,
-    location: String,
+    location: DisplayString,
     optionals: String,
 }
 
@@ -42,7 +42,7 @@ impl ContainerInfo {
             number: String::new(),
             publisher: String::new(),
             date: String::new(),
-            location: String::new(),
+            location: DisplayString::new(),
             optionals: String::new(),
         }
     }
@@ -101,7 +101,7 @@ impl ContainerInfo {
             }
             res.push(' ');
         }
-        res += &self.location;
+        res += self.location;
         if !res.is_empty() {
             if res.last() != Some('.') {
                 res.push('.');
@@ -609,23 +609,23 @@ impl MlaBibliographyFormatter {
             }
 
             // Location
-            let mut location = vec![];
+            let mut location: Vec<DisplayString> = vec![];
             let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).apply(entry).is_some();
             if physical || self.always_use_location || entry.get_publisher().is_none() {
                 if let Some(loc) = entry.get_location() {
-                    location.push(loc.to_string());
+                    location.push(DisplayString::from_str(loc));
                 }
             }
             if let Some(page_range) = entry.get_page_range() {
-                location.push(format_range("p.", "pp.", page_range));
+                location.push(format_range("p.", "pp.", page_range).into());
             }
 
             if entry.get_publisher().is_some() && entry.get_organization().is_some() {
-                location.push(entry.get_organization().unwrap().to_string());
+                location.push(entry.get_organization().unwrap().into());
             }
 
             if entry.get_edition().is_some() && entry.get_serial_number().is_some() {
-                location.push(entry.get_serial_number().unwrap().to_string());
+                location.push(entry.get_serial_number().unwrap().into());
             }
 
             if let Some(archive) = entry.get_archive() {
@@ -640,7 +640,11 @@ impl MlaBibliographyFormatter {
 
             // Location: May also produce a supplemental item.
             if let Some(doi) = entry.get_doi() {
-                location.push(format!("doi:{}", doi));
+                let mut dstr = DisplayString::new();
+                dstr.start_format(Formatting::NoHyphenation);
+                dstr += &format!("doi:{}", doi);
+                dstr.commit_formats();
+                location.push(dstr);
                 has_url = true;
             } else if let Some(qurl) = entry.get_url() {
                 let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
@@ -650,12 +654,17 @@ impl MlaBibliographyFormatter {
                         format_date(qurl.visit_date.as_ref().unwrap())
                     ));
                 }
-                location.push(qurl.value.to_string());
+                let mut dstr = DisplayString::new();
+                dstr.start_format(Formatting::NoHyphenation);
+                dstr += qurl.value.as_str();
+                dstr.commit_formats();
+
+                location.push(dstr);
                 has_url = true;
             }
 
             if !location.is_empty() {
-                container.location = location.join(", ");
+                container.location = DisplayString::join(&location, ", ");
             }
 
             // Supplemental
@@ -715,16 +724,22 @@ impl MlaBibliographyFormatter {
                     if !lc.location.is_empty() {
                         lc.location += ", ";
                     }
+                    lc.location.start_format(Formatting::NoHyphenation);
                     lc.location += qurl.value.as_str();
+                    lc.location.commit_formats();
                     has_url = true;
                 }
             } else if let Some(doi) = entry.get_doi() {
                 let mut nc = ContainerInfo::new();
+                nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += &format!("doi:{}", doi);
+                nc.location.commit_formats();
                 containers.push(nc);
             } else if let Some(qurl) = entry.get_any_url() {
                 let mut nc = ContainerInfo::new();
-                nc.location = qurl.value.to_string();
+                nc.location.start_format(Formatting::NoHyphenation);
+                nc.location += qurl.value.as_str();
+                nc.location.commit_formats();
                 let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
                 if vdate {
                     nc.optionals = format!(

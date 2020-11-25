@@ -946,9 +946,13 @@ impl BibliographyFormatter for IeeeBibliographyFormatter {
                     }
 
                     res += ". Available: ";
+                    res.start_format(Formatting::NoHyphenation);
                     res += url.value.as_str();
+                    res.commit_formats();
                 } else {
+                    res.start_format(Formatting::NoHyphenation);
                     res += url.value.as_str();
+                    res.commit_formats();
 
                     if let Some(date) = &url.visit_date {
                         res += &format!(" (accessed: {}).", self.formt_date(&date));
