@@ -429,6 +429,7 @@ impl MlaBibliographyFormatter {
                     res += &entry
                         .get_title_fmt(Some(&self.tc_formatter), None)
                         .unwrap()
+                        .value
                         .title_case;
                     res += ". ";
                     entry = temp;
@@ -439,13 +440,13 @@ impl MlaBibliographyFormatter {
         if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
             if sc
                 && sel!(alt Id(Legislation), Id(Conference)).apply(entry).is_none()
-                && !is_religious(&title.title_case)
+                && !is_religious(&title.value.title_case)
             {
                 res.start_format(Formatting::Italic)
             } else if !sc {
                 res += "“"
             }
-            res += &title.title_case;
+            res += &title.value.title_case;
             if !res.is_empty() && res.last() != Some('.') && use_quotes {
                 res.push('.');
             }
@@ -679,6 +680,7 @@ impl MlaBibliographyFormatter {
                     series
                         .get_title_fmt(Some(&self.tc_formatter), None)
                         .unwrap()
+                        .value
                         .title_case,
                 );
             }

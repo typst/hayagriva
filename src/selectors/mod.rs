@@ -15,8 +15,8 @@ use thiserror::Error;
 
 use parser::*;
 use scanner::*;
-use span::*;
 pub use span::Spanned;
+use span::*;
 pub use syntax::*;
 use token::*;
 
@@ -48,33 +48,35 @@ fn parenthesized(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
 /// Parse a value.
 fn attr_value(p: &mut Parser) -> Result<Expr, SelectorError> {
     let start = p.pos();
-    Ok(match p.eat().ok_or_else(|| SelectorError::MalformedSelector)? {
-        // Dictionary or just a parenthesized expression.
-        Token::LeftParen => {
-            p.jump(start);
-            parenthesized(p)?.v
-        }
-
-        // Function or just ident.
-        Token::Ident(id) => {
-            let ident = Ident(id.into());
-
-            let kind = EntryType::from_str(&ident.to_lowercase());
-            if let Ok(kind) = kind {
-                Expr::Lit(Lit::Ident(kind))
-            } else {
-                return Err(SelectorError::UnknownEntryType);
+    Ok(
+        match p.eat().ok_or_else(|| SelectorError::MalformedSelector)? {
+            // Dictionary or just a parenthesized expression.
+            Token::LeftParen => {
+                p.jump(start);
+                parenthesized(p)?.v
             }
-        }
 
-        Token::Star => Expr::Lit(Lit::Wildcard),
+            // Function or just ident.
+            Token::Ident(id) => {
+                let ident = Ident(id.into());
 
-        // No value.
-        _ => {
-            p.jump(start);
-            return Err(SelectorError::MalformedSelector);
-        }
-    })
+                let kind = EntryType::from_str(&ident.to_lowercase());
+                if let Ok(kind) = kind {
+                    Expr::Lit(Lit::Ident(kind))
+                } else {
+                    return Err(SelectorError::UnknownEntryType);
+                }
+            }
+
+            Token::Star => Expr::Lit(Lit::Wildcard),
+
+            // No value.
+            _ => {
+                p.jump(start);
+                return Err(SelectorError::MalformedSelector);
+            }
+        },
+    )
 }
 
 /// Parse a value.
@@ -158,7 +160,11 @@ fn factor_attr(p: &mut Parser) -> Result<Spanned<Expr>, SelectorError> {
             Span::new(start, p.pos()),
         ))
     } else {
-        if fail { Err(SelectorError::MalformedSelector) } else { Ok(inner) }
+        if fail {
+            Err(SelectorError::MalformedSelector)
+        } else {
+            Ok(inner)
+        }
     }
 }
 

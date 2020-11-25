@@ -187,11 +187,11 @@ impl IeeeBibliographyFormatter {
 
             if let Some(et) = entry_title {
                 if canonical.entry_type == Conference {
-                    res += &et.sentence_case;
+                    res += &et.value.sentence_case;
                     res.push('.');
                 } else {
                     res += "“";
-                    res += &et.sentence_case;
+                    res += &et.value.sentence_case;
                     res += ",”";
                 }
 
@@ -201,7 +201,7 @@ impl IeeeBibliographyFormatter {
             }
 
             if let Some(ct) = canon_title {
-                let ct = abbreviations::abbreviate_journal(&ct.title_case);
+                let ct = abbreviations::abbreviate_journal(&ct.value.title_case);
 
                 if canonical.entry_type == Conference {
                     res += "Presented at ";
@@ -232,7 +232,7 @@ impl IeeeBibliographyFormatter {
                             par_anth.get_title_fmt(Some(&self.tc_formatter), None)
                         {
                             res += " (";
-                            res += &par_t.title_case;
+                            res += &par_t.value.title_case;
 
                             res.add_if_some(
                                 par_anth.get_issue().map(|i| i.to_string()),
@@ -251,7 +251,7 @@ impl IeeeBibliographyFormatter {
                             par_conf.get_title_fmt(Some(&self.tc_formatter), None)
                         {
                             res += " in ";
-                            res += &par_t.title_case;
+                            res += &par_t.value.title_case;
                         }
                     }
                 }
@@ -279,13 +279,13 @@ impl IeeeBibliographyFormatter {
                     res += ", ";
                 }
 
-                res += &title.title_case;
+                res += &title.value.title_case;
             }
             res.commit_formats();
         } else {
             if let Some(title) = entry.get_title_fmt(None, Some(&self.sc_formatter)) {
                 res += "“";
-                res += &title.sentence_case;
+                res += &title.value.sentence_case;
                 res += ",”";
             }
         }

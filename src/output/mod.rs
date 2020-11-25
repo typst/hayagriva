@@ -1,14 +1,14 @@
 //! Citation and bibliography styles.
 
 use super::types::Person;
-use super::{Entry};
-use std::collections::{HashMap};
+use super::Entry;
+use std::collections::HashMap;
 use std::convert::Into;
 use std::ops::{Add, AddAssign};
 use thiserror::Error;
 
 pub mod apa;
-// pub mod chicago;
+pub mod chicago;
 pub mod ieee;
 pub mod mla;
 
@@ -400,7 +400,9 @@ impl DisplayString {
 
         for item in &self.formatting {
             let opt = item.1;
-            if opt == Formatting::NoHyphenation { continue; }
+            if opt == Formatting::NoHyphenation {
+                continue;
+            }
             let min = item.0.start;
             let max = item.0.end;
 

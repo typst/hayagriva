@@ -556,6 +556,28 @@ pub struct FormattableString {
     pub(crate) verbatim: bool,
 }
 
+/// A collection of formattable Strings consisting of a title, a translated title, and a shorthand.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Title {
+    /// Canonical title.
+    pub value: FormattableString,
+    /// Optional title shorthand.
+    pub shorthand: Option<FormattableString>,
+    /// Optional title translation.
+    pub translated: Option<FormattableString>,
+}
+
+/// Just like a [Title], but with formatting applied.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FormattedTitle {
+    /// Canonical title.
+    pub value: FormattedString,
+    /// Optional title shorthand.
+    pub shorthand: Option<FormattedString>,
+    /// Optional title translation.
+    pub translated: Option<FormattedString>,
+}
+
 /// A string with a canonical value and title and sentence formatted variants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormattedString {
@@ -830,6 +852,7 @@ macro_rules! try_from_fieldtype {
     }
 }
 
+try_from_fieldtype!(Title, Title);
 try_from_fieldtype!(FormattableString, FormattableString);
 try_from_fieldtype!(FormattedString, FormattedString);
 try_from_fieldtype!(Text, String, str);

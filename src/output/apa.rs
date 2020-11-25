@@ -353,12 +353,15 @@ impl ApaBibliographyFormatter {
                 if let Some(date) = &qurl.visit_date {
                     match (date.month, date.day) {
                         (None, _) => {
-                            let mut res = DisplayString::from_string(format!("Retrieved {:04}, from ", date.year));
+                            let mut res = DisplayString::from_string(format!(
+                                "Retrieved {:04}, from ",
+                                date.year
+                            ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
                             res.commit_formats();
                             res
-                        },
+                        }
                         (Some(month), None) => {
                             let mut res = DisplayString::from_string(format!(
                                 "Retrieved {} {:04}, from ",
@@ -369,7 +372,7 @@ impl ApaBibliographyFormatter {
                             res += uv;
                             res.commit_formats();
                             res
-                        },
+                        }
                         (Some(month), Some(day)) => {
                             let mut res = DisplayString::from_string(format!(
                                 "(Retrieved {} {}, {:04}, from )",
@@ -381,7 +384,7 @@ impl ApaBibliographyFormatter {
                             res += uv;
                             res.commit_formats();
                             res
-                        },
+                        }
                     }
                 } else {
                     let mut res = DisplayString::new();
@@ -441,11 +444,11 @@ impl ApaBibliographyFormatter {
                 res.start_format(Formatting::Italic);
             }
             if entry.entry_type == Tweet {
-                let words = &title.value.split_whitespace().collect::<Vec<_>>();
+                let words = &title.value.value.split_whitespace().collect::<Vec<_>>();
                 res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
                     .join(" ");
             } else {
-                res += &title.sentence_case;
+                res += &title.value.sentence_case;
             }
             res.commit_formats();
 
@@ -456,6 +459,7 @@ impl ApaBibliographyFormatter {
                     mv_parent
                         .get_title_fmt(None, Some(&self.formatter))
                         .unwrap()
+                        .value
                         .sentence_case,
                     format_range("Vol.", "Vols.", &vols),
                 ));
@@ -671,7 +675,7 @@ impl ApaBibliographyFormatter {
         match st {
             SourceType::PeriodicalItem(parent) => {
                 let mut comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter))
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res.start_format(Formatting::Italic);
                     res += &title.sentence_case;
@@ -734,7 +738,7 @@ impl ApaBibliographyFormatter {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.sentence_case;
+                    res += &title.value.sentence_case;
                     res.commit_formats();
                     comma = true;
 
@@ -798,7 +802,7 @@ impl ApaBibliographyFormatter {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.sentence_case;
+                    res += &title.value.sentence_case;
                     res.commit_formats();
                     comma = false;
 
@@ -902,7 +906,7 @@ impl ApaBibliographyFormatter {
                 }
             }
             SourceType::Web(parent) => {
-                if let Some(title) = parent.get_title_fmt(None, Some(&self.formatter)) {
+                if let Some(title) = parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value) {
                     let authors = entry.get_authors();
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
@@ -915,7 +919,7 @@ impl ApaBibliographyFormatter {
             }
             SourceType::NewsItem(parent) => {
                 let comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter))
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res.start_format(Formatting::Italic);
                     res += &title.sentence_case;
@@ -935,7 +939,7 @@ impl ApaBibliographyFormatter {
             }
             SourceType::ConferenceTalk(parent) => {
                 let comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter))
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res += &title.sentence_case;
                     true

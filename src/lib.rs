@@ -18,7 +18,7 @@ pub mod types;
 use lang::CaseTransformer;
 use types::{
     get_range, Date, Duration, EntryType, FormattableString, FormattedString, NumOrStr,
-    Person, PersonRole, QualifiedUrl,
+    Person, PersonRole, QualifiedUrl, Title, FormattedTitle
 };
 
 use linked_hash_map::LinkedHashMap;
@@ -34,6 +34,9 @@ use yaml_rust::{Yaml, YamlLoader};
 /// by the various content items of an [Entry].
 #[derive(Clone, Debug, Display, PartialEq)]
 pub enum FieldType {
+    /// A [Title] containing a canonical value and optionally translations and
+    /// shorthands, all of which are formattable.
+    Title(Title),
     /// A [FormattableString] with which the user can override various
     /// automatic formatters.
     FormattableString(FormattableString),
@@ -96,7 +99,8 @@ impl Entry {
     pub fn set(&mut self, key: String, value: FieldType) -> Result<(), EntrySetError> {
         let valid = match key.as_ref() {
             "parent" => matches!(value, FieldType::Entries(_)),
-            "title" | "location" | "publisher" | "archive" | "archive-location" => {
+            "title" => matches!(value, FieldType::Title(_)),
+            "location" | "publisher" | "archive" | "archive-location" => {
                 matches!(value, FieldType::FormattableString(_))
             }
             "author" | "editor" => matches!(value, FieldType::Persons(_)),
@@ -135,17 +139,35 @@ pub enum EntrySetError {
 macro_rules! fields {
     ($($name:ident: $field_name:expr => FormattableString),* $(,)*) => {
         $(
+            fields!(fmt $name: $field_name => FormattableString, FormattedString);
             paste! {
-                #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<get_ $name _raw>](&self) -> Option<&FormattableString> {
-                    self.get($field_name)
-                        .map(|item| <&FormattableString>::try_from(item).unwrap())
-                }
-
                 #[doc = "Get and parse the `" $field_name "` field's value.'"]
                 pub fn [<get_ $name>](&self) -> Option<&str> {
                     self.get($field_name)
                         .map(|item| <&FormattableString>::try_from(item).unwrap().value.as_ref())
+                }
+            }
+        )*
+    };
+    ($($name:ident: $field_name:expr => Title),* $(,)*) => {
+        $(
+            fields!(fmt $name: $field_name => Title, FormattedTitle);
+            paste! {
+                #[doc = "Get and parse the `" $field_name "` field's value.'"]
+                pub fn [<get_ $name>](&self) -> Option<&str> {
+                    self.get($field_name)
+                        .map(|item| <&Title>::try_from(item).unwrap().value.value.as_ref())
+                }
+            }
+        )*
+    };
+    (fmt $($name:ident: $field_name:expr => $fmt_type:ty, $fmtd_type:ty),* $(,)*) => {
+        $(
+            paste! {
+                #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
+                pub fn [<get_ $name _raw>](&self) -> Option<&$fmt_type> {
+                    self.get($field_name)
+                        .map(|item| <&$fmt_type>::try_from(item).unwrap())
                 }
 
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
@@ -153,12 +175,12 @@ macro_rules! fields {
                     &self,
                     title: Option<&dyn CaseTransformer>,
                     sentence: Option<&dyn CaseTransformer>,
-                ) -> Option<FormattedString> {
+                ) -> Option<$fmtd_type> {
                     self.get($field_name)
-                        .map(|item| <FormattableString>::try_from(item.clone()).unwrap().format(title, sentence))
+                        .map(|item| <$fmt_type>::try_from(item.clone()).unwrap().format(title, sentence))
                 }
 
-                fields!(single_set $name => $field_name, FormattableString);
+                fields!(single_set $name => $field_name, $fmt_type);
             }
         )*
     };
@@ -208,8 +230,7 @@ macro_rules! fields {
 
 impl Entry {
     fields!(parents: "parent" => Vec<Entry>, &[Entry]);
-
-    fields!(title: "title" => FormattableString);
+    fields!(title: "title" => Title);
 
     /// Get and parse the `author` field. This will always return a result
     pub fn get_authors(&self) -> &[Person] {
@@ -474,6 +495,43 @@ fn yaml_hash_map_with_string_keys(
         .collect()
 }
 
+fn title_from_hash_map(
+    map: LinkedHashMap<Yaml, Yaml>,
+) -> Result<Title, YamlFormattableStringError> {
+    let value = formattable_str_from_hash_map(map.clone())?;
+    let map = yaml_hash_map_with_string_keys(map);
+
+    let shorthand = if let Some(sh) = map.get("shorthand") {
+        let sh = if let Some(s) = sh.as_str() {
+            FormattableString::new_shorthand(s.into())
+        } else if let Some(hm) = sh.clone().into_hash() {
+            formattable_str_from_hash_map(hm)?
+        } else {
+            return Err(YamlFormattableStringError::NoValue);
+        };
+
+        Some(sh)
+    } else {
+        None
+    };
+
+    let translated = if let Some(tl) = map.get("translation") {
+        let tl = if let Some(s) = tl.as_str() {
+            FormattableString::new_shorthand(s.into())
+        } else if let Some(hm) = tl.clone().into_hash() {
+            formattable_str_from_hash_map(hm)?
+        } else {
+            return Err(YamlFormattableStringError::NoValue);
+        };
+
+        Some(tl)
+    } else {
+        None
+    };
+
+    Ok(Title { value, shorthand, translated })
+}
+
 fn formattable_str_from_hash_map(
     map: LinkedHashMap<Yaml, Yaml>,
 ) -> Result<FormattableString, YamlFormattableStringError> {
@@ -628,7 +686,30 @@ fn entry_from_yaml(
         }
 
         let value = match fname_str {
-            "title" | "publisher" | "location" | "archive" | "archive-location" => {
+            "title" => {
+                if let Some(map) = value.clone().into_hash() {
+                    FieldType::Title(title_from_hash_map(map).map_err(|e| {
+                        YamlBibliographyError::new_data_type_src_error(
+                            &key,
+                            &field_name,
+                            YamlDataTypeError::FormattableString(e),
+                        )
+                    })?)
+                } else if let Some(t) = value.into_string() {
+                    FieldType::Title(Title {
+                        value: FormattableString::new_shorthand(t),
+                        shorthand: None,
+                        translated: None,
+                    })
+                } else {
+                    return Err(YamlBibliographyError::new_data_type_error(
+                        &key,
+                        &field_name,
+                        "text or formattable string or title",
+                    ));
+                }
+            }
+            "publisher" | "location" | "archive" | "archive-location" => {
                 if let Some(map) = value.clone().into_hash() {
                     FieldType::FormattableString(
                         formattable_str_from_hash_map(map).map_err(|e| {
