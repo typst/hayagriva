@@ -5,7 +5,8 @@
 
 mod abbreviations;
 use super::{
-    format_range, name_list_straight, BibliographyFormatter, DisplayString, Formatting,
+    format_range, name_list_straight, push_comma_quote_aware, BibliographyFormatter,
+    DisplayString, Formatting,
 };
 use crate::lang::{en, SentenceCase, TitleCase};
 use crate::selectors::{Bind, Id, Wc};
@@ -225,22 +226,19 @@ impl IeeeBibliographyFormatter {
                     res.commit_formats();
 
                     // Do the series parentheses thing here
-                    let spec = sel!(Id(Anthology) => Bind("p", Id(Anthology)));
+                    let spec = sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")));
                     if let Some(mut hm) = spec.apply(canonical) {
                         let par_anth = hm.remove("p").unwrap();
-                        if let Some(par_t) =
-                            par_anth.get_title_fmt(Some(&self.tc_formatter), None)
-                        {
-                            res += " (";
-                            res += &par_t.value.title_case;
+                        let par_t = par_anth.get_title_fmt(Some(&self.tc_formatter), None).unwrap();
+                        res += " (";
+                        res += &par_t.value.title_case;
 
-                            res.add_if_some(
-                                par_anth.get_issue().map(|i| i.to_string()),
-                                Some(", no. "),
-                                None,
-                            );
-                            res += ")";
-                        }
+                        res.add_if_some(
+                            par_anth.get_issue().map(|i| i.to_string()),
+                            Some(", no. "),
+                            None,
+                        );
+                        res += ")";
                     }
 
                     // And the conference series thing as well
@@ -917,16 +915,7 @@ impl BibliographyFormatter for IeeeBibliographyFormatter {
             }
         }
 
-        let cur_len = res.len();
-        if cur_len > 3
-            && res.value.is_char_boundary(cur_len - 3)
-            && &res.value[cur_len - 3 ..] == "”"
-        {
-            res.value = (&res.value[.. cur_len - 3]).into();
-            res.value += ".”";
-        } else if !res.is_empty() {
-            res += ".";
-        }
+        res.value = push_comma_quote_aware(res.value, '.', false);
 
         if url {
             if let Some(url) = entry.get_any_url() {

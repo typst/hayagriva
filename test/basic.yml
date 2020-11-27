@@ -43,11 +43,25 @@ omarova-libra:
     date: 2019-11-04
     url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
     parent:
-        type: Newspaper,
+        type: Newspaper
         title:
             value: The New York Times
             verbatim: true
         location: "New York, NY, USA"
+
+donne:
+    type: Book
+    title: The "Anniversaries" and the "Epicedes and Obsequies"
+    author: Donne, John
+    editor: ["Stringer, Gary A.", "Pebworth, Ted-Larry"]
+    location: Bloomington
+    volume: 6
+    publisher: Indiana University Press
+    date: 1995
+    parent:
+        type: Book
+        title: The Variorum Edition of the Poetry of John Donne
+        editor: Stringer, Gary A.
 
 harry:
     type: Chapter

@@ -1086,7 +1086,7 @@ mod tests {
 
         for entry in &entries {
             let refs = chicago
-                .get_note(&entry.key, chicago::nb::notes::NoteType::Short)
+                .get_note(&entry.key, chicago::nb::notes::NoteType::Full)
                 .unwrap();
             println!("{}", refs.print_ansi_vt100());
         }

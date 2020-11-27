@@ -435,3 +435,24 @@ impl DisplayString {
         res
     }
 }
+
+fn push_comma_quote_aware(mut s: String, comma: char, space: bool) -> String {
+    let cur_len = s.len();
+    if cur_len > 3 && s.is_char_boundary(cur_len - 3) && &s[cur_len - 3 ..] == "”" {
+        s = (&s[.. cur_len - 3]).into();
+        if s.chars().last() != Some(comma) {
+            s.push(comma);
+            s += "”";
+        }
+    } else if !s.is_empty() {
+        if s.chars().last() != Some(comma) {
+            s.push(',');
+        }
+    }
+
+    if space && !s.is_empty() {
+        s.push(' ');
+    }
+
+    s
+}
