@@ -105,6 +105,7 @@ impl CaseTransformer for TitleCase {
                 || c == '{'
                 || c == ','
                 || c == ';'
+                || c == '"'
                 || (c == '\'' && self.use_exception_dictionary)
                 || (c == '’' && self.use_exception_dictionary)
                 || c.is_whitespace()

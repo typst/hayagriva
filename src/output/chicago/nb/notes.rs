@@ -1,6 +1,9 @@
 //! Formats citations as footnotes.
-use crate::lang::{en::get_ordinal, TitleCase};
-use crate::output::{format_range, push_comma_quote_aware, DisplayString, Formatting};
+use crate::lang::{en::get_month_name, en::get_ordinal, TitleCase};
+use crate::output::{
+    abbreviate_publisher, format_range, push_comma_quote_aware, AtomicCitation,
+    DisplayString, Formatting,
+};
 use crate::selectors::{Bind, Id, Neg, Wc};
 use crate::types::EntryType::*;
 use crate::types::{NumOrStr, PersonRole};
@@ -8,6 +11,15 @@ use crate::{attrs, sel, Entry};
 use std::collections::HashMap;
 
 use super::shorthand;
+use super::{super::is_authoritative, super::AccessDateConfig, omit_initial_articles};
+
+fn is_magazine(entry: &Entry) -> bool {
+    sel!(sel!(alt Id(Article), Id(Entry)) => Bind("p", sel!(alt Id(Periodical), Id(Newspaper))))
+        .apply(entry)
+        .map(|mut hm| hm.remove("p").unwrap())
+        .and_then(|e| e.get_issue().map(|_| true).or_else(|| e.get_volume().map(|_| true)))
+        .is_some()
+}
 
 /// Describes the desired note type. This normally depends on the
 /// previously cited keys, depending on the behavior. Also see the Chicago
@@ -38,6 +50,8 @@ pub struct NoteCitationFormatter<'s> {
     /// Use ibid. instead of the repetition of the source.
     /// Discouraged by Chicago, 14.34.
     pub ibid: bool,
+    /// When to print URL access dates.
+    pub url_access_date: AccessDateConfig,
     /// If there is greater or equal to this number of authors, they will be
     /// abbreviated using et. al. after the first name.
     pub et_al_limit: Option<usize>,
@@ -51,6 +65,7 @@ impl<'s> NoteCitationFormatter<'s> {
             entries: entries.map(|e| (e.key.clone(), e)).collect(),
             tc_formatter,
             ibid: false,
+            url_access_date: AccessDateConfig::NotFormallyPublished,
             et_al_limit: Some(4),
         }
     }
@@ -108,7 +123,6 @@ impl<'s> NoteCitationFormatter<'s> {
 
         kinds.contains(&entry.entry_type)
             || sel!(alt
-                attrs!(Wc(), "editor"),
                 attrs!(Wc(), "publisher"),
                 sel!(Wc() => Neg(Wc())),
             )
@@ -135,8 +149,9 @@ impl<'s> NoteCitationFormatter<'s> {
                 .map(|mut hm| hm.remove("p").unwrap());
 
             let edited_book = sel!(alt
-                sel!(Wc() => Bind("p", attrs!(Id(Book), "editor"))),
-                sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference))))
+                sel!(Wc() => Bind("p", attrs!(sel!(alt Id(Book), Id(Proceedings)), "editor"))),
+                sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
+                sel!(Id(Article) => Bind("p", Id(Proceedings))),
             ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
 
             if let Some(parent) = edited_book.or(chapter) {
@@ -164,10 +179,20 @@ impl<'s> NoteCitationFormatter<'s> {
     fn get_info_element(&self, mut entry: &Entry) -> DisplayString {
         let mut res = vec![];
         let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => Bind("p", Id(Periodical))
-        )
-        .apply(entry)
-        .map(|mut hm| hm.remove("p").unwrap());
+            sel!(alt Id(Article), Id(Entry)) => Bind("p", sel!(alt Id(Periodical), Id(Newspaper)))
+        ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
+        let newspaper = sel!(Wc() => Bind("p", Id(Newspaper)))
+            .apply(entry)
+            .map(|mut hm| hm.remove("p").unwrap());
+
+        let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
+            .apply(entry)
+            .map(|mut hm| hm.remove("p").unwrap());
+
+        let orig_entry = entry;
+        if let Some(mv_p) = mv_title {
+            entry = mv_p;
+        }
 
         let affs = sel!(alt
             Bind("tl", attrs!(Wc(), "affiliated")),
@@ -193,8 +218,80 @@ impl<'s> NoteCitationFormatter<'s> {
             if ts.is_empty() { None } else { Some(ts) }
         });
 
+        if let Some(trans) = translators {
+            if orig_entry.get_authors_fallible().is_some()
+                || orig_entry.get_editors().is_some()
+            {
+                let trans_names = trans
+                    .into_iter()
+                    .map(|p| p.get_given_name_initials_first(false))
+                    .collect::<Vec<_>>();
+
+                let mut local = "trans. ".to_string();
+
+                local += &self.and_list(trans_names, false);
+                res.push(local.into())
+            }
+        }
+
+        if let Some(eds) = eds {
+            if orig_entry.get_authors_fallible().is_some() {
+                let ed_names = eds
+                    .into_iter()
+                    .map(|p| p.get_given_name_initials_first(false))
+                    .collect::<Vec<_>>();
+
+                let mut local =
+                    if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
+
+                local += &self.and_list(ed_names, false);
+                res.push(local.into())
+            }
+        }
+
         if let Some(journal) = journal {
+            if let Some(volume) = entry.get_volume() {
+                res.push(format_range("pt.", "pts.", volume).into());
+            }
+
             let mut local = self.get_chunk_title(journal, false);
+
+            if let Some(paper) = newspaper {
+                if let Some(location) = paper.get_location() {
+                    if !local.is_empty() {
+                        local.push(' ');
+                    }
+
+                    local += &format!("({})", location);
+                }
+            }
+
+            if let Some(ed) = journal.get_edition() {
+                let applied = match ed {
+                    NumOrStr::Number(n) if *n > 1 => format!("{} ser.", get_ordinal(*n)),
+                    NumOrStr::Str(s) => {
+                        let s =
+                            s.to_lowercase().replace("new", "n.").replace("series", "s.");
+                        let s = if s.trim() == "n. s." { "n.s.".into() } else { s };
+
+                        s
+                    }
+                    _ => String::new(),
+                };
+
+                if !applied.is_empty() {
+                    if !local.is_empty() {
+                        local += ", ";
+                    }
+
+                    local += &applied;
+
+                    if journal.get_volume().is_some() {
+                        local.push(',')
+                    }
+                }
+            }
+
             if let Some(vol) = journal.get_volume() {
                 if !local.is_empty() {
                     local.push(' ');
@@ -212,53 +309,24 @@ impl<'s> NoteCitationFormatter<'s> {
                     NumOrStr::Str(s) => s.clone(),
                 };
             }
-            res.push(local)
-        }
-
-        let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-
-        let orig_entry = entry;
-        if let Some(mv_p) = mv_title {
-            entry = mv_p;
-        }
-
-        if let Some(eds) = eds {
-            let ed_names = eds
-                .into_iter()
-                .map(|p| p.get_given_name_initials_first(false))
-                .collect::<Vec<_>>();
-
-            let mut local = if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
-
-            local += &self.and_list(ed_names, false);
-            res.push(local.into())
-        }
-
-        if let Some(trans) = translators {
-            let trans_names = trans
-                .into_iter()
-                .map(|p| p.get_given_name_initials_first(false))
-                .collect::<Vec<_>>();
-
-            let mut local = "trans. ".to_string();
-
-            local += &self.and_list(trans_names, false);
-            res.push(local.into())
+            res.push(local);
         }
 
         if let Some(comp) = compilers {
-            let comp_names = comp
-                .into_iter()
-                .map(|p| p.get_given_name_initials_first(false))
-                .collect::<Vec<_>>();
+            if orig_entry.get_authors_fallible().is_some()
+                || orig_entry.get_editors().is_some()
+            {
+                let comp_names = comp
+                    .into_iter()
+                    .map(|p| p.get_given_name_initials_first(false))
+                    .collect::<Vec<_>>();
 
-            let mut local =
-                if comp_names.len() > 1 { "comps. " } else { "comp. " }.to_string();
+                let mut local =
+                    if comp_names.len() > 1 { "comps. " } else { "comp. " }.to_string();
 
-            local += &self.and_list(comp_names, false);
-            res.push(local.into())
+                local += &self.and_list(comp_names, false);
+                res.push(local.into())
+            }
         }
 
         if let Some(edition) = entry.get_edition() {
@@ -294,7 +362,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 }
             }
 
-            if let Some(parent) = mv_title {
+            if let Some(_parent) = mv_title {
                 let mut title = DisplayString::new();
                 title.start_format(Formatting::Italic);
                 if let Some(own_title) =
@@ -380,6 +448,8 @@ impl<'s> NoteCitationFormatter<'s> {
             res += "“";
         }
 
+        let np = entry.entry_type == Newspaper;
+
         if short {
             if let Some(title) = entry.get_title_raw().map(|t| shorthand(t)) {
                 res += &title.format(Some(&self.tc_formatter), None).title_case;
@@ -388,6 +458,10 @@ impl<'s> NoteCitationFormatter<'s> {
             if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
                 res += &title.value.title_case;
             }
+        }
+
+        if np {
+            res.value = omit_initial_articles(&res.value);
         }
 
         if sc {
@@ -512,10 +586,81 @@ impl<'s> NoteCitationFormatter<'s> {
         res
     }
 
+    fn get_publication_info(&self, entry: &Entry) -> String {
+        let mut res = String::new();
+        let published_entry = sel!(Wc() => Bind("p", attrs!(Wc(), "publisher")))
+            .apply(entry)
+            .map(|mut hm| hm.remove("p").unwrap());
+        if let Some(loc) = entry
+            .get_location()
+            .or_else(|| published_entry.and_then(|e| e.get_location()))
+        {
+            res += loc;
+        } else if [Book, Anthology].contains(&entry.entry_type)
+            && entry.get_any_date().map(|d| d.year).unwrap_or(2020) < 1981
+        {
+            res += "n.p.";
+        }
+
+        if let Some(publisher) = entry
+            .get_publisher()
+            .or_else(|| published_entry.map(|e| e.get_publisher().unwrap()))
+            .map(|p| abbreviate_publisher(p, false))
+        {
+            if !res.is_empty() {
+                res += ": ";
+            }
+            res += &publisher;
+        }
+
+        let date = if let Some(date) = entry.get_any_date() {
+            let journal = sel!(
+                sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical))
+            ).apply(entry).is_some();
+            let mut res = String::new();
+
+            if journal || !is_authoritative(entry) {
+                let day = if journal { None } else { date.day };
+
+                if let Some(month) = date.month {
+                    res.push_str(&if let Some(day) = day {
+                        format!("{} {}, ", get_month_name(month).unwrap(), day + 1)
+                    } else {
+                        format!("{} ", get_month_name(month).unwrap())
+                    });
+                }
+            }
+
+            if date.year > 0 {
+                res += &date.year.to_string();
+            } else {
+                res += &format!("{} B.C.E.", -(date.year - 1));
+            }
+            res
+        } else if [Book, Anthology].contains(&entry.entry_type)
+            && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
+        {
+            "n.d.".to_string()
+        } else {
+            String::new()
+        };
+
+        if !date.is_empty() && !res.is_empty() {
+            res += ", ";
+        }
+        res += &date;
+
+        res
+    }
+
     /// Format a citation as a note.
-    pub fn get_note(&self, key: &str, kind: NoteType) -> Option<DisplayString> {
+    pub fn get_note(
+        &self,
+        citation: AtomicCitation,
+        kind: NoteType,
+    ) -> Option<DisplayString> {
         let short = kind != NoteType::Full;
-        let entry = self.entries.get(key)?;
+        let &entry = self.entries.get(citation.key)?;
         let mut res: DisplayString = self.get_author(entry, short).into();
         if kind != NoteType::OnlyAuthor {
             let title = self.get_title(entry, short);
@@ -529,12 +674,130 @@ impl<'s> NoteCitationFormatter<'s> {
             res += title;
         }
 
+        let mut colon = false;
+        let journal = sel!(
+            sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
+        )
+        .apply(entry)
+        .is_some();
+
         if !short {
             let add = self.get_info_element(entry);
             if !add.is_empty() {
                 res.value = push_comma_quote_aware(res.value, ',', true);
             }
             res += add;
+
+            let publ = self.get_publication_info(entry);
+            let brackets = is_authoritative(entry);
+            if !publ.is_empty() && !res.is_empty() {
+                if brackets {
+                    res.push(' ');
+                } else {
+                    res += ", ";
+                }
+            }
+
+            if !publ.is_empty() {
+                if brackets {
+                    res += &format!("({})", publ);
+                } else {
+                    res += &publ;
+                }
+            }
+
+            if journal && !publ.is_empty() {
+                colon = true;
+            }
+        }
+
+        if let Some(supplement) = citation.supplement {
+            if !res.is_empty() {
+                if colon {
+                    res.push(':');
+                } else {
+                    res.push(',');
+                }
+                res.push(' ');
+            }
+
+            res += supplement;
+        } else if let Some(pr) = entry.get_page_range() {
+            if !res.is_empty() {
+                if colon {
+                    res.push(':');
+                } else {
+                    res.push(',');
+                }
+                res.push(' ');
+            }
+
+            res += &format_range("", "", pr);
+        }
+
+        if journal && !short {
+            if let Some(sn) = entry.get_serial_number() {
+                if !sn.is_empty() && !res.is_empty() && res.last() != Some(',') {
+                    res.push(',');
+                }
+
+                if !sn.is_empty() && !res.is_empty() {
+                    res.push(' ');
+                }
+
+                res += sn;
+            }
+        }
+
+        if !short {
+            let url = if let Some(doi) = entry.get_doi() {
+                format!("https://doi.org/{}", doi)
+            } else if let Some(qurl) = entry.get_any_url() {
+                qurl.value.to_string()
+            } else {
+                String::new()
+            };
+
+            if journal {
+                if !url.is_empty() && !res.is_empty() && res.last() != Some('.') {
+                    res.push('.');
+                }
+            } else {
+                if !url.is_empty() && !res.is_empty() && res.last() != Some(',') {
+                    res.push(',');
+                }
+            }
+
+            if !url.is_empty() && !res.is_empty() {
+                res.push(' ');
+            }
+
+            res.start_format(Formatting::NoHyphenation);
+            res += &url;
+            res.commit_formats();
+
+            if url.is_empty() {
+                if let Some(archive) = entry.get_archive() {
+                    if !res.is_empty() && res.last() != Some(',') {
+                        res.push(',');
+                    }
+
+                    if !url.is_empty() && !res.is_empty() {
+                        res.push(' ');
+                    }
+
+                    res += archive;
+
+                    if let Some(al) = entry.get_archive_location() {
+                        res += ", ";
+                        res += al;
+                    }
+                }
+            }
+        }
+
+        if !res.is_empty() && res.last() != Some('.') {
+            res.push('.');
         }
 
         Some(res)

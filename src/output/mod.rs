@@ -54,6 +54,13 @@ pub struct AtomicCitation<'s> {
     pub number: Option<usize>,
 }
 
+impl<'s> AtomicCitation<'s> {
+    /// Create a new atomic citation.
+    pub fn new(key: &'s str, supplement: Option<&'s str>, number: Option<usize>) -> Self {
+        Self { key, supplement, number }
+    }
+}
+
 /// Structs implementing this trait can generate the appropriate reference
 /// markers for a single `Citation` struct. They do not have to see subsequent
 /// citations to determine the marker value.
@@ -455,4 +462,39 @@ fn push_comma_quote_aware(mut s: String, comma: char, space: bool) -> String {
     }
 
     s
+}
+
+fn abbreviate_publisher(s: &str, up: bool) -> String {
+    let s1 = if up {
+        s.replace("University Press", "UP")
+            .replace("University", "U")
+            .replace("Universität", "U")
+            .replace("Université", "U")
+            .replace("Press", "P")
+            .replace("Presse", "P")
+    } else {
+        s.into()
+    };
+    let business_words = [
+        "Co",
+        "Co.",
+        "Corp",
+        "Corp.",
+        "Corporated",
+        "Corporation",
+        "Inc",
+        "Inc.",
+        "Incorporated",
+        "Limited",
+        "Ltd",
+        "Ltd.",
+        "S A",
+        "S.A.",
+        "Sociedad Anónima",
+        "Société Anonyme",
+    ];
+    s1.split(' ')
+        .filter(|w| !w.is_empty() && business_words.binary_search(w).is_err())
+        .collect::<Vec<_>>()
+        .join(" ")
 }

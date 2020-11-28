@@ -63,6 +63,20 @@ donne:
         title: The Variorum Edition of the Poetry of John Donne
         editor: Stringer, Gary A.
 
+swedish:
+    type: Article
+    editor: Brown, George C.
+    title:
+        value: "A Swedish Traveller in Early Wisconcin: The Observations of Fredrika Bremer"
+        shorthand: Swedish Traveller
+    volume: 1-2
+    parent:
+        type: Periodical
+        title: Wisconcin Magazine of History
+        volume: 61-62
+        date: 1978
+        edition: 2
+
 harry:
     type: Chapter
     page-range: 135-139

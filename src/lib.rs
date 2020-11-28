@@ -1032,7 +1032,7 @@ fn entry_from_yaml(
 #[cfg(test)]
 mod tests {
     use super::load_yaml_structure;
-    use crate::output::{apa, chicago, ieee, mla, BibliographyFormatter};
+    use crate::output::{apa, chicago, ieee, mla, AtomicCitation, BibliographyFormatter};
     use crate::selectors::parse;
     use std::fs;
 
@@ -1085,8 +1085,10 @@ mod tests {
         let chicago = chicago::nb::notes::NoteCitationFormatter::new(entries.iter());
 
         for entry in &entries {
+            let citation = AtomicCitation::new(&entry.key, None, None);
+
             let refs = chicago
-                .get_note(&entry.key, chicago::nb::notes::NoteType::Full)
+                .get_note(citation, chicago::nb::notes::NoteType::Full)
                 .unwrap();
             println!("{}", refs.print_ansi_vt100());
         }

@@ -2,7 +2,8 @@
 //! of the MLA Handbook.
 
 use super::{
-    format_range, offset_format_range, BibliographyFormatter, DisplayString, Formatting,
+    abbreviate_publisher, format_range, offset_format_range, BibliographyFormatter,
+    DisplayString, Formatting,
 };
 use crate::lang::{en, TitleCase};
 use crate::selectors::{Bind, Id, Neg, Wc};
@@ -171,34 +172,6 @@ fn is_religious(s: &str) -> bool {
         "Upanishads",
     ];
     reference.binary_search(&s).is_ok()
-}
-
-fn abbreviate_publisher(s: &str) -> String {
-    let s1 = s
-        .replace("University Press", "UP")
-        .replace("University", "U")
-        .replace("Universität", "U")
-        .replace("Université", "U")
-        .replace("Press", "P")
-        .replace("Presse", "P");
-    let business_words = [
-        "Co",
-        "Co.",
-        "Corp",
-        "Corp.",
-        "Corporated",
-        "Corporation",
-        "Inc",
-        "Inc.",
-        "Incorporated",
-        "Limited",
-        "Ltd",
-        "Ltd.",
-    ];
-    s1.split(' ')
-        .filter(|w| !w.is_empty() && business_words.binary_search(w).is_err())
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 impl MlaBibliographyFormatter {
@@ -597,7 +570,7 @@ impl MlaBibliographyFormatter {
                 if let Some(publisher) =
                     entry.get_publisher().or_else(|| entry.get_organization())
                 {
-                    container.publisher = abbreviate_publisher(publisher);
+                    container.publisher = abbreviate_publisher(publisher, true);
                 }
             }
 

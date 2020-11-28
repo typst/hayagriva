@@ -226,10 +226,13 @@ impl IeeeBibliographyFormatter {
                     res.commit_formats();
 
                     // Do the series parentheses thing here
-                    let spec = sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")));
+                    let spec =
+                        sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")));
                     if let Some(mut hm) = spec.apply(canonical) {
                         let par_anth = hm.remove("p").unwrap();
-                        let par_t = par_anth.get_title_fmt(Some(&self.tc_formatter), None).unwrap();
+                        let par_t = par_anth
+                            .get_title_fmt(Some(&self.tc_formatter), None)
+                            .unwrap();
                         res += " (";
                         res += &par_t.value.title_case;
 
