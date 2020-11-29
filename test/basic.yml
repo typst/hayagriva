@@ -30,6 +30,7 @@ wwdc-network:
               verbatim: true
               shorthand: WWDC 2020
           organization: Apple Inc.
+          location: Mountain View, CA
         - type: Video
           runtime: "00:13:42"
           url: { value: https://developer.apple.com/videos/play/wwdc2020/10111/, date: 2020-09-17 }
@@ -286,3 +287,12 @@ wrong:
     parent:
         type: Blog
         title: tonsky.me
+
+un-hdr:
+    type: Report
+    author: United Nations Development Programme
+    title: Human Development Report 2019
+    location: New York
+    issn: 2412-3129
+    url: http://hdr.undp.org/sites/default/files/hdr2019.pdf
+    date: 2019

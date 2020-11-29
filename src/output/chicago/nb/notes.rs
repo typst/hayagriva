@@ -131,7 +131,6 @@ impl<'s> NoteCitationFormatter<'s> {
         let kinds = [
             Book,
             Report,
-            Thesis,
             Newspaper,
             Periodical,
             Proceedings,
@@ -668,7 +667,17 @@ impl<'s> NoteCitationFormatter<'s> {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let mut res = String::new();
+        let conference = sel!(Wc() => Bind("p", Id(Conference)))
+            .apply(entry)
+            .map(|mut hm| hm.remove("p").unwrap());
+        let mut res = if entry.entry_type == Thesis {
+            "thesis".to_string()
+        } else if conference.is_some() {
+            "conference presentation".into()
+        } else {
+            String::new()
+        };
+
         let published_entry = sel!(Wc() => Bind("p", attrs!(Wc(), "publisher")))
             .apply(entry)
             .map(|mut hm| hm.remove("p").unwrap());
@@ -676,10 +685,16 @@ impl<'s> NoteCitationFormatter<'s> {
             .get_location()
             .or_else(|| published_entry.and_then(|e| e.get_location()))
         {
+            if !res.is_empty() {
+                res += ", ";
+            }
             res += loc;
         } else if [Book, Anthology].contains(&entry.entry_type)
             && entry.get_any_date().map(|d| d.year).unwrap_or(2020) < 1981
         {
+            if !res.is_empty() {
+                res += ", ";
+            }
             res += "n.p.";
         }
 
@@ -690,7 +705,11 @@ impl<'s> NoteCitationFormatter<'s> {
         .apply(entry);
 
         if entry.entry_type == Tweet {
-            if let Some(host) = entry.get_any_url().and_then(|u| u.value.host_str()).map(|h| h.to_lowercase()) {
+            if let Some(host) = entry
+                .get_any_url()
+                .and_then(|u| u.value.host_str())
+                .map(|h| h.to_lowercase())
+            {
                 let service = match host.as_ref() {
                     "twitter.com" => "Twitter",
                     "facebook.com" => "Facebook",
@@ -706,9 +725,37 @@ impl<'s> NoteCitationFormatter<'s> {
             }
         }
 
-        if let Some(publisher) = entry
+        if entry.entry_type == Manuscript {
+            if !res.is_empty() {
+                res += ": ";
+            }
+            res += "unpublished manuscript";
+        } else if let Some(conf) = conference {
+            if let Some(org) = conf.get_organization() {
+                res += ", ";
+                res += org;
+            }
+
+            let conf_name = self.get_chunk_title(conf, false, false).value;
+            if !conf_name.is_empty() {
+                res += ", ";
+                res += &conf_name;
+            }
+
+            if let Some(loc) = conf.get_location() {
+                res += ", ";
+                res += loc;
+            }
+        } else if let Some(publisher) = entry
             .get_publisher()
             .or_else(|| published_entry.map(|e| e.get_publisher().unwrap()))
+            .or_else(|| {
+                if [Report, Thesis].contains(&entry.entry_type) {
+                    entry.get_organization()
+                } else {
+                    None
+                }
+            })
             .map(|p| abbreviate_publisher(p, false))
         {
             if !res.is_empty() {
@@ -741,12 +788,23 @@ impl<'s> NoteCitationFormatter<'s> {
             )
             .apply(entry)
             .is_some();
+            let conf = sel!(alt
+                sel!(Wc() => Id(Conference)),
+                Id(Conference),
+                Id(Exhibition),
+            )
+            .apply(entry)
+            .is_some();
 
-            let mode = match (journal, is_authoritative(entry)) {
+            let mut mode = match (journal, is_authoritative(entry)) {
                 (true, _) => DateMode::Month,
                 (false, true) => DateMode::Year,
                 _ => DateMode::Day,
             };
+
+            if conf {
+                mode = DateMode::Day;
+            }
 
             format_date(date, mode)
         } else if [Book, Anthology].contains(&entry.entry_type)
@@ -814,7 +872,7 @@ impl<'s> NoteCitationFormatter<'s> {
             res += add;
 
             let publ = self.get_publication_info(entry);
-            let brackets = is_authoritative(entry);
+            let brackets = is_authoritative(entry) || entry.entry_type == Manuscript;
             if !publ.is_empty() && !res.is_empty() {
                 if brackets {
                     res.push(' ');
