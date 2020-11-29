@@ -58,12 +58,13 @@ fn is_authoritative(entry: &Entry) -> bool {
         Id(Patent),
         Id(Thesis),
         Id(Report),
+        Id(Reference),
         sel!(Wc() => Id(Conference)),
         sel!(Wc() => Id(Book)),
         sel!(Wc() => Id(Proceedings)),
         sel!(Wc() => attrs!(Id(Periodical), "volume")),
         sel!(Wc() => attrs!(Id(Periodical), "issue")),
-        sel!(sel!(alt Id(Article)) => Id(Anthology)),
+        sel!(Id(Article) => Id(Anthology)),
     )
     .apply(entry)
     .is_some()

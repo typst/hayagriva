@@ -177,6 +177,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 sel!(Wc() => Bind("p", attrs!(sel!(alt Id(Book), Id(Proceedings)), "editor"))),
                 sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
                 sel!(Id(Article) => Bind("p", Id(Proceedings))),
+                sel!(attrs!(Id(Entry), "author") => Bind("p", Id(Reference))),
             ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
 
             if let Some(parent) = edited_book.or(chapter) {
@@ -372,7 +373,7 @@ impl<'s> NoteCitationFormatter<'s> {
         }
 
         if let Some(comp) = compilers {
-            if orig_entry.get_authors_fallible().is_some()
+            if (orig_entry.get_authors_fallible().is_some() || orig_entry.entry_type == Reference)
                 || orig_entry.get_editors().is_some()
             {
                 let comp_names = comp
@@ -497,8 +498,12 @@ impl<'s> NoteCitationFormatter<'s> {
         DisplayString::join(&res, ", ")
     }
 
-    fn get_chunk_title(&self, entry: &Entry, short: bool, fmt: bool) -> DisplayString {
+    fn get_chunk_title(&self, entry: &Entry, short: bool, mut fmt: bool) -> DisplayString {
         let mut res = DisplayString::new();
+
+        if entry.get_title() == Some("Wikipedia") {
+            fmt = false;
+        }
         let sc = fmt && NoteCitationFormatter::self_contained(entry);
 
         if sc {
@@ -511,11 +516,13 @@ impl<'s> NoteCitationFormatter<'s> {
 
         if short {
             if let Some(title) = entry.get_title_raw().map(|t| shorthand(t)) {
-                res += &title.format(Some(&self.tc_formatter), None).title_case;
+                let title = title.format(Some(&self.tc_formatter), None);
+                res += &if entry.entry_type == Entry {title.value} else {title.title_case};
             }
         } else {
             if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
-                res += &title.value.title_case;
+                let title = title.value;
+                res += &if entry.entry_type == Entry {title.value} else {title.title_case};
             }
         }
 
@@ -730,6 +737,8 @@ impl<'s> NoteCitationFormatter<'s> {
                 res += ": ";
             }
             res += "unpublished manuscript";
+        } else if entry.entry_type == Artwork {
+            // Do the publisher stuff later
         } else if let Some(conf) = conference {
             if let Some(org) = conf.get_organization() {
                 res += ", ";
@@ -820,6 +829,43 @@ impl<'s> NoteCitationFormatter<'s> {
         }
         res += &date;
 
+        if entry.entry_type == Artwork {
+            let mut items: Vec<String> = vec![];
+
+            if let Some(note) = entry.get_note() {
+                items.push(note.into());
+            }
+
+            let parent = sel!(Wc() => Bind("p", Id(Exhibition))).apply(entry).map(|mut hm| hm.remove("p").unwrap());
+            if let Some(org) = entry.get_organization()
+                .or_else(|| entry.get_publisher())
+                .or_else(|| parent.and_then(|p| p.get_organization()))
+                .or_else(|| parent.and_then(|p| p.get_publisher()))
+            {
+                items.push(org.into())
+            }
+
+            if let Some(loc) = entry.get_location()
+                .or_else(|| parent.and_then(|p| p.get_location()))
+            {
+                items.push(loc.into())
+            }
+
+            let items = items.join(", ");
+            if !items.is_empty() && !res.is_empty() {
+                res += ", ";
+            }
+            res += &items;
+        }
+
+        if entry.entry_type == Exhibition {
+            if !res.is_empty() {
+                res += ", ";
+            }
+
+            res += "exhibition catalog"
+        }
+
         res
     }
 
@@ -845,7 +891,21 @@ impl<'s> NoteCitationFormatter<'s> {
             DisplayString::new()
         };
 
-        if kind != NoteType::OnlyAuthor {
+        let no_author = res.is_empty();
+
+        let dictionary = sel!(Id(Entry) => Bind("p", Id(Reference))).apply(entry).map(|mut hm| hm.remove("p").unwrap());
+        if no_author && dictionary.is_some() {
+            let dictionary = dictionary.unwrap();
+            let title = self.get_title(dictionary, short);
+            if !res.is_empty() && !title.is_empty() {
+                if res.last().unwrap_or('a') != ',' {
+                    res.push(',');
+                }
+
+                res.push(' ');
+            }
+            res += title;
+        } else if kind != NoteType::OnlyAuthor {
             let title = self.get_title(entry, short);
             if !res.is_empty() && !title.is_empty() {
                 if res.last().unwrap_or('a') != ',' {
@@ -865,14 +925,14 @@ impl<'s> NoteCitationFormatter<'s> {
         .is_some();
 
         if !short {
-            let add = self.get_info_element(entry);
+            let add = if no_author && dictionary.is_some() { self.get_info_element(dictionary.unwrap()) } else { self.get_info_element(entry) };
             if !add.is_empty() {
                 res.value = push_comma_quote_aware(res.value, ',', true);
             }
             res += add;
 
-            let publ = self.get_publication_info(entry);
-            let brackets = is_authoritative(entry) || entry.entry_type == Manuscript;
+            let publ = if no_author && dictionary.is_some() { self.get_publication_info(dictionary.unwrap()) } else { self.get_publication_info(entry) };
+            let brackets = is_authoritative(entry) || entry.entry_type == Manuscript || (no_author && dictionary.is_some());
             if !publ.is_empty() && !res.is_empty() {
                 if brackets {
                     res.push(' ');
@@ -891,6 +951,11 @@ impl<'s> NoteCitationFormatter<'s> {
 
             if journal && !publ.is_empty() {
                 colon = true;
+            }
+            if no_author && dictionary.is_some() && entry.get_authors_fallible().is_none() {
+                res.value = push_comma_quote_aware(res.value, ',', true);
+                res += "s.v. ";
+                res += self.get_chunk_title(entry, false, true);
             }
         }
 
@@ -968,7 +1033,7 @@ impl<'s> NoteCitationFormatter<'s> {
             res += &url;
             res.commit_formats();
 
-            if url.is_empty() {
+            if url.is_empty() || entry.entry_type == Manuscript {
                 if let Some(archive) = entry.get_archive() {
                     res.value = push_comma_quote_aware(res.value, ',', true);
 

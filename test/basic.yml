@@ -296,3 +296,36 @@ un-hdr:
     issn: 2412-3129
     url: http://hdr.undp.org/sites/default/files/hdr2019.pdf
     date: 2019
+
+audio-descriptions:
+    type: Audio
+    title: Audio Descriptions
+    volume: 8
+    date: 2017-02-07
+    author: Barrows, Miellyn Fitzwater
+    affiliated:
+        - names: Taylor, Dallas
+          role: Narrator
+    url: https://www.20k.org/episodes/audio
+    parent:
+        type: Audio
+        title: Twenty Thousand Hertz
+        author: Taylor, Dallas
+
+drill:
+    type: Artwork
+    title: Drill
+    author: Steyerl, Hito
+    date: 2019-06-20
+    location: New York
+    organization: Thompson Arts Center
+
+camb:
+    type: Entry
+    title: authoritative
+    url:
+        value: https://dictionary.cambridge.org/dictionary/english/authoritative
+        date: 2020-11-29
+    parent:
+        type: Reference
+        title: Cambridge Dictionary
