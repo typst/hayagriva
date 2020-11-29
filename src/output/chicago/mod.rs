@@ -25,6 +25,30 @@ pub enum AccessDateConfig {
     Always,
 }
 
+impl AccessDateConfig {
+    /// Will determine, given the value of `self` and a [Entry], if an access
+    /// date should be provided.
+    pub fn needs_date(&self, entry: &Entry) -> bool {
+        match self {
+            AccessDateConfig::Never => false,
+            AccessDateConfig::NoDate => entry.get_any_date().is_none(),
+            AccessDateConfig::InherentlyOnline => {
+                sel!(alt
+                    Id(Web),
+                    sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
+                )
+                .apply(entry)
+                .is_some()
+                    || entry.get_any_date().is_none()
+            }
+            AccessDateConfig::NotFormallyPublished => {
+                !is_formally_published(entry) || entry.get_any_date().is_none()
+            }
+            AccessDateConfig::Always => true,
+        }
+    }
+}
+
 fn is_authoritative(entry: &Entry) -> bool {
     sel!(alt
         Id(Book),

@@ -6,19 +6,42 @@ use crate::output::{
 };
 use crate::selectors::{Bind, Id, Neg, Wc};
 use crate::types::EntryType::*;
-use crate::types::{NumOrStr, PersonRole};
+use crate::types::{Date, NumOrStr, PersonRole};
 use crate::{attrs, sel, Entry};
 use std::collections::HashMap;
 
 use super::shorthand;
 use super::{super::is_authoritative, super::AccessDateConfig, omit_initial_articles};
 
-fn is_magazine(entry: &Entry) -> bool {
-    sel!(sel!(alt Id(Article), Id(Entry)) => Bind("p", sel!(alt Id(Periodical), Id(Newspaper))))
-        .apply(entry)
-        .map(|mut hm| hm.remove("p").unwrap())
-        .and_then(|e| e.get_issue().map(|_| true).or_else(|| e.get_volume().map(|_| true)))
-        .is_some()
+/// Which parts of the day should be printed.
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum DateMode {
+    Year,
+    Month,
+    Day,
+}
+
+fn format_date(date: &Date, mode: DateMode) -> String {
+    let mut res = String::new();
+
+    if mode != DateMode::Year {
+        let day = if mode == DateMode::Day { date.day } else { None };
+
+        if let Some(month) = date.month {
+            res.push_str(&if let Some(day) = day {
+                format!("{} {}, ", get_month_name(month).unwrap(), day + 1)
+            } else {
+                format!("{} ", get_month_name(month).unwrap())
+            });
+        }
+    }
+
+    if date.year > 0 {
+        res += &date.year.to_string();
+    } else {
+        res += &format!("{} B.C.E.", -(date.year - 1));
+    }
+    res
 }
 
 /// Describes the desired note type. This normally depends on the
@@ -121,13 +144,16 @@ impl<'s> NoteCitationFormatter<'s> {
             Exhibition,
         ];
 
+        let always_quote = [Web];
+
         kinds.contains(&entry.entry_type)
-            || sel!(alt
-                attrs!(Wc(), "publisher"),
-                sel!(Wc() => Neg(Wc())),
-            )
-            .apply(entry)
-            .is_some()
+            || (!always_quote.contains(&entry.entry_type)
+                && sel!(alt
+                    attrs!(Wc(), "publisher"),
+                    sel!(Wc() => Neg(Wc())),
+                )
+                .apply(entry)
+                .is_some())
     }
 
     fn get_title(&self, entry: &Entry, short: bool) -> DisplayString {
@@ -138,9 +164,9 @@ impl<'s> NoteCitationFormatter<'s> {
 
         let mut res = DisplayString::new();
         if let Some(parent) = mv_title {
-            res += self.get_chunk_title(parent, short);
+            res += self.get_chunk_title(parent, short, true);
         } else {
-            res += self.get_chunk_title(entry, short);
+            res += self.get_chunk_title(entry, short, true);
         }
 
         if !short && mv_title.is_none() {
@@ -169,7 +195,41 @@ impl<'s> NoteCitationFormatter<'s> {
                 }
 
                 res += "in ";
-                res += self.get_chunk_title(parent, false);
+                res += self.get_chunk_title(parent, false, true);
+            }
+
+            let web_parent = sel!(alt
+                sel!(Id(Web) => Bind("p", Wc())),
+                sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
+            )
+            .apply(entry)
+            .map(|mut hm| hm.remove("p").unwrap());
+
+            if web_parent.and_then(|p| p.get_title()).is_some() {
+                res.value = push_comma_quote_aware(res.value, ',', true);
+                res += &self.get_chunk_title(web_parent.unwrap(), false, false).value;
+            }
+
+            let blog_parent = sel!(Wc() => Bind("p", Id(Blog)))
+                .apply(entry)
+                .map(|mut hm| hm.remove("p").unwrap());
+            if let Some(parent) = blog_parent {
+                let titles = self.get_title(parent, false);
+
+                if !titles.is_empty() {
+                    res.value = push_comma_quote_aware(res.value, ',', true);
+                }
+
+                res += titles;
+            } else if entry.entry_type == Blog {
+                let title_parent = sel!(Wc() => Bind("p", attrs!(Wc(), "title")))
+                    .apply(entry)
+                    .map(|mut hm| hm.remove("p").unwrap());
+                if let Some(parent) = title_parent {
+                    let titles = self.get_title(parent, false);
+                    res.value = push_comma_quote_aware(res.value, ',', true);
+                    res += titles;
+                }
             }
         }
 
@@ -254,7 +314,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 res.push(format_range("pt.", "pts.", volume).into());
             }
 
-            let mut local = self.get_chunk_title(journal, false);
+            let mut local = self.get_chunk_title(journal, false, true);
 
             if let Some(paper) = newspaper {
                 if let Some(location) = paper.get_location() {
@@ -399,7 +459,7 @@ impl<'s> NoteCitationFormatter<'s> {
             );
             if let Some(mut hm) = spec.apply(orig_entry) {
                 let par_anth = hm.remove("p").unwrap();
-                let mut title = self.get_chunk_title(par_anth, false).value.into();
+                let mut title = self.get_chunk_title(par_anth, false, false).value.into();
 
                 let issue = if let Some(issue) = par_anth.get_issue() {
                     Some(match issue {
@@ -438,13 +498,13 @@ impl<'s> NoteCitationFormatter<'s> {
         DisplayString::join(&res, ", ")
     }
 
-    fn get_chunk_title(&self, entry: &Entry, short: bool) -> DisplayString {
+    fn get_chunk_title(&self, entry: &Entry, short: bool, fmt: bool) -> DisplayString {
         let mut res = DisplayString::new();
-        let sc = NoteCitationFormatter::self_contained(entry);
+        let sc = fmt && NoteCitationFormatter::self_contained(entry);
 
         if sc {
             res.start_format(Formatting::Italic);
-        } else {
+        } else if fmt {
             res += "“";
         }
 
@@ -466,8 +526,20 @@ impl<'s> NoteCitationFormatter<'s> {
 
         if sc {
             res.commit_formats();
-        } else {
+        } else if fmt {
             res += "”";
+        }
+
+        if !short && entry.entry_type == Blog {
+            let brackets = !res.is_empty();
+            if brackets {
+                res.push(' ');
+                res.push('(');
+            }
+            res += "blog";
+            if brackets {
+                res.push(')');
+            }
         }
 
         res
@@ -547,12 +619,21 @@ impl<'s> NoteCitationFormatter<'s> {
         } else {
             authors
                 .into_iter()
-                .map(|p| {
+                .enumerate()
+                .map(|(i, p)| {
                     let name = p.get_given_name_initials_first(false);
-                    if let Some(pseud) = p.alias {
-                        format!("{} [{}]", pseud, name)
+                    if entry.entry_type == Tweet {
+                        if let Some(pseud) = entry.get_twitter_handle(i) {
+                            format!("{} ({})", name, pseud)
+                        } else {
+                            name
+                        }
                     } else {
-                        name
+                        if let Some(pseud) = p.alias {
+                            format!("{} [{}]", pseud, name)
+                        } else {
+                            name
+                        }
                     }
                 })
                 .collect::<Vec<_>>()
@@ -602,6 +683,29 @@ impl<'s> NoteCitationFormatter<'s> {
             res += "n.p.";
         }
 
+        let web_thing = sel!(alt
+            Id(Web),
+            sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
+        )
+        .apply(entry);
+
+        if entry.entry_type == Tweet {
+            if let Some(host) = entry.get_any_url().and_then(|u| u.value.host_str()).map(|h| h.to_lowercase()) {
+                let service = match host.as_ref() {
+                    "twitter.com" => "Twitter",
+                    "facebook.com" => "Facebook",
+                    "instagram.com" => "Instagram",
+                    "vt.tiktok.com" => "TikTok",
+                    _ => "",
+                };
+
+                if !service.is_empty() && !res.is_empty() {
+                    res += ", ";
+                }
+                res += service;
+            }
+        }
+
         if let Some(publisher) = entry
             .get_publisher()
             .or_else(|| published_entry.map(|e| e.get_publisher().unwrap()))
@@ -611,32 +715,40 @@ impl<'s> NoteCitationFormatter<'s> {
                 res += ": ";
             }
             res += &publisher;
+        } else if let Some(wt) = web_thing {
+            let creator = if entry.get_authors_fallible().is_some() {
+                self.get_author(entry, false)
+            } else if let Some(org) = entry.get_organization() {
+                org.into()
+            } else if wt.get("p").and_then(|e| e.get_authors_fallible()).is_some() {
+                self.get_author(wt.get("p").unwrap(), false)
+            } else if let Some(org) = wt.get("p").and_then(|e| e.get_organization()) {
+                org.into()
+            } else {
+                "".into()
+            };
+
+            if !res.is_empty() && !creator.is_empty() {
+                res += ", ";
+            }
+
+            res += &creator;
         }
 
         let date = if let Some(date) = entry.get_any_date() {
             let journal = sel!(
-                sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical))
-            ).apply(entry).is_some();
-            let mut res = String::new();
+                sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
+            )
+            .apply(entry)
+            .is_some();
 
-            if journal || !is_authoritative(entry) {
-                let day = if journal { None } else { date.day };
+            let mode = match (journal, is_authoritative(entry)) {
+                (true, _) => DateMode::Month,
+                (false, true) => DateMode::Year,
+                _ => DateMode::Day,
+            };
 
-                if let Some(month) = date.month {
-                    res.push_str(&if let Some(day) = day {
-                        format!("{} {}, ", get_month_name(month).unwrap(), day + 1)
-                    } else {
-                        format!("{} ", get_month_name(month).unwrap())
-                    });
-                }
-            }
-
-            if date.year > 0 {
-                res += &date.year.to_string();
-            } else {
-                res += &format!("{} B.C.E.", -(date.year - 1));
-            }
-            res
+            format_date(date, mode)
         } else if [Book, Anthology].contains(&entry.entry_type)
             && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
         {
@@ -661,7 +773,20 @@ impl<'s> NoteCitationFormatter<'s> {
     ) -> Option<DisplayString> {
         let short = kind != NoteType::Full;
         let &entry = self.entries.get(citation.key)?;
-        let mut res: DisplayString = self.get_author(entry, short).into();
+
+        let web_thing = sel!(alt
+            Id(Web),
+            sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
+        )
+        .apply(entry)
+        .is_some();
+
+        let mut res: DisplayString = if !web_thing || short {
+            self.get_author(entry, short).into()
+        } else {
+            DisplayString::new()
+        };
+
         if kind != NoteType::OnlyAuthor {
             let title = self.get_title(entry, short);
             if !res.is_empty() && !title.is_empty() {
@@ -694,7 +819,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 if brackets {
                     res.push(' ');
                 } else {
-                    res += ", ";
+                    res.value = push_comma_quote_aware(res.value, ',', true);
                 }
             }
 
@@ -716,7 +841,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 if colon {
                     res.push(':');
                 } else {
-                    res.push(',');
+                    res.value = push_comma_quote_aware(res.value, ',', false);
                 }
                 res.push(' ');
             }
@@ -727,7 +852,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 if colon {
                     res.push(':');
                 } else {
-                    res.push(',');
+                    res.value = push_comma_quote_aware(res.value, ',', false);
                 }
                 res.push(' ');
             }
@@ -737,8 +862,8 @@ impl<'s> NoteCitationFormatter<'s> {
 
         if journal && !short {
             if let Some(sn) = entry.get_serial_number() {
-                if !sn.is_empty() && !res.is_empty() && res.last() != Some(',') {
-                    res.push(',');
+                if !sn.is_empty() {
+                    res.value = push_comma_quote_aware(res.value, ',', false);
                 }
 
                 if !sn.is_empty() && !res.is_empty() {
@@ -753,7 +878,16 @@ impl<'s> NoteCitationFormatter<'s> {
             let url = if let Some(doi) = entry.get_doi() {
                 format!("https://doi.org/{}", doi)
             } else if let Some(qurl) = entry.get_any_url() {
-                qurl.value.to_string()
+                let mut res = String::new();
+                if let Some(date) = qurl.visit_date.as_ref() {
+                    if self.url_access_date.needs_date(entry) {
+                        res +=
+                            &format!("accessed {}, ", format_date(date, DateMode::Day));
+                    }
+                }
+
+                res += qurl.value.as_str();
+                res
             } else {
                 String::new()
             };
@@ -763,8 +897,8 @@ impl<'s> NoteCitationFormatter<'s> {
                     res.push('.');
                 }
             } else {
-                if !url.is_empty() && !res.is_empty() && res.last() != Some(',') {
-                    res.push(',');
+                if !url.is_empty() {
+                    res.value = push_comma_quote_aware(res.value, ',', false);
                 }
             }
 
@@ -778,13 +912,7 @@ impl<'s> NoteCitationFormatter<'s> {
 
             if url.is_empty() {
                 if let Some(archive) = entry.get_archive() {
-                    if !res.is_empty() && res.last() != Some(',') {
-                        res.push(',');
-                    }
-
-                    if !url.is_empty() && !res.is_empty() {
-                        res.push(' ');
-                    }
+                    res.value = push_comma_quote_aware(res.value, ',', true);
 
                     res += archive;
 

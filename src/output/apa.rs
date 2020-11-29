@@ -375,7 +375,7 @@ impl ApaBibliographyFormatter {
                         }
                         (Some(month), Some(day)) => {
                             let mut res = DisplayString::from_string(format!(
-                                "(Retrieved {} {}, {:04}, from )",
+                                "(Retrieved {} {}, {:04}, from ",
                                 get_month_name(month).unwrap(),
                                 day,
                                 date.year,
@@ -383,6 +383,7 @@ impl ApaBibliographyFormatter {
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
                             res.commit_formats();
+                            res.push(')');
                             res
                         }
                     }

@@ -258,3 +258,31 @@ electronic-music:
     serial-number: v2.5
     author: Ishkur
     url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-12 }
+
+mattermost:
+    type: Web
+    title: Mattermost Privacy Policy
+    author: Mattermost
+    url:
+        value: https://mattermost.com/privacy-policy/
+        date: 2020-11-29
+    parent:
+        type: Web
+        title: Policies
+
+worth:
+    type: Blog
+    title: Jon Worth Euroblog
+    author: Worth, Jon
+    url: https://jonworth.eu/
+
+
+wrong:
+    type: Article
+    title: It is fast or it is wrong
+    date: 2018-12-29
+    author: Prokopov, Nikita
+    url: https://tonsky.me/blog/slow-wrong/
+    parent:
+        type: Blog
+        title: tonsky.me
