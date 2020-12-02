@@ -300,7 +300,7 @@ un-hdr:
 audio-descriptions:
     type: Audio
     title: Audio Descriptions
-    volume: 8
+    issue: 8
     date: 2017-02-07
     author: Barrows, Miellyn Fitzwater
     affiliated:
@@ -329,3 +329,35 @@ camb:
     parent:
         type: Reference
         title: Cambridge Dictionary
+
+logician:
+    type: Entry
+    title: Logician
+    serial-number: n10269785
+    url:
+        value: http://image-net.org/api/text/wordnet.structure.hyponym?wnid=n10269785
+        date: 2019-12-02
+    parent:
+        type: Repository
+        title: ImageNet
+        url: http://image-net.org
+
+dns-encryption:
+    type: Reference
+    title: Secret Key Transaction Authentication for DNS
+    serial-number: RFC 2845
+    author: Internet Engineering Task Force
+    url: https://tools.ietf.org/html/rfc2845
+    date: 2000
+
+roe-wade:
+    type: Case
+    title: Roe v. Wade
+    serial-number: 93 S. Ct. 705
+    date: 1973
+
+foia:
+    type: Legislation
+    title: Freedom of Information Act
+    serial-number : Pub. L. No. 107-296, 80 Stat. 250
+    date: 1967

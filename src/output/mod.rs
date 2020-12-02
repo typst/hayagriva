@@ -361,6 +361,11 @@ impl DisplayString {
         self.pending_formatting.push((self.len(), f));
     }
 
+    /// Resets all of the formatting.
+    pub fn clear_formatting(&mut self) {
+        self.formatting.clear();
+    }
+
     pub(crate) fn commit_formats(&mut self) {
         for (start, f) in self.pending_formatting.iter() {
             self.formatting.push((*start .. self.len(), *f))

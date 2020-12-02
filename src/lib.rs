@@ -1088,7 +1088,7 @@ mod tests {
             let citation = AtomicCitation::new(&entry.key, None, None);
 
             let refs = chicago
-                .get_note(citation, chicago::nb::notes::NoteType::Full)
+                .get_note(citation, chicago::nb::notes::NoteType::OnlyAuthor)
                 .unwrap();
             println!("{}", refs.print_ansi_vt100());
         }
