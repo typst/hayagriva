@@ -206,7 +206,10 @@ oiseau:
 
 renaissance:
     type: Book
-    title: Renaissance, Les Déracinés
+    title:
+        value: Renaissance, Les Déracinés
+        translation: Renaissance, The Unrooted
+    language: fr-FR
     author: Duval, Fred
     affiliated:
         - role: Illustrator
@@ -276,7 +279,6 @@ worth:
     title: Jon Worth Euroblog
     author: Worth, Jon
     url: https://jonworth.eu/
-
 
 wrong:
     type: Article

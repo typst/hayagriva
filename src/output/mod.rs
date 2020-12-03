@@ -458,7 +458,7 @@ fn push_comma_quote_aware(mut s: String, comma: char, space: bool) -> String {
         }
     } else if !s.is_empty() {
         if s.chars().last() != Some(comma) {
-            s.push(',');
+            s.push(comma);
         }
     }
 

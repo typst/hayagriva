@@ -1,48 +1,18 @@
 //! Formats citations as footnotes.
-use crate::lang::{en::get_month_name, en::get_ordinal, TitleCase};
 use crate::output::{
     abbreviate_publisher, format_range, push_comma_quote_aware, AtomicCitation,
     DisplayString, Formatting,
 };
-use crate::selectors::{Bind, Id, Neg, Wc};
+use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
-use crate::types::{Date, NumOrStr, PersonRole};
 use crate::{attrs, sel, Entry};
 use std::collections::HashMap;
 
-use super::shorthand;
-use super::{super::is_authoritative, super::AccessDateConfig, omit_initial_articles};
-
-/// Which parts of the day should be printed.
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum DateMode {
-    Year,
-    Month,
-    Day,
-}
-
-fn format_date(date: &Date, mode: DateMode) -> String {
-    let mut res = String::new();
-
-    if mode != DateMode::Year {
-        let day = if mode == DateMode::Day { date.day } else { None };
-
-        if let Some(month) = date.month {
-            res.push_str(&if let Some(day) = day {
-                format!("{} {}, ", get_month_name(month).unwrap(), day + 1)
-            } else {
-                format!("{} ", get_month_name(month).unwrap())
-            });
-        }
-    }
-
-    if date.year > 0 {
-        res += &date.year.to_string();
-    } else {
-        res += &format!("{} B.C.E.", -(date.year - 1));
-    }
-    res
-}
+use super::{
+    super::is_authoritative, and_list, common_author_handling, format_date,
+    get_chunk_title, get_info_element, get_title, AuthorRole, CommonChicagoNbConfig,
+    DateMode,
+};
 
 /// Describes the desired note type. This normally depends on the
 /// previously cited keys, depending on the behavior. Also see the Chicago
@@ -69,605 +39,25 @@ pub enum NoteType {
 pub struct NoteCitationFormatter<'s> {
     /// Entries within the database.
     entries: HashMap<String, &'s Entry>,
-    tc_formatter: TitleCase,
     /// Use ibid. instead of the repetition of the source.
     /// Discouraged by Chicago, 14.34.
     pub ibid: bool,
-    /// When to print URL access dates.
-    pub url_access_date: AccessDateConfig,
-    /// If there is greater or equal to this number of authors, they will be
-    /// abbreviated using et. al. after the first name.
-    pub et_al_limit: Option<usize>,
+    /// Properties shared with the bibliography.
+    pub common: CommonChicagoNbConfig,
 }
 
 impl<'s> NoteCitationFormatter<'s> {
     /// Create a new [NoteCitationFormatter].
     pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
-        let tc_formatter = TitleCase::new();
         Self {
             entries: entries.map(|e| (e.key.clone(), e)).collect(),
-            tc_formatter,
             ibid: false,
-            url_access_date: AccessDateConfig::NotFormallyPublished,
-            et_al_limit: Some(4),
+            common: CommonChicagoNbConfig::new(),
         }
-    }
-
-    fn and_list(&self, names: Vec<String>, oxford: bool) -> String {
-        let name_len = names.len();
-        let mut res = String::new();
-        let threshold = self.et_al_limit.unwrap_or(0);
-
-        for (index, name) in names.into_iter().enumerate() {
-            if threshold > 0 && index > 0 && name_len >= threshold {
-                break;
-            }
-
-            res += &name;
-
-            if (index as i32) <= name_len as i32 - 2
-                && (threshold == 0 || name_len < threshold)
-            {
-                if oxford || name_len > 2 {
-                    res += ", ";
-                } else {
-                    res.push(' ');
-                }
-            }
-            if (index as i32) == name_len as i32 - 2 {
-                res += "and ";
-            }
-        }
-
-        if threshold > 0 && name_len >= threshold {
-            res += " et al."
-        }
-
-        res
-    }
-
-    /// Indicates whether a kind of work is its own container.
-    fn self_contained(entry: &Entry) -> bool {
-        let kinds = [
-            Book,
-            Report,
-            Newspaper,
-            Periodical,
-            Proceedings,
-            Book,
-            Blog,
-            Reference,
-            Conference,
-            Anthology,
-            Thread,
-            Exhibition,
-            Case,
-        ];
-
-        let always_quote = [Web];
-
-        kinds.contains(&entry.entry_type)
-            || (!always_quote.contains(&entry.entry_type)
-                && sel!(alt
-                    attrs!(Wc(), "publisher"),
-                    sel!(Wc() => Neg(Wc())),
-                )
-                .apply(entry)
-                .is_some())
-    }
-
-    fn get_title(&self, entry: &Entry, short: bool) -> DisplayString {
-        let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-
-
-        let mut res = DisplayString::new();
-        if let Some(parent) = mv_title {
-            res += self.get_chunk_title(parent, short, true);
-        } else {
-            res += self.get_chunk_title(entry, short, true);
-        }
-
-        if !short && mv_title.is_none() {
-            let chapter = sel!(Id(Chapter) => Bind("p", attrs!(Wc(), "title")))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
-
-            let edited_book = sel!(alt
-                sel!(Wc() => Bind("p", attrs!(sel!(alt Id(Book), Id(Proceedings)), "editor"))),
-                sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
-                sel!(Id(Article) => Bind("p", Id(Proceedings))),
-                sel!(attrs!(Id(Entry), "author") => Bind("p", Id(Reference))),
-            ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
-
-            if let Some(parent) = edited_book.or(chapter) {
-                res.value = push_comma_quote_aware(res.value, ',', true);
-                if chapter.is_some() {
-                    if let Some(sn) = entry.get_serial_number() {
-                        let num = sn.chars().all(char::is_numeric);
-                        if num {
-                            res += &format!("chap. {} ", sn);
-                        } else {
-                            res += sn;
-                            res.push(' ');
-                        }
-                    }
-                }
-
-                res += "in ";
-                res += self.get_chunk_title(parent, false, true);
-            }
-
-            let web_parent = sel!(alt
-                sel!(Id(Web) => Bind("p", Wc())),
-                sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
-            )
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-
-            if web_parent.and_then(|p| p.get_title()).is_some() {
-                res.value = push_comma_quote_aware(res.value, ',', true);
-                res += &self.get_chunk_title(web_parent.unwrap(), false, false).value;
-            }
-
-            let blog_parent = sel!(Wc() => Bind("p", Id(Blog)))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
-            if let Some(parent) = blog_parent {
-                let titles = self.get_title(parent, false);
-
-                if !titles.is_empty() {
-                    res.value = push_comma_quote_aware(res.value, ',', true);
-                }
-
-                res += titles;
-            } else if entry.entry_type == Blog {
-                let title_parent = sel!(Wc() => Bind("p", attrs!(Wc(), "title")))
-                    .apply(entry)
-                    .map(|mut hm| hm.remove("p").unwrap());
-                if let Some(parent) = title_parent {
-                    let titles = self.get_title(parent, false);
-                    res.value = push_comma_quote_aware(res.value, ',', true);
-                    res += titles;
-                }
-            }
-        }
-
-        res
-    }
-
-    fn get_info_element(&self, mut entry: &Entry) -> DisplayString {
-        let series = sel!(alt
-            attrs!(Id(Video), "volume-total"),
-            attrs!(Id(Audio), "volume-total"),
-            sel!(Id(Video) => Id(Video)),
-            sel!(Id(Audio) => Id(Audio)),
-        )
-        .apply(entry)
-        .is_some();
-
-        let mut res = vec![];
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => Bind("p", sel!(alt Id(Periodical), Id(Newspaper)))
-        ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
-        let newspaper = sel!(Wc() => Bind("p", Id(Newspaper)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-
-        let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-
-        let orig_entry = entry;
-        if let Some(mv_p) = mv_title {
-            entry = mv_p;
-        }
-
-        let affs = sel!(alt
-            Bind("tl", attrs!(Wc(), "affiliated")),
-            sel!(Wc() => Bind("tl", attrs!(Wc(), "affiliated"))),
-        )
-        .apply(entry)
-        .map(|mut hm| hm.remove("tl").unwrap());
-
-        let eds = sel!(alt
-            Bind("ed", attrs!(Wc(), "editor")),
-            sel!(Wc() => Bind("ed", attrs!(Wc(), "editor"))),
-        )
-        .apply(entry)
-        .map(|mut hm| hm.remove("ed").unwrap().get_editors().unwrap());
-
-        let translators = affs.and_then(|e| {
-            let ts = e.get_affiliated_filtered(PersonRole::Translator);
-            if ts.is_empty() { None } else { Some(ts) }
-        });
-
-        let compilers = affs.and_then(|e| {
-            let ts = e.get_affiliated_filtered(PersonRole::Compiler);
-            if ts.is_empty() { None } else { Some(ts) }
-        });
-
-        if let Some(trans) = translators {
-            if orig_entry.get_authors_fallible().is_some()
-                || orig_entry.get_editors().is_some()
-            {
-                let trans_names = trans
-                    .into_iter()
-                    .map(|p| p.get_given_name_initials_first(false))
-                    .collect::<Vec<_>>();
-
-                let mut local = "trans. ".to_string();
-
-                local += &self.and_list(trans_names, false);
-                res.push(local.into())
-            }
-        }
-
-        if let Some(eds) = eds {
-            if orig_entry.get_authors_fallible().is_some() {
-                let ed_names = eds
-                    .into_iter()
-                    .map(|p| p.get_given_name_initials_first(false))
-                    .collect::<Vec<_>>();
-
-                let mut local =
-                    if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
-
-                local += &self.and_list(ed_names, false);
-                res.push(local.into())
-            }
-        }
-
-        if let Some(journal) = journal {
-            if let Some(volume) = entry.get_volume() {
-                res.push(format_range("pt.", "pts.", volume).into());
-            }
-
-            let mut local = self.get_chunk_title(journal, false, true);
-
-            if let Some(paper) = newspaper {
-                if let Some(location) = paper.get_location() {
-                    if !local.is_empty() {
-                        local.push(' ');
-                    }
-
-                    local += &format!("({})", location);
-                }
-            }
-
-            if let Some(ed) = journal.get_edition() {
-                let applied = match ed {
-                    NumOrStr::Number(n) if *n > 1 => format!("{} ser.", get_ordinal(*n)),
-                    NumOrStr::Str(s) => {
-                        let s =
-                            s.to_lowercase().replace("new", "n.").replace("series", "s.");
-                        let s = if s.trim() == "n. s." { "n.s.".into() } else { s };
-
-                        s
-                    }
-                    _ => String::new(),
-                };
-
-                if !applied.is_empty() {
-                    if !local.is_empty() {
-                        local += ", ";
-                    }
-
-                    local += &applied;
-
-                    if journal.get_volume().is_some() {
-                        local.push(',')
-                    }
-                }
-            }
-
-            if let Some(vol) = journal.get_volume() {
-                if !local.is_empty() {
-                    local.push(' ');
-                }
-                local += &format_range("", "", vol);
-            }
-
-            if let Some(iss) = journal.get_issue() {
-                if !local.is_empty() {
-                    local += ", ";
-                }
-
-                local += &match iss {
-                    NumOrStr::Number(i) => format!("no. {}", i),
-                    NumOrStr::Str(s) => s.clone(),
-                };
-            }
-            res.push(local);
-        }
-
-        if let Some(comp) = compilers {
-            if (orig_entry.get_authors_fallible().is_some()
-                || orig_entry.entry_type == Reference)
-                || orig_entry.get_editors().is_some()
-            {
-                let comp_names = comp
-                    .into_iter()
-                    .map(|p| p.get_given_name_initials_first(false))
-                    .collect::<Vec<_>>();
-
-                let mut local =
-                    if comp_names.len() > 1 { "comps. " } else { "comp. " }.to_string();
-
-                local += &self.and_list(comp_names, false);
-                res.push(local.into())
-            }
-        }
-
-        if let Some(edition) = entry.get_edition() {
-            match edition {
-                NumOrStr::Number(i) if *i <= 1 => {}
-                NumOrStr::Number(i) => {
-                    res.push(format!("{} ed.", get_ordinal(*i)).into())
-                }
-                NumOrStr::Str(s) => {
-                    res.push(
-                        s.split(' ')
-                            .map(|i| match i.to_lowercase().as_ref() {
-                                "edition" => "ed.",
-                                "revised" => "rev.",
-                                _ => i,
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                            .into(),
-                    );
-                }
-            }
-        }
-
-        if journal.is_none() {
-            if let Some(vols) = orig_entry.get_volume() {
-                if series {
-                    res.push(format_range("season", "seasons", vols).into())
-                } else {
-                    res.push(format_range("vol.", "vols.", vols).into())
-                }
-            }
-
-            if let Some(vtotal) = orig_entry.get_total_volumes() {
-                if *vtotal > 1 {
-                    if series {
-                        res.push(format!("{} seasons", vtotal).into())
-                    } else {
-                        res.push(format!("{} vols.", vtotal).into())
-                    }
-                }
-            }
-
-            if series {
-                if let Some(eps) = orig_entry.get_issue() {
-                    match eps {
-                        NumOrStr::Str(s) => res.push(s.clone().into()),
-                        NumOrStr::Number(n) => res.push(format!("ep. {}", n).into()),
-                    }
-                }
-            }
-
-            if let Some(_parent) = mv_title {
-                let mut title = DisplayString::new();
-                title.start_format(Formatting::Italic);
-                if let Some(own_title) =
-                    orig_entry.get_title_fmt(Some(&self.tc_formatter), None)
-                {
-                    title += &own_title.value.title_case;
-                }
-                if let Some(eds) = orig_entry.get_editors() {
-                    title.value = push_comma_quote_aware(title.value, ',', true);
-                    title.commit_formats();
-                    let ed_names = eds
-                        .into_iter()
-                        .map(|p| p.get_given_name_initials_first(false))
-                        .collect::<Vec<_>>();
-
-                    let mut local =
-                        if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
-
-                    local += &self.and_list(ed_names, false);
-                    title += &local;
-                } else {
-                    title.commit_formats();
-                }
-                res.push(title);
-            }
-        }
-
-        // Series titles: Chicago 14.123
-        if mv_title.is_none() {
-            let spec = sel!(alt
-                sel!(Wc() => sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))),
-                sel!(Wc() => sel!(Id(Book) => Bind("p", attrs!(Id(Book), "title")))),
-                sel!(Id(Book) => Bind("p", attrs!(Wc(), "title"))),
-            );
-            if let Some(mut hm) = spec.apply(orig_entry) {
-                let par_anth = hm.remove("p").unwrap();
-                let mut title = self.get_chunk_title(par_anth, false, false).value.into();
-
-                let issue = if let Some(issue) = par_anth.get_issue() {
-                    Some(match issue {
-                        NumOrStr::Str(s) => (s.clone(), None),
-                        NumOrStr::Number(i) => (
-                            if series {
-                                format!("ep. {}", i)
-                            } else {
-                                format!("no. {}", i)
-                            },
-                            Some(*i),
-                        ),
-                    })
-                } else {
-                    None
-                };
-
-                let volume = par_anth.get_volume().map(|v| {
-                    let val = if v.start == v.end { Some(v.start) } else { None };
-                    (format_range("vol.", "vols.", v), val)
-                });
-
-                if issue.is_some() && volume.is_some() {
-                    res.push(title);
-                    res.push(volume.unwrap().0.into());
-                    res.push(issue.unwrap().0.into());
-                } else {
-                    let item = issue.or(volume);
-                    if let Some((_, Some(v))) = item {
-                        title.push(' ');
-                        title += &v.to_string();
-                        res.push(title);
-                    } else if let Some((s, _)) = item {
-                        res.push(title);
-                        res.push(s.into());
-                    } else {
-                        res.push(title);
-                    }
-                }
-            }
-        }
-
-        if entry.entry_type == Reference {
-            if let Some(sn) = entry.get_serial_number() {
-                res.push(sn.into());
-            }
-        } else if entry.entry_type == Case || entry.entry_type == Legislation {
-            if let Some(org) =
-                entry.get_serial_number().or_else(|| entry.get_organization())
-            {
-                res.push(org.into());
-            }
-        }
-
-        DisplayString::join(&res, ", ")
-    }
-
-    fn get_chunk_title(
-        &self,
-        entry: &Entry,
-        short: bool,
-        mut fmt: bool,
-    ) -> DisplayString {
-        let mut res = DisplayString::new();
-
-        if entry.get_title() == Some("Wikipedia") || entry.entry_type == Repository {
-            fmt = false;
-        }
-        let sc = fmt && NoteCitationFormatter::self_contained(entry);
-
-        if sc {
-            res.start_format(Formatting::Italic);
-        } else if fmt {
-            res += "“";
-        }
-
-        let np = entry.entry_type == Newspaper;
-
-        if short {
-            if let Some(title) = entry.get_title_raw().map(|t| shorthand(t)) {
-                let title = title.format(Some(&self.tc_formatter), None);
-                res += &if entry.entry_type == Entry {
-                    title.value
-                } else {
-                    title.title_case
-                };
-            }
-        } else {
-            if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
-                let title = title.value;
-                res += &if entry.entry_type == Entry {
-                    title.value
-                } else if entry.entry_type == Case {
-                    title.title_case.replace("V.", "v.")
-                } else {
-                    title.title_case
-                };
-            }
-        }
-
-        if np {
-            res.value = omit_initial_articles(&res.value);
-        }
-
-        if sc {
-            res.commit_formats();
-        } else if fmt {
-            res += "”";
-        }
-
-        if !short && entry.entry_type == Blog {
-            let brackets = !res.is_empty();
-            if brackets {
-                res.push(' ');
-                res.push('(');
-            }
-            res += "blog";
-            if brackets {
-                res.push(')');
-            }
-        }
-
-        res
     }
 
     fn get_author(&self, entry: &Entry, short: bool) -> String {
-        enum AuthorRole {
-            Normal,
-            Editor,
-            Compiler,
-            Translator,
-            Director,
-            ExecutiveProducer,
-        }
-
-        let mut add = AuthorRole::Normal;
-        let authors = if let Some(authors) = entry.get_authors_fallible() {
-            authors.to_vec()
-        } else if let Some(eds) = entry.get_editors() {
-            add = AuthorRole::Editor;
-            eds.to_vec()
-        } else if entry.entry_type == Video {
-            let tv_series =
-                sel!(attrs!(Id(Video), "issue", "volume") => Bind("p", Id(Video)));
-            if let Some(mut hm) = tv_series.apply(entry) {
-                let mut affs = entry.get_affiliated_filtered(PersonRole::Director);
-                affs.extend(
-                    entry.get_affiliated_filtered(PersonRole::Writer).into_iter(),
-                );
-                if !affs.is_empty() {
-                    affs
-                } else {
-                    let parent = hm.remove("p").unwrap();
-                    add = AuthorRole::ExecutiveProducer;
-                    parent.get_affiliated_filtered(PersonRole::ExecutiveProducer)
-                }
-            } else {
-                let dir = entry.get_affiliated_filtered(PersonRole::Director);
-                if !dir.is_empty() {
-                    add = AuthorRole::Director;
-                    dir
-                } else {
-                    add = AuthorRole::ExecutiveProducer;
-                    entry.get_affiliated_filtered(PersonRole::ExecutiveProducer)
-                }
-            }
-        } else {
-            let compilers = entry.get_affiliated_filtered(PersonRole::Compiler);
-            let translators = entry.get_affiliated_filtered(PersonRole::Translator);
-            if !compilers.is_empty() {
-                add = AuthorRole::Compiler;
-                compilers
-            } else if !translators.is_empty() {
-                add = AuthorRole::Translator;
-                translators
-            } else {
-                vec![]
-            }
-        };
-
+        let (authors, add) = common_author_handling(entry);
         if authors.is_empty() {
             return String::new();
         }
@@ -706,7 +96,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 })
                 .collect::<Vec<_>>()
         };
-        let mut res = self.and_list(authors, false);
+        let mut res = and_list(authors, false, self.common.et_al_limit);
 
         if !short {
             let add = match add {
@@ -794,11 +184,16 @@ impl<'s> NoteCitationFormatter<'s> {
             }
         }
 
-        if entry.entry_type == Manuscript {
+        let preprint = sel!(Id(Article) => Id(Repository)).apply(entry).is_some();
+        if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
             }
-            res += "unpublished manuscript";
+            if preprint {
+                res += "preprint";
+            } else {
+                res += "unpublished manuscript";
+            }
         } else if entry.entry_type == Artwork {
             // Do the publisher stuff later
         } else if let Some(conf) = conference {
@@ -807,7 +202,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 res += org;
             }
 
-            let conf_name = self.get_chunk_title(conf, false, false).value;
+            let conf_name = get_chunk_title(conf, false, false, &self.common).value;
             if !conf_name.is_empty() {
                 res += ", ";
                 res += &conf_name;
@@ -834,11 +229,12 @@ impl<'s> NoteCitationFormatter<'s> {
             .or_else(|| {
                 if entry.entry_type == Reference && entry.get_volume().is_none() {
                     entry.get_authors_fallible().map(|a| {
-                        self.and_list(
+                        and_list(
                             a.into_iter()
                                 .map(|p| p.get_given_name_initials_first(false))
                                 .collect::<Vec<_>>(),
                             false,
+                            self.common.et_al_limit,
                         )
                     })
                 } else {
@@ -1001,7 +397,7 @@ impl<'s> NoteCitationFormatter<'s> {
             .map(|mut hm| hm.remove("p").unwrap());
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
-            let title = self.get_title(dictionary, short);
+            let title = get_title(dictionary, short, &self.common, ',');
             if !res.is_empty() && !title.is_empty() {
                 if res.last().unwrap_or('a') != ',' {
                     res.push(',');
@@ -1011,7 +407,7 @@ impl<'s> NoteCitationFormatter<'s> {
             }
             res += title;
         } else if kind != NoteType::OnlyAuthor || no_author {
-            let mut title = self.get_title(entry, short);
+            let mut title = get_title(entry, short, &self.common, ',');
             if (entry.entry_type == Case || entry.entry_type == Legislation) && !short {
                 title.clear_formatting();
             }
@@ -1034,9 +430,9 @@ impl<'s> NoteCitationFormatter<'s> {
 
         if !short {
             let add = if no_author && dictionary.is_some() {
-                self.get_info_element(dictionary.unwrap())
+                get_info_element(dictionary.unwrap(), &self.common, false)
             } else {
-                self.get_info_element(entry)
+                get_info_element(entry, &self.common, false)
             };
             if !add.is_empty() {
                 res.value = push_comma_quote_aware(res.value, ',', true);
@@ -1071,7 +467,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 colon = true;
             }
         } else if database.is_some() {
-            let title = self.get_chunk_title(entry, true, false).value;
+            let title = get_chunk_title(entry, true, false, &self.common).value;
             let db_entry = if title.is_empty() {
                 entry.get_serial_number().unwrap_or_default().into()
             } else {
@@ -1086,7 +482,7 @@ impl<'s> NoteCitationFormatter<'s> {
         if no_author && dictionary.is_some() && entry.get_authors_fallible().is_none() {
             res.value = push_comma_quote_aware(res.value, ',', true);
             res += "s.v. ";
-            res += self.get_chunk_title(entry, false, true);
+            res += get_chunk_title(entry, false, true, &self.common);
         }
 
         if let Some(supplement) = citation.supplement {
@@ -1137,7 +533,8 @@ impl<'s> NoteCitationFormatter<'s> {
             } else if let Some(qurl) = entry.get_any_url() {
                 let mut res = DisplayString::new();
                 if let Some(date) = qurl.visit_date.as_ref() {
-                    if database.is_none() && self.url_access_date.needs_date(entry) {
+                    if database.is_none() && self.common.url_access_date.needs_date(entry)
+                    {
                         res +=
                             &format!("accessed {}, ", format_date(date, DateMode::Day));
                     }
@@ -1156,13 +553,14 @@ impl<'s> NoteCitationFormatter<'s> {
                     res.push('.');
                 }
             } else if database.is_some() {
-                let mut brack_content = self.get_chunk_title(entry, false, false);
+                let mut brack_content =
+                    get_chunk_title(entry, false, false, &self.common);
                 if let Some(sn) = entry.get_serial_number() {
                     brack_content.value =
                         push_comma_quote_aware(brack_content.value, ',', true);
                     brack_content += sn;
                 }
-                if self.url_access_date.needs_date(entry) {
+                if self.common.url_access_date.needs_date(entry) {
                     if let Some(date) =
                         entry.get_any_url().and_then(|u| u.visit_date.as_ref())
                     {
@@ -1194,7 +592,8 @@ impl<'s> NoteCitationFormatter<'s> {
             let no_url = url.is_empty();
             res += url;
 
-            if no_url || entry.entry_type == Manuscript {
+            let preprint = sel!(Id(Article) => Id(Repository)).apply(entry).is_some();
+            if no_url || entry.entry_type == Manuscript || preprint {
                 if let Some(archive) = entry.get_archive() {
                     res.value = push_comma_quote_aware(res.value, ',', true);
 

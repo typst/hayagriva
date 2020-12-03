@@ -1079,7 +1079,7 @@ mod tests {
     }
 
     #[test]
-    fn chicago() {
+    fn chicago_n() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let chicago = chicago::nb::notes::NoteCitationFormatter::new(entries.iter());
@@ -1088,8 +1088,20 @@ mod tests {
             let citation = AtomicCitation::new(&entry.key, None, None);
 
             let refs = chicago
-                .get_note(citation, chicago::nb::notes::NoteType::OnlyAuthor)
+                .get_note(citation, chicago::nb::notes::NoteType::Full)
                 .unwrap();
+            println!("{}", refs.print_ansi_vt100());
+        }
+    }
+
+    #[test]
+    fn chicago_b() {
+        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let entries = load_yaml_structure(&contents).unwrap();
+        let chicago = chicago::nb::bibliography::BibliographyFormatter::new();
+
+        for entry in &entries {
+            let refs = chicago.format(&entry);
             println!("{}", refs.print_ansi_vt100());
         }
     }
@@ -1134,7 +1146,8 @@ mod tests {
         select_all!("Article > (Periodical | Newspaper)", entries, [
             "omarova-libra",
             "kinetics",
-            "house"
+            "house",
+            "swedish",
         ]);
         select_all!("(Chapter | Anthos) > (Anthology | Book)", entries, [
             "harry", "gedanken"
@@ -1145,7 +1158,15 @@ mod tests {
             "oiseau",
             "georgia",
             "really-habitable",
-            "electronic-music"
+            "electronic-music",
+            "mattermost",
+            "worth",
+            "wrong",
+            "un-hdr",
+            "audio-descriptions",
+            "camb",
+            "logician",
+            "dns-encryption",
         ]);
         select_all!("!(*[url] | (* > *[url]))", entries, [
             "zygos",
@@ -1157,7 +1178,12 @@ mod tests {
             "house",
             "plaque",
             "renaissance",
-            "gedanken"
+            "gedanken",
+            "donne",
+            "roe-wade",
+            "foia",
+            "drill",
+            "swedish",
         ]);
     }
 

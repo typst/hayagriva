@@ -248,7 +248,7 @@ fn binops(
 macro_rules! attrs {
     ($src:expr, $($exp:expr),* $(,)?) => {
         {
-            use crate::selectors::{ExprTag, TagOp, Ident};
+            use crate::selectors::{ExprTag, Expr, TagOp, Ident, Spanned};
             let mut array = vec![];
             $(
                 array.push(Spanned::zero(Ident::new($exp).unwrap()));
