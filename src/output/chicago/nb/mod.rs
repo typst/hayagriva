@@ -225,7 +225,8 @@ fn get_title(
                         .map(|p| p.get_given_name_initials_first(false))
                         .collect::<Vec<_>>();
 
-                    let mut local = if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
+                    let mut local =
+                        if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
 
                     local += &and_list(ed_names, false, common.et_al_limit);
                     res.value = push_comma_quote_aware(res.value, ',', true);

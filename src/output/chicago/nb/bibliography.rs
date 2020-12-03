@@ -81,6 +81,31 @@ impl BibliographyFormatter {
             res += add;
         }
 
+        if res.is_empty() {
+            let web_thing = sel!(alt
+                Id(Web),
+                sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
+            )
+            .apply(entry);
+            if let Some(wt) = web_thing {
+                let creator = if let Some(org) = entry.get_organization() {
+                    org.into()
+                } else if wt.get("p").and_then(|e| e.get_authors_fallible()).is_some() {
+                    self.get_author(wt.get("p").unwrap())
+                } else if let Some(org) = wt.get("p").and_then(|e| e.get_organization()) {
+                    org.into()
+                } else {
+                    "".into()
+                };
+
+                if !res.is_empty() && !creator.is_empty() {
+                    res += ", ";
+                }
+
+                res += &creator;
+            }
+        }
+
         res
     }
 
@@ -89,9 +114,7 @@ impl BibliographyFormatter {
             .apply(entry)
             .map(|mut hm| hm.remove("p").unwrap());
         let mut res = if entry.entry_type == Thesis {
-            "thesis".to_string()
-        } else if conference.is_some() {
-            "conference presentation".into()
+            "Thesis".to_string()
         } else {
             String::new()
         };
@@ -99,28 +122,24 @@ impl BibliographyFormatter {
         let published_entry = sel!(Wc() => Bind("p", attrs!(Wc(), "publisher")))
             .apply(entry)
             .map(|mut hm| hm.remove("p").unwrap());
-        if let Some(loc) = entry
-            .get_location()
-            .or_else(|| published_entry.and_then(|e| e.get_location()))
-        {
-            if !res.is_empty() {
-                res += ", ";
+        if !conference.is_some() {
+            if let Some(loc) = entry
+                .get_location()
+                .or_else(|| published_entry.and_then(|e| e.get_location()))
+            {
+                if !res.is_empty() {
+                    res += ", ";
+                }
+                res += loc;
+            } else if [Book, Anthology].contains(&entry.entry_type)
+                && entry.get_any_date().map(|d| d.year).unwrap_or(2020) < 1981
+            {
+                if !res.is_empty() {
+                    res += ", ";
+                }
+                res += "n.p.";
             }
-            res += loc;
-        } else if [Book, Anthology].contains(&entry.entry_type)
-            && entry.get_any_date().map(|d| d.year).unwrap_or(2020) < 1981
-        {
-            if !res.is_empty() {
-                res += ", ";
-            }
-            res += "n.p.";
         }
-
-        let web_thing = sel!(alt
-            Id(Web),
-            sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
-        )
-        .apply(entry);
 
         if entry.entry_type == Tweet {
             if let Some(host) = entry
@@ -155,15 +174,17 @@ impl BibliographyFormatter {
         } else if entry.entry_type == Artwork {
             // Do the publisher stuff later
         } else if let Some(conf) = conference {
+            let conf_name = get_chunk_title(conf, false, false, &self.common).value;
+            if !conf_name.is_empty() {
+                res += "Conference Presentation at ";
+                res += &conf_name;
+            } else {
+                res += "Conference presentation";
+            }
+
             if let Some(org) = conf.get_organization() {
                 res += ", ";
                 res += org;
-            }
-
-            let conf_name = get_chunk_title(conf, false, false, &self.common).value;
-            if !conf_name.is_empty() {
-                res += ", ";
-                res += &conf_name;
             }
 
             if let Some(loc) = conf.get_location() {
@@ -205,24 +226,6 @@ impl BibliographyFormatter {
                 res += ": ";
             }
             res += &publisher;
-        } else if let Some(wt) = web_thing {
-            let creator = if entry.get_authors_fallible().is_some() {
-                self.get_author(entry)
-            } else if let Some(org) = entry.get_organization() {
-                org.into()
-            } else if wt.get("p").and_then(|e| e.get_authors_fallible()).is_some() {
-                self.get_author(wt.get("p").unwrap())
-            } else if let Some(org) = wt.get("p").and_then(|e| e.get_organization()) {
-                org.into()
-            } else {
-                "".into()
-            };
-
-            if !res.is_empty() && !creator.is_empty() {
-                res += ", ";
-            }
-
-            res += &creator;
         }
 
         let journal = sel!(
@@ -250,11 +253,7 @@ impl BibliographyFormatter {
             }
 
             let date = format_date(date, mode);
-            if journal {
-                format!("({})", date)
-            } else {
-                date
-            }
+            if journal { format!("({})", date) } else { date }
         } else if [Book, Anthology].contains(&entry.entry_type)
             && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
         {
@@ -328,17 +327,9 @@ impl BibliographyFormatter {
             }
         }
 
-        let web_thing = sel!(alt
-            Id(Web),
-            sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
-        )
-        .apply(entry)
-        .is_some();
-
-        let mut res: DisplayString = if !web_thing
-            && (entry.entry_type != Reference
-                || entry.get_publisher().is_some()
-                || entry.get_volume().is_some())
+        let mut res: DisplayString = if entry.entry_type != Reference
+            || entry.get_publisher().is_some()
+            || entry.get_volume().is_some()
         {
             self.get_author(entry).into()
         } else {
