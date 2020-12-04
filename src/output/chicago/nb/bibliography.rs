@@ -33,30 +33,26 @@ impl BibliographyFormatter {
         }
 
         let count = authors.len();
-        let authors = authors
-            .into_iter()
-            .enumerate()
-            .map(|(i, p)| {
-                let name = if i == 0 {
-                    p.get_name_first(false, true)
+        let authors = authors.into_iter().enumerate().map(|(i, p)| {
+            let name = if i == 0 {
+                p.get_name_first(false, true)
+            } else {
+                p.get_given_name_initials_first(false)
+            };
+            if entry.entry_type == Tweet {
+                if let Some(pseud) = entry.get_twitter_handle(i) {
+                    format!("{} ({})", name, pseud)
                 } else {
-                    p.get_given_name_initials_first(false)
-                };
-                if entry.entry_type == Tweet {
-                    if let Some(pseud) = entry.get_twitter_handle(i) {
-                        format!("{} ({})", name, pseud)
-                    } else {
-                        name
-                    }
-                } else {
-                    if let Some(pseud) = p.alias {
-                        format!("{} [{}]", pseud, name)
-                    } else {
-                        name
-                    }
+                    name
                 }
-            })
-            .collect::<Vec<_>>();
+            } else {
+                if let Some(pseud) = p.alias {
+                    format!("{} [{}]", pseud, name)
+                } else {
+                    name
+                }
+            }
+        });
         let mut res = and_list(authors, true, self.common.et_al_limit);
 
         let add = match add {
@@ -73,7 +69,7 @@ impl BibliographyFormatter {
         };
 
         if !add.is_empty() {
-            if !res.is_empty() && res.chars().last().unwrap_or('a') != ',' {
+            if !res.is_empty() && res.chars().last() != Some(',') {
                 res.push(',');
             }
 
@@ -131,7 +127,7 @@ impl BibliographyFormatter {
                     res += ", ";
                 }
                 res += loc;
-            } else if [Book, Anthology].contains(&entry.entry_type)
+            } else if matches!(&entry.entry_type, Book | Anthology)
                 && entry.get_any_date().map(|d| d.year).unwrap_or(2020) < 1981
             {
                 if !res.is_empty() {
@@ -161,7 +157,7 @@ impl BibliographyFormatter {
                 res += service;
             }
         }
-        let preprint = sel!(Id(Article) => Id(Repository)).apply(entry).is_some();
+        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
         if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
@@ -195,8 +191,8 @@ impl BibliographyFormatter {
             .get_publisher()
             .or_else(|| published_entry.map(|e| e.get_publisher().unwrap()))
             .or_else(|| {
-                if [Report, Thesis].contains(&entry.entry_type)
-                    || ([Case, Legislation].contains(&entry.entry_type)
+                if matches!(&entry.entry_type, Report | Thesis)
+                    || (matches!(&entry.entry_type, Case | Legislation)
                         && entry.get_serial_number().is_some())
                 {
                     entry.get_organization()
@@ -204,14 +200,12 @@ impl BibliographyFormatter {
                     None
                 }
             })
-            .map(|s| s.into())
+            .map(Into::into)
             .or_else(|| {
                 if entry.entry_type == Reference && entry.get_volume().is_none() {
                     entry.get_authors_fallible().map(|a| {
                         and_list(
-                            a.into_iter()
-                                .map(|p| p.get_given_name_initials_first(false))
-                                .collect::<Vec<_>>(),
+                            a.into_iter().map(|p| p.get_given_name_initials_first(false)),
                             false,
                             self.common.et_al_limit,
                         )
@@ -231,16 +225,14 @@ impl BibliographyFormatter {
         let journal = sel!(
             sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
         )
-        .apply(entry)
-        .is_some();
+        .matches(entry);
         let date = if let Some(date) = entry.get_any_date() {
             let conf = sel!(alt
                 sel!(Wc() => Id(Conference)),
                 Id(Conference),
                 Id(Exhibition),
             )
-            .apply(entry)
-            .is_some();
+            .matches(entry);
 
             let mut mode = match (journal, is_authoritative(entry)) {
                 (true, _) => DateMode::Month,
@@ -254,7 +246,7 @@ impl BibliographyFormatter {
 
             let date = format_date(date, mode);
             if journal { format!("({})", date) } else { date }
-        } else if [Book, Anthology].contains(&entry.entry_type)
+        } else if matches!(&entry.entry_type, Book | Anthology)
             && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
         {
             "n.d.".to_string()
@@ -273,27 +265,26 @@ impl BibliographyFormatter {
         if entry.entry_type == Artwork {
             let mut items: Vec<String> = vec![];
 
-            if let Some(note) = entry.get_note() {
-                items.push(note.into());
-            }
+            items.extend(entry.get_note().map(Into::into));
 
             let parent = sel!(Wc() => Bind("p", Id(Exhibition)))
                 .apply(entry)
                 .map(|mut hm| hm.remove("p").unwrap());
-            if let Some(org) = entry
-                .get_organization()
-                .or_else(|| entry.get_publisher())
-                .or_else(|| parent.and_then(|p| p.get_organization()))
-                .or_else(|| parent.and_then(|p| p.get_publisher()))
-            {
-                items.push(org.into())
-            }
+            items.extend(
+                entry
+                    .get_organization()
+                    .or_else(|| entry.get_publisher())
+                    .or_else(|| parent.and_then(|p| p.get_organization()))
+                    .or_else(|| parent.and_then(|p| p.get_publisher()))
+                    .map(Into::into),
+            );
 
-            if let Some(loc) =
-                entry.get_location().or_else(|| parent.and_then(|p| p.get_location()))
-            {
-                items.push(loc.into())
-            }
+            items.extend(
+                entry
+                    .get_location()
+                    .or_else(|| parent.and_then(|p| p.get_location()))
+                    .map(Into::into),
+            );
 
             let items = items.join(", ");
             if !items.is_empty() && !res.is_empty() {
@@ -316,7 +307,7 @@ impl BibliographyFormatter {
     /// Format a citation as a note.
     pub fn format(&self, mut entry: &Entry) -> DisplayString {
         let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
+        while sel!(alt Id(Chapter), Id(Scene)).matches(entry)
             && entry.get_title().is_none()
         {
             if let Some(p) = parent {
@@ -348,7 +339,7 @@ impl BibliographyFormatter {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, false, &self.common, '.');
             if !res.is_empty() && !title.is_empty() {
-                if res.last().unwrap_or('a') != ',' {
+                if res.last() != Some(',') {
                     res.push(',');
                 }
 
@@ -361,7 +352,7 @@ impl BibliographyFormatter {
                 title.clear_formatting();
             }
             if !res.is_empty() && !title.is_empty() {
-                if res.last().unwrap_or('a') != '.' {
+                if res.last() != Some('.') {
                     res.push('.');
                 }
 
@@ -374,14 +365,10 @@ impl BibliographyFormatter {
         let journal = sel!(
             sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
         )
-        .apply(entry)
-        .is_some();
+        .matches(entry);
 
-        let mut add = if no_author && dictionary.is_some() {
-            get_info_element(dictionary.unwrap(), &self.common, true)
-        } else {
-            get_info_element(entry, &self.common, true)
-        };
+        let dict = if no_author { dictionary.unwrap_or(entry) } else { entry };
+        let mut add = get_info_element(dict, &self.common, true);
 
         add.value = add
             .value
@@ -397,11 +384,7 @@ impl BibliographyFormatter {
         }
         res += add;
 
-        let publ = if no_author && dictionary.is_some() {
-            self.get_publication_info(dictionary.unwrap())
-        } else {
-            self.get_publication_info(entry)
-        };
+        let publ = self.get_publication_info(dict);
         if !publ.is_empty() && !res.is_empty() {
             res.value = push_comma_quote_aware(res.value, '.', true);
         }
@@ -512,7 +495,7 @@ impl BibliographyFormatter {
         let no_url = url.is_empty();
         res += url;
 
-        let preprint = sel!(Id(Article) => Id(Repository)).apply(entry).is_some();
+        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
         if no_url || entry.entry_type == Manuscript || preprint {
             if let Some(archive) = entry.get_archive() {
                 res.value = push_comma_quote_aware(res.value, ',', true);

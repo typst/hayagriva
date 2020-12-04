@@ -429,10 +429,11 @@ impl ApaBibliographyFormatter {
 
         let book =
             sel!(alt Id(Book), Id(Report), Id(Reference), Id(Anthology), Id(Proceedings))
-                .apply(entry)
-                .is_some();
+                .matches(entry);
 
-        if let Some(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
+        if let Some(title) =
+            entry.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+        {
             let multivol_spec = sel!(
                 attrs!(sel!(alt Id(Book), Id(Proceedings), Id(Anthology)), "volume") =>
                 Bind("p", sel!(alt Id(Book), Id(Proceedings), Id(Anthology)))
@@ -445,11 +446,11 @@ impl ApaBibliographyFormatter {
                 res.start_format(Formatting::Italic);
             }
             if entry.entry_type == Tweet {
-                let words = &title.value.value.split_whitespace().collect::<Vec<_>>();
+                let words = &title.value.split_whitespace().collect::<Vec<_>>();
                 res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
                     .join(" ");
             } else {
-                res += &title.value.sentence_case;
+                res += &title.sentence_case;
             }
             res.commit_formats();
 
@@ -1018,7 +1019,7 @@ impl ApaBibliographyFormatter {
 impl BibliographyFormatter for ApaBibliographyFormatter {
     fn get_reference(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some() {
+        while sel!(alt Id(Chapter), Id(Scene)).matches(entry) {
             if let Some(p) = parent {
                 entry = &p;
                 parent = entry.get_parents().and_then(|v| v.first());
@@ -1027,7 +1028,7 @@ impl BibliographyFormatter for ApaBibliographyFormatter {
             }
         }
 
-        let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).apply(entry).is_some();
+        let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).matches(entry);
 
         let authors = self.get_author(entry);
         let date = self.get_date(entry);

@@ -43,6 +43,11 @@ fn flatten_mp(expr: &Expr) -> Vec<&Expr> {
 }
 
 impl Expr {
+    /// Checks if the selector matches the provided [Entry].
+    pub fn matches(&self, entry: &Entry) -> bool {
+        self.apply(entry).is_some()
+    }
+
     /// Applies the expression to an [Entry] and returns the bound variables in a hash
     /// map if there was a match.
     pub fn apply<'s>(&self, entry: &'s Entry) -> Option<HashMap<String, &'s Entry>> {

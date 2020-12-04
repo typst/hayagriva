@@ -113,7 +113,7 @@ impl<'s> NoteCitationFormatter<'s> {
             };
 
             if !add.is_empty() {
-                if !res.is_empty() && res.chars().last().unwrap_or('a') != ',' {
+                if !res.is_empty() && res.chars().last() != Some(',') {
                     res.push(',');
                 }
 
@@ -148,7 +148,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 res += ", ";
             }
             res += loc;
-        } else if [Book, Anthology].contains(&entry.entry_type)
+        } else if matches!(&entry.entry_type, Book | Anthology)
             && entry.get_any_date().map(|d| d.year).unwrap_or(2020) < 1981
         {
             if !res.is_empty() {
@@ -184,7 +184,7 @@ impl<'s> NoteCitationFormatter<'s> {
             }
         }
 
-        let preprint = sel!(Id(Article) => Id(Repository)).apply(entry).is_some();
+        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
         if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
@@ -216,8 +216,8 @@ impl<'s> NoteCitationFormatter<'s> {
             .get_publisher()
             .or_else(|| published_entry.map(|e| e.get_publisher().unwrap()))
             .or_else(|| {
-                if [Report, Thesis].contains(&entry.entry_type)
-                    || ([Case, Legislation].contains(&entry.entry_type)
+                if matches!(&entry.entry_type, Report | Thesis)
+                    || (matches!(&entry.entry_type, Case | Legislation)
                         && entry.get_serial_number().is_some())
                 {
                     entry.get_organization()
@@ -225,14 +225,12 @@ impl<'s> NoteCitationFormatter<'s> {
                     None
                 }
             })
-            .map(|s| s.into())
+            .map(Into::into)
             .or_else(|| {
                 if entry.entry_type == Reference && entry.get_volume().is_none() {
                     entry.get_authors_fallible().map(|a| {
                         and_list(
-                            a.into_iter()
-                                .map(|p| p.get_given_name_initials_first(false))
-                                .collect::<Vec<_>>(),
+                            a.into_iter().map(|p| p.get_given_name_initials_first(false)),
                             false,
                             self.common.et_al_limit,
                         )
@@ -271,15 +269,13 @@ impl<'s> NoteCitationFormatter<'s> {
             let journal = sel!(
                 sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
             )
-            .apply(entry)
-            .is_some();
+            .matches(entry);
             let conf = sel!(alt
                 sel!(Wc() => Id(Conference)),
                 Id(Conference),
                 Id(Exhibition),
             )
-            .apply(entry)
-            .is_some();
+            .matches(entry);
 
             let mut mode = match (journal, is_authoritative(entry)) {
                 (true, _) => DateMode::Month,
@@ -292,7 +288,7 @@ impl<'s> NoteCitationFormatter<'s> {
             }
 
             format_date(date, mode)
-        } else if [Book, Anthology].contains(&entry.entry_type)
+        } else if matches!(&entry.entry_type, Book | Anthology)
             && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
         {
             "n.d.".to_string()
@@ -308,27 +304,26 @@ impl<'s> NoteCitationFormatter<'s> {
         if entry.entry_type == Artwork {
             let mut items: Vec<String> = vec![];
 
-            if let Some(note) = entry.get_note() {
-                items.push(note.into());
-            }
+            items.extend(entry.get_note().map(Into::into));
 
             let parent = sel!(Wc() => Bind("p", Id(Exhibition)))
                 .apply(entry)
                 .map(|mut hm| hm.remove("p").unwrap());
-            if let Some(org) = entry
-                .get_organization()
-                .or_else(|| entry.get_publisher())
-                .or_else(|| parent.and_then(|p| p.get_organization()))
-                .or_else(|| parent.and_then(|p| p.get_publisher()))
-            {
-                items.push(org.into())
-            }
+            items.extend(
+                entry
+                    .get_organization()
+                    .or_else(|| entry.get_publisher())
+                    .or_else(|| parent.and_then(|p| p.get_organization()))
+                    .or_else(|| parent.and_then(|p| p.get_publisher()))
+                    .map(Into::into),
+            );
 
-            if let Some(loc) =
-                entry.get_location().or_else(|| parent.and_then(|p| p.get_location()))
-            {
-                items.push(loc.into())
-            }
+            items.extend(
+                entry
+                    .get_location()
+                    .or_else(|| parent.and_then(|p| p.get_location()))
+                    .map(Into::into),
+            );
 
             let items = items.join(", ");
             if !items.is_empty() && !res.is_empty() {
@@ -358,7 +353,7 @@ impl<'s> NoteCitationFormatter<'s> {
         let mut entry = self.entries.get(citation.key).map(|o| o.clone())?;
 
         let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
+        while sel!(alt Id(Chapter), Id(Scene)).matches(entry)
             && entry.get_title().is_none()
         {
             if let Some(p) = parent {
@@ -373,8 +368,7 @@ impl<'s> NoteCitationFormatter<'s> {
             Id(Web),
             sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
         )
-        .apply(entry)
-        .is_some();
+        .matches(entry);
 
         let mut res: DisplayString = if (!web_thing
             && (entry.entry_type != Reference
@@ -399,7 +393,7 @@ impl<'s> NoteCitationFormatter<'s> {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, short, &self.common, ',');
             if !res.is_empty() && !title.is_empty() {
-                if res.last().unwrap_or('a') != ',' {
+                if res.last() != Some(',') {
                     res.push(',');
                 }
 
@@ -412,7 +406,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 title.clear_formatting();
             }
             if !res.is_empty() && !title.is_empty() {
-                if res.last().unwrap_or('a') != ',' {
+                if res.last() != Some(',') {
                     res.push(',');
                 }
 
@@ -425,8 +419,7 @@ impl<'s> NoteCitationFormatter<'s> {
         let journal = sel!(
             sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
         )
-        .apply(entry)
-        .is_some();
+        .matches(entry);
 
         if !short {
             let add = if no_author && dictionary.is_some() {
@@ -439,11 +432,7 @@ impl<'s> NoteCitationFormatter<'s> {
             }
             res += add;
 
-            let publ = if no_author && dictionary.is_some() {
-                self.get_publication_info(dictionary.unwrap())
-            } else {
-                self.get_publication_info(entry)
-            };
+            let publ = self.get_publication_info(if no_author { dictionary.unwrap_or(entry) } else { entry });
             let brackets = is_authoritative(entry)
                 || entry.entry_type == Manuscript
                 || (no_author && dictionary.is_some());
@@ -592,7 +581,7 @@ impl<'s> NoteCitationFormatter<'s> {
             let no_url = url.is_empty();
             res += url;
 
-            let preprint = sel!(Id(Article) => Id(Repository)).apply(entry).is_some();
+            let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
             if no_url || entry.entry_type == Manuscript || preprint {
                 if let Some(archive) = entry.get_archive() {
                     res.value = push_comma_quote_aware(res.value, ',', true);

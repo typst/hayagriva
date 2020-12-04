@@ -211,8 +211,7 @@ impl MlaBibliographyFormatter {
                 attrs!(Wc(), "publisher"),
                 sel!(Wc() => Neg(Wc())),
             )
-            .apply(entry)
-            .is_some()
+            .matches(entry)
     }
 
     fn and_list(&self, names: Vec<String>, et_al: bool) -> String {
@@ -280,7 +279,7 @@ impl MlaBibliographyFormatter {
         while entry.get_authors_fallible().is_none()
             && entry.get_affiliated_persons().is_none()
             && entry.get_editors().is_none()
-            && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
+            && sel!(alt Id(Chapter), Id(Scene)).matches(entry)
         {
             if let Some(p) = entry.get_parents().and_then(|ps| ps.get(0)) {
                 entry = &p;
@@ -378,7 +377,7 @@ impl MlaBibliographyFormatter {
             String::new()
         };
 
-        if !res.is_empty() && res.chars().last().unwrap_or('a') != '.' {
+        if !res.is_empty() && res.chars().last() != Some('.') {
             res.push('.');
         }
         res
@@ -412,7 +411,7 @@ impl MlaBibliographyFormatter {
 
         if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
             if sc
-                && sel!(alt Id(Legislation), Id(Conference)).apply(entry).is_none()
+                && !sel!(alt Id(Legislation), Id(Conference)).matches(entry)
                 && !is_religious(&title.value.title_case)
             {
                 res.start_format(Formatting::Italic)
@@ -539,7 +538,7 @@ impl MlaBibliographyFormatter {
 
             // Number
             let mut number = String::new();
-            let tv = sel!(Id(Video) => Wc()).apply(entry).is_some();
+            let tv = sel!(Id(Video) => Wc()).matches(entry);
             if let Some(vols) = entry.get_volume() {
                 number += &if tv {
                     format_range("season", "seasons", &vols)
@@ -563,9 +562,7 @@ impl MlaBibliographyFormatter {
             container.number = number;
 
             // Publisher
-            if sel!(alt sel!(Id(Manuscript) => Neg(Wc())), Id(Periodical))
-                .apply(entry)
-                .is_none()
+            if !sel!(alt sel!(Id(Manuscript) => Neg(Wc())), Id(Periodical)).matches(entry)
             {
                 if let Some(publisher) =
                     entry.get_publisher().or_else(|| entry.get_organization())
@@ -584,7 +581,7 @@ impl MlaBibliographyFormatter {
 
             // Location
             let mut location: Vec<DisplayString> = vec![];
-            let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).apply(entry).is_some();
+            let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).matches(entry);
             if physical || self.always_use_location || entry.get_publisher().is_none() {
                 if let Some(loc) = entry.get_location() {
                     location.push(DisplayString::from_str(loc));
@@ -621,7 +618,7 @@ impl MlaBibliographyFormatter {
                 location.push(dstr);
                 has_url = true;
             } else if let Some(qurl) = entry.get_url() {
-                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
                 if vdate {
                     supplemental.push(format!(
                         "Accessed {}",
@@ -685,7 +682,7 @@ impl MlaBibliographyFormatter {
                     }
                     lc.location += &format!("doi:{}", doi);
                 } else if let Some(qurl) = entry.get_any_url() {
-                    let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                    let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
                     if vdate {
                         if !lc.optionals.is_empty() {
                             lc.optionals += ". ";
@@ -715,7 +712,7 @@ impl MlaBibliographyFormatter {
                 nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += qurl.value.as_str();
                 nc.location.commit_formats();
-                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
                 if vdate {
                     nc.optionals = format!(
                         "Accessed {}",

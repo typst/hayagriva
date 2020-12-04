@@ -129,7 +129,7 @@ impl Entry {
         }
 
         if let Some(alias) = &authors[user_index].alias {
-            return if alias.chars().next().unwrap_or('a') == '@' {
+            return if alias.chars().next() == Some('@') {
                 Some(alias.clone())
             } else {
                 Some(format!("@{}", alias))

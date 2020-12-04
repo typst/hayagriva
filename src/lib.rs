@@ -161,13 +161,13 @@ macro_rules! fields {
             }
         )*
     };
-    (fmt $($name:ident: $field_name:expr => $fmt_type:ty, $fmtd_type:ty),* $(,)*) => {
+    (fmt $($name:ident: $field_name:expr => $src_type:ty, $dst_type:ty),* $(,)*) => {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<get_ $name _raw>](&self) -> Option<&$fmt_type> {
+                pub fn [<get_ $name _raw>](&self) -> Option<&$src_type> {
                     self.get($field_name)
-                        .map(|item| <&$fmt_type>::try_from(item).unwrap())
+                        .map(|item| <&$src_type>::try_from(item).unwrap())
                 }
 
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
@@ -175,12 +175,12 @@ macro_rules! fields {
                     &self,
                     title: Option<&dyn CaseTransformer>,
                     sentence: Option<&dyn CaseTransformer>,
-                ) -> Option<$fmtd_type> {
+                ) -> Option<$dst_type> {
                     self.get($field_name)
-                        .map(|item| <$fmt_type>::try_from(item.clone()).unwrap().format(title, sentence))
+                        .map(|item| <$src_type>::try_from(item.clone()).unwrap().format(title, sentence))
                 }
 
-                fields!(single_set $name => $field_name, $fmt_type);
+                fields!(single_set $name => $field_name, $src_type);
             }
         )*
     };
@@ -686,8 +686,8 @@ fn entry_from_yaml(
         }
 
         let value = match fname_str {
-            "title" => {
-                if let Some(map) = value.clone().into_hash() {
+            "title" => match value {
+                Yaml::Hash(map) => {
                     FieldType::Title(title_from_hash_map(map).map_err(|e| {
                         YamlBibliographyError::new_data_type_src_error(
                             &key,
@@ -695,41 +695,41 @@ fn entry_from_yaml(
                             YamlDataTypeError::FormattableString(e),
                         )
                     })?)
-                } else if let Some(t) = value.into_string() {
-                    FieldType::Title(Title {
-                        value: FormattableString::new_shorthand(t),
-                        shorthand: None,
-                        translated: None,
-                    })
-                } else {
+                }
+                Yaml::String(t) => FieldType::Title(Title {
+                    value: FormattableString::new_shorthand(t),
+                    shorthand: None,
+                    translated: None,
+                }),
+                _ => {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
                         "text or formattable string or title",
                     ));
                 }
-            }
-            "publisher" | "location" | "archive" | "archive-location" => {
-                if let Some(map) = value.clone().into_hash() {
-                    FieldType::FormattableString(
-                        formattable_str_from_hash_map(map).map_err(|e| {
-                            YamlBibliographyError::new_data_type_src_error(
-                                &key,
-                                &field_name,
-                                YamlDataTypeError::FormattableString(e),
-                            )
-                        })?,
-                    )
-                } else if let Some(t) = value.into_string() {
+            },
+            "publisher" | "location" | "archive" | "archive-location" => match value {
+                Yaml::Hash(map) => FieldType::FormattableString(
+                    formattable_str_from_hash_map(map).map_err(|e| {
+                        YamlBibliographyError::new_data_type_src_error(
+                            &key,
+                            &field_name,
+                            YamlDataTypeError::FormattableString(e),
+                        )
+                    })?,
+                ),
+                Yaml::String(t) => {
                     FieldType::FormattableString(FormattableString::new_shorthand(t))
-                } else {
+                }
+                _ => {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
                         "text or formattable string",
                     ));
                 }
-            }
+            },
             "author" | "editor" => {
                 FieldType::Persons(persons_from_yaml(value, &key, &field_name)?)
             }
@@ -792,22 +792,22 @@ fn entry_from_yaml(
 
                 FieldType::PersonsWithRoles(res)
             }
-            "date" => FieldType::Date(if let Some(value) = value.as_i64() {
-                Date::from_year(value as i32)
-            } else if let Some(value) = value.into_string() {
-                Date::from_str(&value).map_err(|e| {
+            "date" => FieldType::Date(match value {
+                Yaml::Integer(value) => Date::from_year(value as i32),
+                Yaml::String(value) => Date::from_str(&value).map_err(|e| {
                     YamlBibliographyError::new_data_type_src_error(
                         &key,
                         &field_name,
                         YamlDataTypeError::Date(e),
                     )
-                })?
-            } else {
-                return Err(YamlBibliographyError::new_data_type_error(
-                    &key,
-                    &field_name,
-                    "date",
-                ));
+                })?,
+                _ => {
+                    return Err(YamlBibliographyError::new_data_type_error(
+                        &key,
+                        &field_name,
+                        "date",
+                    ));
+                }
             }),
             "issue" | "edition" => {
                 let as_int = value.as_i64();
@@ -834,25 +834,23 @@ fn entry_from_yaml(
                     )
                 })?)
             }
-            "volume" | "page-range" => {
-                FieldType::Range(if let Some(value) = value.as_i64() {
-                    value .. value
-                } else if let Some(value) = value.into_string() {
-                    get_range(&value).ok_or_else(|| {
-                        YamlBibliographyError::new_data_type_src_error(
-                            &key,
-                            &field_name,
-                            YamlDataTypeError::Range,
-                        )
-                    })?
-                } else {
+            "volume" | "page-range" => FieldType::Range(match value {
+                Yaml::Integer(value) => (value .. value),
+                Yaml::String(value) => get_range(&value).ok_or_else(|| {
+                    YamlBibliographyError::new_data_type_src_error(
+                        &key,
+                        &field_name,
+                        YamlDataTypeError::Range,
+                    )
+                })?,
+                _ => {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
                         "integer range",
                     ));
-                })
-            }
+                }
+            }),
             "runtime" => {
                 let v = value
                     .into_string()
@@ -898,8 +896,8 @@ fn entry_from_yaml(
                 FieldType::TimeRange(v)
             }
             "url" => {
-                let (url, date) = if let Some(s) = value.as_str() {
-                    (
+                let (url, date) = match value {
+                    Yaml::String(s) => (
                         Url::parse(&s).map_err(|e| {
                             YamlBibliographyError::new_data_type_src_error(
                                 &key,
@@ -908,68 +906,72 @@ fn entry_from_yaml(
                             )
                         })?,
                         None,
-                    )
-                } else if let Some(map) = value.into_hash() {
-                    let mut map = yaml_hash_map_with_string_keys(map);
-                    let url = map
-                        .remove("value")
-                        .ok_or_else(|| {
-                            YamlBibliographyError::new_data_type_src_error(
-                                &key,
-                                &field_name,
-                                YamlDataTypeError::MissingRequiredField,
-                            )
-                        })
-                        .and_then(|value| {
-                            value
-                                .into_string()
-                                .ok_or_else(|| {
+                    ),
+                    Yaml::Hash(map) => {
+                        let mut map = yaml_hash_map_with_string_keys(map);
+                        let url = map
+                            .remove("value")
+                            .ok_or_else(|| {
+                                YamlBibliographyError::new_data_type_src_error(
+                                    &key,
+                                    &field_name,
+                                    YamlDataTypeError::MissingRequiredField,
+                                )
+                            })
+                            .and_then(|value| {
+                                value
+                                    .into_string()
+                                    .ok_or_else(|| {
+                                        YamlBibliographyError::new_data_type_src_error(
+                                            &key,
+                                            &field_name,
+                                            YamlDataTypeError::MismatchedPrimitive,
+                                        )
+                                    })
+                                    .and_then(|s| {
+                                        Url::parse(&s).map_err(|e| {
+                                            YamlBibliographyError::new_data_type_src_error(
+                                                &key,
+                                                &field_name,
+                                                YamlDataTypeError::Url(e),
+                                            )
+                                        })
+                                    })
+                            })?;
+
+                        let date = if let Some(date) = map.remove("date") {
+                            if let Some(year) = date.as_i64() {
+                                Some(Date::from_year(year as i32))
+                            } else if let Some(s) = date.into_string() {
+                                Some(Date::from_str(&s).map_err(|e| {
+                                    YamlBibliographyError::new_data_type_src_error(
+                                        &key,
+                                        &field_name,
+                                        YamlDataTypeError::Date(e),
+                                    )
+                                })?)
+                            } else {
+                                return Err(
                                     YamlBibliographyError::new_data_type_src_error(
                                         &key,
                                         &field_name,
                                         YamlDataTypeError::MismatchedPrimitive,
-                                    )
-                                })
-                                .and_then(|s| {
-                                    Url::parse(&s).map_err(|e| {
-                                        YamlBibliographyError::new_data_type_src_error(
-                                            &key,
-                                            &field_name,
-                                            YamlDataTypeError::Url(e),
-                                        )
-                                    })
-                                })
-                        })?;
-
-                    let date = if let Some(date) = map.remove("date") {
-                        if let Some(year) = date.as_i64() {
-                            Some(Date::from_year(year as i32))
-                        } else if let Some(s) = date.into_string() {
-                            Some(Date::from_str(&s).map_err(|e| {
-                                YamlBibliographyError::new_data_type_src_error(
-                                    &key,
-                                    &field_name,
-                                    YamlDataTypeError::Date(e),
-                                )
-                            })?)
+                                    ),
+                                );
+                            }
                         } else {
-                            return Err(YamlBibliographyError::new_data_type_src_error(
-                                &key,
-                                &field_name,
-                                YamlDataTypeError::MismatchedPrimitive,
-                            ));
-                        }
-                    } else {
-                        None
-                    };
+                            None
+                        };
 
-                    (url, date)
-                } else {
-                    return Err(YamlBibliographyError::new_data_type_error(
-                        &key,
-                        &field_name,
-                        "qualified url",
-                    ));
+                        (url, date)
+                    }
+                    _ => {
+                        return Err(YamlBibliographyError::new_data_type_error(
+                            &key,
+                            &field_name,
+                            "qualified url",
+                        ));
+                    }
                 };
 
                 FieldType::Url(QualifiedUrl { value: url, visit_date: date })
@@ -1023,8 +1025,6 @@ fn entry_from_yaml(
 
         entry.content.insert(field_name, value);
     }
-
-    // TODO derive total pages from page range
 
     Ok(entry)
 }

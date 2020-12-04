@@ -37,8 +37,7 @@ impl AccessDateConfig {
                     Id(Web),
                     sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
                 )
-                .apply(entry)
-                .is_some()
+                .matches(entry)
                     || entry.get_any_date().is_none()
             }
             AccessDateConfig::NotFormallyPublished => {
@@ -68,8 +67,7 @@ fn is_authoritative(entry: &Entry) -> bool {
         Id(Case),
         Id(Legislation),
     )
-    .apply(entry)
-    .is_some()
+    .matches(entry)
 }
 
 fn is_formally_published(entry: &Entry) -> bool {
@@ -88,6 +86,5 @@ fn is_formally_published(entry: &Entry) -> bool {
         sel!(Id(Article) => Id(Newspaper)),
         sel!(sel!(alt Id(Article), Id(Anthos)) => Id(Anthology)),
     )
-    .apply(entry)
-    .is_some()
+    .matches(entry)
 }

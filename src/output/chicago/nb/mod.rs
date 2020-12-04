@@ -104,8 +104,12 @@ fn format_date(date: &Date, mode: DateMode) -> String {
     res
 }
 
-fn and_list(names: Vec<String>, oxford: bool, et_al_limit: Option<usize>) -> String {
-    let name_len = names.len();
+fn and_list(
+    names: impl IntoIterator<Item = String> + Clone,
+    oxford: bool,
+    et_al_limit: Option<usize>,
+) -> String {
+    let name_len = names.clone().into_iter().count();
     let mut res = String::new();
     let threshold = et_al_limit.unwrap_or(0);
 
@@ -163,8 +167,7 @@ fn self_contained(entry: &Entry) -> bool {
                 attrs!(Wc(), "publisher"),
                 sel!(Wc() => Neg(Wc())),
             )
-            .apply(entry)
-            .is_some())
+            .matches(entry))
 }
 
 fn get_title(
@@ -284,8 +287,7 @@ fn get_info_element(
         sel!(Id(Video) => Id(Video)),
         sel!(Id(Audio) => Id(Audio)),
     )
-    .apply(entry)
-    .is_some();
+    .matches(entry);
 
     let prepend = if let Some(lang) = entry.get_language() {
         if entry.get_title_raw().and_then(|t| t.translated.as_ref()).is_none() {
@@ -350,10 +352,8 @@ fn get_info_element(
         if orig_entry.get_authors_fallible().is_some()
             || orig_entry.get_editors().is_some()
         {
-            let trans_names = trans
-                .into_iter()
-                .map(|p| p.get_given_name_initials_first(false))
-                .collect::<Vec<_>>();
+            let trans_names =
+                trans.into_iter().map(|p| p.get_given_name_initials_first(false));
 
             let mut local =
                 if capitals { "Translated by " } else { "trans. " }.to_string();

@@ -807,7 +807,7 @@ impl BibliographyFormatter for IeeeBibliographyFormatter {
         let mut parent = entry.get_parents().and_then(|v| v.first());
         let mut sn_stack = vec![];
         while entry.get_title().is_none()
-            && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
+            && sel!(alt Id(Chapter), Id(Scene)).matches(entry)
         {
             if let Some(sn) = entry.get_serial_number() {
                 sn_stack.push(sn);
