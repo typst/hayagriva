@@ -59,30 +59,30 @@ impl<'s> SourceType<'s> {
         let talk = sel!(Wc() => Bind("p", Id(Conference)));
         let generic_parent = sel!(Wc() => Bind("p", Wc()));
 
-        if let Some(mut hm) = periodical.apply(entry) {
-            Self::PeriodicalItem(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = collection.apply(entry) {
-            Self::CollectionItem(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = tv_series.apply(entry) {
-            Self::TvSeries(hm.remove("p").unwrap())
+        if let Some(mut bindings) = periodical.apply(entry) {
+            Self::PeriodicalItem(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = collection.apply(entry) {
+            Self::CollectionItem(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = tv_series.apply(entry) {
+            Self::TvSeries(bindings.remove("p").unwrap())
         } else if thesis.apply(entry).is_some() {
             Self::Thesis
         } else if manuscript.apply(entry).is_some() {
             Self::Manuscript
-        } else if let Some(mut hm) = art_container.apply(entry) {
-            Self::ArtContainer(hm.remove("p").unwrap())
+        } else if let Some(mut bindings) = art_container.apply(entry) {
+            Self::ArtContainer(bindings.remove("p").unwrap())
         } else if art.apply(entry).is_some() {
             Self::StandaloneArt
-        } else if let Some(mut hm) = news_item.apply(entry) {
-            Self::NewsItem(hm.remove("p").unwrap())
+        } else if let Some(mut bindings) = news_item.apply(entry) {
+            Self::NewsItem(bindings.remove("p").unwrap())
         } else if web_standalone.apply(entry).is_some() {
             Self::StandaloneWeb
-        } else if let Some(mut hm) = web_contained.apply(entry) {
-            Self::Web(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = talk.apply(entry) {
-            Self::ConferenceTalk(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = generic_parent.apply(entry) {
-            Self::GenericParent(hm.remove("p").unwrap())
+        } else if let Some(mut bindings) = web_contained.apply(entry) {
+            Self::Web(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = talk.apply(entry) {
+            Self::ConferenceTalk(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = generic_parent.apply(entry) {
+            Self::GenericParent(bindings.remove("p").unwrap())
         } else {
             Self::Generic
         }
@@ -328,13 +328,15 @@ impl ApaBibliographyFormatter {
     fn get_date(&self, entry: &Entry) -> String {
         if let Some(date) = entry.get_any_date() {
             match (date.month, date.day) {
-                (None, _) => format!("({:04}).", date.year),
-                (Some(month), None) => {
-                    format!("({:04}, {}).", date.year, get_month_name(month).unwrap())
-                }
+                (None, _) => format!("({}).", date.display_year()),
+                (Some(month), None) => format!(
+                    "({}, {}).",
+                    date.display_year(),
+                    get_month_name(month).unwrap()
+                ),
                 (Some(month), Some(day)) => format!(
-                    "({:04}, {} {}).",
-                    date.year,
+                    "({}, {} {}).",
+                    date.display_year(),
                     get_month_name(month).unwrap(),
                     day + 1,
                 ),
@@ -353,35 +355,39 @@ impl ApaBibliographyFormatter {
                 if let Some(date) = &qurl.visit_date {
                     match (date.month, date.day) {
                         (None, _) => {
-                            let mut res = DisplayString::from_string(format!("Retrieved {:04}, from ", date.year));
+                            let mut res = DisplayString::from_string(format!(
+                                "Retrieved {}, from ",
+                                date.display_year()
+                            ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
                             res.commit_formats();
                             res
-                        },
+                        }
                         (Some(month), None) => {
                             let mut res = DisplayString::from_string(format!(
-                                "Retrieved {} {:04}, from ",
+                                "Retrieved {} {}, from ",
                                 get_month_name(month).unwrap(),
-                                date.year,
+                                date.display_year(),
                             ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
                             res.commit_formats();
                             res
-                        },
+                        }
                         (Some(month), Some(day)) => {
                             let mut res = DisplayString::from_string(format!(
-                                "(Retrieved {} {}, {:04}, from )",
+                                "(Retrieved {} {}, {}, from ",
                                 get_month_name(month).unwrap(),
                                 day,
-                                date.year,
+                                date.display_year(),
                             ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
                             res.commit_formats();
+                            res.push(')');
                             res
-                        },
+                        }
                     }
                 } else {
                     let mut res = DisplayString::new();
@@ -425,17 +431,19 @@ impl ApaBibliographyFormatter {
 
         let book =
             sel!(alt Id(Book), Id(Report), Id(Reference), Id(Anthology), Id(Proceedings))
-                .apply(entry)
-                .is_some();
+                .matches(entry);
 
-        if let Some(title) = entry.get_title_fmt(None, Some(&self.formatter)) {
+        if let Some(title) =
+            entry.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+        {
             let multivol_spec = sel!(
                 attrs!(sel!(alt Id(Book), Id(Proceedings), Id(Anthology)), "volume") =>
                 Bind("p", sel!(alt Id(Book), Id(Proceedings), Id(Anthology)))
             );
 
-            let multivolume_parent =
-                multivol_spec.apply(entry).and_then(|mut hm| hm.remove("p"));
+            let multivolume_parent = multivol_spec
+                .apply(entry)
+                .and_then(|mut bindings| bindings.remove("p"));
 
             if italicise {
                 res.start_format(Formatting::Italic);
@@ -456,6 +464,7 @@ impl ApaBibliographyFormatter {
                     mv_parent
                         .get_title_fmt(None, Some(&self.formatter))
                         .unwrap()
+                        .value
                         .sentence_case,
                     format_range("Vol.", "Vols.", &vols),
                 ));
@@ -671,7 +680,7 @@ impl ApaBibliographyFormatter {
         match st {
             SourceType::PeriodicalItem(parent) => {
                 let mut comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter))
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res.start_format(Formatting::Italic);
                     res += &title.sentence_case;
@@ -734,7 +743,7 @@ impl ApaBibliographyFormatter {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.sentence_case;
+                    res += &title.value.sentence_case;
                     res.commit_formats();
                     comma = true;
 
@@ -798,7 +807,7 @@ impl ApaBibliographyFormatter {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.sentence_case;
+                    res += &title.value.sentence_case;
                     res.commit_formats();
                     comma = false;
 
@@ -902,7 +911,9 @@ impl ApaBibliographyFormatter {
                 }
             }
             SourceType::Web(parent) => {
-                if let Some(title) = parent.get_title_fmt(None, Some(&self.formatter)) {
+                if let Some(title) =
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+                {
                     let authors = entry.get_authors();
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
@@ -915,7 +926,7 @@ impl ApaBibliographyFormatter {
             }
             SourceType::NewsItem(parent) => {
                 let comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter))
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res.start_format(Formatting::Italic);
                     res += &title.sentence_case;
@@ -935,7 +946,7 @@ impl ApaBibliographyFormatter {
             }
             SourceType::ConferenceTalk(parent) => {
                 let comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter))
+                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res += &title.sentence_case;
                     true
@@ -1011,7 +1022,7 @@ impl ApaBibliographyFormatter {
 impl BibliographyFormatter for ApaBibliographyFormatter {
     fn get_reference(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some() {
+        while sel!(alt Id(Chapter), Id(Scene)).matches(entry) {
             if let Some(p) = parent {
                 entry = &p;
                 parent = entry.get_parents().and_then(|v| v.first());
@@ -1020,7 +1031,7 @@ impl BibliographyFormatter for ApaBibliographyFormatter {
             }
         }
 
-        let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).apply(entry).is_some();
+        let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).matches(entry);
 
         let authors = self.get_author(entry);
         let date = self.get_date(entry);

@@ -1,14 +1,14 @@
 //! Citation and bibliography styles.
 
 use super::types::Person;
-use super::{Entry};
-use std::collections::{HashMap};
+use super::Entry;
+use std::collections::HashMap;
 use std::convert::Into;
 use std::ops::{Add, AddAssign};
 use thiserror::Error;
 
 pub mod apa;
-// pub mod chicago;
+pub mod chicago;
 pub mod ieee;
 pub mod mla;
 
@@ -52,6 +52,13 @@ pub struct AtomicCitation<'s> {
     pub supplement: Option<&'s str>,
     /// Assigned number of the citation.
     pub number: Option<usize>,
+}
+
+impl<'s> AtomicCitation<'s> {
+    /// Create a new atomic citation.
+    pub fn new(key: &'s str, supplement: Option<&'s str>, number: Option<usize>) -> Self {
+        Self { key, supplement, number }
+    }
 }
 
 /// Structs implementing this trait can generate the appropriate reference
@@ -354,6 +361,11 @@ impl DisplayString {
         self.pending_formatting.push((self.len(), f));
     }
 
+    /// Resets all of the formatting.
+    pub fn clear_formatting(&mut self) {
+        self.formatting.clear();
+    }
+
     pub(crate) fn commit_formats(&mut self) {
         for (start, f) in self.pending_formatting.iter() {
             self.formatting.push((*start .. self.len(), *f))
@@ -400,7 +412,9 @@ impl DisplayString {
 
         for item in &self.formatting {
             let opt = item.1;
-            if opt == Formatting::NoHyphenation { continue; }
+            if opt == Formatting::NoHyphenation {
+                continue;
+            }
             let min = item.0.start;
             let max = item.0.end;
 
@@ -432,4 +446,58 @@ impl DisplayString {
 
         res
     }
+}
+
+fn push_comma_quote_aware(s: &mut String, comma: char, space: bool) {
+    let cur_len = s.len();
+    if cur_len > 3 && s.is_char_boundary(cur_len - 3) && &s[cur_len - 3 ..] == "”" {
+        s.truncate(cur_len - 3);
+        if s.chars().last() != Some(comma) {
+            s.push(comma);
+            s.push_str("”");
+        }
+    } else if !s.is_empty() {
+        if s.chars().last() != Some(comma) {
+            s.push(comma);
+        }
+    }
+
+    if space && !s.is_empty() {
+        s.push(' ');
+    }
+}
+
+fn abbreviate_publisher(s: &str, up: bool) -> String {
+    let s1 = if up {
+        s.replace("University Press", "UP")
+            .replace("University", "U")
+            .replace("Universität", "U")
+            .replace("Université", "U")
+            .replace("Press", "P")
+            .replace("Presse", "P")
+    } else {
+        s.into()
+    };
+    let business_words = [
+        "Co",
+        "Co.",
+        "Corp",
+        "Corp.",
+        "Corporated",
+        "Corporation",
+        "Inc",
+        "Inc.",
+        "Incorporated",
+        "Limited",
+        "Ltd",
+        "Ltd.",
+        "S A",
+        "S.A.",
+        "Sociedad Anónima",
+        "Société Anonyme",
+    ];
+    s1.split(' ')
+        .filter(|w| !w.is_empty() && business_words.binary_search(w).is_err())
+        .collect::<Vec<_>>()
+        .join(" ")
 }

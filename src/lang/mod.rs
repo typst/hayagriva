@@ -1,6 +1,6 @@
 //! Language-dependant string transformations.
 
-use super::types::{FormattableString, FormattedString};
+use super::types::{FormattableString, FormattedString, FormattedTitle, Title};
 use usize;
 
 pub(crate) mod en;
@@ -105,6 +105,7 @@ impl CaseTransformer for TitleCase {
                 || c == '{'
                 || c == ','
                 || c == ';'
+                || c == '"'
                 || (c == '\'' && self.use_exception_dictionary)
                 || (c == '’' && self.use_exception_dictionary)
                 || c.is_whitespace()
@@ -454,6 +455,22 @@ impl FormattableString {
         };
 
         fstr
+    }
+}
+
+impl Title {
+    /// Apply title and sentence case formatting, if the formatters are provided
+    /// and the user did not override.
+    pub fn format(
+        self,
+        title: Option<&dyn CaseTransformer>,
+        sentence: Option<&dyn CaseTransformer>,
+    ) -> FormattedTitle {
+        FormattedTitle {
+            value: self.value.format(title, sentence),
+            shorthand: self.shorthand.map(|s| s.format(title, sentence)),
+            translated: self.translated.map(|s| s.format(title, sentence)),
+        }
     }
 }
 

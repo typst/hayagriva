@@ -129,7 +129,7 @@ impl Entry {
         }
 
         if let Some(alias) = &authors[user_index].alias {
-            return if alias.chars().next().unwrap_or('a') == '@' {
+            return if alias.chars().next() == Some('@') {
                 Some(alias.clone())
             } else {
                 Some(format!("@{}", alias))
@@ -540,6 +540,55 @@ impl Date {
     pub fn from_year(year: i32) -> Self {
         Self { year, month: None, day: None }
     }
+
+    /// Prints the year as a human-readable gregorian year.
+    /// Non-positive values will be marked with a "BCE" postfix.
+    pub fn display_year(&self) -> String {
+        self.display_year_opt(true, false, false, false)
+    }
+
+    /// Prints the year as a human-readable gregorian year with controllable
+    /// pre- and postfixes denominating the year's positivity.
+    ///
+    /// ## Arguments
+    /// - `secular`   Switches between "BC" and "BCE"
+    /// - `periods`   Determines wheter to use punctuation in the abbreviations
+    /// - `designate_positive`    Show a denomination for positive years
+    /// - `ad_prefix` Use the "AD" designation for positive years in a prefix
+    ///               position. Will be ignored if `designate_positive` is negative.
+    pub fn display_year_opt(
+        &self,
+        secular: bool,
+        periods: bool,
+        designate_positive: bool,
+        ad_prefix: bool,
+    ) -> String {
+        let np_postfix = match (secular, periods) {
+            (true, false) => "BCE",
+            (true, true) => "B.C.E.",
+            (false, false) => "BC",
+            (false, true) => "B.C.",
+        };
+
+        let positive_dn = match (periods, ad_prefix) {
+            (true, false) => "C.E.",
+            (false, false) => "CE",
+            (true, true) => "AD",
+            (false, true) => "A.D.",
+        };
+
+        if self.year > 0 {
+            if designate_positive && ad_prefix {
+                format!("{} {}", positive_dn, self.year)
+            } else if designate_positive && !ad_prefix {
+                format!("{} {}", self.year, positive_dn)
+            } else {
+                self.year.to_string()
+            }
+        } else {
+            format!("{} {}", -(self.year as i64 - 1), np_postfix)
+        }
+    }
 }
 
 /// A string with a value and possibly user-defined overrides for various
@@ -554,6 +603,28 @@ pub struct FormattableString {
     pub(crate) sentence_case: Option<String>,
     /// If true, the user opts out of all automatic formatting for this string.
     pub(crate) verbatim: bool,
+}
+
+/// A collection of formattable Strings consisting of a title, a translated title, and a shorthand.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Title {
+    /// Canonical title.
+    pub value: FormattableString,
+    /// Optional title shorthand.
+    pub shorthand: Option<FormattableString>,
+    /// Optional title translation.
+    pub translated: Option<FormattableString>,
+}
+
+/// Just like a [Title], but with formatting applied.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FormattedTitle {
+    /// Canonical title.
+    pub value: FormattedString,
+    /// Optional title shorthand.
+    pub shorthand: Option<FormattedString>,
+    /// Optional title translation.
+    pub translated: Option<FormattedString>,
 }
 
 /// A string with a canonical value and title and sentence formatted variants.
@@ -830,6 +901,7 @@ macro_rules! try_from_fieldtype {
     }
 }
 
+try_from_fieldtype!(Title, Title);
 try_from_fieldtype!(FormattableString, FormattableString);
 try_from_fieldtype!(FormattedString, FormattedString);
 try_from_fieldtype!(Text, String, str);

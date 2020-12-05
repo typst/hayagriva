@@ -43,6 +43,22 @@ fn flatten_mp(expr: &Expr) -> Vec<&Expr> {
 }
 
 impl Expr {
+    /// Checks if the selector matches the provided [Entry].
+    pub fn matches(&self, entry: &Entry) -> bool {
+        self.apply(entry).is_some()
+    }
+
+    /// Applies the expression and returns the bound element if there was
+    /// a match. This can panic if there are resolving Entries which
+    /// do not bind the argument.
+    pub(crate) fn bound_element<'s>(
+        &self,
+        entry: &'s Entry,
+        bound: &str,
+    ) -> Option<&'s Entry> {
+        self.apply(entry).map(|mut hm| hm.remove(bound).unwrap())
+    }
+
     /// Applies the expression to an [Entry] and returns the bound variables in a hash
     /// map if there was a match.
     pub fn apply<'s>(&self, entry: &'s Entry) -> Option<HashMap<String, &'s Entry>> {

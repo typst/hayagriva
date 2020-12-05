@@ -2,7 +2,8 @@
 //! of the MLA Handbook.
 
 use super::{
-    format_range, offset_format_range, BibliographyFormatter, DisplayString, Formatting,
+    abbreviate_publisher, format_range, offset_format_range, BibliographyFormatter,
+    DisplayString, Formatting,
 };
 use crate::lang::{en, TitleCase};
 use crate::selectors::{Bind, Id, Neg, Wc};
@@ -148,11 +149,7 @@ fn format_date(d: &Date) -> String {
         });
     }
 
-    if d.year > 0 {
-        res += &d.year.to_string();
-    } else {
-        res += &format!("{} B.C.E.", -(d.year - 1));
-    }
+    res += &d.display_year();
     res
 }
 
@@ -171,34 +168,6 @@ fn is_religious(s: &str) -> bool {
         "Upanishads",
     ];
     reference.binary_search(&s).is_ok()
-}
-
-fn abbreviate_publisher(s: &str) -> String {
-    let s1 = s
-        .replace("University Press", "UP")
-        .replace("University", "U")
-        .replace("Universität", "U")
-        .replace("Université", "U")
-        .replace("Press", "P")
-        .replace("Presse", "P");
-    let business_words = [
-        "Co",
-        "Co.",
-        "Corp",
-        "Corp.",
-        "Corporated",
-        "Corporation",
-        "Inc",
-        "Inc.",
-        "Incorporated",
-        "Limited",
-        "Ltd",
-        "Ltd.",
-    ];
-    s1.split(' ')
-        .filter(|w| !w.is_empty() && business_words.binary_search(w).is_err())
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 impl MlaBibliographyFormatter {
@@ -238,8 +207,7 @@ impl MlaBibliographyFormatter {
                 attrs!(Wc(), "publisher"),
                 sel!(Wc() => Neg(Wc())),
             )
-            .apply(entry)
-            .is_some()
+            .matches(entry)
     }
 
     fn and_list(&self, names: Vec<String>, et_al: bool) -> String {
@@ -307,7 +275,7 @@ impl MlaBibliographyFormatter {
         while entry.get_authors_fallible().is_none()
             && entry.get_affiliated_persons().is_none()
             && entry.get_editors().is_none()
-            && sel!(alt Id(Chapter), Id(Scene)).apply(entry).is_some()
+            && sel!(alt Id(Chapter), Id(Scene)).matches(entry)
         {
             if let Some(p) = entry.get_parents().and_then(|ps| ps.get(0)) {
                 entry = &p;
@@ -405,7 +373,7 @@ impl MlaBibliographyFormatter {
             String::new()
         };
 
-        if !res.is_empty() && res.chars().last().unwrap_or('a') != '.' {
+        if !res.is_empty() && res.chars().last() != Some('.') {
             res.push('.');
         }
         res
@@ -416,8 +384,9 @@ impl MlaBibliographyFormatter {
         let mut res = DisplayString::new();
 
         if use_quotes {
-            if let Some(mut hm) = sel!(Id(Chapter) => Bind("a", Wc())).apply(entry) {
-                let temp = hm.remove("a").unwrap();
+            if let Some(mut bindings) = sel!(Id(Chapter) => Bind("a", Wc())).apply(entry)
+            {
+                let temp = bindings.remove("a").unwrap();
 
                 if ["preface", "introduction", "foreword", "afterword"]
                     .iter()
@@ -429,6 +398,7 @@ impl MlaBibliographyFormatter {
                     res += &entry
                         .get_title_fmt(Some(&self.tc_formatter), None)
                         .unwrap()
+                        .value
                         .title_case;
                     res += ". ";
                     entry = temp;
@@ -438,14 +408,14 @@ impl MlaBibliographyFormatter {
 
         if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
             if sc
-                && sel!(alt Id(Legislation), Id(Conference)).apply(entry).is_none()
-                && !is_religious(&title.title_case)
+                && !sel!(alt Id(Legislation), Id(Conference)).matches(entry)
+                && !is_religious(&title.value.title_case)
             {
                 res.start_format(Formatting::Italic)
             } else if !sc {
                 res += "“"
             }
-            res += &title.title_case;
+            res += &title.value.title_case;
             if !res.is_empty() && res.last() != Some('.') && use_quotes {
                 res.push('.');
             }
@@ -473,8 +443,7 @@ impl MlaBibliographyFormatter {
         let mut containers: Vec<ContainerInfo> = vec![];
         let series: Option<&Entry> =
             sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
+                .bound_element(entry, "p");
 
         if entry != root || MlaBibliographyFormatter::own_container(entry) {
             let mut container = ContainerInfo::new();
@@ -565,7 +534,7 @@ impl MlaBibliographyFormatter {
 
             // Number
             let mut number = String::new();
-            let tv = sel!(Id(Video) => Wc()).apply(entry).is_some();
+            let tv = sel!(Id(Video) => Wc()).matches(entry);
             if let Some(vols) = entry.get_volume() {
                 number += &if tv {
                     format_range("season", "seasons", &vols)
@@ -589,14 +558,12 @@ impl MlaBibliographyFormatter {
             container.number = number;
 
             // Publisher
-            if sel!(alt sel!(Id(Manuscript) => Neg(Wc())), Id(Periodical))
-                .apply(entry)
-                .is_none()
+            if !sel!(alt sel!(Id(Manuscript) => Neg(Wc())), Id(Periodical)).matches(entry)
             {
                 if let Some(publisher) =
                     entry.get_publisher().or_else(|| entry.get_organization())
                 {
-                    container.publisher = abbreviate_publisher(publisher);
+                    container.publisher = abbreviate_publisher(publisher, true);
                 }
             }
 
@@ -610,7 +577,7 @@ impl MlaBibliographyFormatter {
 
             // Location
             let mut location: Vec<DisplayString> = vec![];
-            let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).apply(entry).is_some();
+            let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).matches(entry);
             if physical || self.always_use_location || entry.get_publisher().is_none() {
                 if let Some(loc) = entry.get_location() {
                     location.push(DisplayString::from_str(loc));
@@ -647,7 +614,13 @@ impl MlaBibliographyFormatter {
                 location.push(dstr);
                 has_url = true;
             } else if let Some(qurl) = entry.get_url() {
-                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                let vdate = qurl.visit_date.is_some()
+                    && sel!(alt
+                        Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")),
+                        sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))
+                    )
+                    .matches(entry);
+
                 if vdate {
                     supplemental.push(format!(
                         "Accessed {}",
@@ -679,6 +652,7 @@ impl MlaBibliographyFormatter {
                     series
                         .get_title_fmt(Some(&self.tc_formatter), None)
                         .unwrap()
+                        .value
                         .title_case,
                 );
             }
@@ -710,7 +684,7 @@ impl MlaBibliographyFormatter {
                     }
                     lc.location += &format!("doi:{}", doi);
                 } else if let Some(qurl) = entry.get_any_url() {
-                    let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                    let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
                     if vdate {
                         if !lc.optionals.is_empty() {
                             lc.optionals += ". ";
@@ -740,7 +714,7 @@ impl MlaBibliographyFormatter {
                 nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += qurl.value.as_str();
                 nc.location.commit_formats();
-                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).apply(entry).is_some();
+                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
                 if vdate {
                     nc.optionals = format!(
                         "Accessed {}",
