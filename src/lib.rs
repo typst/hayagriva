@@ -31,7 +31,7 @@ use url::Url;
 use yaml_rust::{Yaml, YamlLoader};
 
 /// The field type enum variants describe what data types can possibly be held
-/// by the various content items of an [Entry].
+/// by the various content items of an [`Entry`].
 #[derive(Clone, Debug, Display, PartialEq)]
 pub enum FieldType {
     /// A [Title] containing a canonical value and optionally translations and

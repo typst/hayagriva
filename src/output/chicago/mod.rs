@@ -26,7 +26,7 @@ pub enum AccessDateConfig {
 }
 
 impl AccessDateConfig {
-    /// Will determine, given the value of `self` and a [Entry], if an access
+    /// Will determine, given the value of `self` and a [`Entry`], if an access
     /// date should be provided.
     pub fn needs_date(&self, entry: &Entry) -> bool {
         match self {

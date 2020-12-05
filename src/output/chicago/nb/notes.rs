@@ -17,7 +17,7 @@ use super::{
 /// Describes the desired note type. This normally depends on the
 /// previously cited keys, depending on the behavior. Also see the Chicago
 /// Manual of Style, 17. ed., 14.20, 14.30, 14.34.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum NoteType {
     /// Creates a full citation. Should always be used if this is the first
     /// occurrance of the key in a section and the work contains no
@@ -70,7 +70,7 @@ impl<'s> NoteCitationFormatter<'s> {
                     if let Some(prefix) = p.prefix {
                         format!("{} {}", prefix, p.name)
                     } else {
-                        p.name.clone()
+                        p.name
                     }
                 })
                 .collect::<Vec<_>>()
@@ -126,9 +126,8 @@ impl<'s> NoteCitationFormatter<'s> {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let conference = sel!(Wc() => Bind("p", Id(Conference)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let conference =
+            sel!(Wc() => Bind("p", Id(Conference))).bound_element(entry, "p");
         let mut res = if entry.entry_type == Thesis {
             "thesis".to_string()
         } else if conference.is_some() {
@@ -137,9 +136,8 @@ impl<'s> NoteCitationFormatter<'s> {
             String::new()
         };
 
-        let published_entry = sel!(Wc() => Bind("p", attrs!(Wc(), "publisher")))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let published_entry =
+            sel!(Wc() => Bind("p", attrs!(Wc(), "publisher"))).bound_element(entry, "p");
         if let Some(loc) = entry
             .get_location()
             .or_else(|| published_entry.and_then(|e| e.get_location()))
@@ -195,7 +193,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 res += "unpublished manuscript";
             }
         } else if entry.entry_type == Artwork {
-            // Do the publisher stuff later
+            // Intentionally empty: We do the publisher stuff later
         } else if let Some(conf) = conference {
             if let Some(org) = conf.get_organization() {
                 res += ", ";
@@ -306,9 +304,8 @@ impl<'s> NoteCitationFormatter<'s> {
 
             items.extend(entry.get_note().map(Into::into));
 
-            let parent = sel!(Wc() => Bind("p", Id(Exhibition)))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
+            let parent =
+                sel!(Wc() => Bind("p", Id(Exhibition))).bound_element(entry, "p");
             items.extend(
                 entry
                     .get_organization()
@@ -383,12 +380,10 @@ impl<'s> NoteCitationFormatter<'s> {
 
         let no_author = res.is_empty();
 
-        let dictionary = sel!(Id(Entry) => Bind("p", Id(Reference)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-        let database = sel!(Id(Entry) => Bind("p", Id(Repository)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let dictionary =
+            sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
+        let database =
+            sel!(Id(Entry) => Bind("p", Id(Repository))).bound_element(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, short, &self.common, ',');
@@ -428,11 +423,15 @@ impl<'s> NoteCitationFormatter<'s> {
                 get_info_element(entry, &self.common, false)
             };
             if !add.is_empty() {
-                res.value = push_comma_quote_aware(res.value, ',', true);
+                push_comma_quote_aware(&mut res.value, ',', true);
             }
             res += add;
 
-            let publ = self.get_publication_info(if no_author { dictionary.unwrap_or(entry) } else { entry });
+            let publ = self.get_publication_info(if no_author {
+                dictionary.unwrap_or(entry)
+            } else {
+                entry
+            });
             let brackets = is_authoritative(entry)
                 || entry.entry_type == Manuscript
                 || (no_author && dictionary.is_some());
@@ -440,7 +439,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 if brackets {
                     res.push(' ');
                 } else {
-                    res.value = push_comma_quote_aware(res.value, ',', true);
+                    push_comma_quote_aware(&mut res.value, ',', true);
                 }
             }
 
@@ -463,13 +462,13 @@ impl<'s> NoteCitationFormatter<'s> {
                 title
             };
             if !db_entry.is_empty() {
-                res.value = push_comma_quote_aware(res.value, ',', true);
+                push_comma_quote_aware(&mut res.value, ',', true);
                 res += &db_entry;
             }
         }
 
         if no_author && dictionary.is_some() && entry.get_authors_fallible().is_none() {
-            res.value = push_comma_quote_aware(res.value, ',', true);
+            push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.common);
         }
@@ -479,7 +478,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 if colon {
                     res.push(':');
                 } else {
-                    res.value = push_comma_quote_aware(res.value, ',', false);
+                    push_comma_quote_aware(&mut res.value, ',', false);
                 }
                 res.push(' ');
             }
@@ -490,7 +489,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 if colon {
                     res.push(':');
                 } else {
-                    res.value = push_comma_quote_aware(res.value, ',', false);
+                    push_comma_quote_aware(&mut res.value, ',', false);
                 }
                 res.push(' ');
             }
@@ -501,7 +500,7 @@ impl<'s> NoteCitationFormatter<'s> {
         if journal && !short {
             if let Some(sn) = entry.get_serial_number() {
                 if !sn.is_empty() {
-                    res.value = push_comma_quote_aware(res.value, ',', false);
+                    push_comma_quote_aware(&mut res.value, ',', false);
                 }
 
                 if !sn.is_empty() && !res.is_empty() {
@@ -545,16 +544,14 @@ impl<'s> NoteCitationFormatter<'s> {
                 let mut brack_content =
                     get_chunk_title(entry, false, false, &self.common);
                 if let Some(sn) = entry.get_serial_number() {
-                    brack_content.value =
-                        push_comma_quote_aware(brack_content.value, ',', true);
+                    push_comma_quote_aware(&mut brack_content.value, ',', true);
                     brack_content += sn;
                 }
                 if self.common.url_access_date.needs_date(entry) {
                     if let Some(date) =
                         entry.get_any_url().and_then(|u| u.visit_date.as_ref())
                     {
-                        brack_content.value =
-                            push_comma_quote_aware(brack_content.value, ';', true);
+                        push_comma_quote_aware(&mut brack_content.value, ';', true);
                         brack_content +=
                             &format!("accessed {}", format_date(date, DateMode::Day));
                     }
@@ -570,7 +567,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 }
             } else {
                 if !url.is_empty() {
-                    res.value = push_comma_quote_aware(res.value, ',', false);
+                    push_comma_quote_aware(&mut res.value, ',', false);
                 }
             }
 
@@ -584,7 +581,7 @@ impl<'s> NoteCitationFormatter<'s> {
             let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
             if no_url || entry.entry_type == Manuscript || preprint {
                 if let Some(archive) = entry.get_archive() {
-                    res.value = push_comma_quote_aware(res.value, ',', true);
+                    push_comma_quote_aware(&mut res.value, ',', true);
 
                     res += archive;
 

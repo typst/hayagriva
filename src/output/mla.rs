@@ -149,11 +149,7 @@ fn format_date(d: &Date) -> String {
         });
     }
 
-    if d.year > 0 {
-        res += &d.year.to_string();
-    } else {
-        res += &format!("{} B.C.E.", -(d.year - 1));
-    }
+    res += &d.display_year();
     res
 }
 
@@ -388,8 +384,9 @@ impl MlaBibliographyFormatter {
         let mut res = DisplayString::new();
 
         if use_quotes {
-            if let Some(mut hm) = sel!(Id(Chapter) => Bind("a", Wc())).apply(entry) {
-                let temp = hm.remove("a").unwrap();
+            if let Some(mut bindings) = sel!(Id(Chapter) => Bind("a", Wc())).apply(entry)
+            {
+                let temp = bindings.remove("a").unwrap();
 
                 if ["preface", "introduction", "foreword", "afterword"]
                     .iter()
@@ -446,8 +443,7 @@ impl MlaBibliographyFormatter {
         let mut containers: Vec<ContainerInfo> = vec![];
         let series: Option<&Entry> =
             sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
+                .bound_element(entry, "p");
 
         if entry != root || MlaBibliographyFormatter::own_container(entry) {
             let mut container = ContainerInfo::new();
@@ -618,7 +614,13 @@ impl MlaBibliographyFormatter {
                 location.push(dstr);
                 has_url = true;
             } else if let Some(qurl) = entry.get_url() {
-                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
+                let vdate = qurl.visit_date.is_some()
+                    && sel!(alt
+                        Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")),
+                        sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))
+                    )
+                    .matches(entry);
+
                 if vdate {
                     supplemental.push(format!(
                         "Accessed {}",

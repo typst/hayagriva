@@ -59,30 +59,30 @@ impl<'s> SourceType<'s> {
         let talk = sel!(Wc() => Bind("p", Id(Conference)));
         let generic_parent = sel!(Wc() => Bind("p", Wc()));
 
-        if let Some(mut hm) = periodical.apply(entry) {
-            Self::PeriodicalItem(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = collection.apply(entry) {
-            Self::CollectionItem(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = tv_series.apply(entry) {
-            Self::TvSeries(hm.remove("p").unwrap())
+        if let Some(mut bindings) = periodical.apply(entry) {
+            Self::PeriodicalItem(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = collection.apply(entry) {
+            Self::CollectionItem(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = tv_series.apply(entry) {
+            Self::TvSeries(bindings.remove("p").unwrap())
         } else if thesis.apply(entry).is_some() {
             Self::Thesis
         } else if manuscript.apply(entry).is_some() {
             Self::Manuscript
-        } else if let Some(mut hm) = art_container.apply(entry) {
-            Self::ArtContainer(hm.remove("p").unwrap())
+        } else if let Some(mut bindings) = art_container.apply(entry) {
+            Self::ArtContainer(bindings.remove("p").unwrap())
         } else if art.apply(entry).is_some() {
             Self::StandaloneArt
-        } else if let Some(mut hm) = news_item.apply(entry) {
-            Self::NewsItem(hm.remove("p").unwrap())
+        } else if let Some(mut bindings) = news_item.apply(entry) {
+            Self::NewsItem(bindings.remove("p").unwrap())
         } else if web_standalone.apply(entry).is_some() {
             Self::StandaloneWeb
-        } else if let Some(mut hm) = web_contained.apply(entry) {
-            Self::Web(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = talk.apply(entry) {
-            Self::ConferenceTalk(hm.remove("p").unwrap())
-        } else if let Some(mut hm) = generic_parent.apply(entry) {
-            Self::GenericParent(hm.remove("p").unwrap())
+        } else if let Some(mut bindings) = web_contained.apply(entry) {
+            Self::Web(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = talk.apply(entry) {
+            Self::ConferenceTalk(bindings.remove("p").unwrap())
+        } else if let Some(mut bindings) = generic_parent.apply(entry) {
+            Self::GenericParent(bindings.remove("p").unwrap())
         } else {
             Self::Generic
         }
@@ -328,13 +328,15 @@ impl ApaBibliographyFormatter {
     fn get_date(&self, entry: &Entry) -> String {
         if let Some(date) = entry.get_any_date() {
             match (date.month, date.day) {
-                (None, _) => format!("({:04}).", date.year),
-                (Some(month), None) => {
-                    format!("({:04}, {}).", date.year, get_month_name(month).unwrap())
-                }
+                (None, _) => format!("({}).", date.display_year()),
+                (Some(month), None) => format!(
+                    "({}, {}).",
+                    date.display_year(),
+                    get_month_name(month).unwrap()
+                ),
                 (Some(month), Some(day)) => format!(
-                    "({:04}, {} {}).",
-                    date.year,
+                    "({}, {} {}).",
+                    date.display_year(),
                     get_month_name(month).unwrap(),
                     day + 1,
                 ),
@@ -354,8 +356,8 @@ impl ApaBibliographyFormatter {
                     match (date.month, date.day) {
                         (None, _) => {
                             let mut res = DisplayString::from_string(format!(
-                                "Retrieved {:04}, from ",
-                                date.year
+                                "Retrieved {}, from ",
+                                date.display_year()
                             ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
@@ -364,9 +366,9 @@ impl ApaBibliographyFormatter {
                         }
                         (Some(month), None) => {
                             let mut res = DisplayString::from_string(format!(
-                                "Retrieved {} {:04}, from ",
+                                "Retrieved {} {}, from ",
                                 get_month_name(month).unwrap(),
-                                date.year,
+                                date.display_year(),
                             ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
@@ -375,10 +377,10 @@ impl ApaBibliographyFormatter {
                         }
                         (Some(month), Some(day)) => {
                             let mut res = DisplayString::from_string(format!(
-                                "(Retrieved {} {}, {:04}, from ",
+                                "(Retrieved {} {}, {}, from ",
                                 get_month_name(month).unwrap(),
                                 day,
-                                date.year,
+                                date.display_year(),
                             ));
                             res.start_format(Formatting::NoHyphenation);
                             res += uv;
@@ -439,8 +441,9 @@ impl ApaBibliographyFormatter {
                 Bind("p", sel!(alt Id(Book), Id(Proceedings), Id(Anthology)))
             );
 
-            let multivolume_parent =
-                multivol_spec.apply(entry).and_then(|mut hm| hm.remove("p"));
+            let multivolume_parent = multivol_spec
+                .apply(entry)
+                .and_then(|mut bindings| bindings.remove("p"));
 
             if italicise {
                 res.start_format(Formatting::Italic);

@@ -448,13 +448,13 @@ impl DisplayString {
     }
 }
 
-fn push_comma_quote_aware(mut s: String, comma: char, space: bool) -> String {
+fn push_comma_quote_aware(s: &mut String, comma: char, space: bool) {
     let cur_len = s.len();
     if cur_len > 3 && s.is_char_boundary(cur_len - 3) && &s[cur_len - 3 ..] == "”" {
-        s = (&s[.. cur_len - 3]).into();
+        s.truncate(cur_len - 3);
         if s.chars().last() != Some(comma) {
             s.push(comma);
-            s += "”";
+            s.push_str("”");
         }
     } else if !s.is_empty() {
         if s.chars().last() != Some(comma) {
@@ -465,8 +465,6 @@ fn push_comma_quote_aware(mut s: String, comma: char, space: bool) -> String {
     if space && !s.is_empty() {
         s.push(' ');
     }
-
-    s
 }
 
 fn abbreviate_publisher(s: &str, up: bool) -> String {

@@ -27,7 +27,7 @@ pub struct CommonChicagoNbConfig {
 }
 
 impl CommonChicagoNbConfig {
-    /// Create a new [CommonChicagoNbConfig].
+    /// Create a new [`CommonChicagoNbConfig`].
     pub fn new() -> Self {
         let tc_formatter = TitleCase::new();
         Self {
@@ -53,8 +53,8 @@ fn omit_initial_articles(s: &str) -> String {
 }
 
 fn shorthand(title: &Title) -> FormattableString {
-    if let Some(sh) = title.clone().shorthand {
-        sh
+    if let Some(sh) = title.shorthand.as_ref() {
+        sh.clone()
     } else {
         FormattableString {
             value: omit_initial_articles(&title.value.value),
@@ -74,7 +74,7 @@ fn shorthand(title: &Title) -> FormattableString {
 }
 
 /// Which parts of the day should be printed.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum DateMode {
     Year,
     Month,
@@ -96,20 +96,17 @@ fn format_date(date: &Date, mode: DateMode) -> String {
         }
     }
 
-    if date.year > 0 {
-        res += &date.year.to_string();
-    } else {
-        res += &format!("{} B.C.E.", -(date.year - 1));
-    }
+    res += &date.display_year();
     res
 }
 
 fn and_list(
-    names: impl IntoIterator<Item = String> + Clone,
+    names: impl IntoIterator<Item = String>,
     oxford: bool,
     et_al_limit: Option<usize>,
 ) -> String {
-    let name_len = names.clone().into_iter().count();
+    let names = names.into_iter().collect::<Vec<_>>();
+    let name_len = names.len();
     let mut res = String::new();
     let threshold = et_al_limit.unwrap_or(0);
 
@@ -120,16 +117,14 @@ fn and_list(
 
         res += &name;
 
-        if (index as i32) <= name_len as i32 - 2
-            && (threshold == 0 || name_len < threshold)
-        {
+        if index + 2 <= name_len && (threshold == 0 || name_len < threshold) {
             if oxford || name_len > 2 {
                 res += ", ";
             } else {
                 res.push(' ');
             }
         }
-        if (index as i32) == name_len as i32 - 2 {
+        if index + 2 == name_len {
             res += "and ";
         }
     }
@@ -143,31 +138,27 @@ fn and_list(
 
 /// Indicates whether a kind of work is its own container.
 fn self_contained(entry: &Entry) -> bool {
-    let kinds = [
-        Book,
-        Report,
-        Newspaper,
-        Periodical,
-        Proceedings,
-        Book,
-        Blog,
-        Reference,
-        Conference,
-        Anthology,
-        Thread,
-        Exhibition,
-        Case,
-    ];
+    let sc = matches!(
+        entry.entry_type,
+        Book | Report
+            | Newspaper
+            | Periodical
+            | Proceedings
+            | Blog
+            | Reference
+            | Conference
+            | Anthology
+            | Thread
+            | Exhibition
+            | Case
+    );
 
-    let always_quote = [Web];
-
-    kinds.contains(&entry.entry_type)
-        || (!always_quote.contains(&entry.entry_type)
-            && sel!(alt
-                attrs!(Wc(), "publisher"),
-                sel!(Wc() => Neg(Wc())),
-            )
-            .matches(entry))
+    sc || (!matches!(entry.entry_type, Web)
+        && sel!(alt
+            attrs!(Wc(), "publisher"),
+            sel!(Wc() => Neg(Wc())),
+        )
+        .matches(entry))
 }
 
 fn get_title(
@@ -177,9 +168,7 @@ fn get_title(
     comma: char,
 ) -> DisplayString {
     let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-        .apply(entry)
-        .map(|mut hm| hm.remove("p").unwrap());
-
+        .bound_element(entry, "p");
 
     let mut res = DisplayString::new();
     if let Some(parent) = mv_title {
@@ -190,22 +179,20 @@ fn get_title(
 
     if !short && mv_title.is_none() {
         let chapter = sel!(Id(Chapter) => Bind("p", attrs!(Wc(), "title")))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+            .bound_element(entry, "p");
 
         let edited_book = sel!(alt
             sel!(Wc() => Bind("p", attrs!(sel!(alt Id(Book), Id(Proceedings)), "editor"))),
             sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
             sel!(Id(Article) => Bind("p", Id(Proceedings))),
             sel!(attrs!(Id(Entry), "author") => Bind("p", Id(Reference))),
-        ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
+        ).bound_element(entry, "p");
 
         if let Some(parent) = edited_book.or(chapter) {
-            res.value = push_comma_quote_aware(res.value, comma, true);
+            push_comma_quote_aware(&mut res.value, comma, true);
             if chapter.is_some() {
                 if let Some(sn) = entry.get_serial_number() {
-                    let num = sn.chars().all(char::is_numeric);
-                    if num {
+                    if sn.chars().all(char::is_numeric) {
                         res += &format!("chap. {} ", sn);
                     } else {
                         res += sn;
@@ -232,7 +219,7 @@ fn get_title(
                         if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
 
                     local += &and_list(ed_names, false, common.et_al_limit);
-                    res.value = push_comma_quote_aware(res.value, ',', true);
+                    push_comma_quote_aware(&mut res.value, ',', true);
                     res += &local;
                 }
             }
@@ -242,32 +229,28 @@ fn get_title(
             sel!(Id(Web) => Bind("p", Wc())),
             sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
         )
-        .apply(entry)
-        .map(|mut hm| hm.remove("p").unwrap());
+        .bound_element(entry, "p");
 
         if web_parent.and_then(|p| p.get_title()).is_some() {
-            res.value = push_comma_quote_aware(res.value, comma, true);
+            push_comma_quote_aware(&mut res.value, comma, true);
             res += &get_chunk_title(web_parent.unwrap(), false, false, common).value;
         }
 
-        let blog_parent = sel!(Wc() => Bind("p", Id(Blog)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let blog_parent = sel!(Wc() => Bind("p", Id(Blog))).bound_element(entry, "p");
+
         if let Some(parent) = blog_parent {
             let titles = get_title(parent, false, common, comma);
-
             if !titles.is_empty() {
-                res.value = push_comma_quote_aware(res.value, comma, true);
+                push_comma_quote_aware(&mut res.value, comma, true);
             }
 
             res += titles;
         } else if entry.entry_type == Blog {
-            let title_parent = sel!(Wc() => Bind("p", attrs!(Wc(), "title")))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
+            let title_parent =
+                sel!(Wc() => Bind("p", attrs!(Wc(), "title"))).bound_element(entry, "p");
             if let Some(parent) = title_parent {
                 let titles = get_title(parent, false, common, comma);
-                res.value = push_comma_quote_aware(res.value, comma, true);
+                push_comma_quote_aware(&mut res.value, comma, true);
                 res += titles;
             }
         }
@@ -309,14 +292,12 @@ fn get_info_element(
 
     let journal = sel!(
         sel!(alt Id(Article), Id(Entry)) => Bind("p", sel!(alt Id(Periodical), Id(Newspaper)))
-    ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
-    let newspaper = sel!(Wc() => Bind("p", Id(Newspaper)))
-        .apply(entry)
-        .map(|mut hm| hm.remove("p").unwrap());
+    ).bound_element(entry, "p");
+
+    let newspaper = sel!(Wc() => Bind("p", Id(Newspaper))).bound_element(entry, "p");
 
     let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-        .apply(entry)
-        .map(|mut hm| hm.remove("p").unwrap());
+        .bound_element(entry, "p");
 
     let orig_entry = entry;
     if let Some(mv_p) = mv_title {
@@ -327,15 +308,13 @@ fn get_info_element(
         Bind("tl", attrs!(Wc(), "affiliated")),
         sel!(Wc() => Bind("tl", attrs!(Wc(), "affiliated"))),
     )
-    .apply(entry)
-    .map(|mut hm| hm.remove("tl").unwrap());
+    .bound_element(entry, "tl");
 
     let ed_match = sel!(alt
         Bind("ed", attrs!(Wc(), "editor")),
         sel!(Wc() => Bind("ed", attrs!(Wc(), "editor"))),
     )
-    .apply(entry)
-    .map(|mut hm| hm.remove("ed").unwrap());
+    .bound_element(entry, "ed");
     let eds = ed_match.map(|e| e.get_editors().unwrap());
 
     let translators = affs.and_then(|e| {
@@ -369,7 +348,7 @@ fn get_info_element(
             sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
             sel!(Id(Article) => Bind("p", Id(Proceedings))),
             sel!(attrs!(Id(Entry), "author") => Bind("p", Id(Reference))),
-        ).apply(entry).map(|mut hm| hm.remove("p").unwrap());
+        ).bound_element(entry, "p");
 
         if orig_entry.get_authors_fallible().is_some() && ed_match != edited_book {
             let ed_names = eds
@@ -410,8 +389,11 @@ fn get_info_element(
             let applied = match ed {
                 NumOrStr::Number(n) if *n > 1 => format!("{} ser.", get_ordinal(*n)),
                 NumOrStr::Str(s) => {
-                    let s = s.to_lowercase().replace("new", "n.").replace("series", "s.");
-                    let s = if s.trim() == "n. s." { "n.s.".into() } else { s };
+                    let mut s =
+                        s.to_lowercase().replace("new", "n.").replace("series", "s.");
+                    if s.trim() == "n. s." {
+                        s = "n.s.".into()
+                    };
 
                     s
                 }
@@ -480,13 +462,15 @@ fn get_info_element(
             NumOrStr::Str(s) => {
                 res.push(
                     s.split(' ')
-                        .map(|i| match i.to_lowercase().as_ref() {
-                            "edition" => "ed.",
-                            "revised" => "rev.",
-                            _ => i,
+                        .flat_map(|i| {
+                            match i.to_lowercase().as_ref() {
+                                "edition" => "ed.",
+                                "revised" => "rev.",
+                                _ => i,
+                            }
+                            .chars()
                         })
-                        .collect::<Vec<_>>()
-                        .join(" ")
+                        .collect::<String>()
                         .into(),
                 );
             }
@@ -502,8 +486,8 @@ fn get_info_element(
             }
         }
 
-        if let Some(vtotal) = orig_entry.get_total_volumes() {
-            if *vtotal > 1 {
+        if let Some(&vtotal) = orig_entry.get_total_volumes() {
+            if vtotal > 1 {
                 if series {
                     res.push(format!("{} seasons", vtotal).into())
                 } else {
@@ -521,7 +505,7 @@ fn get_info_element(
             }
         }
 
-        if let Some(_parent) = mv_title {
+        if mv_title.is_some() {
             let mut title = DisplayString::new();
             title.start_format(Formatting::Italic);
             if let Some(own_title) =
@@ -530,7 +514,7 @@ fn get_info_element(
                 title += &own_title.value.title_case;
             }
             if let Some(eds) = orig_entry.get_editors() {
-                title.value = push_comma_quote_aware(title.value, ',', true);
+                push_comma_quote_aware(&mut title.value, ',', true);
                 title.commit_formats();
                 let ed_names = eds
                     .into_iter()
@@ -560,8 +544,8 @@ fn get_info_element(
             sel!(Wc() => sel!(Id(Book) => Bind("p", attrs!(Id(Book), "title")))),
             sel!(Id(Book) => Bind("p", attrs!(Wc(), "title"))),
         );
-        if let Some(mut hm) = spec.apply(orig_entry) {
-            let par_anth = hm.remove("p").unwrap();
+        if let Some(mut bindings) = spec.apply(orig_entry) {
+            let par_anth = bindings.remove("p").unwrap();
             let mut title = get_chunk_title(par_anth, false, false, common).value.into();
 
             let issue = if let Some(issue) = par_anth.get_issue() {
@@ -592,10 +576,10 @@ fn get_info_element(
                 )
             });
 
-            if issue.is_some() && volume.is_some() {
+            if let (Some(issue), Some(volume)) = (&issue, &volume) {
                 res.push(title);
-                res.push(volume.unwrap().0.into());
-                res.push(issue.unwrap().0.into());
+                res.push(volume.clone().0.into());
+                res.push(issue.clone().0.into());
             } else {
                 let item = issue.or(volume);
                 if let Some((_, Some(v))) = item {
@@ -742,13 +726,13 @@ fn common_author_handling(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     } else if entry.entry_type == Video {
         let tv_series =
             sel!(attrs!(Id(Video), "issue", "volume") => Bind("p", Id(Video)));
-        if let Some(mut hm) = tv_series.apply(entry) {
+        if let Some(mut bindings) = tv_series.apply(entry) {
             let mut affs = entry.get_affiliated_filtered(PersonRole::Director);
-            affs.extend(entry.get_affiliated_filtered(PersonRole::Writer).into_iter());
+            affs.extend(entry.get_affiliated_filtered(PersonRole::Writer));
             if !affs.is_empty() {
                 affs
             } else {
-                let parent = hm.remove("p").unwrap();
+                let parent = bindings.remove("p").unwrap();
                 add = AuthorRole::ExecutiveProducer;
                 parent.get_affiliated_filtered(PersonRole::ExecutiveProducer)
             }

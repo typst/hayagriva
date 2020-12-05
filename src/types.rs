@@ -540,6 +540,55 @@ impl Date {
     pub fn from_year(year: i32) -> Self {
         Self { year, month: None, day: None }
     }
+
+    /// Prints the year as a human-readable gregorian year.
+    /// Non-positive values will be marked with a "BCE" postfix.
+    pub fn display_year(&self) -> String {
+        self.display_year_opt(true, false, false, false)
+    }
+
+    /// Prints the year as a human-readable gregorian year with controllable
+    /// pre- and postfixes denominating the year's positivity.
+    ///
+    /// ## Arguments
+    /// - `secular`   Switches between "BC" and "BCE"
+    /// - `periods`   Determines wheter to use punctuation in the abbreviations
+    /// - `designate_positive`    Show a denomination for positive years
+    /// - `ad_prefix` Use the "AD" designation for positive years in a prefix
+    ///               position. Will be ignored if `designate_positive` is negative.
+    pub fn display_year_opt(
+        &self,
+        secular: bool,
+        periods: bool,
+        designate_positive: bool,
+        ad_prefix: bool,
+    ) -> String {
+        let np_postfix = match (secular, periods) {
+            (true, false) => "BCE",
+            (true, true) => "B.C.E.",
+            (false, false) => "BC",
+            (false, true) => "B.C.",
+        };
+
+        let positive_dn = match (periods, ad_prefix) {
+            (true, false) => "C.E.",
+            (false, false) => "CE",
+            (true, true) => "AD",
+            (false, true) => "A.D.",
+        };
+
+        if self.year > 0 {
+            if designate_positive && ad_prefix {
+                format!("{} {}", positive_dn, self.year)
+            } else if designate_positive && !ad_prefix {
+                format!("{} {}", self.year, positive_dn)
+            } else {
+                self.year.to_string()
+            }
+        } else {
+            format!("{} {}", -(self.year as i64 - 1), np_postfix)
+        }
+    }
 }
 
 /// A string with a value and possibly user-defined overrides for various

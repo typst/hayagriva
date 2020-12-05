@@ -106,18 +106,16 @@ impl BibliographyFormatter {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let conference = sel!(Wc() => Bind("p", Id(Conference)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let conference =
+            sel!(Wc() => Bind("p", Id(Conference))).bound_element(entry, "p");
         let mut res = if entry.entry_type == Thesis {
             "Thesis".to_string()
         } else {
             String::new()
         };
 
-        let published_entry = sel!(Wc() => Bind("p", attrs!(Wc(), "publisher")))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let published_entry =
+            sel!(Wc() => Bind("p", attrs!(Wc(), "publisher"))).bound_element(entry, "p");
         if !conference.is_some() {
             if let Some(loc) = entry
                 .get_location()
@@ -168,7 +166,7 @@ impl BibliographyFormatter {
                 res += "Unpublished manuscript";
             }
         } else if entry.entry_type == Artwork {
-            // Do the publisher stuff later
+            // Intentionally empty: We do the publisher stuff later
         } else if let Some(conf) = conference {
             let conf_name = get_chunk_title(conf, false, false, &self.common).value;
             if !conf_name.is_empty() {
@@ -267,9 +265,8 @@ impl BibliographyFormatter {
 
             items.extend(entry.get_note().map(Into::into));
 
-            let parent = sel!(Wc() => Bind("p", Id(Exhibition)))
-                .apply(entry)
-                .map(|mut hm| hm.remove("p").unwrap());
+            let parent =
+                sel!(Wc() => Bind("p", Id(Exhibition))).bound_element(entry, "p");
             items.extend(
                 entry
                     .get_organization()
@@ -329,12 +326,10 @@ impl BibliographyFormatter {
 
         let no_author = res.is_empty();
 
-        let dictionary = sel!(Id(Entry) => Bind("p", Id(Reference)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
-        let database = sel!(Id(Entry) => Bind("p", Id(Repository)))
-            .apply(entry)
-            .map(|mut hm| hm.remove("p").unwrap());
+        let dictionary =
+            sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
+        let database =
+            sel!(Id(Entry) => Bind("p", Id(Repository))).bound_element(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, false, &self.common, '.');
@@ -380,13 +375,13 @@ impl BibliographyFormatter {
             .join("");
 
         if !add.is_empty() {
-            res.value = push_comma_quote_aware(res.value, '.', true);
+            push_comma_quote_aware(&mut res.value, '.', true);
         }
         res += add;
 
         let publ = self.get_publication_info(dict);
         if !publ.is_empty() && !res.is_empty() {
-            res.value = push_comma_quote_aware(res.value, '.', true);
+            push_comma_quote_aware(&mut res.value, '.', true);
         }
 
         if !publ.is_empty() {
@@ -398,7 +393,7 @@ impl BibliographyFormatter {
         }
 
         if no_author && dictionary.is_some() && entry.get_authors_fallible().is_none() {
-            res.value = push_comma_quote_aware(res.value, ',', true);
+            push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.common);
         }
@@ -408,7 +403,7 @@ impl BibliographyFormatter {
                 if colon {
                     res.push(':');
                 } else {
-                    res.value = push_comma_quote_aware(res.value, ',', false);
+                    push_comma_quote_aware(&mut res.value, ',', false);
                 }
                 res.push(' ');
             }
@@ -419,7 +414,7 @@ impl BibliographyFormatter {
         if journal {
             if let Some(sn) = entry.get_serial_number() {
                 if !sn.is_empty() {
-                    res.value = push_comma_quote_aware(res.value, ',', false);
+                    push_comma_quote_aware(&mut res.value, ',', false);
                 }
 
                 if !sn.is_empty() && !res.is_empty() {
@@ -459,16 +454,14 @@ impl BibliographyFormatter {
         } else if database.is_some() {
             let mut brack_content = get_chunk_title(entry, false, false, &self.common);
             if let Some(sn) = entry.get_serial_number() {
-                brack_content.value =
-                    push_comma_quote_aware(brack_content.value, ',', true);
+                push_comma_quote_aware(&mut brack_content.value, ',', true);
                 brack_content += sn;
             }
             if self.common.url_access_date.needs_date(entry) {
                 if let Some(date) =
                     entry.get_any_url().and_then(|u| u.visit_date.as_ref())
                 {
-                    brack_content.value =
-                        push_comma_quote_aware(brack_content.value, ';', true);
+                    push_comma_quote_aware(&mut brack_content.value, ';', true);
                     brack_content +=
                         &format!("accessed {}", format_date(date, DateMode::Day));
                 }
@@ -484,7 +477,7 @@ impl BibliographyFormatter {
             }
         } else {
             if !url.is_empty() {
-                res.value = push_comma_quote_aware(res.value, ',', false);
+                push_comma_quote_aware(&mut res.value, ',', false);
             }
         }
 
@@ -498,7 +491,7 @@ impl BibliographyFormatter {
         let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
         if no_url || entry.entry_type == Manuscript || preprint {
             if let Some(archive) = entry.get_archive() {
-                res.value = push_comma_quote_aware(res.value, ',', true);
+                push_comma_quote_aware(&mut res.value, ',', true);
 
                 res += archive;
 

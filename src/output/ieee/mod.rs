@@ -35,7 +35,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
         .or_else(|| anthology.apply(entry))
         .or_else(|| entry_spec.apply(entry))
         .or_else(|| proceedings.apply(entry))
-        .and_then(|mut hm| hm.remove("p"))
+        .and_then(|mut bindings| bindings.remove("p"))
 }
 
 impl IeeeBibliographyFormatter {
@@ -228,16 +228,16 @@ impl IeeeBibliographyFormatter {
                     // Do the series parentheses thing here
                     let spec =
                         sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")));
-                    if let Some(mut hm) = spec.apply(canonical) {
-                        let par_anth = hm.remove("p").unwrap();
-                        let par_t = par_anth
+                    if let Some(mut bindings) = spec.apply(canonical) {
+                        let parenth_anth = bindings.remove("p").unwrap();
+                        let parenth_title = parenth_anth
                             .get_title_fmt(Some(&self.tc_formatter), None)
                             .unwrap();
                         res += " (";
-                        res += &par_t.value.title_case;
+                        res += &parenth_title.value.title_case;
 
                         res.add_if_some(
-                            par_anth.get_issue().map(|i| i.to_string()),
+                            parenth_anth.get_issue().map(|i| i.to_string()),
                             Some(", no. "),
                             None,
                         );
@@ -246,13 +246,13 @@ impl IeeeBibliographyFormatter {
 
                     // And the conference series thing as well
                     let spec = sel!(Id(Proceedings) => Bind("p", sel!(alt Id(Proceedings), Id(Anthology), Id(Misc))));
-                    if let Some(mut hm) = spec.apply(canonical) {
-                        let par_conf = hm.remove("p").unwrap();
-                        if let Some(par_t) =
+                    if let Some(mut bindings) = spec.apply(canonical) {
+                        let par_conf = bindings.remove("p").unwrap();
+                        if let Some(parenth_title) =
                             par_conf.get_title_fmt(Some(&self.tc_formatter), None)
                         {
                             res += " in ";
-                            res += &par_t.value.title_case;
+                            res += &parenth_title.value.title_case;
                         }
                     }
                 }
@@ -355,7 +355,7 @@ impl IeeeBibliographyFormatter {
                             });
                         }
 
-                        res.push(date.year.to_string());
+                        res.push(date.display_year());
                     }
                 }
 
@@ -390,7 +390,7 @@ impl IeeeBibliographyFormatter {
                         String::new()
                     };
 
-                    res += &date.year.to_string();
+                    res += &date.display_year();
                     res
                 });
 
@@ -485,7 +485,7 @@ impl IeeeBibliographyFormatter {
                     let mut fin = String::new();
                     if let Some(date) = entry.get_any_date() {
                         fin += "(";
-                        fin += &date.year.to_string();
+                        fin += &date.display_year();
                         if let Some(month) = date.month {
                             fin += ", ";
                             fin += &(if let Some(day) = date.day {
@@ -520,7 +520,7 @@ impl IeeeBibliographyFormatter {
                             });
                         }
 
-                        res.push(date.year.to_string());
+                        res.push(date.display_year());
                     }
                 }
             }
@@ -553,7 +553,7 @@ impl IeeeBibliographyFormatter {
                         });
                     }
 
-                    res.push(date.year.to_string());
+                    res.push(date.display_year());
                 }
 
                 if !pages {
@@ -596,7 +596,7 @@ impl IeeeBibliographyFormatter {
                         String::new()
                     };
 
-                    res += &date.year.to_string();
+                    res += &date.display_year();
                     res
                 });
 
@@ -638,7 +638,7 @@ impl IeeeBibliographyFormatter {
                 }
 
                 if let Some(date) = entry.get_any_date() {
-                    res.push(date.year.to_string());
+                    res.push(date.display_year());
                 }
             }
             (_, Legislation) => {}
@@ -689,7 +689,7 @@ impl IeeeBibliographyFormatter {
                         });
                     }
 
-                    res.push(date.year.to_string());
+                    res.push(date.display_year());
                 }
             }
             (Web, _) | (Blog, _) => {
@@ -766,7 +766,7 @@ impl IeeeBibliographyFormatter {
                 }
 
                 if let Some(date) = canonical.get_any_date() {
-                    res.push(date.year.to_string());
+                    res.push(date.display_year());
                 }
 
                 if let Some(chapter) = chapter {
@@ -797,7 +797,7 @@ impl IeeeBibliographyFormatter {
             res += " ";
         }
 
-        res += &date.year.to_string();
+        res += &date.display_year();
         res
     }
 }
@@ -918,7 +918,7 @@ impl BibliographyFormatter for IeeeBibliographyFormatter {
             }
         }
 
-        res.value = push_comma_quote_aware(res.value, '.', false);
+        push_comma_quote_aware(&mut res.value, '.', false);
 
         if url {
             if let Some(url) = entry.get_any_url() {
