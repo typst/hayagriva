@@ -1,7 +1,9 @@
 //! Citation and bibliography styles.
 
 use super::types::Person;
-use super::Entry;
+use super::{sel, Entry};
+use crate::selectors::Id;
+use crate::types::EntryType::{Chapter, Scene};
 use std::collections::HashMap;
 use std::convert::Into;
 use std::ops::{Add, AddAssign};
@@ -500,4 +502,18 @@ fn abbreviate_publisher(s: &str, up: bool) -> String {
         .filter(|w| !w.is_empty() && business_words.binary_search(w).is_err())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
+    let mut parent = entry.get_parents().and_then(|v| v.first());
+    while sel!(alt Id(Chapter), Id(Scene)).matches(entry) && entry.get_title().is_none() {
+        if let Some(p) = parent {
+            entry = &p;
+            parent = entry.get_parents().and_then(|v| v.first());
+        } else {
+            break;
+        }
+    }
+
+    entry
 }
