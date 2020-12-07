@@ -7,9 +7,11 @@ use crate::types::EntryType::*;
 use crate::{attrs, sel, Entry};
 
 use super::{
-    super::is_authoritative, and_list, common_author_handling, format_date,
-    get_chunk_title, get_info_element, get_title, AuthorRole, CommonChicagoNbConfig,
-    DateMode,
+    super::{
+        and_list, common_author_handling, get_chunk_title, get_title, is_authoritative,
+        AuthorRole, CommonChicagoConfig,
+    },
+    format_date, get_info_element, DateMode,
 };
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -17,13 +19,13 @@ use unicode_segmentation::UnicodeSegmentation;
 /// The struct doing the formatting.
 pub struct BibliographyFormatter {
     /// Properties shared with the bibliography.
-    pub common: CommonChicagoNbConfig,
+    pub common: CommonChicagoConfig,
 }
 
 impl BibliographyFormatter {
     /// Create a new [NoteCitationFormatter].
     pub fn new() -> Self {
-        Self { common: CommonChicagoNbConfig::new() }
+        Self { common: CommonChicagoConfig::new() }
     }
 
     fn get_author(&self, entry: &Entry) -> String {

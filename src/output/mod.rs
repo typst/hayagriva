@@ -44,9 +44,9 @@ pub trait BibliographyFormatter {
 }
 
 /// Represents a citation of one or more database entries.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct AtomicCitation<'s> {
-    /// Cited entry keys.
+    /// Key of the cited entry.
     pub key: &'s str,
     /// Supplements for each entry key such as page or chapter number.
     pub supplement: Option<&'s str>,
@@ -68,8 +68,8 @@ pub trait CitationFormatter<'s> {
     /// Get a reference for the passed citation struct.
     fn get_reference(
         &self,
-        citation: impl Iterator<Item = AtomicCitation<'s>>,
-    ) -> Result<String, CitationError>;
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError>;
 }
 
 /// Checks if the keys are in the database and returns them as reference
@@ -81,8 +81,8 @@ pub struct KeyCitationFormatter<'s> {
 impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
     fn get_reference(
         &self,
-        citation: impl Iterator<Item = AtomicCitation<'s>>,
-    ) -> Result<String, CitationError> {
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError> {
         let mut items = vec![];
         for atomic in citation {
             if !self.entries.contains_key(atomic.key) {
@@ -96,7 +96,7 @@ impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
             });
         }
 
-        Ok(items.join(", "))
+        Ok(items.join(", ").into())
     }
 }
 
@@ -108,8 +108,8 @@ pub struct NumericalCitationFormatter<'s> {
 impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
     fn get_reference(
         &self,
-        citation: impl Iterator<Item = AtomicCitation<'s>>,
-    ) -> Result<String, CitationError> {
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError> {
         let mut ids = vec![];
         for atomic in citation {
             if !self.entries.contains_key(atomic.key) {
@@ -171,7 +171,7 @@ impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
             .collect::<Vec<_>>()
             .join("; ");
 
-        Ok(format!("[{}]", re))
+        Ok(format!("[{}]", re).into())
     }
 }
 

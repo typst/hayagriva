@@ -223,7 +223,7 @@ pub enum PersonRole {
 }
 
 /// Holds the name of a person.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Person {
     /// The family name.
     pub name: String,
@@ -614,6 +614,31 @@ pub struct Title {
     pub shorthand: Option<FormattableString>,
     /// Optional title translation.
     pub translated: Option<FormattableString>,
+}
+
+impl Title {
+    /// Create a new Title.
+    pub fn new(value: FormattableString, shorthand: Option<FormattableString>, translated: Option<FormattableString>) -> Self {
+        Self {
+            value,
+            shorthand,
+            translated,
+        }
+    }
+
+    /// Create a new title using a [`FormattableString`].
+    pub fn from_fs(value: FormattableString) -> Self {
+        Self {
+            value,
+            shorthand: None,
+            translated: None,
+        }
+    }
+
+    /// Create a new title from a string reference.
+    pub fn from_str(s: &str) -> Self {
+        Self::from_fs(FormattableString::new_shorthand(s.into()))
+    }
 }
 
 /// Just like a [Title], but with formatting applied.

@@ -9,9 +9,11 @@ use crate::{attrs, sel, Entry};
 use std::collections::HashMap;
 
 use super::{
-    super::is_authoritative, and_list, common_author_handling, format_date,
-    get_chunk_title, get_info_element, get_title, AuthorRole, CommonChicagoNbConfig,
-    DateMode,
+    super::{
+        and_list, common_author_handling, get_chunk_title, get_title, is_authoritative,
+        AuthorRole, CommonChicagoConfig,
+    },
+    format_date, get_info_element, DateMode,
 };
 
 /// Describes the desired note type. This normally depends on the
@@ -43,7 +45,7 @@ pub struct NoteCitationFormatter<'s> {
     /// Discouraged by Chicago, 14.34.
     pub ibid: bool,
     /// Properties shared with the bibliography.
-    pub common: CommonChicagoNbConfig,
+    pub common: CommonChicagoConfig,
 }
 
 impl<'s> NoteCitationFormatter<'s> {
@@ -52,7 +54,7 @@ impl<'s> NoteCitationFormatter<'s> {
         Self {
             entries: entries.map(|e| (e.key.clone(), e)).collect(),
             ibid: false,
-            common: CommonChicagoNbConfig::new(),
+            common: CommonChicagoConfig::new(),
         }
     }
 
