@@ -1,12 +1,12 @@
 //! Notes and Bibliography (nb) referencing as defined in chapter 14 of the
 //! 17th edition of the Chicago Manual of Style.
 
-use super::{and_list, get_chunk_title, omit_initial_articles, CommonChicagoConfig};
+use super::{and_list, get_chunk_title, CommonChicagoConfig};
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::output::{format_range, push_comma_quote_aware, DisplayString, Formatting};
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
-use crate::types::{Date, FormattableString, Person, PersonRole, Title};
+use crate::types::{Date, PersonRole};
 use crate::{attrs, sel, Entry, NumOrStr};
 
 use isolang::Language;
@@ -113,8 +113,7 @@ fn get_info_element(
         if orig_entry.get_authors_fallible().is_some()
             || orig_entry.get_editors().is_some()
         {
-            let trans_names =
-                trans.into_iter().map(|p| p.get_given_name_initials_first(false));
+            let trans_names = trans.into_iter().map(|p| p.given_first(false));
 
             let mut local =
                 if capitals { "Translated by " } else { "trans. " }.to_string();
@@ -133,10 +132,8 @@ fn get_info_element(
         ).bound_element(entry, "p");
 
         if orig_entry.get_authors_fallible().is_some() && ed_match != edited_book {
-            let ed_names = eds
-                .into_iter()
-                .map(|p| p.get_given_name_initials_first(false))
-                .collect::<Vec<_>>();
+            let ed_names =
+                eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
             let mut local = if capitals && ed_match != Some(orig_entry) {
                 "Edited by "
@@ -220,10 +217,8 @@ fn get_info_element(
             || orig_entry.entry_type == Reference)
             || orig_entry.get_editors().is_some()
         {
-            let comp_names = comp
-                .into_iter()
-                .map(|p| p.get_given_name_initials_first(false))
-                .collect::<Vec<_>>();
+            let comp_names =
+                comp.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
             let mut local = if capitals {
                 "Compiled by "
@@ -298,10 +293,8 @@ fn get_info_element(
             if let Some(eds) = orig_entry.get_editors() {
                 push_comma_quote_aware(&mut title.value, ',', true);
                 title.commit_formats();
-                let ed_names = eds
-                    .into_iter()
-                    .map(|p| p.get_given_name_initials_first(false))
-                    .collect::<Vec<_>>();
+                let ed_names =
+                    eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
                 let mut local = if capitals {
                     "edited by "

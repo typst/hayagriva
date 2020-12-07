@@ -344,7 +344,7 @@ impl Person {
     /// Formats the given name into initials, `"Judith Beatrice"`
     /// would yield `"J. B."` if the `delimiter` argument is set to
     /// `Some(".")`, `"Klaus-Peter"` would become `"K-P"` without a delimiter.
-    pub fn get_initials(&self, delimiter: Option<&str>) -> Option<String> {
+    pub fn initials(&self, delimiter: Option<&str>) -> Option<String> {
         if let Some(gn) = &self.given_name {
             let mut collect = true;
             let mut letters = vec![];
@@ -384,7 +384,7 @@ impl Person {
 
     /// Get the name with the family name fist, the initials
     /// afterwards, seperated by a comma.
-    pub fn get_name_first(&self, initials: bool, prefix_given_name: bool) -> String {
+    pub fn name_first(&self, initials: bool, prefix_given_name: bool) -> String {
         let mut res = if !prefix_given_name {
             if let Some(prefix) = &self.prefix {
                 format!("{} {}", prefix, self.name)
@@ -396,13 +396,13 @@ impl Person {
         };
 
         if initials {
-            if let Some(initials) = self.get_initials(Some(".")) {
+            if let Some(initials) = self.initials(Some(".")) {
                 res += ", ";
                 res += &initials;
             }
-        } else if let Some(given_name) = self.given_name.clone() {
+        } else if let Some(given_name) = &self.given_name {
             res += ", ";
-            res += &given_name;
+            res += given_name;
         }
 
         if prefix_given_name {
@@ -423,11 +423,10 @@ impl Person {
         res
     }
 
-    /// Get the name with the initials fist, the family name
-    /// afterwards, seperated by a comma.
-    pub fn get_given_name_initials_first(&self, initials: bool) -> String {
+    /// Get the name with the given name first, the family name afterwards.
+    pub fn given_first(&self, initials: bool) -> String {
         let mut res = if initials {
-            if let Some(initials) = self.get_initials(Some(".")) {
+            if let Some(initials) = self.initials(Some(".")) {
                 format!("{} ", initials)
             } else {
                 String::new()
@@ -618,21 +617,17 @@ pub struct Title {
 
 impl Title {
     /// Create a new Title.
-    pub fn new(value: FormattableString, shorthand: Option<FormattableString>, translated: Option<FormattableString>) -> Self {
-        Self {
-            value,
-            shorthand,
-            translated,
-        }
+    pub fn new(
+        value: FormattableString,
+        shorthand: Option<FormattableString>,
+        translated: Option<FormattableString>,
+    ) -> Self {
+        Self { value, shorthand, translated }
     }
 
     /// Create a new title using a [`FormattableString`].
     pub fn from_fs(value: FormattableString) -> Self {
-        Self {
-            value,
-            shorthand: None,
-            translated: None,
-        }
+        Self { value, shorthand: None, translated: None }
     }
 
     /// Create a new title from a string reference.
@@ -953,8 +948,8 @@ mod tests {
     #[test]
     fn person_initials() {
         let p = Person::from_strings(&vec!["Dissmer", "Courtney Deliah"]).unwrap();
-        assert_eq!("C. D.", p.get_initials(Some(".")).unwrap());
+        assert_eq!("C. D.", p.initials(Some(".")).unwrap());
         let p = Person::from_strings(&vec!["Günther", "Hans-Joseph"]).unwrap();
-        assert_eq!("H-J", p.get_initials(None).unwrap());
+        assert_eq!("H-J", p.initials(None).unwrap());
     }
 }

@@ -257,13 +257,9 @@ impl MlaBibliographyFormatter {
                 .or_else(|| author.alias.clone());
 
             names.push(if let Some(alias) = alias {
-                format!(
-                    "{} ({})",
-                    alias,
-                    author.get_given_name_initials_first(false)
-                )
+                format!("{} ({})", alias, author.given_first(false))
             } else {
-                author.get_name_first(false, true)
+                author.name_first(false, true)
             });
         }
 
@@ -497,7 +493,7 @@ impl MlaBibliographyFormatter {
                         let mut names = vec![];
 
                         for author in ps.iter() {
-                            names.push(author.get_given_name_initials_first(false));
+                            names.push(author.given_first(false));
                         }
 
                         res += &self.and_list(names, false);

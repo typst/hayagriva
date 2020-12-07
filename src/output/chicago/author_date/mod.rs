@@ -1,17 +1,17 @@
 //! Author-Date referencing as defined in chapter 15 of the 17th edition of the
 //! Chicago Manual of Style.
 
-use super::{and_list_opt, common_author_handling, get_chunk_title, CommonChicagoConfig};
+use super::{and_list_opt, get_chunk_title, get_creators, CommonChicagoConfig};
 use crate::output::{AtomicCitation, CitationError, CitationFormatter, DisplayString};
 use crate::types::Person;
 use crate::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum NameUniqueness {
-    Unique,
-    UniqueInitials,
-    RequiresFull,
+enum Uniqueness {
+    None,
+    Initials,
+    Full,
 }
 
 /// Checks if the keys are in the database and returns them as reference
@@ -20,7 +20,7 @@ pub struct AuthorYear<'s> {
     entries: BTreeMap<&'s str, &'s Entry>,
     authors: Vec<Person>,
     entry_authors: HashMap<&'s str, Vec<usize>>,
-    unique: HashMap<usize, NameUniqueness>,
+    unique: Vec<Uniqueness>,
     /// Common config options for all chicago styles.
     /// Primarily important for works without titles.
     pub common: CommonChicagoConfig,
@@ -38,35 +38,35 @@ impl<'s> AuthorYear<'s> {
         let mut authors = vec![];
         let entry_authors: HashMap<&'s str, Vec<usize>> = entries
             .iter()
-            .map(|(k, e)| (k.clone(), {
-                let creators = common_author_handling(e).0;
-                let mut indices = vec![];
-                for creator in creators.into_iter() {
-                    indices.push(i);
-                    i += 1;
-                    authors.push(creator);
-                }
-                indices
-            }))
+            .map(|(k, e)| {
+                (k.clone(), {
+                    let creators = get_creators(e).0;
+                    let mut indices = vec![];
+                    for creator in creators.into_iter() {
+                        indices.push(i);
+                        i += 1;
+                        authors.push(creator);
+                    }
+                    indices
+                })
+            })
             .collect();
 
-        let mut unique = HashMap::new();
-        for (index, author) in authors.iter().enumerate() {
-            let last_name_match =
-                authors.iter().filter(|a| a != &author && a.name == author.name).collect::<Vec<_>>();
-            if !last_name_match.is_empty() {
-                if last_name_match
-                    .into_iter()
-                    .filter(|a| a.get_initials(None) == author.get_initials(None))
-                    .count() > 0
-                {
-                    unique.insert(index, NameUniqueness::RequiresFull);
-                } else {
-                    unique.insert(index, NameUniqueness::UniqueInitials);
+        let mut unique = vec![];
+        for author in &authors {
+            let mut uniqueness = Uniqueness::Full;
+
+            for other in &authors {
+                if other != author && other.name == author.name {
+                    if other.initials(None) == author.initials(None) {
+                        uniqueness = Uniqueness::None;
+                    } else if uniqueness != Uniqueness::None {
+                        uniqueness = Uniqueness::Initials;
+                    }
                 }
-            } else {
-                unique.insert(index, NameUniqueness::Unique);
             }
+
+            unique.push(uniqueness);
         }
         Self {
             entries,
@@ -112,25 +112,35 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
 
             let mut s = if !authors.is_empty() {
                 let mut last_full = false;
-                let names = self.entry_authors.get(atomic.key).unwrap().into_iter().map(|&index| {
-                    let uniqueness = self.unique.get(&index).unwrap();
-                    last_full = uniqueness == &NameUniqueness::RequiresFull;
-                    match uniqueness {
-                        NameUniqueness::Unique => self.authors[index].name.clone(),
-                        NameUniqueness::UniqueInitials => self.authors[index].get_given_name_initials_first(true),
-                        NameUniqueness::RequiresFull => self.authors[index].get_name_first(false, true),
-                    }
-                }).collect::<Vec<_>>();
+                let names = self.entry_authors[atomic.key]
+                    .iter()
+                    .map(|&index| {
+                        let uniqueness = self.unique[index];
+                        last_full = uniqueness == Uniqueness::None;
+                        let author = &self.authors[index];
+                        match uniqueness {
+                            Uniqueness::Full => author.name.clone(),
+                            Uniqueness::Initials => author.given_first(true),
+                            Uniqueness::None => author.name_first(false, true),
+                        }
+                    })
+                    .collect::<Vec<_>>();
 
                 let et_al_auth = if names.len() >= self.et_al_limit as usize {
-                    let local_authors = self.entry_authors.get(atomic.key).unwrap().into_iter().map(|&index| &self.authors[index]).collect::<Vec<_>>();
+                    let local_authors = self.entry_authors[atomic.key]
+                        .iter()
+                        .map(|&index| &self.authors[index])
+                        .collect::<Vec<_>>();
                     // 0: First author is different
                     let mut distinction_authors = 0;
                     for (&key, authors) in self.entry_authors.iter() {
                         if key == atomic.key {
                             continue;
                         }
-                        let authors = authors.into_iter().map(|&index| &self.authors[index]).collect::<Vec<_>>();
+                        let authors = authors
+                            .into_iter()
+                            .map(|&index| &self.authors[index])
+                            .collect::<Vec<_>>();
                         let mut mismatch = authors.len();
 
                         for (i, author) in authors.iter().enumerate() {
@@ -138,7 +148,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                                 mismatch = i;
                                 break;
                             }
-                        };
+                        }
 
                         if mismatch == authors.len() {
                             continue;
@@ -154,12 +164,8 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                     0
                 };
 
-                let mut list = and_list_opt(
-                    names,
-                    false,
-                    Some(self.et_al_limit.into()),
-                    et_al_auth,
-                );
+                let mut list =
+                    and_list_opt(names, false, Some(self.et_al_limit.into()), et_al_auth);
 
                 if last_full {
                     if list.chars().last() != Some('.') {

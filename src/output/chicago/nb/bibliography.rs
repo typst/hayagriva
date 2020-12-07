@@ -8,8 +8,8 @@ use crate::{attrs, sel, Entry};
 
 use super::{
     super::{
-        and_list, common_author_handling, get_chunk_title, get_title, is_authoritative,
-        AuthorRole, CommonChicagoConfig,
+        and_list, get_chunk_title, get_creators, get_title, is_authoritative, AuthorRole,
+        CommonChicagoConfig,
     },
     format_date, get_info_element, DateMode,
 };
@@ -29,7 +29,7 @@ impl BibliographyFormatter {
     }
 
     fn get_author(&self, entry: &Entry) -> String {
-        let (authors, add) = common_author_handling(entry);
+        let (authors, add) = get_creators(entry);
         if authors.is_empty() {
             return String::new();
         }
@@ -37,9 +37,9 @@ impl BibliographyFormatter {
         let count = authors.len();
         let authors = authors.into_iter().enumerate().map(|(i, p)| {
             let name = if i == 0 {
-                p.get_name_first(false, true)
+                p.name_first(false, true)
             } else {
-                p.get_given_name_initials_first(false)
+                p.given_first(false)
             };
             if entry.entry_type == Tweet {
                 if let Some(pseud) = entry.get_twitter_handle(i) {
@@ -205,7 +205,7 @@ impl BibliographyFormatter {
                 if entry.entry_type == Reference && entry.get_volume().is_none() {
                     entry.get_authors_fallible().map(|a| {
                         and_list(
-                            a.into_iter().map(|p| p.get_given_name_initials_first(false)),
+                            a.into_iter().map(|p| p.given_first(false)),
                             false,
                             self.common.et_al_limit,
                         )

@@ -125,7 +125,7 @@ enum AuthorRole {
     ExecutiveProducer,
 }
 
-fn common_author_handling(entry: &Entry) -> (Vec<Person>, AuthorRole) {
+fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     let mut add = AuthorRole::Normal;
     let authors = if let Some(authors) = entry.get_authors_fallible() {
         authors.to_vec()
@@ -190,7 +190,9 @@ fn and_list_opt(
 
         res += &name;
 
-        if index + 2 <= name_len && (threshold == 0 || name_len < threshold || (index < et_al_items)) {
+        if index + 2 <= name_len
+            && (threshold == 0 || name_len < threshold || (index < et_al_items))
+        {
             if oxford || name_len > 2 {
                 res.push(',');
             }
@@ -268,10 +270,8 @@ fn get_title(
 
             if parent.get_authors_fallible().is_none() {
                 if let Some(eds) = parent.get_editors() {
-                    let ed_names = eds
-                        .into_iter()
-                        .map(|p| p.get_given_name_initials_first(false))
-                        .collect::<Vec<_>>();
+                    let ed_names =
+                        eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
                     let mut local =
                         if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();

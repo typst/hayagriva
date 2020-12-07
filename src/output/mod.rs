@@ -192,7 +192,7 @@ fn name_list(persons: &[Person]) -> Vec<String> {
     let mut names = vec![];
 
     for author in persons.iter() {
-        names.push(author.get_name_first(true, false));
+        names.push(author.name_first(true, false));
     }
 
     names
@@ -202,7 +202,7 @@ fn name_list_straight(persons: &[Person]) -> Vec<String> {
     let mut names = vec![];
 
     for author in persons.iter() {
-        names.push(author.get_given_name_initials_first(true));
+        names.push(author.given_first(true));
     }
 
     names
