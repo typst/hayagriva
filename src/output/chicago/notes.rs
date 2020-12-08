@@ -1,4 +1,4 @@
-//! Formats citations as footnotes.
+//! Formats citations as footnotes for Chicago's Notes and Bibliography style.
 use crate::output::{
     abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
     AtomicCitation, DisplayString, Formatting,
@@ -9,11 +9,8 @@ use crate::{attrs, sel, Entry};
 use std::collections::HashMap;
 
 use super::{
-    super::{
-        and_list, get_chunk_title, get_creators, get_title, is_authoritative, web_creator, AuthorRole,
-        CommonChicagoConfig,
-    },
-    format_date, get_info_element, DateMode,
+    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
+    get_title, is_authoritative, web_creator, AuthorRole, CommonChicagoConfig, DateMode,
 };
 
 /// Describes the desired note type. This normally depends on the
@@ -247,36 +244,7 @@ impl<'s> NoteCitationFormatter<'s> {
             res += &creator;
         }
 
-        let date = if let Some(date) = entry.get_any_date() {
-            let journal = sel!(
-                sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
-            )
-            .matches(entry);
-            let conf = sel!(alt
-                sel!(Wc() => Id(Conference)),
-                Id(Conference),
-                Id(Exhibition),
-            )
-            .matches(entry);
-
-            let mut mode = match (journal, is_authoritative(entry)) {
-                (true, _) => DateMode::Month,
-                (false, true) => DateMode::Year,
-                _ => DateMode::Day,
-            };
-
-            if conf {
-                mode = DateMode::Day;
-            }
-
-            format_date(date, mode)
-        } else if matches!(&entry.entry_type, Book | Anthology)
-            && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
-        {
-            "n.d.".to_string()
-        } else {
-            String::new()
-        };
+        let date = entry_date(entry, false);
 
         if !date.is_empty() && !res.is_empty() {
             res += ", ";

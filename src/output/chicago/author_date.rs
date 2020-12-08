@@ -1,4 +1,4 @@
-//! Author-Date referencing as defined in chapter 15 of the 17th edition of the
+//! Author-Date citations as defined in chapter 15 of the 17th edition of the
 //! Chicago Manual of Style.
 
 use super::{
@@ -220,7 +220,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
 
             if similars.len() > 1 {
                 let pos = similars.iter().position(|&x| x == entry).unwrap();
-                let designator = (b'a' + (pos as u8 % 26)) as char;
+                let designator = (b'a' + (pos % 26) as u8) as char;
 
                 if space {
                     s.push(' ');

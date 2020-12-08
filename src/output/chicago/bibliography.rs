@@ -1,4 +1,7 @@
-//! Formats citations as bibliographies.
+//! Formats citations as bibliographies. This module supports both the
+//! _Notes and Bibliography_ and the _Author-Date_ style. The style can
+//! be set through the [`BibliographyFormatter`] struct.
+
 use crate::output::{
     abbreviate_publisher, chicago::web_creator, delegate_titled_entry, format_range,
     push_comma_quote_aware, DisplayString, Formatting,
@@ -8,11 +11,8 @@ use crate::types::EntryType::*;
 use crate::{attrs, sel, Entry};
 
 use super::{
-    super::{
-        and_list, get_chunk_title, get_creators, get_title, is_authoritative, AuthorRole,
-        CommonChicagoConfig,
-    },
-    format_date, get_info_element, DateMode,
+    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
+    get_title, AuthorRole, CommonChicagoConfig, DateMode, Mode,
 };
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -21,12 +21,14 @@ use unicode_segmentation::UnicodeSegmentation;
 pub struct BibliographyFormatter {
     /// Properties shared with the bibliography.
     pub common: CommonChicagoConfig,
+    /// Selects the bibliography mode.
+    pub mode: Mode,
 }
 
 impl BibliographyFormatter {
-    /// Create a new [NoteCitationFormatter].
-    pub fn new() -> Self {
-        Self { common: CommonChicagoConfig::new() }
+    /// Create a new BibliographyFormatter.
+    pub fn new(mode: Mode) -> Self {
+        Self { common: CommonChicagoConfig::new(), mode }
     }
 
     fn get_author(&self, entry: &Entry) -> String {
@@ -83,6 +85,15 @@ impl BibliographyFormatter {
         if res.is_empty() {
             if let Some(creator) = web_creator(entry, true, self.common.et_al_limit) {
                 res += &creator;
+            } else if self.mode == Mode::AuthorDate
+                && matches!(
+                    entry.entry_type,
+                    Report | Patent | Legislation | Conference | Exhibition
+                )
+            {
+                if let Some(org) = entry.get_organization() {
+                    res += org.into()
+                }
             }
         }
 
@@ -208,30 +219,10 @@ impl BibliographyFormatter {
             sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
         )
         .matches(entry);
-        let date = if let Some(date) = entry.get_any_date() {
-            let conf = sel!(alt
-                sel!(Wc() => Id(Conference)),
-                Id(Conference),
-                Id(Exhibition),
-            )
-            .matches(entry);
-
-            let mut mode = match (journal, is_authoritative(entry)) {
-                (true, _) => DateMode::Month,
-                (false, true) => DateMode::Year,
-                _ => DateMode::Day,
-            };
-
-            if conf {
-                mode = DateMode::Day;
-            }
-
-            let date = format_date(date, mode);
-            if journal { format!("({})", date) } else { date }
-        } else if matches!(&entry.entry_type, Book | Anthology)
-            && entry.get_any_url().and_then(|url| url.visit_date.as_ref()).is_none()
+        let date = if self.mode == Mode::NotesAndBibliography
+            || sel!(alt sel!(Wc() => Id(Newspaper)), Id(Tweet), Id(Thread), sel!(Wc() => Id(Thread))).matches(entry)
         {
-            "n.d.".to_string()
+            entry_date(entry, false)
         } else {
             String::new()
         };
@@ -286,7 +277,7 @@ impl BibliographyFormatter {
     }
 
     /// Format a citation as a note.
-    pub fn format(&self, mut entry: &Entry) -> DisplayString {
+    pub fn format(&self, mut entry: &Entry, num: Option<usize>) -> DisplayString {
         entry = delegate_titled_entry(entry);
 
         let mut res: DisplayString = if entry.entry_type != Reference
@@ -299,6 +290,30 @@ impl BibliographyFormatter {
         };
 
         let no_author = res.is_empty();
+
+        let ad_date = if self.mode == Mode::AuthorDate {
+            let designator = num.map(|pos| (b'a' + (pos % 26) as u8) as char);
+            let mut date = String::new();
+
+            date += &entry_date(entry, true);
+            if let Some(designator) = designator {
+                date.push(designator);
+            }
+
+            date
+        } else {
+            String::new()
+        };
+
+        if !no_author {
+            if !ad_date.is_empty() {
+                if res.last() != Some('.') {
+                    res.push('.');
+                }
+                res.push(' ');
+                res += &ad_date;
+            }
+        }
 
         let dictionary =
             sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
@@ -328,6 +343,16 @@ impl BibliographyFormatter {
                 res.push(' ');
             }
             res += title;
+        }
+
+        if no_author {
+            if !ad_date.is_empty() {
+                if res.last() != Some('.') {
+                    res.push('.');
+                }
+                res.push(' ');
+                res += &ad_date;
+            }
         }
 
         let mut colon = false;

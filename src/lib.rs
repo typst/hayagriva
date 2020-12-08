@@ -1082,14 +1082,13 @@ mod tests {
     fn chicago_n() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let chicago = chicago::nb::notes::NoteCitationFormatter::new(entries.iter());
+        let chicago = chicago::notes::NoteCitationFormatter::new(entries.iter());
 
         for entry in &entries {
             let citation = AtomicCitation::new(&entry.key, None, None);
 
-            let refs = chicago
-                .get_note(citation, chicago::nb::notes::NoteType::Full)
-                .unwrap();
+            let refs =
+                chicago.get_note(citation, chicago::notes::NoteType::Full).unwrap();
             println!("{}", refs.print_ansi_vt100());
         }
     }
@@ -1098,10 +1097,11 @@ mod tests {
     fn chicago_b() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let chicago = chicago::nb::bibliography::BibliographyFormatter::new();
+        let chicago =
+            chicago::bibliography::BibliographyFormatter::new(chicago::Mode::AuthorDate);
 
         for entry in &entries {
-            let refs = chicago.format(&entry);
+            let refs = chicago.format(&entry, None);
             println!("{}", refs.print_ansi_vt100());
         }
     }
