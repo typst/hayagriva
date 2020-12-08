@@ -1,6 +1,7 @@
 //! Formats citations as bibliographies.
 use crate::output::{
-    abbreviate_publisher, format_range, push_comma_quote_aware, DisplayString, Formatting,
+    abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
+    DisplayString, Formatting,
 };
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
@@ -305,17 +306,7 @@ impl BibliographyFormatter {
 
     /// Format a citation as a note.
     pub fn format(&self, mut entry: &Entry) -> DisplayString {
-        let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).matches(entry)
-            && entry.get_title().is_none()
-        {
-            if let Some(p) = parent {
-                entry = &p;
-                parent = entry.get_parents().and_then(|v| v.first());
-            } else {
-                break;
-            }
-        }
+        entry = delegate_titled_entry(entry);
 
         let mut res: DisplayString = if entry.entry_type != Reference
             || entry.get_publisher().is_some()

@@ -1,10 +1,7 @@
 //! Style for entries in a reference list [as defined in the 7th edition of the
 //! APA Publication Manual](https://apastyle.apa.org/style-grammar-guidelines/references/).
 
-use super::{
-    format_range, name_list, name_list_straight, BibliographyFormatter, DisplayString,
-    Formatting,
-};
+use super::{BibliographyFormatter, DisplayString, Formatting, delegate_titled_entry, format_range, name_list, name_list_straight};
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
 use crate::selectors::{Bind, Id, Neg, Wc};
@@ -1021,15 +1018,7 @@ impl ApaBibliographyFormatter {
 
 impl BibliographyFormatter for ApaBibliographyFormatter {
     fn get_reference(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
-        let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).matches(entry) {
-            if let Some(p) = parent {
-                entry = &p;
-                parent = entry.get_parents().and_then(|v| v.first());
-            } else {
-                break;
-            }
-        }
+        entry = delegate_titled_entry(entry);
 
         let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).matches(entry);
 

@@ -1,7 +1,7 @@
 //! Formats citations as footnotes.
 use crate::output::{
-    abbreviate_publisher, format_range, push_comma_quote_aware, AtomicCitation,
-    DisplayString, Formatting,
+    abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
+    AtomicCitation, DisplayString, Formatting,
 };
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
@@ -351,17 +351,7 @@ impl<'s> NoteCitationFormatter<'s> {
         let short = kind != NoteType::Full;
         let mut entry = self.entries.get(citation.key).map(|o| o.clone())?;
 
-        let mut parent = entry.get_parents().and_then(|v| v.first());
-        while sel!(alt Id(Chapter), Id(Scene)).matches(entry)
-            && entry.get_title().is_none()
-        {
-            if let Some(p) = parent {
-                entry = &p;
-                parent = entry.get_parents().and_then(|v| v.first());
-            } else {
-                break;
-            }
-        }
+        entry = delegate_titled_entry(entry);
 
         let web_thing = sel!(alt
             Id(Web),
