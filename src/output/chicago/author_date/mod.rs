@@ -1,10 +1,14 @@
 //! Author-Date referencing as defined in chapter 15 of the 17th edition of the
 //! Chicago Manual of Style.
 
-use super::{and_list_opt, get_chunk_title, get_creators, CommonChicagoConfig};
+use super::{
+    and_list_opt, get_chunk_title, get_creators, web_creator, CommonChicagoConfig,
+};
 use crate::output::{AtomicCitation, CitationError, CitationFormatter, DisplayString};
+use crate::selectors::{Bind, Id, Wc};
+use crate::types::EntryType::*;
 use crate::types::Person;
-use crate::Entry;
+use crate::{sel, Entry};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -176,6 +180,23 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                 list.into()
             } else if entry.get_title().is_some() {
                 get_chunk_title(entry, true, true, &self.common)
+            } else if let Some(creator) =
+                web_creator(entry, false, self.common.et_al_limit)
+            {
+                creator.into()
+            } else if matches!(
+                entry.entry_type,
+                Report | Patent | Legislation | Conference | Exhibition
+            ) {
+                if let Some(org) = entry.get_organization() {
+                    org.into()
+                } else {
+                    DisplayString::new()
+                }
+            } else if let Some(np) =
+                sel!(Wc() => Bind("p", Id(Newspaper))).bound_element(entry, "p")
+            {
+                get_chunk_title(np, true, true, &self.common)
             } else {
                 DisplayString::new()
             };
@@ -206,6 +227,14 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                 }
 
                 s.push(designator);
+            }
+
+            if let Some(supplement) = atomic.supplement {
+                if supplement.chars().last() != Some(';') {
+                    s += ", ";
+                }
+
+                s += supplement;
             }
 
             items.push(s);

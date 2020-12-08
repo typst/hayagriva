@@ -1,7 +1,7 @@
 //! Formats citations as bibliographies.
 use crate::output::{
-    abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
-    DisplayString, Formatting,
+    abbreviate_publisher, chicago::web_creator, delegate_titled_entry, format_range,
+    push_comma_quote_aware, DisplayString, Formatting,
 };
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
@@ -81,26 +81,7 @@ impl BibliographyFormatter {
         }
 
         if res.is_empty() {
-            let web_thing = sel!(alt
-                Id(Web),
-                sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
-            )
-            .apply(entry);
-            if let Some(wt) = web_thing {
-                let creator = if let Some(org) = entry.get_organization() {
-                    org.into()
-                } else if wt.get("p").and_then(|e| e.get_authors_fallible()).is_some() {
-                    self.get_author(wt.get("p").unwrap())
-                } else if let Some(org) = wt.get("p").and_then(|e| e.get_organization()) {
-                    org.into()
-                } else {
-                    "".into()
-                };
-
-                if !res.is_empty() && !creator.is_empty() {
-                    res += ", ";
-                }
-
+            if let Some(creator) = web_creator(entry, true, self.common.et_al_limit) {
                 res += &creator;
             }
         }

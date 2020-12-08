@@ -458,3 +458,37 @@ fn shorthand(title: &Title) -> FormattableString {
         }
     }
 }
+
+fn web_creator(
+    entry: &Entry,
+    invert_first: bool,
+    et_al_limit: Option<usize>,
+) -> Option<String> {
+    let web_thing = sel!(alt
+        Id(Web),
+        sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
+    )
+    .apply(entry);
+    web_thing.map(|wt| {
+        if let Some(org) = entry.get_organization() {
+            org.into()
+        } else if wt.get("p").and_then(|e| e.get_authors_fallible()).is_some() {
+            let authors =
+                get_creators(wt.get("p").unwrap()).0.into_iter().enumerate().map(
+                    |(i, p)| {
+                        if i == 0 && invert_first {
+                            p.name_first(false, true)
+                        } else {
+                            p.given_first(false)
+                        }
+                    },
+                );
+
+            and_list(authors, invert_first, et_al_limit)
+        } else if let Some(org) = wt.get("p").and_then(|e| e.get_organization()) {
+            org.into()
+        } else {
+            "".into()
+        }
+    })
+}

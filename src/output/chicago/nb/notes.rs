@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use super::{
     super::{
-        and_list, get_chunk_title, get_creators, get_title, is_authoritative, AuthorRole,
+        and_list, get_chunk_title, get_creators, get_title, is_authoritative, web_creator, AuthorRole,
         CommonChicagoConfig,
     },
     format_date, get_info_element, DateMode,
@@ -157,12 +157,6 @@ impl<'s> NoteCitationFormatter<'s> {
             res += "n.p.";
         }
 
-        let web_thing = sel!(alt
-            Id(Web),
-            sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
-        )
-        .apply(entry);
-
         if entry.entry_type == Tweet {
             if let Some(host) = entry
                 .get_any_url()
@@ -245,19 +239,7 @@ impl<'s> NoteCitationFormatter<'s> {
                 res += ": ";
             }
             res += &publisher;
-        } else if let Some(wt) = web_thing {
-            let creator = if entry.get_authors_fallible().is_some() {
-                self.get_author(entry, false)
-            } else if let Some(org) = entry.get_organization() {
-                org.into()
-            } else if wt.get("p").and_then(|e| e.get_authors_fallible()).is_some() {
-                self.get_author(wt.get("p").unwrap(), false)
-            } else if let Some(org) = wt.get("p").and_then(|e| e.get_organization()) {
-                org.into()
-            } else {
-                "".into()
-            };
-
+        } else if let Some(creator) = web_creator(entry, false, self.common.et_al_limit) {
             if !res.is_empty() && !creator.is_empty() {
                 res += ", ";
             }

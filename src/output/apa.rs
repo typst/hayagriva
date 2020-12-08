@@ -1,7 +1,10 @@
 //! Style for entries in a reference list [as defined in the 7th edition of the
 //! APA Publication Manual](https://apastyle.apa.org/style-grammar-guidelines/references/).
 
-use super::{BibliographyFormatter, DisplayString, Formatting, delegate_titled_entry, format_range, name_list, name_list_straight};
+use super::{
+    delegate_titled_entry, format_range, name_list, name_list_straight,
+    BibliographyFormatter, DisplayString, Formatting,
+};
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
 use crate::selectors::{Bind, Id, Neg, Wc};
