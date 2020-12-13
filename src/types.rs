@@ -11,7 +11,7 @@ use super::{Entry, FieldType};
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
 use regex::Regex;
-use strum_macros::EnumString;
+use strum::EnumString;
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};

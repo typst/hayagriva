@@ -1,39 +1,81 @@
-use clap::{arg_enum, value_t, App, Arg};
+use clap::{value_t, App, Arg};
 use hayagriva::input::load_yaml_structure;
 use hayagriva::output::chicago::bibliography::BibliographyFormatter as ChicagoBib;
 use hayagriva::output::{apa, chicago, ieee, mla, BibliographyFormatter};
 use hayagriva::selectors::parse;
 use biblatex::Bibliography as TexBibliography;
 use std::fs::read_to_string;
+use std::str::FromStr;
+use strum::{EnumVariantNames, VariantNames};
 
-arg_enum! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
-    pub enum Mode {
-        Keys,
-        Citation,
-        Reference,
-        Biblatex,
-        Bibtex,
-        Yaml,
+#[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Mode {
+    Keys,
+    Citation,
+    Reference,
+    Biblatex,
+    Bibtex,
+    Yaml,
+}
+
+impl FromStr for Mode {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s.to_ascii_lowercase().as_ref() {
+            "keys" => Ok(Mode::Keys),
+            "citation" => Ok(Mode::Citation),
+            "reference" => Ok(Mode::Reference),
+            "bibtex" => Ok(Mode::Bibtex),
+            "biblatex" => Ok(Mode::Biblatex),
+            "yaml" => Ok(Mode::Yaml),
+            _ => Err("unknown mode")
+        }
     }
 }
 
-arg_enum! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
-    pub enum Format {
-        Bibtex,
-        Biblatex,
-        Yaml,
+#[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Format {
+    Bibtex,
+    Biblatex,
+    Yaml,
+}
+
+impl FromStr for Format {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s.to_ascii_lowercase().as_ref() {
+            "bibtex" => Ok(Format::Bibtex),
+            "biblatex" => Ok(Format::Biblatex),
+            "yaml" => Ok(Format::Yaml),
+            _ => Err("unknown format")
+        }
     }
 }
 
-arg_enum! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
-    pub enum Style {
-        Chicago,
-        Mla,
-        Apa,
-        Ieee,
+#[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Style {
+    Chicago,
+    Mla,
+    Apa,
+    Ieee,
+}
+
+impl FromStr for Style {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s.to_ascii_lowercase().as_ref() {
+            "chicago" => Ok(Style::Chicago),
+            "mla" => Ok(Style::Mla),
+            "apa" => Ok(Style::Apa),
+            "ieee" => Ok(Style::Ieee),
+            _ => Err("unknown style")
+        }
     }
 }
 
@@ -44,29 +86,34 @@ fn main() {
         .author("The Typst Project Developers <hi@typst.app>")
         .about("Output appropriate references and citations for your YAML-encoded bibliography database. Query the database for various source types with selectors.")
         .arg(Arg::with_name("INPUT").help("Sets the YAML bibliograpghy to use").required(true).index(1))
-        .arg(Arg::with_name("format").long("format").short("f").help("What input file format to expect").possible_values(&Format::variants()).takes_value(true))
+        .arg(Arg::with_name("format").long("format").short("f").help("What input file format to expect").possible_values(&Format::VARIANTS).case_insensitive(true).takes_value(true))
         .arg(Arg::with_name("selector").long("select").help("Filter your bibliography using selectors").takes_value(true))
         .arg(Arg::with_name("key").long("key").short("k").help("Get a specific key from the database").takes_value(true))
-        .arg(Arg::with_name("mode").long("mode").short("m").help("Sets Hayagriva's mode").possible_values(&Mode::variants()).takes_value(true))
-        .arg(Arg::with_name("style").long("style").short("s").help("Set the referencing/citation style").possible_values(&Style::variants()).takes_value(true))
+        .arg(Arg::with_name("mode").long("mode").short("m").help("Sets Hayagriva's mode").possible_values(&Mode::VARIANTS).case_insensitive(true).takes_value(true))
+        .arg(Arg::with_name("style").long("style").short("s").help("Set the referencing/citation style").possible_values(&Style::VARIANTS).case_insensitive(true).takes_value(true))
         .get_matches();
 
-    let format = value_t!(matches, "format", Format).unwrap_or_else(|_| Format::Yaml);
+    let input = matches.value_of("INPUT").unwrap();
+    let format = value_t!(matches, "format", Format).unwrap_or_else(|_| {
+        if let Some(pos) = input.rfind('.') {
+            let file_ext = &input[pos+1..].to_lowercase();
+            match file_ext.as_ref() {
+                "bib" => Format::Bibtex,
+                _ => Format::Yaml,
+            }
+        } else {
+            Format::Yaml
+        }
+    });
 
     let bibliography = match format {
         Format::Yaml => load_yaml_structure(
-            &matches
-                .value_of("INPUT")
-                .and_then(|s| read_to_string(s).ok())
-                .unwrap(),
+            &read_to_string(input).unwrap(),
         )
         .unwrap(),
         Format::Biblatex | Format::Bibtex => {
             let tex = TexBibliography::parse(
-                &matches
-                .value_of("INPUT")
-                .and_then(|s| read_to_string(s).ok())
-                .unwrap(),
+                &read_to_string(input).unwrap(),
             );
             tex.into_iter().map(|e| e.into()).collect()
         }

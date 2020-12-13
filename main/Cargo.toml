@@ -8,6 +8,7 @@ edition = "2018"
 hayagriva = { path = ".." }
 biblatex = { path = "../../biblatex" }
 clap = "2.33.3"
+strum = { version = "0.20", features = ["derive"] }
 
 [[bin]]
 name = "hayagriva-main"

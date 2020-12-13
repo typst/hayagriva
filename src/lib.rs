@@ -25,7 +25,7 @@ use types::{
 
 use paste::paste;
 use std::convert::TryFrom;
-use strum_macros::Display;
+use strum::Display;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
