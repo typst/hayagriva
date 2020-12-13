@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 hayagriva = { path = ".." }
+biblatex = { path = "../../biblatex" }
+clap = "2.33.3"
 
 [[bin]]
 name = "hayagriva-main"

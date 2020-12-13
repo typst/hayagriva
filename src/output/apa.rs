@@ -1020,7 +1020,7 @@ impl ApaBibliographyFormatter {
 }
 
 impl BibliographyFormatter for ApaBibliographyFormatter {
-    fn get_reference(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
+    fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         entry = delegate_titled_entry(entry);
 
         let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).matches(entry);

@@ -90,7 +90,7 @@ impl<'s> AuthorYear<'s> {
 }
 
 impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
-    fn get_reference(
+    fn format(
         &self,
         citation: impl IntoIterator<Item = AtomicCitation<'s>>,
     ) -> Result<DisplayString, CitationError> {

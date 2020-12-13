@@ -803,7 +803,7 @@ impl IeeeBibliographyFormatter {
 }
 
 impl BibliographyFormatter for IeeeBibliographyFormatter {
-    fn get_reference(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
+    fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         let mut parent = entry.get_parents().and_then(|v| v.first());
         let mut sn_stack = vec![];
         while entry.get_title().is_none()

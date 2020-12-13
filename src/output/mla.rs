@@ -744,7 +744,7 @@ impl MlaBibliographyFormatter {
 }
 
 impl BibliographyFormatter for MlaBibliographyFormatter {
-    fn get_reference(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString {
+    fn format(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString {
         let mut res = DisplayString::from_string(self.get_author(entry, prev_entry));
         let title = self.get_title(entry, true);
 

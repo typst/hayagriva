@@ -184,7 +184,7 @@ impl Expr {
             },
             Expr::Tag(taop) => match &taop.op.v {
                 TagOp::Bind(b) => taop.expr.v.apply_any(entries).map(|(mut hm, es)| {
-                    if es.len() == 1 {
+                    if es.len() >= 1 {
                         hm.insert(b.to_string(), es.get(0).unwrap());
                     } else {
                         println!("WARN: Trying to bind to {} elems", es.len());

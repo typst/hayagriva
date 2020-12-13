@@ -604,6 +604,32 @@ pub struct FormattableString {
     pub(crate) verbatim: bool,
 }
 
+impl FormattableString {
+    pub(crate) fn extend(&mut self, f2: Self) {
+        self.value += &f2.value;
+        self.verbatim = self.verbatim || f2.verbatim;
+        if let Some((t1, t2)) = self.title_case.clone().and_then(|t1| Some((t1, f2.clone().title_case?))) {
+            self.title_case = Some(t1 + &t2);
+        } else {
+            self.title_case = None;
+        }
+        if let Some((t1, t2)) = self.sentence_case.clone().and_then(|t1| Some((t1, f2.sentence_case?))) {
+            self.sentence_case = Some(t1 + &t2);
+        } else {
+            self.sentence_case = None;
+        }
+    }
+
+    pub(crate) fn new_empty(title: bool, sentence: bool, verbatim: bool) -> Self {
+        Self {
+            value: String::new(),
+            title_case: if title { Some(String::new()) } else { None },
+            sentence_case: if sentence { Some(String::new()) } else { None },
+            verbatim
+        }
+    }
+}
+
 /// A collection of formattable Strings consisting of a title, a translated title, and a shorthand.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Title {

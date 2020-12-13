@@ -42,7 +42,7 @@ pub enum CitationError {
 pub trait BibliographyFormatter {
     /// Get a string with optional formatting that describes `Entry` in
     /// accordance with the implementing struct's style.
-    fn get_reference(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString;
+    fn format(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString;
 }
 
 /// Represents a citation of one or more database entries.
@@ -68,7 +68,7 @@ impl<'s> AtomicCitation<'s> {
 /// citations to determine the marker value.
 pub trait CitationFormatter<'s> {
     /// Get a reference for the passed citation struct.
-    fn get_reference(
+    fn format(
         &self,
         citation: impl IntoIterator<Item = AtomicCitation<'s>>,
     ) -> Result<DisplayString, CitationError>;
@@ -81,7 +81,7 @@ pub struct KeyCitationFormatter<'s> {
 }
 
 impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
-    fn get_reference(
+    fn format(
         &self,
         citation: impl IntoIterator<Item = AtomicCitation<'s>>,
     ) -> Result<DisplayString, CitationError> {
@@ -108,7 +108,7 @@ pub struct NumericalCitationFormatter<'s> {
 }
 
 impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
-    fn get_reference(
+    fn format(
         &self,
         citation: impl IntoIterator<Item = AtomicCitation<'s>>,
     ) -> Result<DisplayString, CitationError> {
