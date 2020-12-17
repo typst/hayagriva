@@ -390,3 +390,12 @@ editors:
     author: Munroe, Randall
     date: 2014-03-12
     url: https://xkcd.com/1341/
+
+barb:
+    type: Book
+    title: Den Boden unter den Füßen verlieren
+    author: Günther-Haug, Barbara
+    date: 2020
+    publisher: MVG
+    location: München
+    language: de-DE

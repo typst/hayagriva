@@ -145,7 +145,7 @@ impl YamlBibliographyError {
 ///     location: New York, NY, US
 /// "#;
 /// let bib = load_yaml_structure(yaml).unwrap();
-/// assert_eq!(bib[0].get_date().unwrap().year, 2014);
+/// assert_eq!(bib[0].date().unwrap().year, 2014);
 /// ```
 pub fn load_yaml_structure(file: &str) -> Result<Vec<Entry>, YamlBibliographyError> {
     let docs = YamlLoader::load_from_str(file)?;

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 pub mod input;
 #[cfg(feature = "default")]
-pub mod interop;
+mod interop;
 pub mod lang;
 pub mod output;
 pub mod selectors;
@@ -151,7 +151,7 @@ macro_rules! fields {
             fields!(fmt $name: $field_name => FormattableString, FormattedString);
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field's value.'"]
-                pub fn [<get_ $name>](&self) -> Option<&str> {
+                pub fn $name(&self) -> Option<&str> {
                     self.get($field_name)
                         .map(|item| <&FormattableString>::try_from(item).unwrap().value.as_ref())
                 }
@@ -163,7 +163,7 @@ macro_rules! fields {
             fields!(fmt $name: $field_name => Title, FormattedTitle);
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field's value.'"]
-                pub fn [<get_ $name>](&self) -> Option<&str> {
+                pub fn $name(&self) -> Option<&str> {
                     self.get($field_name)
                         .map(|item| <&Title>::try_from(item).unwrap().value.value.as_ref())
                 }
@@ -174,13 +174,13 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<get_ $name _raw>](&self) -> Option<&$src_type> {
+                pub fn [<$name _raw>](&self) -> Option<&$src_type> {
                     self.get($field_name)
                         .map(|item| <&$src_type>::try_from(item).unwrap())
                 }
 
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
-                pub fn [<get_ $name _fmt>](
+                pub fn [<$name _fmt>](
                     &self,
                     title: Option<&dyn CaseTransformer>,
                     sentence: Option<&dyn CaseTransformer>,
@@ -198,7 +198,7 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn [<get_ $name>](&self) -> Option<fields!(@type ref $($res)?)> {
+                pub fn $name(&self) -> Option<fields!(@type ref $($res)?)> {
                     self.get($field_name)
                         .map(|item| <fields!(@type ref $($res)?)>::try_from(item).unwrap())
                 }
@@ -212,7 +212,7 @@ macro_rules! fields {
         $(
             paste! {
                 #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn [<get_ $name>](&self) -> Option<$res_ref> {
+                pub fn $name(&self) -> Option<$res_ref> {
                     self.get($field_name)
                         .map(|item| <$res_ref>::try_from(item).unwrap())
                 }
@@ -242,7 +242,7 @@ impl Entry {
     fields!(title: "title" => Title);
 
     /// Get and parse the `author` field. This will always return a result
-    pub fn get_authors(&self) -> &[Person] {
+    pub fn authors(&self) -> &[Person] {
         self.get("author")
             .map(|item| <&[Person]>::try_from(item).unwrap())
             .unwrap_or_default()
@@ -250,7 +250,7 @@ impl Entry {
 
     /// Get and parse the `author` field.
     /// This will fail if there are no authors.
-    pub fn get_authors_fallible(&self) -> Option<&[Person]> {
+    pub fn authors_fallible(&self) -> Option<&[Person]> {
         self.get("author").map(|item| <&[Person]>::try_from(item).unwrap())
     }
 
@@ -264,8 +264,8 @@ impl Entry {
 
     /// Get and parse the `affiliated` field and only return persons of a given
     /// [role](PersonRole).
-    pub fn get_affiliated_filtered(&self, role: PersonRole) -> Vec<Person> {
-        self.get_affiliated_persons()
+    pub fn affiliated_filtered(&self, role: PersonRole) -> Vec<Person> {
+        self.affiliated_persons()
             .into_iter()
             .flat_map(|v| v)
             .filter_map(|(v, erole)| if erole == &role { Some(v) } else { None })
@@ -284,12 +284,12 @@ impl Entry {
     );
 
     /// Will recursively get a date off either the entry or its parents.
-    pub fn get_any_date(&self) -> Option<&Date> {
-        self.get_date().or_else(|| {
-            self.get_parents()
+    pub fn any_date(&self) -> Option<&Date> {
+        self.date().or_else(|| {
+            self.parents()
                 .into_iter()
                 .flat_map(|v| v)
-                .filter_map(|p| p.get_any_date())
+                .filter_map(|p| p.any_date())
                 .next()
         })
     }
@@ -310,11 +310,13 @@ impl Entry {
 
     /// Adds affiliated persons. The list will be created if there is none.
     pub fn add_affiliated_persons(&mut self, new_persons: (Vec<Person>, PersonRole)) {
-        if let Some(affiliated) = self
-            .content
-            .get_mut("affiliated")
-            .and_then(|f| if let FieldType::PersonsWithRoles(e) = f { Some(e) } else { None })
-        {
+        if let Some(affiliated) = self.content.get_mut("affiliated").and_then(|f| {
+            if let FieldType::PersonsWithRoles(e) = f {
+                Some(e)
+            } else {
+                None
+            }
+        }) {
             affiliated.push(new_persons);
         } else {
             self.set_affiliated_persons(vec![new_persons]);
@@ -323,7 +325,7 @@ impl Entry {
 
     /// Adds a parent to the currrent entry. The parent
     /// list will be created if there is none.
-    pub fn get_parents_mut(&mut self) -> Option<&mut [Entry]> {
+    pub fn parents_mut(&mut self) -> Option<&mut [Entry]> {
         self.content.get_mut("parent").and_then(|f| {
             if let FieldType::Entries(e) = f {
                 Some(e.as_mut_slice())
@@ -334,22 +336,22 @@ impl Entry {
     }
 
     /// Will recursively get an url off either the entry or its parents.
-    pub fn get_any_url(&self) -> Option<&QualifiedUrl> {
-        self.get_url().or_else(|| {
-            self.get_parents()
+    pub fn any_url(&self) -> Option<&QualifiedUrl> {
+        self.url().or_else(|| {
+            self.parents()
                 .into_iter()
                 .flat_map(|v| v)
-                .filter_map(|p| p.get_any_url())
+                .filter_map(|p| p.any_url())
                 .next()
         })
     }
 
     /// Get and parse the `page-total` field, falling back on
     /// `page-range` if not specified.
-    pub fn get_page_total(&self) -> Option<i64> {
+    pub fn page_total(&self) -> Option<i64> {
         self.get("page-total")
             .map(|ft| ft.clone())
-            .or_else(|| self.get_page_range().map(|r| FieldType::from(r.end - r.start)))
+            .or_else(|| self.page_range().map(|r| FieldType::from(r.end - r.start)))
             .map(|item| i64::try_from(item).unwrap())
     }
 
@@ -358,10 +360,10 @@ impl Entry {
 
     /// Get and parse the `runtime` field, falling back on
     /// `time-range` if not specified.
-    pub fn get_runtime(&self) -> Option<Duration> {
+    pub fn runtime(&self) -> Option<Duration> {
         self.get("runtime")
             .map(|ft| ft.clone())
-            .or_else(|| self.get_time_range().map(|r| FieldType::from(r.end - r.start)))
+            .or_else(|| self.time_range().map(|r| FieldType::from(r.end - r.start)))
             .map(|item| Duration::try_from(item).unwrap())
     }
 
@@ -522,6 +524,8 @@ mod tests {
             "camb",
             "logician",
             "dns-encryption",
+            "overleaf",
+            "editors",
         ]);
         select_all!("!(*[url] | (* > *[url]))", entries, [
             "zygos",
@@ -539,6 +543,8 @@ mod tests {
             "foia",
             "drill",
             "swedish",
+            "latex-users",
+            "barb",
         ]);
     }
 

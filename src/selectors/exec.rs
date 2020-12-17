@@ -76,7 +76,7 @@ impl Expr {
                     bop.lhs.v.apply(entry).or_else(|| bop.rhs.v.apply(entry))
                 }
                 BinOp::Ancestrage => bop.lhs.v.apply(entry).and_then(|mut r| {
-                    let ps = entry.get_parents().unwrap_or_default();
+                    let ps = entry.parents().unwrap_or_default();
                     let r2 = bop.rhs.v.apply_any(ps);
                     if let Some(r2) = r2 {
                         r.extend(r2.0.into_iter());

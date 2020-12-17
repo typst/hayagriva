@@ -117,12 +117,12 @@ impl Entry {
     ///
     /// If the `user_index` is 0, the function will try to extract
     /// the handle from the URL.
-    pub(crate) fn get_twitter_handle(&self, user_index: usize) -> Option<String> {
+    pub(crate) fn twitter_handle(&self, user_index: usize) -> Option<String> {
         if self.entry_type != EntryType::Tweet {
             return None;
         }
 
-        let authors = self.get_authors();
+        let authors = self.authors();
 
         if user_index > 0 && user_index >= authors.len() {
             return None;
@@ -137,7 +137,7 @@ impl Entry {
         }
 
         if user_index == 0 {
-            if let Some(url) = self.get_url().map(|u| &u.value) {
+            if let Some(url) = self.url().map(|u| &u.value) {
                 if url.host() != Some(Host::Domain("twitter.com")) {
                     return None;
                 }
@@ -608,12 +608,20 @@ impl FormattableString {
     pub(crate) fn extend(&mut self, f2: Self) {
         self.value += &f2.value;
         self.verbatim = self.verbatim || f2.verbatim;
-        if let Some((t1, t2)) = self.title_case.clone().and_then(|t1| Some((t1, f2.clone().title_case?))) {
+        if let Some((t1, t2)) = self
+            .title_case
+            .clone()
+            .and_then(|t1| Some((t1, f2.clone().title_case?)))
+        {
             self.title_case = Some(t1 + &t2);
         } else {
             self.title_case = None;
         }
-        if let Some((t1, t2)) = self.sentence_case.clone().and_then(|t1| Some((t1, f2.sentence_case?))) {
+        if let Some((t1, t2)) = self
+            .sentence_case
+            .clone()
+            .and_then(|t1| Some((t1, f2.sentence_case?)))
+        {
             self.sentence_case = Some(t1 + &t2);
         } else {
             self.sentence_case = None;
@@ -625,7 +633,7 @@ impl FormattableString {
             value: String::new(),
             title_case: if title { Some(String::new()) } else { None },
             sentence_case: if sentence { Some(String::new()) } else { None },
-            verbatim
+            verbatim,
         }
     }
 }

@@ -1,9 +1,9 @@
-use clap::{value_t, App, Arg};
+use biblatex::Bibliography as TexBibliography;
+use clap::{value_t, crate_version, App, AppSettings, Arg, SubCommand};
 use hayagriva::input::load_yaml_structure;
 use hayagriva::output::chicago::bibliography::BibliographyFormatter as ChicagoBib;
 use hayagriva::output::{apa, chicago, ieee, mla, BibliographyFormatter};
 use hayagriva::selectors::parse;
-use biblatex::Bibliography as TexBibliography;
 use std::fs::read_to_string;
 use std::str::FromStr;
 use strum::{EnumVariantNames, VariantNames};
@@ -30,7 +30,7 @@ impl FromStr for Mode {
             "bibtex" => Ok(Mode::Bibtex),
             "biblatex" => Ok(Mode::Biblatex),
             "yaml" => Ok(Mode::Yaml),
-            _ => Err("unknown mode")
+            _ => Err("unknown mode"),
         }
     }
 }
@@ -51,7 +51,7 @@ impl FromStr for Format {
             "bibtex" => Ok(Format::Bibtex),
             "biblatex" => Ok(Format::Biblatex),
             "yaml" => Ok(Format::Yaml),
-            _ => Err("unknown format")
+            _ => Err("unknown format"),
         }
     }
 }
@@ -74,7 +74,32 @@ impl FromStr for Style {
             "mla" => Ok(Style::Mla),
             "apa" => Ok(Style::Apa),
             "ieee" => Ok(Style::Ieee),
-            _ => Err("unknown style")
+            _ => Err("unknown style"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
+pub enum CitationStyle {
+    AuthorDate,
+    ChicagoNote,
+    Numeric,
+    Alphabetic,
+    AuthorTitle,
+}
+
+impl FromStr for CitationStyle {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s.to_ascii_lowercase().as_ref() {
+            "author-date" | "author-year" => Ok(CitationStyle::AuthorDate),
+            "note" | "chicago-note" | "chicago" => Ok(CitationStyle::ChicagoNote),
+            "numeric" | "ieee" => Ok(CitationStyle::Numeric),
+            "alphabetic" | "alpha" => Ok(CitationStyle::Alphabetic),
+            "author-title" => Ok(CitationStyle::AuthorTitle),
+            _ => Err("unknown style"),
         }
     }
 }
@@ -82,21 +107,90 @@ impl FromStr for Style {
 /// Main function of the Hayagriva CLI.
 fn main() {
     let matches = App::new("Hayagriva CLI")
-        .version("0.1")
+        .version(crate_version!())
         .author("The Typst Project Developers <hi@typst.app>")
+        .setting(AppSettings::VersionlessSubcommands)
         .about("Output appropriate references and citations for your YAML-encoded bibliography database. Query the database for various source types with selectors.")
-        .arg(Arg::with_name("INPUT").help("Sets the YAML bibliograpghy to use").required(true).index(1))
-        .arg(Arg::with_name("format").long("format").short("f").help("What input file format to expect").possible_values(&Format::VARIANTS).case_insensitive(true).takes_value(true))
-        .arg(Arg::with_name("selector").long("select").help("Filter your bibliography using selectors").takes_value(true))
-        .arg(Arg::with_name("key").long("key").short("k").help("Get a specific key from the database").takes_value(true))
-        .arg(Arg::with_name("mode").long("mode").short("m").help("Sets Hayagriva's mode").possible_values(&Mode::VARIANTS).case_insensitive(true).takes_value(true))
-        .arg(Arg::with_name("style").long("style").short("s").help("Set the referencing/citation style").possible_values(&Style::VARIANTS).case_insensitive(true).takes_value(true))
+        .arg(
+            Arg::with_name("INPUT").help("Sets the bibliograpghy to use").required(true).index(1)
+        )
+        .arg(
+            Arg::with_name("format")
+                .long("format")
+                .short("f")
+                .help("What input file format to expect")
+                .possible_values(&Format::VARIANTS)
+                .case_insensitive(true)
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("selector")
+                .long("select")
+                .help("Filter your bibliography using selectors")
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("key")
+                .long("key")
+                .short("k")
+                .help("Get a specific key from the database")
+                .takes_value(true)
+        )
+        .subcommand(
+            SubCommand::with_name("reference")
+                .about("Create references for your Bibliography / Works Cited listing")
+                .arg(
+                    Arg::with_name("style")
+                        .long("style")
+                        .short("s")
+                        .help("Set the referencing style")
+                        .possible_values(&Style::VARIANTS)
+                        .case_insensitive(true)
+                        .takes_value(true)
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("keys")
+                .about("Show the selected keys and, optionally, the parents bound by your selector")
+                .arg(
+                    Arg::with_name("bindings")
+                        .long("show-bound")
+                        .short("b")
+                        .help("Show the parents that were bound by your selector")
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("citation")
+                .about("Get pointers to your sources for use in your text")
+                .arg(
+                    Arg::with_name("style")
+                        .long("style")
+                        .short("s")
+                        .help("Set the citation style")
+                        .possible_values(&CitationStyle::VARIANTS)
+                        .case_insensitive(true)
+                        .takes_value(true)
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("dump")
+                .about("Get a bibliography file with your selected entries")
+                .arg(
+                    Arg::with_name("output-format")
+                        .long("output-format")
+                        .short("o")
+                        .help("Set the desired output format")
+                        .possible_values(&Format::VARIANTS)
+                        .case_insensitive(true)
+                        .takes_value(true)
+                )
+        )
         .get_matches();
 
     let input = matches.value_of("INPUT").unwrap();
     let format = value_t!(matches, "format", Format).unwrap_or_else(|_| {
         if let Some(pos) = input.rfind('.') {
-            let file_ext = &input[pos+1..].to_lowercase();
+            let file_ext = &input[pos + 1 ..].to_lowercase();
             match file_ext.as_ref() {
                 "bib" => Format::Bibtex,
                 _ => Format::Yaml,
@@ -107,19 +201,12 @@ fn main() {
     });
 
     let bibliography = match format {
-        Format::Yaml => load_yaml_structure(
-            &read_to_string(input).unwrap(),
-        )
-        .unwrap(),
+        Format::Yaml => load_yaml_structure(&read_to_string(input).unwrap()).unwrap(),
         Format::Biblatex | Format::Bibtex => {
-            let tex = TexBibliography::parse(
-                &read_to_string(input).unwrap(),
-            );
+            let tex = TexBibliography::parse(&read_to_string(input).unwrap()).unwrap();
             tex.into_iter().map(|e| e.into()).collect()
         }
     };
-
-    let mode = value_t!(matches, "mode", Mode).unwrap_or_else(|_| Mode::Keys);
 
     let bibliography = if let Some(key) = matches.value_of("key") {
         bibliography.into_iter().filter(|e| e.key() == key).collect()
@@ -130,14 +217,14 @@ fn main() {
         bibliography
     };
 
-    match mode {
-        Mode::Keys => {
+    match matches.subcommand() {
+        ("keys", _) => {
             for entry in &bibliography {
                 println!("{}", entry.key());
             }
         }
-        Mode::Reference => {
-            match value_t!(matches, "style", Style).unwrap_or_else(|_| Style::Chicago) {
+        ("reference", Some(sub_matches)) => {
+            match value_t!(sub_matches, "style", Style).unwrap_or_else(|_| Style::Chicago) {
                 Style::Chicago => {
                     let chicago = ChicagoBib::new(chicago::Mode::AuthorDate);
                     for entry in &bibliography {

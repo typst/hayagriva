@@ -103,13 +103,13 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
 
             let authors = self.get_authors(atomic.key).unwrap();
 
-            let date = entry.get_any_date();
+            let date = entry.any_date();
             let similars = self
                 .entries
                 .iter()
                 .map(|(_, e)| e)
                 .filter(|&e| {
-                    e.get_any_date().map(|d| d.year) == date.map(|d| d.year)
+                    e.any_date().map(|d| d.year) == date.map(|d| d.year)
                         && self.get_authors(&e.key).unwrap() == authors
                 })
                 .collect::<Vec<_>>();
@@ -178,7 +178,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                 }
 
                 list.into()
-            } else if entry.get_title().is_some() {
+            } else if entry.title().is_some() {
                 get_chunk_title(entry, true, true, &self.common)
             } else if let Some(creator) =
                 web_creator(entry, false, self.common.et_al_limit)
@@ -188,7 +188,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                 entry.entry_type,
                 Report | Patent | Legislation | Conference | Exhibition
             ) {
-                if let Some(org) = entry.get_organization() {
+                if let Some(org) = entry.organization() {
                     org.into()
                 } else {
                     DisplayString::new()
@@ -279,10 +279,7 @@ mod tests {
         let es = vec![date_author_entry("key", vec![A("Martin", "Haug")], 2018)];
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);
-        assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
-            "Haug 2018"
-        );
+        assert_eq!(formatter.format(citations).unwrap().value, "Haug 2018");
     }
 
     #[test]
@@ -298,7 +295,7 @@ mod tests {
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);
         assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
+            formatter.format(citations).unwrap().value,
             "Kinsky 2018a; Kinsky 2018b; Hinsky 2018; Kinsky 2018c; Kinsky 2019a; Kinsky 2019b"
         );
     }
@@ -312,7 +309,7 @@ mod tests {
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);
         assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
+            formatter.format(citations).unwrap().value,
             "J. Doe 1967; R. Doe 2011"
         );
     }
@@ -326,7 +323,7 @@ mod tests {
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);
         assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
+            formatter.format(citations).unwrap().value,
             "Doe, John. 1967; Doe, Janet. 2011"
         );
     }
@@ -353,7 +350,7 @@ mod tests {
         formatter.et_al_limit = 3;
         let citations = Cs(&es);
         assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
+            formatter.format(citations).unwrap().value,
             "Mädje and Haug 2020; Poquelin et al. 1648"
         );
     }
@@ -384,7 +381,7 @@ mod tests {
         formatter.et_al_limit = 3;
         let citations = Cs(&es);
         assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
+            formatter.format(citations).unwrap().value,
             "Poquelin, M. Béjart, et al. 1648; Poquelin, A. Béjart, et al. 1662"
         );
     }
@@ -398,7 +395,7 @@ mod tests {
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);
         assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
+            formatter.format(citations).unwrap().value,
             "Third International Report on Reporting 1999"
         );
     }
@@ -410,9 +407,6 @@ mod tests {
         let es = vec![e];
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);
-        assert_eq!(
-            formatter.get_reference(citations).unwrap().value,
-            "Doe, n.d."
-        );
+        assert_eq!(formatter.format(citations).unwrap().value, "Doe, n.d.");
     }
 }

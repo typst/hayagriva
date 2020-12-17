@@ -238,14 +238,14 @@ impl MlaBibliographyFormatter {
 
     fn get_main_contributors(&self, entry: &Entry) -> Option<Vec<Person>> {
         entry
-            .get_authors_fallible()
+            .authors_fallible()
             .map(|a| a.to_vec())
             .or_else(|| {
                 entry
-                    .get_affiliated_persons()
+                    .affiliated_persons()
                     .and_then(|a| if a.len() == 1 { Some(a[0].0.clone()) } else { None })
             })
-            .or_else(|| entry.get_editors().map(|a| a.to_vec()))
+            .or_else(|| entry.editors().map(|a| a.to_vec()))
     }
 
     fn name_list(&self, persons: &[Person], tweet_entry: Option<&Entry>) -> Vec<String> {
@@ -253,7 +253,7 @@ impl MlaBibliographyFormatter {
 
         for (i, author) in persons.iter().enumerate() {
             let alias = tweet_entry
-                .and_then(|entry| entry.get_twitter_handle(i))
+                .and_then(|entry| entry.twitter_handle(i))
                 .or_else(|| author.alias.clone());
 
             names.push(if let Some(alias) = alias {
@@ -268,12 +268,12 @@ impl MlaBibliographyFormatter {
 
     /// Prints the names of the main creators of the item.
     fn get_author(&self, mut entry: &Entry, prev_entry: Option<&Entry>) -> String {
-        while entry.get_authors_fallible().is_none()
-            && entry.get_affiliated_persons().is_none()
-            && entry.get_editors().is_none()
+        while entry.authors_fallible().is_none()
+            && entry.affiliated_persons().is_none()
+            && entry.editors().is_none()
             && sel!(alt Id(Chapter), Id(Scene)).matches(entry)
         {
-            if let Some(p) = entry.get_parents().and_then(|ps| ps.get(0)) {
+            if let Some(p) = entry.parents().and_then(|ps| ps.get(0)) {
                 entry = &p;
             } else {
                 break;
@@ -288,7 +288,7 @@ impl MlaBibliographyFormatter {
         } else {
             (String::new(), false)
         };
-        res += &if let Some(authors) = entry.get_authors_fallible() {
+        res += &if let Some(authors) = entry.authors_fallible() {
             if !previous && entry.entry_type == Tweet {
                 self.and_list(self.name_list(authors, Some(entry)), true)
             } else if !previous {
@@ -296,7 +296,7 @@ impl MlaBibliographyFormatter {
             } else {
                 String::new()
             }
-        } else if let Some(affs) = entry.get_affiliated_persons() {
+        } else if let Some(affs) = entry.affiliated_persons() {
             let mut res = String::new();
             for (persons, role) in affs.iter() {
                 let plural = persons.len() > 1;
@@ -351,7 +351,7 @@ impl MlaBibliographyFormatter {
                 res += desc;
             }
             res
-        } else if let Some(eds) = entry.get_editors() {
+        } else if let Some(eds) = entry.editors() {
             let plural = eds.len() > 1;
             let mut res = if !previous {
                 self.and_list(self.name_list(eds, None), true)
@@ -387,12 +387,12 @@ impl MlaBibliographyFormatter {
                 if ["preface", "introduction", "foreword", "afterword"]
                     .iter()
                     .position(|&x| {
-                        Some(x.into()) == entry.get_title().map(|x| x.to_lowercase())
+                        Some(x.into()) == entry.title().map(|x| x.to_lowercase())
                     })
                     .is_some()
                 {
                     res += &entry
-                        .get_title_fmt(Some(&self.tc_formatter), None)
+                        .title_fmt(Some(&self.tc_formatter), None)
                         .unwrap()
                         .value
                         .title_case;
@@ -402,7 +402,7 @@ impl MlaBibliographyFormatter {
             }
         }
 
-        if let Some(title) = entry.get_title_fmt(Some(&self.tc_formatter), None) {
+        if let Some(title) = entry.title_fmt(Some(&self.tc_formatter), None) {
             if sc
                 && !sel!(alt Id(Legislation), Id(Conference)).matches(entry)
                 && !is_religious(&title.value.title_case)
@@ -419,7 +419,7 @@ impl MlaBibliographyFormatter {
             if !sc {
                 res += "”";
             }
-        } else if let Some(note) = entry.get_note() {
+        } else if let Some(note) = entry.note() {
             res += note;
             if !res.is_empty() && res.last() != Some('.') && use_quotes {
                 res.push('.');
@@ -451,8 +451,8 @@ impl MlaBibliographyFormatter {
 
             // Other contributors.
             let mut contributors = vec![];
-            if let Some(affiliated) = entry.get_affiliated_persons() {
-                if entry != root || entry.get_authors_fallible().is_some() {
+            if let Some(affiliated) = entry.affiliated_persons() {
+                if entry != root || entry.authors_fallible().is_some() {
                     for (ps, r) in affiliated.iter() {
                         if ps.is_empty() {
                             continue;
@@ -502,11 +502,11 @@ impl MlaBibliographyFormatter {
                 }
             }
 
-            if let Some(eds) = entry.get_editors() {
+            if let Some(eds) = entry.editors() {
                 if !eds.is_empty()
                     && (entry != root
-                        || entry.get_authors_fallible().is_some()
-                        || entry.get_affiliated_persons().is_some())
+                        || entry.authors_fallible().is_some()
+                        || entry.affiliated_persons().is_some())
                 {
                     let mut res = "edited by ".to_string();
                     res += &self.and_list(self.name_list(eds, None), true);
@@ -519,19 +519,19 @@ impl MlaBibliographyFormatter {
             }
 
             // Version
-            if let Some(edition) = entry.get_edition() {
+            if let Some(edition) = entry.edition() {
                 match edition {
                     NumOrStr::Str(i) => container.version = i.replace("revised", "rev."),
                     NumOrStr::Number(i) => container.version = format!("{} ed.", i),
                 }
-            } else if let Some(serial_number) = entry.get_serial_number() {
+            } else if let Some(serial_number) = entry.serial_number() {
                 container.version = serial_number.to_string();
             }
 
             // Number
             let mut number = String::new();
             let tv = sel!(Id(Video) => Wc()).matches(entry);
-            if let Some(vols) = entry.get_volume() {
+            if let Some(vols) = entry.volume() {
                 number += &if tv {
                     format_range("season", "seasons", &vols)
                 } else {
@@ -539,7 +539,7 @@ impl MlaBibliographyFormatter {
                 }
             }
 
-            if let Some(issue) = entry.get_issue() {
+            if let Some(issue) = entry.issue() {
                 let res = match issue {
                     NumOrStr::Str(i) => i.clone(),
                     NumOrStr::Number(i) if tv => format!("episode {}", i),
@@ -557,14 +557,14 @@ impl MlaBibliographyFormatter {
             if !sel!(alt sel!(Id(Manuscript) => Neg(Wc())), Id(Periodical)).matches(entry)
             {
                 if let Some(publisher) =
-                    entry.get_publisher().or_else(|| entry.get_organization())
+                    entry.publisher().or_else(|| entry.organization())
                 {
                     container.publisher = abbreviate_publisher(publisher, true);
                 }
             }
 
             // Date
-            if let Some(date) = entry.get_date() {
+            if let Some(date) = entry.date() {
                 if !has_date || self.always_print_date {
                     has_date = true;
                     container.date = format_date(&date);
@@ -574,25 +574,25 @@ impl MlaBibliographyFormatter {
             // Location
             let mut location: Vec<DisplayString> = vec![];
             let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).matches(entry);
-            if physical || self.always_use_location || entry.get_publisher().is_none() {
-                if let Some(loc) = entry.get_location() {
+            if physical || self.always_use_location || entry.publisher().is_none() {
+                if let Some(loc) = entry.location() {
                     location.push(DisplayString::from_str(loc));
                 }
             }
-            if let Some(page_range) = entry.get_page_range() {
+            if let Some(page_range) = entry.page_range() {
                 location.push(format_range("p.", "pp.", page_range).into());
             }
 
-            if entry.get_publisher().is_some() && entry.get_organization().is_some() {
-                location.push(entry.get_organization().unwrap().into());
+            if entry.publisher().is_some() && entry.organization().is_some() {
+                location.push(entry.organization().unwrap().into());
             }
 
-            if entry.get_edition().is_some() && entry.get_serial_number().is_some() {
-                location.push(entry.get_serial_number().unwrap().into());
+            if entry.edition().is_some() && entry.serial_number().is_some() {
+                location.push(entry.serial_number().unwrap().into());
             }
 
-            if let Some(archive) = entry.get_archive() {
-                if let Some(aloc) = entry.get_archive_location() {
+            if let Some(archive) = entry.archive() {
+                if let Some(aloc) = entry.archive_location() {
                     location.push(aloc.into());
                 }
 
@@ -602,14 +602,14 @@ impl MlaBibliographyFormatter {
             let mut supplemental = vec![];
 
             // Location: May also produce a supplemental item.
-            if let Some(doi) = entry.get_doi() {
+            if let Some(doi) = entry.doi() {
                 let mut dstr = DisplayString::new();
                 dstr.start_format(Formatting::NoHyphenation);
                 dstr += &format!("doi:{}", doi);
                 dstr.commit_formats();
                 location.push(dstr);
                 has_url = true;
-            } else if let Some(qurl) = entry.get_url() {
+            } else if let Some(qurl) = entry.url() {
                 let vdate = qurl.visit_date.is_some()
                     && sel!(alt
                         Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")),
@@ -637,7 +637,7 @@ impl MlaBibliographyFormatter {
             }
 
             // Supplemental
-            if let Some(&tvol) = entry.get_total_volumes() {
+            if let Some(&tvol) = entry.total_volumes() {
                 if tvol > 1 {
                     supplemental.push(format!("{} vols", tvol));
                 }
@@ -646,7 +646,7 @@ impl MlaBibliographyFormatter {
             if let Some(series) = series {
                 supplemental.push(
                     series
-                        .get_title_fmt(Some(&self.tc_formatter), None)
+                        .title_fmt(Some(&self.tc_formatter), None)
                         .unwrap()
                         .value
                         .title_case,
@@ -662,7 +662,7 @@ impl MlaBibliographyFormatter {
             }
         }
 
-        for p in &entry.get_parents().map(|r| r.to_vec()).unwrap_or_default() {
+        for p in &entry.parents().map(|r| r.to_vec()).unwrap_or_default() {
             if Some(p) == series {
                 continue;
             }
@@ -674,12 +674,12 @@ impl MlaBibliographyFormatter {
 
         if entry == root && !has_url {
             if let Some(lc) = containers.last_mut() {
-                if let Some(doi) = entry.get_doi() {
+                if let Some(doi) = entry.doi() {
                     if !lc.location.is_empty() {
                         lc.location += ", ";
                     }
                     lc.location += &format!("doi:{}", doi);
-                } else if let Some(qurl) = entry.get_any_url() {
+                } else if let Some(qurl) = entry.any_url() {
                     let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
                     if vdate {
                         if !lc.optionals.is_empty() {
@@ -699,13 +699,13 @@ impl MlaBibliographyFormatter {
                     lc.location.commit_formats();
                     has_url = true;
                 }
-            } else if let Some(doi) = entry.get_doi() {
+            } else if let Some(doi) = entry.doi() {
                 let mut nc = ContainerInfo::new();
                 nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += &format!("doi:{}", doi);
                 nc.location.commit_formats();
                 containers.push(nc);
-            } else if let Some(qurl) = entry.get_any_url() {
+            } else if let Some(qurl) = entry.any_url() {
                 let mut nc = ContainerInfo::new();
                 nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += qurl.value.as_str();

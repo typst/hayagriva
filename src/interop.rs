@@ -1,8 +1,13 @@
 //! Provides conversion methods for BibLaTeX.
 
-use super::types::{Date, EntryType, Person, FormattableString, NumOrStr, PersonRole, Title, QualifiedUrl};
+use super::types::{
+    Date, EntryType, FormattableString, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
+};
 use super::Entry;
-use biblatex::{Chunks, ChunksExt, Date as TexDate, DateValue, Edition, EditorType, Entry as TexEntry, EntryType as TexKind, Person as TexPerson};
+use biblatex::{
+    Chunks, ChunksExt, Date as TexDate, DateValue, Edition, EditorType,
+    Entry as TexEntry, EntryType as TexKind, Person as TexPerson,
+};
 use std::convert::Into;
 use url::Url;
 
@@ -72,7 +77,12 @@ impl Into<Date> for TexDate {
 
 impl Into<FormattableString> for Chunks {
     fn into(self) -> FormattableString {
-        FormattableString::new(self.format_verbatim(), None, Some(self.format_sentence()), false)
+        FormattableString::new(
+            self.format_verbatim(),
+            None,
+            Some(self.format_sentence()),
+            false,
+        )
     }
 }
 
@@ -110,7 +120,7 @@ fn ed_role(role: &EditorType) -> Option<PersonRole> {
 
 fn book(item: &mut Entry, parent: bool) -> Option<&mut Entry> {
     if parent {
-        item.get_parents_mut().and_then(|p| p.get_mut(0))
+        item.parents_mut().and_then(|p| p.get_mut(0))
     } else {
         None
     }
@@ -118,9 +128,13 @@ fn book(item: &mut Entry, parent: bool) -> Option<&mut Entry> {
 
 fn mv(item: &mut Entry, parent: bool, mv_parent: bool) -> Option<&mut Entry> {
     if parent && mv_parent {
-        item.get_parents_mut().and_then(|p| p.get_mut(0)).unwrap().get_parents_mut().and_then(|p| p.get_mut(0))
+        item.parents_mut()
+            .and_then(|p| p.get_mut(0))
+            .unwrap()
+            .parents_mut()
+            .and_then(|p| p.get_mut(0))
     } else if mv_parent {
-        item.get_parents_mut().and_then(|p| p.get_mut(0))
+        item.parents_mut().and_then(|p| p.get_mut(0))
     } else {
         None
     }
@@ -193,7 +207,8 @@ impl Into<Entry> for TexEntry {
             let ptype = ed_role(&role);
             match ptype {
                 None => eds.extend(editors.into_iter().map(Into::into)),
-                Some(role) => collaborators.push((editors.into_iter().map(Into::into).collect(), role)),
+                Some(role) => collaborators
+                    .push((editors.into_iter().map(Into::into).collect(), role)),
             }
         }
 
@@ -209,34 +224,45 @@ impl Into<Entry> for TexEntry {
         }
 
         if let Some(parent) = book(&mut item, parent) {
-            if let Some(a) = self.book_author().map(|a| a.into_iter().map(Into::into).collect()) {
+            if let Some(a) =
+                self.book_author().map(|a| a.into_iter().map(Into::into).collect())
+            {
                 parent.set_authors(a);
             }
         }
 
-        if let Some(a) = self.annotator().map(|a| a.into_iter().map(Into::into).collect()) {
+        if let Some(a) = self.annotator().map(|a| a.into_iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Annotator));
         }
 
-        if let Some(a) = self.commentator().map(|a| a.into_iter().map(Into::into).collect()) {
+        if let Some(a) =
+            self.commentator().map(|a| a.into_iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Commentator));
         }
 
-        if let Some(a) = self.translator().map(|a| a.into_iter().map(Into::into).collect()) {
+        if let Some(a) =
+            self.translator().map(|a| a.into_iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
         // TODO: self.orig_language into item.set_language()
 
-        if let Some(a) = self.afterword().map(|a| a.into_iter().map(Into::into).collect()) {
+        if let Some(a) = self.afterword().map(|a| a.into_iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Afterword));
         }
 
-        if let Some(a) = self.foreword().map(|a| a.into_iter().map(Into::into).collect()) {
+        if let Some(a) = self.foreword().map(|a| a.into_iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Foreword));
         }
 
-        if let Some(a) = self.introduction().map(|a| a.into_iter().map(Into::into).collect()) {
+        if let Some(a) =
+            self.introduction().map(|a| a.into_iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Introduction));
         }
 
@@ -247,31 +273,45 @@ impl Into<Entry> for TexEntry {
         // NOTE: Ignoring subtitle and titleaddon for now
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(title) = self.main_title().map(|a| Title::from_fs(a.to_vec().into())) {
+            if let Some(title) =
+                self.main_title().map(|a| Title::from_fs(a.to_vec().into()))
+            {
                 parent.set_title(title);
             }
         }
 
         if let Some(parent) = book(&mut item, parent) {
             if self.entry_type == TexKind::Article {
-                if let Some(title) = self.journal_title().map(|a| Title::from_fs(a.to_vec().into())) {
+                if let Some(title) =
+                    self.journal_title().map(|a| Title::from_fs(a.to_vec().into()))
+                {
                     parent.set_title(title);
                 }
             } else {
-                if let Some(title) = self.book_title().map(|a| Title::from_fs(a.to_vec().into())) {
+                if let Some(title) =
+                    self.book_title().map(|a| Title::from_fs(a.to_vec().into()))
+                {
                     parent.set_title(title);
                 }
             }
         }
 
-        if matches!(self.entry_type, TexKind::Proceedings | TexKind::MvProceedings | TexKind::InProceedings) {
-            if self.event_date().is_some() || self.eventtitle().is_some() || self.venue().is_some() {
+        if matches!(
+            self.entry_type,
+            TexKind::Proceedings | TexKind::MvProceedings | TexKind::InProceedings
+        ) {
+            if self.event_date().is_some()
+                || self.eventtitle().is_some()
+                || self.venue().is_some()
+            {
                 let mut conference = Entry::new(&self.key, EntryType::Conference);
 
                 if let Some(event_date) = self.event_date().map(|d| d.into()) {
                     conference.set_date(event_date);
                 }
-                if let Some(title) = self.eventtitle().map(|a| Title::from_fs(a.to_vec().into())) {
+                if let Some(title) =
+                    self.eventtitle().map(|a| Title::from_fs(a.to_vec().into()))
+                {
                     conference.set_title(title);
                 }
                 if let Some(venue) = self.venue().map(|d| d.to_vec().into()) {
@@ -302,7 +342,9 @@ impl Into<Entry> for TexEntry {
                     item.set_issue(issue);
                 }
             }
-            if let Some(ititle) = self.issue_title().map(|a| Title::from_fs(a.to_vec().into())) {
+            if let Some(ititle) =
+                self.issue_title().map(|a| Title::from_fs(a.to_vec().into()))
+            {
                 if let Some(parent) = book(&mut item, parent) {
                     parent.set_title(ititle);
                 } else {
@@ -321,15 +363,15 @@ impl Into<Entry> for TexEntry {
 
         if let Some(volume) = self.volume() {
             if let Some(parent) = book(&mut item, parent) {
-                parent.set_volume(volume..volume);
+                parent.set_volume(volume .. volume);
             } else {
-                item.set_volume(volume..volume);
+                item.set_volume(volume .. volume);
             }
         }
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
             if let Some(volumes) = self.volumes() {
-                    parent.set_total_volumes(volumes);
+                parent.set_total_volumes(volumes);
             }
         }
 
@@ -350,7 +392,7 @@ impl Into<Entry> for TexEntry {
         }
 
         if let Some(sn) = self.isan().or_else(|| self.ismn()).or_else(|| self.iswc()) {
-            if item.get_serial_number().is_none() {
+            if item.serial_number().is_none() {
                 item.set_serial_number(sn.to_vec().format_verbatim());
             }
         }
@@ -370,7 +412,12 @@ impl Into<Entry> for TexEntry {
 
         if let Some(publisher) = self.publisher().map(|d| {
             let mut format = FormattableString::new_empty(false, true, false);
-            let comma = FormattableString { value: ", ".into(), sentence_case: Some(", ".into()), title_case: None, verbatim: false };
+            let comma = FormattableString {
+                value: ", ".into(),
+                sentence_case: Some(", ".into()),
+                title_case: None,
+                verbatim: false,
+            };
             for (i, item) in d.into_iter().enumerate() {
                 if i != 0 {
                     format.extend(comma.clone());
@@ -402,7 +449,9 @@ impl Into<Entry> for TexEntry {
             } else {
                 item.set_organization(organization);
             }
-        } else if let Some(organization) = self.institution().map(|d| d.to_vec().format_verbatim()) {
+        } else if let Some(organization) =
+            self.institution().map(|d| d.to_vec().format_verbatim())
+        {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_organization(organization);
             } else {
@@ -419,10 +468,13 @@ impl Into<Entry> for TexEntry {
         }
 
         if let Some(pages) = self.pages().and_then(|p| p.get(0).cloned()) {
-            item.set_page_range((pages.start as i64)..(pages.end as i64));
+            item.set_page_range((pages.start as i64) .. (pages.end as i64));
         }
 
-        if let Some(ptotal) = self.page_total().and_then(|c| c.to_vec().format_verbatim().parse().ok()) {
+        if let Some(ptotal) = self
+            .page_total()
+            .and_then(|c| c.to_vec().format_verbatim().parse().ok())
+        {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_total_pages(ptotal);
             } else {
@@ -430,8 +482,12 @@ impl Into<Entry> for TexEntry {
             }
         }
 
-        if let Some(note) = self.annotation().or_else(|| self.addendum()).map(|d| d.to_vec().format_verbatim()) {
-            if item.get_note().is_none() {
+        if let Some(note) = self
+            .annotation()
+            .or_else(|| self.addendum())
+            .map(|d| d.to_vec().format_verbatim())
+        {
+            if item.note().is_none() {
                 item.set_note(note);
             }
         }
@@ -451,7 +507,9 @@ impl Into<Entry> for TexEntry {
             }
         }
 
-        if let Some(chapter) = self.chapter().or_else(|| self.part()).map(|c| c.to_vec().into()) {
+        if let Some(chapter) =
+            self.chapter().or_else(|| self.part()).map(|c| c.to_vec().into())
+        {
             let mut new = Entry::new(&self.key, EntryType::Chapter);
             new.set_title(Title::from_fs(chapter));
             let temp = item;

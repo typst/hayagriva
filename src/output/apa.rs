@@ -117,7 +117,7 @@ fn ampersand_list(names: Vec<String>) -> String {
 }
 
 fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
-    let vstr = if let Some(vols) = entry.get_volume() {
+    let vstr = if let Some(vols) = entry.volume() {
         if is_tv_show {
             Some(format_range("Episode", "Episodes", &vols))
         } else {
@@ -127,13 +127,9 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
         None
     };
 
-    let ed = if is_tv_show {
-        entry.get_issue()
-    } else {
-        entry.get_edition()
-    };
+    let ed = if is_tv_show { entry.issue() } else { entry.edition() };
 
-    let translator = entry.get_affiliated_filtered(PersonRole::Translator);
+    let translator = entry.affiliated_filtered(PersonRole::Translator);
 
     let translator = if translator.is_empty() {
         None
@@ -193,7 +189,7 @@ impl ApaBibliographyFormatter {
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
             let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
-            let dirs = entry.get_affiliated_filtered(PersonRole::Director);
+            let dirs = entry.affiliated_filtered(PersonRole::Director);
 
             if tv_series.apply(entry).is_some() {
                 // TV episode
@@ -202,7 +198,7 @@ impl ApaBibliographyFormatter {
                     .map(|s| format!("{} (Director)", s))
                     .collect::<Vec<String>>();
 
-                let writers = entry.get_affiliated_filtered(PersonRole::Writer);
+                let writers = entry.affiliated_filtered(PersonRole::Writer);
                 let mut writers_name_list = name_list(&writers)
                     .into_iter()
                     .map(|s| format!("{} (Writer)", s))
@@ -219,8 +215,7 @@ impl ApaBibliographyFormatter {
                     role = AuthorRole::Director;
                 } else {
                     // TV show
-                    let prods =
-                        entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
+                    let prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
 
                     if !prods.is_empty() {
                         names = Some(name_list(&prods));
@@ -230,8 +225,7 @@ impl ApaBibliographyFormatter {
             }
         }
 
-        let authors =
-            names.or_else(|| entry.get_authors_fallible().map(|n| name_list(n)));
+        let authors = names.or_else(|| entry.authors_fallible().map(|n| name_list(n)));
         let mut al = if let Some(mut authors) = authors {
             let count = authors.len();
             if entry.entry_type == Tweet {
@@ -239,7 +233,7 @@ impl ApaBibliographyFormatter {
                     .into_iter()
                     .enumerate()
                     .map(|(i, n)| {
-                        if let Some(handle) = entry.get_twitter_handle(i) {
+                        if let Some(handle) = entry.twitter_handle(i) {
                             format!("{} [{}]", n, handle)
                         } else {
                             n
@@ -260,7 +254,7 @@ impl ApaBibliographyFormatter {
                 AuthorRole::Director if count == 1 => format!("{} (Director)", amps),
                 AuthorRole::Director => format!("{} (Directors)", amps),
             }
-        } else if let Some(eds) = entry.get_editors() {
+        } else if let Some(eds) = entry.editors() {
             if !eds.is_empty() {
                 format!(
                     "{} ({})",
@@ -278,7 +272,7 @@ impl ApaBibliographyFormatter {
         let booklike = sel!(alt Id(Book), Id(Proceedings), Id(Anthology));
         if booklike.apply(entry).is_some() {
             let affs = entry
-                .get_affiliated_persons()
+                .affiliated_persons()
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|(_, role)| {
@@ -326,7 +320,7 @@ impl ApaBibliographyFormatter {
     }
 
     fn get_date(&self, entry: &Entry) -> String {
-        if let Some(date) = entry.get_any_date() {
+        if let Some(date) = entry.any_date() {
             match (date.month, date.day) {
                 (None, _) => format!("({}).", date.display_year()),
                 (Some(month), None) => format!(
@@ -347,7 +341,7 @@ impl ApaBibliographyFormatter {
     }
 
     fn get_retreival_date(&self, entry: &Entry, use_date: bool) -> Option<DisplayString> {
-        let url = entry.get_any_url();
+        let url = entry.any_url();
 
         if let Some(qurl) = url {
             let uv = qurl.value.as_str();
@@ -412,10 +406,10 @@ impl ApaBibliographyFormatter {
 
     fn get_title(&self, entry: &Entry, wrap: bool) -> DisplayString {
         let italicise = if entry
-            .get_parents()
+            .parents()
             .unwrap_or_default()
             .into_iter()
-            .any(|p| p.get_title().is_some())
+            .any(|p| p.title().is_some())
         {
             let talk = sel!(Wc() => Id(Conference));
             let preprint =
@@ -433,8 +427,7 @@ impl ApaBibliographyFormatter {
             sel!(alt Id(Book), Id(Report), Id(Reference), Id(Anthology), Id(Proceedings))
                 .matches(entry);
 
-        if let Some(title) =
-            entry.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+        if let Some(title) = entry.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
         {
             let multivol_spec = sel!(
                 attrs!(sel!(alt Id(Book), Id(Proceedings), Id(Anthology)), "volume") =>
@@ -458,11 +451,11 @@ impl ApaBibliographyFormatter {
             res.commit_formats();
 
             if let Some(mv_parent) = multivolume_parent {
-                let vols = entry.get_volume().unwrap();
+                let vols = entry.volume().unwrap();
                 let mut new = DisplayString::from_string(format!(
                     "{}: {} ",
                     mv_parent
-                        .get_title_fmt(None, Some(&self.formatter))
+                        .title_fmt(None, Some(&self.formatter))
                         .unwrap()
                         .value
                         .sentence_case,
@@ -470,9 +463,7 @@ impl ApaBibliographyFormatter {
                 ));
                 new += res;
                 res = new;
-            } else if (entry.get_volume().is_some() || entry.get_edition().is_some())
-                && book
-            {
+            } else if (entry.volume().is_some() || entry.edition().is_some()) && book {
                 res += &ed_vol_str(entry, false);
             } else if vid_match.apply(entry).is_some() {
                 res += &ed_vol_str(entry, true);
@@ -482,7 +473,7 @@ impl ApaBibliographyFormatter {
         let mut items: Vec<String> = vec![];
         if book {
             let illustrators = entry
-                .get_affiliated_persons()
+                .affiliated_persons()
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|(_, role)| role == &PersonRole::Illustrator)
@@ -498,10 +489,10 @@ impl ApaBibliographyFormatter {
                 ));
             }
 
-            if entry.get_note().and_then(|_| entry.get_editors()).is_some()
-                && !entry.get_authors().is_empty()
+            if entry.note().and_then(|_| entry.editors()).is_some()
+                && !entry.authors().is_empty()
             {
-                let editors = entry.get_editors().unwrap();
+                let editors = entry.editors().unwrap();
                 let amp_list = ampersand_list(name_list_straight(&editors));
                 if editors.len() == 1 {
                     items.push(format!("{}, Ed.", amp_list));
@@ -510,11 +501,11 @@ impl ApaBibliographyFormatter {
                 }
             }
         } else if entry.entry_type == Report {
-            if let Some(serial) = entry.get_serial_number() {
+            if let Some(serial) = entry.serial_number() {
                 items.push(serial.to_string());
             }
         } else if entry.entry_type == Thesis {
-            if let Some(serial) = entry.get_serial_number() {
+            if let Some(serial) = entry.serial_number() {
                 items.push(format!("Publication No. {}", serial));
             }
         }
@@ -558,7 +549,7 @@ impl ApaBibliographyFormatter {
         } else if talk_spec.apply(entry).is_some() {
             TitleSpec::ConferenceSession
         } else if entry.entry_type == Thesis {
-            if entry.get_archive().is_some() || entry.get_url().is_some() {
+            if entry.archive().is_some() || entry.url().is_some() {
                 TitleSpec::Thesis
             } else {
                 TitleSpec::UnpublishedThesis
@@ -573,7 +564,7 @@ impl ApaBibliographyFormatter {
             TitleSpec::Audio
         } else if entry.entry_type == Video {
             let dirs = entry
-                .get_affiliated_persons()
+                .affiliated_persons()
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|(_, role)| role == &PersonRole::Director)
@@ -581,12 +572,12 @@ impl ApaBibliographyFormatter {
                 .flatten()
                 .collect::<Vec<&Person>>();
             if !dirs.is_empty()
-                && entry.get_total_volumes().is_none()
-                && entry.get_parents().is_none()
+                && entry.total_volumes().is_none()
+                && entry.parents().is_none()
             {
                 TitleSpec::Film
             } else {
-                let is_online_vid = if let Some(url) = entry.get_url() {
+                let is_online_vid = if let Some(url) = entry.url() {
                     match url.value.host_str().unwrap_or("").to_lowercase().as_ref() {
                         "youtube.com" => true,
                         "dailymotion.com" => true,
@@ -600,12 +591,11 @@ impl ApaBibliographyFormatter {
                 if is_online_vid {
                     TitleSpec::Video
                 } else {
-                    let prods =
-                        entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
+                    let prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
 
                     if vid_match.apply(entry).is_some() {
                         TitleSpec::TvEpisode
-                    } else if !prods.is_empty() || entry.get_total_volumes().is_some() {
+                    } else if !prods.is_empty() || entry.total_volumes().is_some() {
                         TitleSpec::TvShow
                     } else {
                         TitleSpec::Video
@@ -642,7 +632,7 @@ impl ApaBibliographyFormatter {
             }
 
             let printed = if spec == TitleSpec::Thesis {
-                if let Some(org) = entry.get_organization() {
+                if let Some(org) = entry.organization() {
                     res += &format!("[{}, {}]", append, org);
                     true
                 } else {
@@ -680,7 +670,7 @@ impl ApaBibliographyFormatter {
         match st {
             SourceType::PeriodicalItem(parent) => {
                 let mut comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res.start_format(Formatting::Italic);
                     res += &title.sentence_case;
@@ -690,37 +680,36 @@ impl ApaBibliographyFormatter {
                     false
                 };
 
-                if parent.get_volume().is_some() || parent.get_issue().is_some() {
+                if parent.volume().is_some() || parent.issue().is_some() {
                     if comma {
                         res += ", ";
                     }
 
-                    if let Some(volume) = parent.get_volume() {
+                    if let Some(volume) = parent.volume() {
                         res += &format_range("", "", &volume);
                     }
 
-                    if let Some(issue) = parent.get_issue() {
+                    if let Some(issue) = parent.issue() {
                         res += &format!("({})", issue);
                     }
                     comma = true;
                 }
 
-                if entry.get_serial_number().is_some() || entry.get_page_range().is_some()
-                {
+                if entry.serial_number().is_some() || entry.page_range().is_some() {
                     if comma {
                         res += ", ";
                     }
 
-                    if let Some(sn) = entry.get_serial_number() {
+                    if let Some(sn) = entry.serial_number() {
                         res += "Article ";
                         res += sn;
-                    } else if let Some(pages) = entry.get_page_range() {
+                    } else if let Some(pages) = entry.page_range() {
                         res += &format_range("", "", &pages);
                     }
                 }
             }
             SourceType::CollectionItem(parent) => {
-                let mut comma = if let Some(eds) = parent.get_editors() {
+                let mut comma = if let Some(eds) = parent.editors() {
                     let names = name_list(&eds);
                     match names.len() {
                         0 => false,
@@ -737,7 +726,7 @@ impl ApaBibliographyFormatter {
                     false
                 };
 
-                if let Some(title) = parent.get_title_fmt(None, Some(&self.formatter)) {
+                if let Some(title) = parent.title_fmt(None, Some(&self.formatter)) {
                     if comma {
                         res += ", ";
                     }
@@ -747,7 +736,7 @@ impl ApaBibliographyFormatter {
                     res.commit_formats();
                     comma = true;
 
-                    if parent.get_volume().is_some() || parent.get_edition().is_some() {
+                    if parent.volume().is_some() || parent.edition().is_some() {
                         res += &ed_vol_str(parent, false);
                         res.push('.');
                         comma = false;
@@ -764,22 +753,20 @@ impl ApaBibliographyFormatter {
                     res = new;
                 }
 
-                if parent.get_publisher().is_some() || parent.get_organization().is_some()
-                {
+                if parent.publisher().is_some() || parent.organization().is_some() {
                     res.push(' ');
 
-                    if let Some(publisher) = parent.get_publisher() {
+                    if let Some(publisher) = parent.publisher() {
                         res += publisher;
-                    } else if let Some(organization) = parent.get_organization() {
+                    } else if let Some(organization) = parent.organization() {
                         res += organization;
                     }
                 }
             }
             SourceType::TvSeries(parent) => {
-                let mut prods =
-                    entry.get_affiliated_filtered(PersonRole::ExecutiveProducer);
+                let mut prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
                 if prods.is_empty() {
-                    prods = entry.get_authors().to_vec();
+                    prods = entry.authors().to_vec();
                 }
                 let mut comma = if !prods.is_empty() {
                     let names = name_list(&prods);
@@ -801,7 +788,7 @@ impl ApaBibliographyFormatter {
                     false
                 };
 
-                if let Some(title) = parent.get_title_fmt(None, Some(&self.formatter)) {
+                if let Some(title) = parent.title_fmt(None, Some(&self.formatter)) {
                     if comma {
                         res += ", ";
                     }
@@ -811,7 +798,7 @@ impl ApaBibliographyFormatter {
                     res.commit_formats();
                     comma = false;
 
-                    if parent.get_volume().is_some() || parent.get_edition().is_some() {
+                    if parent.volume().is_some() || parent.edition().is_some() {
                         res.push(' ');
                         res += &ed_vol_str(entry, true);
                         res.push('.');
@@ -834,46 +821,45 @@ impl ApaBibliographyFormatter {
                     res = new;
                 }
 
-                if parent.get_publisher().is_some() || parent.get_organization().is_some()
-                {
+                if parent.publisher().is_some() || parent.organization().is_some() {
                     res.push(' ');
 
-                    if let Some(publisher) = parent.get_publisher() {
+                    if let Some(publisher) = parent.publisher() {
                         res += publisher;
-                    } else if let Some(organization) = parent.get_organization() {
+                    } else if let Some(organization) = parent.organization() {
                         res += organization;
                     }
                 }
             }
             SourceType::Thesis => {
-                if let Some(archive) = entry.get_archive() {
+                if let Some(archive) = entry.archive() {
                     res += archive;
-                } else if let Some(org) = entry.get_organization() {
-                    if entry.get_url().is_none() {
+                } else if let Some(org) = entry.organization() {
+                    if entry.url().is_none() {
                         res += org;
                     }
                 }
             }
             SourceType::Manuscript => {
-                if let Some(archive) = entry.get_archive() {
+                if let Some(archive) = entry.archive() {
                     res += archive;
                 }
             }
             SourceType::ArtContainer(parent) => {
                 let org = parent
-                    .get_organization()
-                    .or_else(|| parent.get_archive())
-                    .or_else(|| parent.get_publisher())
-                    .or_else(|| entry.get_organization())
-                    .or_else(|| entry.get_archive())
-                    .or_else(|| entry.get_publisher());
+                    .organization()
+                    .or_else(|| parent.archive())
+                    .or_else(|| parent.publisher())
+                    .or_else(|| entry.organization())
+                    .or_else(|| entry.archive())
+                    .or_else(|| entry.publisher());
 
                 if let Some(org) = org {
                     if let Some(loc) = parent
-                        .get_location()
-                        .or_else(|| parent.get_archive_location())
-                        .or_else(|| entry.get_location())
-                        .or_else(|| entry.get_archive_location())
+                        .location()
+                        .or_else(|| parent.archive_location())
+                        .or_else(|| entry.location())
+                        .or_else(|| entry.archive_location())
                     {
                         res += &format!("{}, {}.", org, loc);
                     } else {
@@ -883,13 +869,13 @@ impl ApaBibliographyFormatter {
             }
             SourceType::StandaloneArt => {
                 let org = entry
-                    .get_organization()
-                    .or_else(|| entry.get_archive())
-                    .or_else(|| entry.get_publisher());
+                    .organization()
+                    .or_else(|| entry.archive())
+                    .or_else(|| entry.publisher());
 
                 if let Some(org) = org {
                     if let Some(loc) =
-                        entry.get_location().or_else(|| entry.get_archive_location())
+                        entry.location().or_else(|| entry.archive_location())
                     {
                         res += &format!("{}, {}.", org, loc);
                     } else {
@@ -898,11 +884,10 @@ impl ApaBibliographyFormatter {
                 }
             }
             SourceType::StandaloneWeb => {
-                let publisher =
-                    entry.get_publisher().or_else(|| entry.get_organization());
+                let publisher = entry.publisher().or_else(|| entry.organization());
 
                 if let Some(publisher) = publisher {
-                    let authors = entry.get_authors();
+                    let authors = entry.authors();
                     if authors.len() != 1
                         || authors.get(0).map(|a| a.name.as_ref()) != Some(publisher)
                     {
@@ -912,9 +897,9 @@ impl ApaBibliographyFormatter {
             }
             SourceType::Web(parent) => {
                 if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
-                    let authors = entry.get_authors();
+                    let authors = entry.authors();
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {
@@ -926,7 +911,7 @@ impl ApaBibliographyFormatter {
             }
             SourceType::NewsItem(parent) => {
                 let comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res.start_format(Formatting::Italic);
                     res += &title.sentence_case;
@@ -936,7 +921,7 @@ impl ApaBibliographyFormatter {
                     false
                 };
 
-                if let Some(pps) = entry.get_page_range() {
+                if let Some(pps) = entry.page_range() {
                     if comma {
                         res += ", ";
                     }
@@ -946,7 +931,7 @@ impl ApaBibliographyFormatter {
             }
             SourceType::ConferenceTalk(parent) => {
                 let comma = if let Some(title) =
-                    parent.get_title_fmt(None, Some(&self.formatter)).map(|t| t.value)
+                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
                 {
                     res += &title.sentence_case;
                     true
@@ -954,7 +939,7 @@ impl ApaBibliographyFormatter {
                     false
                 };
 
-                if let Some(loc) = parent.get_location() {
+                if let Some(loc) = parent.location() {
                     if comma {
                         res += ", ";
                     }
@@ -963,7 +948,7 @@ impl ApaBibliographyFormatter {
                 }
             }
             SourceType::GenericParent(parent) => {
-                if let Some(title) = parent.get_title() {
+                if let Some(title) = parent.title() {
                     let preprint = sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Id(Repository));
 
                     if preprint.apply(entry).is_none() {
@@ -974,10 +959,10 @@ impl ApaBibliographyFormatter {
                 }
             }
             SourceType::Generic => {
-                if entry.get_publisher().is_some() || entry.get_organization().is_some() {
-                    if let Some(publisher) = entry.get_publisher() {
+                if entry.publisher().is_some() || entry.organization().is_some() {
+                    if let Some(publisher) = entry.publisher() {
                         res += publisher;
-                    } else if let Some(organization) = entry.get_organization() {
+                    } else if let Some(organization) = entry.organization() {
                         res += organization;
                     }
                 }
@@ -990,7 +975,7 @@ impl ApaBibliographyFormatter {
             res.push('.');
         }
 
-        if let Some(doi) = entry.get_doi() {
+        if let Some(doi) = entry.doi() {
             if !res.is_empty() {
                 res.push(' ');
             }
@@ -1002,10 +987,10 @@ impl ApaBibliographyFormatter {
             let reference_entry = sel!(Id(Reference) => Id(Entry));
             let url_str = self.get_retreival_date(
                 entry,
-                entry.get_date().is_none()
+                entry.date().is_none()
                     || reference_entry.apply(entry).is_some()
                     || (matches!(st, SourceType::StandaloneWeb)
-                        && entry.get_parents().unwrap_or_default().is_empty()),
+                        && entry.parents().unwrap_or_default().is_empty()),
             );
             if let Some(url) = url_str {
                 if !res.is_empty() {
@@ -1066,7 +1051,7 @@ impl BibliographyFormatter for ApaBibliographyFormatter {
             }
         }
 
-        if let Some(note) = entry.get_note() {
+        if let Some(note) = entry.note() {
             if !res.is_empty() {
                 res.push(' ');
             }

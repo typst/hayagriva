@@ -505,11 +505,11 @@ fn abbreviate_publisher(s: &str, up: bool) -> String {
 }
 
 fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
-    let mut parent = entry.get_parents().and_then(|v| v.first());
-    while sel!(alt Id(Chapter), Id(Scene)).matches(entry) && entry.get_title().is_none() {
+    let mut parent = entry.parents().and_then(|v| v.first());
+    while sel!(alt Id(Chapter), Id(Scene)).matches(entry) && entry.title().is_none() {
         if let Some(p) = parent {
             entry = &p;
-            parent = entry.get_parents().and_then(|v| v.first());
+            parent = entry.parents().and_then(|v| v.first());
         } else {
             break;
         }
