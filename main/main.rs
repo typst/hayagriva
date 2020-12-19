@@ -1,8 +1,8 @@
 use biblatex::Bibliography as TexBibliography;
-use clap::{value_t, crate_version, App, AppSettings, Arg, SubCommand};
+use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use hayagriva::input::load_yaml_structure;
 use hayagriva::output::chicago::bibliography::BibliographyFormatter as ChicagoBib;
-use hayagriva::output::{apa, chicago, ieee, mla, BibliographyFormatter};
+use hayagriva::output::{apa, chicago, ieee, mla, AtomicCitation, BibliographyFormatter, CitationFormatter};
 use hayagriva::selectors::parse;
 use std::fs::read_to_string;
 use std::str::FromStr;
@@ -60,6 +60,7 @@ impl FromStr for Format {
 #[strum(serialize_all = "kebab_case")]
 pub enum Style {
     Chicago,
+    ChicagoAuthorDate,
     Mla,
     Apa,
     Ieee,
@@ -70,7 +71,8 @@ impl FromStr for Style {
 
     fn from_str(s: &str) -> Result<Self, &'static str> {
         match s.to_ascii_lowercase().as_ref() {
-            "chicago" => Ok(Style::Chicago),
+            "chicago" | "chicago-bibliography" => Ok(Style::Chicago),
+            "chicago-author-date" | "author-date" => Ok(Style::ChicagoAuthorDate),
             "mla" => Ok(Style::Mla),
             "apa" => Ok(Style::Apa),
             "ieee" => Ok(Style::Ieee),
@@ -84,7 +86,6 @@ impl FromStr for Style {
 pub enum CitationStyle {
     AuthorDate,
     ChicagoNote,
-    Numeric,
     Alphabetic,
     AuthorTitle,
 }
@@ -96,7 +97,6 @@ impl FromStr for CitationStyle {
         match s.to_ascii_lowercase().as_ref() {
             "author-date" | "author-year" => Ok(CitationStyle::AuthorDate),
             "note" | "chicago-note" | "chicago" => Ok(CitationStyle::ChicagoNote),
-            "numeric" | "ieee" => Ok(CitationStyle::Numeric),
             "alphabetic" | "alpha" => Ok(CitationStyle::Alphabetic),
             "author-title" => Ok(CitationStyle::AuthorTitle),
             _ => Err("unknown style"),
@@ -133,7 +133,7 @@ fn main() {
             Arg::with_name("key")
                 .long("key")
                 .short("k")
-                .help("Get a specific key from the database")
+                .help("Filter the database using a comma-seperated list of keys")
                 .takes_value(true)
         )
         .subcommand(
@@ -144,6 +144,14 @@ fn main() {
                         .long("style")
                         .short("s")
                         .help("Set the referencing style")
+                        .possible_values(&Style::VARIANTS)
+                        .case_insensitive(true)
+                        .takes_value(true)
+                )
+                .arg(
+                    Arg::with_name("supplement")
+                        .long("supplement")
+                        .help("Specify some information for the citation, e.g. \"p. 6\", in a comma-seperated list.")
                         .possible_values(&Style::VARIANTS)
                         .case_insensitive(true)
                         .takes_value(true)
@@ -170,6 +178,12 @@ fn main() {
                         .possible_values(&CitationStyle::VARIANTS)
                         .case_insensitive(true)
                         .takes_value(true)
+                )
+                .arg(
+                    Arg::with_name("combined")
+                        .long("combined")
+                        .short("c")
+                        .help("Combine all keys into one citation (ignored for Chicago Notes)")
                 )
         )
         .subcommand(
@@ -208,24 +222,63 @@ fn main() {
         }
     };
 
-    let bibliography = if let Some(key) = matches.value_of("key") {
-        bibliography.into_iter().filter(|e| e.key() == key).collect()
+    let bib_len = bibliography.len();
+
+    let bibliography = if let Some(keys) = matches.value_of("key") {
+        let mut res = vec![];
+        for key in keys.split(',') {
+            if let Some(entry) = bibliography.iter().find(|e| e.key() == key) {
+                res.push(entry.clone());
+            }
+        }
+        res
     } else if let Some(selector) = matches.value_of("selector") {
-        let selector = parse(selector).unwrap();
+        let selector = parse(selector).expect("Invalid selector");
         bibliography.into_iter().filter(|e| selector.matches(e)).collect()
     } else {
         bibliography
     };
 
     match matches.subcommand() {
-        ("keys", _) => {
+        ("keys", Some(sub_matches)) => {
+            println!("Selected {} of {} entries in the bibliography\n", bibliography.len(), bib_len);
+
             for entry in &bibliography {
                 println!("{}", entry.key());
+                if sub_matches.is_present("bindings") {
+                    if let Some(selector) = matches.value_of("selector") {
+                        let selector = parse(selector).unwrap();
+                        let formatter = chicago::notes::NoteCitationFormatter::new(
+                            bibliography.iter(),
+                        );
+                        for (k, v) in selector.apply(entry).unwrap() {
+                            println!(
+                                "\t{} => [{}] {}",
+                                k,
+                                v.kind(),
+                                formatter
+                                    .get_entry_note(
+                                        v,
+                                        None,
+                                        chicago::notes::NoteType::Short
+                                    )
+                                    .value
+                            );
+                        }
+                    }
+                }
             }
         }
         ("reference", Some(sub_matches)) => {
-            match value_t!(sub_matches, "style", Style).unwrap_or_else(|_| Style::Chicago) {
+            match value_t!(sub_matches, "style", Style).unwrap_or_else(|_| Style::ChicagoAuthorDate)
+            {
                 Style::Chicago => {
+                    let chicago = ChicagoBib::new(chicago::Mode::NotesAndBibliography);
+                    for entry in &bibliography {
+                        println!("{}", chicago.format(entry, None).print_ansi_vt100());
+                    }
+                }
+                Style::ChicagoAuthorDate => {
                     let chicago = ChicagoBib::new(chicago::Mode::AuthorDate);
                     for entry in &bibliography {
                         println!("{}", chicago.format(entry, None).print_ansi_vt100());
@@ -249,6 +302,35 @@ fn main() {
                         println!("{}", mla.format(entry, None).print_ansi_vt100());
                     }
                 }
+            }
+        }
+        ("citation", Some(sub_matches)) => {
+            let style = value_t!(sub_matches, "style", CitationStyle).unwrap_or_else(|_| CitationStyle::AuthorDate);
+            let supplements = matches.value_of("supplement").map(|sup| sup.split(',').collect::<Vec<_>>()).unwrap_or_default();
+            let atomics = bibliography.iter().enumerate().map(|(i, e)| {
+                let supp = supplements.get(i).cloned();
+                AtomicCitation::new(e.key(), supp, Some(i))
+            }).collect::<Vec<_>>();
+            let combined = sub_matches.is_present("combined");
+            match style {
+                CitationStyle::AuthorDate => {
+                    let formatter = chicago::author_date::AuthorYear::new(bibliography.iter());
+                    if !combined {
+                        for atomic in atomics {
+                            println!("{}", formatter.format(vec![atomic].into_iter()).unwrap().print_ansi_vt100());
+                        }
+                    } else {
+                        println!("{}", formatter.format(atomics).unwrap().print_ansi_vt100());
+                    }
+                },
+                CitationStyle::AuthorTitle => todo!(),
+                CitationStyle::Alphabetic => todo!(),
+                CitationStyle::ChicagoNote => {
+                    let formatter = chicago::notes::NoteCitationFormatter::new(bibliography.iter());
+                    for atomic in atomics {
+                        println!("{}", formatter.get_note(atomic, chicago::notes::NoteType::Full).unwrap().print_ansi_vt100());
+                    }
+                },
             }
         }
         _ => todo!(),

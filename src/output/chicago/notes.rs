@@ -298,8 +298,17 @@ impl<'s> NoteCitationFormatter<'s> {
         citation: AtomicCitation,
         kind: NoteType,
     ) -> Option<DisplayString> {
+        Some(self.get_entry_note(self.entries.get(citation.key).map(|o| o.clone())?, citation.supplement, kind))
+    }
+
+    /// Format a citation as a note given an entry.
+    pub fn get_entry_note(
+        &self,
+        mut entry: &Entry,
+        supplement: Option<&str>,
+        kind: NoteType,
+    ) -> DisplayString {
         let short = kind != NoteType::Full;
-        let mut entry = self.entries.get(citation.key).map(|o| o.clone())?;
 
         entry = delegate_titled_entry(entry);
 
@@ -415,7 +424,7 @@ impl<'s> NoteCitationFormatter<'s> {
             res += get_chunk_title(entry, false, true, &self.common);
         }
 
-        if let Some(supplement) = citation.supplement {
+        if let Some(supplement) = supplement {
             if !res.is_empty() {
                 if colon {
                     res.push(':');
@@ -539,6 +548,6 @@ impl<'s> NoteCitationFormatter<'s> {
             res.push('.');
         }
 
-        Some(res)
+        res
     }
 }

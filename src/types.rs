@@ -11,7 +11,7 @@ use super::{Entry, FieldType};
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
 use regex::Regex;
-use strum::EnumString;
+use strum::{EnumString, Display};
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};
@@ -31,7 +31,7 @@ lazy_static! {
 }
 
 /// Describes which kind of work a database entry refers to.
-#[derive(Copy, Clone, Debug, EnumString, PartialEq, Eq)]
+#[derive(Copy, Clone, Display, Debug, EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "lowercase")]
 pub enum EntryType {
     /// A short text, possibly of journalistic or scientific nature,

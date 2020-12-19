@@ -1,5 +1,5 @@
 [package]
-name = "hayagriva-main"
+name = "hayagriva-cli"
 version = "0.1.0"
 authors = ["Martin Haug <mhaug@live.de>"]
 edition = "2018"
