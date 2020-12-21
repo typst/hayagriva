@@ -76,7 +76,7 @@ pub struct Entry {
     /// The kind of media this Entry represents.
     entry_type: EntryType,
     /// Information about the Entry.
-    content: HashMap<String, FieldType>,
+    pub(crate) content: HashMap<String, FieldType>,
 }
 
 impl Entry {
@@ -455,7 +455,7 @@ mod tests {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let chicago =
-            chicago::bibliography::BibliographyFormatter::new(chicago::Mode::AuthorDate);
+            chicago::bibliography::Bibliography::new(chicago::Mode::AuthorDate);
 
         for entry in &entries {
             let refs = chicago.format(&entry, None);

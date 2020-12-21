@@ -173,7 +173,7 @@ impl EntryType {
 
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
-#[derive(Clone, Debug, EnumString, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "lowercase")]
 pub enum PersonRole {
     /// Translated the work from a foreign language to the cited edition.
@@ -756,11 +756,16 @@ pub fn get_range(source: &str) -> Option<Range<i64>> {
 /// A duration.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Duration {
-    days: u32,
-    hours: u32,
-    minutes: u32,
-    seconds: u8,
-    milliseconds: f64,
+    /// Days (24 hours).
+    pub days: u32,
+    /// Hours (60 minutes).
+    pub hours: u32,
+    /// Minutes (60 seconds).
+    pub minutes: u32,
+    /// Seconds (1000 milliseconds).
+    pub seconds: u8,
+    /// Milliseconds.
+    pub milliseconds: f64,
 }
 
 /// Errors that can occur when parsing a string to a duration

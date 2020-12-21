@@ -1,14 +1,19 @@
+use std::fs::{read_to_string, OpenOptions};
+use std::process::exit;
+use std::str::FromStr;
+use std::io;
+use std::io::Write;
+
 use biblatex::Bibliography as TexBibliography;
-use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
-use hayagriva::input::load_yaml_structure;
+use hayagriva::input::{bibliography_to_yaml_str, load_yaml_structure};
 use hayagriva::output::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::output::{
     apa, chicago, ieee, mla, Alphabetical, AtomicCitation, AuthorTitle,
     BibliographyFormatter, CitationFormatter,
 };
 use hayagriva::selectors::parse;
-use std::fs::read_to_string;
-use std::str::FromStr;
+
+use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use strum::{EnumVariantNames, VariantNames};
 
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
@@ -167,15 +172,27 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("dump")
-                .about("Get a bibliography file with your selected entries")
+                .about("Get a bibliography file with your selected entries. This can also be used to convert a BibTeX file to the YAML database format.")
+                // .arg(
+                //     Arg::with_name("output-format")
+                //         .long("output-format")
+                //         .short("f")
+                //         .help("Set the desired output format")
+                //         .possible_values(&Format::VARIANTS)
+                //         .case_insensitive(true)
+                //         .takes_value(true)
+                // )
                 .arg(
-                    Arg::with_name("output-format")
-                        .long("output-format")
+                    Arg::with_name("output")
+                        .long("output")
                         .short("o")
-                        .help("Set the desired output format")
-                        .possible_values(&Format::VARIANTS)
-                        .case_insensitive(true)
+                        .help("Save the file at a path instead of writing to the terminal")
                         .takes_value(true)
+                )
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .help("Override the output file if it already exists")
                 )
         )
         .get_matches();
@@ -392,6 +409,40 @@ fn main() {
                 println!("{}", r);
             }
         }
-        _ => todo!(),
+        ("dump", Some(sub_matches)) => {
+            let bib = bibliography_to_yaml_str(bibliography).unwrap();
+            if let Some(path) = sub_matches.value_of("output") {
+                let options = if sub_matches.is_present("force") {
+                    OpenOptions::new().write(true).create(true).truncate(true).open(path)
+                } else {
+                    OpenOptions::new().write(true).create_new(true).open(path)
+                };
+
+                if let Err(e) = options {
+                    if e.kind() == io::ErrorKind::AlreadyExists {
+                        eprintln!(
+                            "The file already exists. If you want to override its contents, add the `--force` flag."
+                        );
+                        exit(2);
+                    } else if e.kind() == io::ErrorKind::PermissionDenied {
+                        eprintln!("The permission to create the file was denied.");
+                        exit(3);
+                    } else {
+                        eprintln!("Error when creating the file.");
+                        exit(3);
+                    }
+                } else if let Ok(mut file) = options {
+                    file.write_all(bib.as_bytes()).unwrap();
+                }
+            } else {
+                println!("{}", bib);
+            }
+        }
+        _ => {
+            eprintln!(
+                "Unknown subcommand. Try the switch `--help` to see a listing of all possible sub-commands."
+            );
+            exit(1);
+        }
     }
 }
