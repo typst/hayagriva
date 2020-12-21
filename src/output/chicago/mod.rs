@@ -341,7 +341,7 @@ fn get_title(
     res
 }
 
-fn get_chunk_title(
+pub(super) fn get_chunk_title(
     entry: &Entry,
     short: bool,
     mut fmt: bool,

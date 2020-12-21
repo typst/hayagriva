@@ -4,6 +4,8 @@ use super::types::Person;
 use super::{sel, Entry};
 use crate::selectors::Id;
 use crate::types::EntryType::{Chapter, Scene};
+use chicago::CommonChicagoConfig;
+use isolang::Language;
 use std::collections::HashMap;
 use std::convert::Into;
 use std::fmt::Write;
@@ -668,6 +670,7 @@ fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
 fn alph_designator(pos: usize) -> char {
     (b'a' + (pos % 26) as u8) as char
 }
+
 /// Output citations like "Oba20" or "KMS96".
 pub struct Alphabetical<'s> {
     entries: HashMap<&'s str, &'s Entry>,
@@ -676,7 +679,7 @@ pub struct Alphabetical<'s> {
 }
 
 impl<'s> Alphabetical<'s> {
-    /// Create a new `Numerical`.
+    /// Create a new `Alphabetical`.
     pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
         let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
         Self { entries, letters: 3 }
@@ -690,10 +693,13 @@ impl<'s> CitationFormatter<'s> for Alphabetical<'s> {
     ) -> Result<DisplayString, CitationError> {
         let mut items = vec![];
         for atomic in citation {
-            let entry = self
+            let mut entry = self
                 .entries
                 .get(atomic.key)
+                .cloned()
                 .ok_or_else(|| CitationError::KeyNotFound(atomic.key.into()))?;
+
+            entry = delegate_titled_entry(entry);
 
             let creators = chicago::get_creators(entry).0;
             let mut res = match creators.len() {
@@ -771,5 +777,91 @@ impl<'s> BracketPreference for Alphabetical<'s> {
 
     fn default_bracket_mode() -> BracketMode {
         BracketMode::Wrapped
+    }
+}
+
+/// Output citations with the authors last names and the title of the work.
+pub struct AuthorTitle<'s> {
+    entries: HashMap<&'s str, &'s Entry>,
+    /// This citation style uses code from Chicago, therefore the settings are
+    /// contined within this struct.
+    pub config: CommonChicagoConfig,
+}
+
+impl<'s> AuthorTitle<'s> {
+    /// Create a new `Alphabetical`.
+    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
+        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
+        Self {
+            entries,
+            config: CommonChicagoConfig::new(),
+        }
+    }
+}
+
+impl<'s> CitationFormatter<'s> for AuthorTitle<'s> {
+    fn format(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError> {
+        let mut items = vec![];
+        for atomic in citation {
+            let mut entry = self
+                .entries
+                .get(atomic.key)
+                .cloned()
+                .ok_or_else(|| CitationError::KeyNotFound(atomic.key.into()))?;
+
+            entry = delegate_titled_entry(entry);
+
+            let creators = chicago::get_creators(entry).0;
+            let mut res: DisplayString = match creators.len() {
+                0 => {
+                    if let Some(org) = entry.organization() {
+                        org.into()
+                    } else {
+                        String::new()
+                    }
+                }
+                _ => chicago::and_list(
+                    creators.into_iter().map(|person| {
+                        if let Some(prefix) = person.prefix {
+                            format!("{} {}", prefix, person.name)
+                        } else {
+                            person.name.clone()
+                        }
+                    }),
+                    false,
+                    self.config.et_al_limit,
+                ),
+            }
+            .into();
+
+            if entry.title().is_some() {
+                push_comma_quote_aware(&mut res.value, ',', true);
+                res += chicago::get_chunk_title(entry, false, true, &self.config);
+            }
+
+            if let Some(lang) = entry.language() {
+                push_comma_quote_aware(&mut res.value, ',', true);
+                res += "(";
+                res += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
+                res += ")";
+            }
+
+            items.push(res);
+        }
+
+        Ok(DisplayString::join(&items, "; "))
+    }
+}
+
+impl<'s> BracketPreference for AuthorTitle<'s> {
+    fn default_brackets() -> Bracket {
+        Bracket::Parentheses
+    }
+
+    fn default_bracket_mode() -> BracketMode {
+        BracketMode::Unwrapped
     }
 }

@@ -3,8 +3,8 @@ use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use hayagriva::input::load_yaml_structure;
 use hayagriva::output::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::output::{
-    apa, chicago, ieee, mla, Alphabetical, AtomicCitation, BibliographyFormatter,
-    CitationFormatter,
+    apa, chicago, ieee, mla, Alphabetical, AtomicCitation, AuthorTitle,
+    BibliographyFormatter, CitationFormatter,
 };
 use hayagriva::selectors::parse;
 use std::fs::read_to_string;
@@ -112,6 +112,11 @@ fn main() {
                 .help("Filter the database using a comma-seperated list of keys")
                 .takes_value(true)
         )
+        .arg(
+            Arg::with_name("no-fmt")
+                .long("no-fmt")
+                .help("Suppress the formatting of the output with ANSI / VT100 character sequences")
+        )
         .subcommand(
             SubCommand::with_name("reference")
                 .about("Create references for your Bibliography / Works Cited listing")
@@ -128,8 +133,6 @@ fn main() {
                     Arg::with_name("supplement")
                         .long("supplement")
                         .help("Specify some information for the citation, e.g. \"p. 6\", in a comma-seperated list.")
-                        .possible_values(&Style::VARIANTS)
-                        .case_insensitive(true)
                         .takes_value(true)
                 )
         )
@@ -248,38 +251,51 @@ fn main() {
             }
         }
         ("reference", Some(sub_matches)) => {
-            match value_t!(sub_matches, "style", Style)
+            let rows = match value_t!(sub_matches, "style", Style)
                 .unwrap_or_else(|_| Style::ChicagoAuthorDate)
             {
                 Style::Chicago => {
                     let chicago = ChicagoBib::new(chicago::Mode::NotesAndBibliography);
-                    for entry in &bibliography {
-                        println!("{}", chicago.format(entry, None).print_ansi_vt100());
-                    }
+                    bibliography
+                        .iter()
+                        .map(|entry| chicago.format(entry, None))
+                        .collect::<Vec<_>>()
                 }
                 Style::ChicagoAuthorDate => {
                     let chicago = ChicagoBib::new(chicago::Mode::AuthorDate);
-                    for entry in &bibliography {
-                        println!("{}", chicago.format(entry, None).print_ansi_vt100());
-                    }
+                    bibliography
+                        .iter()
+                        .map(|entry| chicago.format(entry, None))
+                        .collect::<Vec<_>>()
                 }
                 Style::Apa => {
                     let apa = apa::Apa::new();
-                    for entry in &bibliography {
-                        println!("{}", apa.format(entry, None).print_ansi_vt100());
-                    }
+                    bibliography
+                        .iter()
+                        .map(|entry| apa.format(entry, None))
+                        .collect::<Vec<_>>()
                 }
                 Style::Ieee => {
                     let ieee = ieee::Ieee::new();
-                    for entry in &bibliography {
-                        println!("{}", ieee.format(entry, None).print_ansi_vt100());
-                    }
+                    bibliography
+                        .iter()
+                        .map(|entry| ieee.format(entry, None))
+                        .collect::<Vec<_>>()
                 }
                 Style::Mla => {
                     let mla = mla::Mla::new();
-                    for entry in &bibliography {
-                        println!("{}", mla.format(entry, None).print_ansi_vt100());
-                    }
+                    bibliography
+                        .iter()
+                        .map(|entry| mla.format(entry, None))
+                        .collect::<Vec<_>>()
+                }
+            };
+
+            for row in rows {
+                if matches.is_present("no-fmt") {
+                    println!("{}", row.value);
+                } else {
+                    println!("{}", row.print_ansi_vt100())
                 }
             }
         }
@@ -299,28 +315,32 @@ fn main() {
                 })
                 .collect::<Vec<_>>();
             let combined = sub_matches.is_present("combined");
-            match style {
+            let rows = match style {
                 CitationStyle::AuthorDate => {
                     let formatter =
                         chicago::author_date::AuthorYear::new(bibliography.iter());
                     if !combined {
+                        let mut res = vec![];
                         for atomic in atomics {
-                            println!(
-                                "{}",
-                                formatter
-                                    .format(vec![atomic].into_iter())
-                                    .unwrap()
-                                    .print_ansi_vt100()
-                            );
+                            res.push(formatter.format(vec![atomic].into_iter()).unwrap())
                         }
+                        res
                     } else {
-                        println!(
-                            "{}",
-                            formatter.format(atomics).unwrap().print_ansi_vt100()
-                        );
+                        vec![formatter.format(atomics).unwrap()]
                     }
                 }
-                CitationStyle::AuthorTitle => todo!(),
+                CitationStyle::AuthorTitle => {
+                    let formatter = AuthorTitle::new(bibliography.iter());
+                    if !combined {
+                        let mut res = vec![];
+                        for atomic in atomics {
+                            res.push(formatter.format(vec![atomic].into_iter()).unwrap());
+                        }
+                        res
+                    } else {
+                        vec![formatter.format(atomics).unwrap()]
+                    }
+                }
                 CitationStyle::Alphabetical => {
                     let formatter = Alphabetical::new(bibliography.iter());
                     for atomic in atomics.iter_mut() {
@@ -339,34 +359,37 @@ fn main() {
                         }
                     }
                     if !combined {
+                        let mut res = vec![];
                         for atomic in atomics {
-                            println!(
-                                "{}",
-                                formatter
-                                    .format(vec![atomic].into_iter())
-                                    .unwrap()
-                                    .print_ansi_vt100()
-                            );
+                            res.push(formatter.format(vec![atomic].into_iter()).unwrap());
                         }
+                        res
                     } else {
-                        println!(
-                            "{}",
-                            formatter.format(atomics).unwrap().print_ansi_vt100()
-                        );
+                        vec![formatter.format(atomics).unwrap()]
                     }
                 }
                 CitationStyle::ChicagoNote => {
                     let formatter = chicago::notes::Note::new(bibliography.iter());
+                    let mut res = vec![];
                     for atomic in atomics {
-                        println!(
-                            "{}",
+                        res.push(
                             formatter
                                 .get_note(atomic, chicago::notes::NoteType::Full)
-                                .unwrap()
-                                .print_ansi_vt100()
+                                .unwrap(),
                         );
                     }
+                    res
                 }
+            };
+
+            for r in rows.iter().map(|r| {
+                if !matches.is_present("no-fmt") {
+                    r.print_ansi_vt100()
+                } else {
+                    r.value.clone()
+                }
+            }) {
+                println!("{}", r);
             }
         }
         _ => todo!(),
