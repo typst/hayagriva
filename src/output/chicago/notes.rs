@@ -31,12 +31,12 @@ pub enum NoteType {
     /// Creates a minimal citation, ommitting the title. This should only be
     /// used if the same source is cited multiple times without citing another
     /// source in-between. Also compare the `ibid`-Option of the
-    /// [NoteCitationFormatter]. E.g. "Obama, 517."
+    /// [Note]. E.g. "Obama, 517."
     OnlyAuthor,
 }
 
 /// The struct doing the formatting.
-pub struct NoteCitationFormatter<'s> {
+pub struct Note<'s> {
     /// Entries within the database.
     entries: HashMap<String, &'s Entry>,
     /// Use ibid. instead of the repetition of the source.
@@ -46,8 +46,8 @@ pub struct NoteCitationFormatter<'s> {
     pub common: CommonChicagoConfig,
 }
 
-impl<'s> NoteCitationFormatter<'s> {
-    /// Create a new [NoteCitationFormatter].
+impl<'s> Note<'s> {
+    /// Create a new [Note].
     pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
         Self {
             entries: entries.map(|e| (e.key.clone(), e)).collect(),
@@ -557,9 +557,9 @@ impl<'s> NoteCitationFormatter<'s> {
     }
 }
 
-impl<'s> CitationFormatter<'s> for NoteCitationFormatter<'s> {
+impl<'s> CitationFormatter<'s> for Note<'s> {
     /// This implementation will always create full notes.
-    /// Use [`NoteCitationFormatter::get_note`] to set the
+    /// Use [`Note::get_note`] to set the
     /// [`NoteType`].
     fn format(
         &self,
@@ -577,7 +577,7 @@ impl<'s> CitationFormatter<'s> for NoteCitationFormatter<'s> {
     }
 }
 
-impl<'s> BracketPreference for NoteCitationFormatter<'s> {
+impl<'s> BracketPreference for Note<'s> {
     fn default_brackets() -> Bracket {
         Bracket::None
     }

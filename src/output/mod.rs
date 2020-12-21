@@ -192,19 +192,19 @@ pub trait CitationFormatter<'s> {
 
 /// Checks if the keys are in the database and returns them as reference
 /// markers, since they are already unique.
-pub struct KeyCitationFormatter<'s> {
+pub struct KeyDump<'s> {
     entries: HashMap<&'s str, &'s Entry>,
 }
 
-impl<'s> KeyCitationFormatter<'s> {
-    /// Create a new `KeyCitationFormatter`.
+impl<'s> KeyDump<'s> {
+    /// Create a new `KeyDump`.
     pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
         let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
         Self { entries }
     }
 }
 
-impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
+impl<'s> CitationFormatter<'s> for KeyDump<'s> {
     fn format(
         &self,
         citation: impl IntoIterator<Item = AtomicCitation<'s>>,
@@ -230,7 +230,7 @@ impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
     }
 }
 
-impl<'s> BracketPreference for KeyCitationFormatter<'s> {
+impl<'s> BracketPreference for KeyDump<'s> {
     fn default_brackets() -> Bracket {
         Bracket::SquareBrackets
     }
@@ -241,19 +241,19 @@ impl<'s> BracketPreference for KeyCitationFormatter<'s> {
 }
 
 /// Output IEEE-style numerical reference markers.
-pub struct NumericalCitationFormatter<'s> {
+pub struct Numerical<'s> {
     entries: HashMap<&'s str, &'s Entry>,
 }
 
-impl<'s> NumericalCitationFormatter<'s> {
-    /// Create a new `NumericalCitationFormatter`.
+impl<'s> Numerical<'s> {
+    /// Create a new `Numerical`.
     pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
         let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
         Self { entries }
     }
 }
 
-impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
+impl<'s> CitationFormatter<'s> for Numerical<'s> {
     fn format(
         &self,
         citation: impl IntoIterator<Item = AtomicCitation<'s>>,
@@ -323,7 +323,7 @@ impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
     }
 }
 
-impl<'s> BracketPreference for NumericalCitationFormatter<'s> {
+impl<'s> BracketPreference for Numerical<'s> {
     fn default_brackets() -> Bracket {
         Bracket::SquareBrackets
     }
@@ -676,7 +676,7 @@ pub struct Alphabetical<'s> {
 }
 
 impl<'s> Alphabetical<'s> {
-    /// Create a new `NumericalCitationFormatter`.
+    /// Create a new `Numerical`.
     pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
         let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
         Self { entries, letters: 3 }

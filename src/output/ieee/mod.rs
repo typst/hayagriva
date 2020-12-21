@@ -17,7 +17,7 @@ use isolang::Language;
 
 /// Generator for the IEEE reference list.
 #[derive(Clone, Debug)]
-pub struct IeeeBibliographyFormatter {
+pub struct Ieee {
     sc_formatter: SentenceCase,
     tc_formatter: TitleCase,
     et_al_threshold: Option<u32>,
@@ -38,7 +38,7 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
         .and_then(|mut bindings| bindings.remove("p"))
 }
 
-impl IeeeBibliographyFormatter {
+impl Ieee {
     /// Creates a new IEEE bibliography generator.
     pub fn new() -> Self {
         let mut tc_formatter = TitleCase::default();
@@ -790,7 +790,7 @@ impl IeeeBibliographyFormatter {
     }
 }
 
-impl BibliographyFormatter for IeeeBibliographyFormatter {
+impl BibliographyFormatter for Ieee {
     fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         let mut parent = entry.parents().and_then(|v| v.first());
         let mut sn_stack = vec![];

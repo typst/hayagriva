@@ -1,10 +1,11 @@
 //! Formats citations as bibliographies. This module supports both the
 //! _Notes and Bibliography_ and the _Author-Date_ style. The style can
-//! be set through the [`BibliographyFormatter`] struct.
+//! be set through the [`Bibliography`] struct.
 
 use crate::output::{
     abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
-    format_range, push_comma_quote_aware, DisplayString, Formatting,
+    format_range, push_comma_quote_aware, BibliographyFormatter, DisplayString,
+    Formatting,
 };
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
@@ -18,15 +19,15 @@ use super::{
 use unicode_segmentation::UnicodeSegmentation;
 
 /// The struct doing the formatting.
-pub struct BibliographyFormatter {
+pub struct Bibliography {
     /// Properties shared with the bibliography.
     pub common: CommonChicagoConfig,
     /// Selects the bibliography mode.
     pub mode: Mode,
 }
 
-impl BibliographyFormatter {
-    /// Create a new BibliographyFormatter.
+impl Bibliography {
+    /// Create a new Bibliography.
     pub fn new(mode: Mode) -> Self {
         Self { common: CommonChicagoConfig::new(), mode }
     }
@@ -504,5 +505,44 @@ impl BibliographyFormatter {
         }
 
         res
+    }
+}
+
+/// A struct containing the [`Bibliography`] formatter that is preset to
+/// the [`Mode`] `NotesAndBibliography` and implements the BibliographyFormatter trait.
+/// Does *not* support letters to disambiguate between multiple contributions
+/// by the same authors in the same year.
+pub struct ChicagoNote(Bibliography);
+
+impl ChicagoNote {
+    /// Create the struct.
+    pub fn new() -> Self {
+        let bib = Bibliography::new(Mode::NotesAndBibliography);
+        Self(bib)
+    }
+}
+
+impl BibliographyFormatter for ChicagoNote {
+    fn format(&self, entry: &Entry, _: Option<&Entry>) -> DisplayString {
+        self.0.format(entry, None)
+    }
+}
+/// A struct containing the [`Bibliography`] formatter that is preset to
+/// the [`Mode`] `AuthorDate` and implements the BibliographyFormatter trait.
+/// Does *not* support letters to disambiguate between multiple contributions
+/// by the same authors in the same year.
+pub struct ChicagoAuthorYear(Bibliography);
+
+impl ChicagoAuthorYear {
+    /// Create the struct.
+    pub fn new() -> Self {
+        let bib = Bibliography::new(Mode::AuthorDate);
+        Self(bib)
+    }
+}
+
+impl BibliographyFormatter for ChicagoAuthorYear {
+    fn format(&self, entry: &Entry, _: Option<&Entry>) -> DisplayString {
+        self.0.format(entry, None)
     }
 }

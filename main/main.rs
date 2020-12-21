@@ -1,7 +1,7 @@
 use biblatex::Bibliography as TexBibliography;
 use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use hayagriva::input::load_yaml_structure;
-use hayagriva::output::chicago::bibliography::BibliographyFormatter as ChicagoBib;
+use hayagriva::output::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::output::{
     apa, chicago, ieee, mla, Alphabetical, AtomicCitation, BibliographyFormatter,
     CitationFormatter,
@@ -228,9 +228,7 @@ fn main() {
                 if sub_matches.is_present("bindings") {
                     if let Some(selector) = matches.value_of("selector") {
                         let selector = parse(selector).unwrap();
-                        let formatter = chicago::notes::NoteCitationFormatter::new(
-                            bibliography.iter(),
-                        );
+                        let formatter = chicago::notes::Note::new(bibliography.iter());
                         for (k, v) in selector.apply(entry).unwrap() {
                             println!(
                                 "\t{} => [{}] {}",
@@ -266,19 +264,19 @@ fn main() {
                     }
                 }
                 Style::Apa => {
-                    let apa = apa::ApaBibliographyFormatter::new();
+                    let apa = apa::Apa::new();
                     for entry in &bibliography {
                         println!("{}", apa.format(entry, None).print_ansi_vt100());
                     }
                 }
                 Style::Ieee => {
-                    let ieee = ieee::IeeeBibliographyFormatter::new();
+                    let ieee = ieee::Ieee::new();
                     for entry in &bibliography {
                         println!("{}", ieee.format(entry, None).print_ansi_vt100());
                     }
                 }
                 Style::Mla => {
-                    let mla = mla::MlaBibliographyFormatter::new();
+                    let mla = mla::Mla::new();
                     for entry in &bibliography {
                         println!("{}", mla.format(entry, None).print_ansi_vt100());
                     }
@@ -358,8 +356,7 @@ fn main() {
                     }
                 }
                 CitationStyle::ChicagoNote => {
-                    let formatter =
-                        chicago::notes::NoteCitationFormatter::new(bibliography.iter());
+                    let formatter = chicago::notes::Note::new(bibliography.iter());
                     for atomic in atomics {
                         println!(
                             "{}",

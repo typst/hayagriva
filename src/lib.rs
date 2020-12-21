@@ -397,7 +397,7 @@ mod tests {
     fn apa() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let apa = apa::ApaBibliographyFormatter::new();
+        let apa = apa::Apa::new();
         let mut last_entry = None;
 
         for entry in &entries {
@@ -411,7 +411,7 @@ mod tests {
     fn ieee() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let ieee = ieee::IeeeBibliographyFormatter::new();
+        let ieee = ieee::Ieee::new();
         let mut last_entry = None;
 
         for entry in &entries {
@@ -425,7 +425,7 @@ mod tests {
     fn mla() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let mla = mla::MlaBibliographyFormatter::new();
+        let mla = mla::Mla::new();
         let mut last_entry = None;
 
         for entry in &entries {
@@ -439,7 +439,7 @@ mod tests {
     fn chicago_n() {
         let contents = fs::read_to_string("test/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
-        let chicago = chicago::notes::NoteCitationFormatter::new(entries.iter());
+        let chicago = chicago::notes::Note::new(entries.iter());
 
         for entry in &entries {
             let citation = AtomicCitation::new(&entry.key, None, None);

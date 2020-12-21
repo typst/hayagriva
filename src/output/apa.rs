@@ -14,7 +14,7 @@ use crate::{attrs, sel, Entry};
 
 /// Generates APA reference list entries.
 #[derive(Clone, Debug)]
-pub struct ApaBibliographyFormatter {
+pub struct Apa {
     formatter: SentenceCase,
 }
 
@@ -165,7 +165,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
     }
 }
 
-impl ApaBibliographyFormatter {
+impl Apa {
     /// Creates a new bibliography generator.
     pub fn new() -> Self {
         Self { formatter: SentenceCase::default() }
@@ -1004,7 +1004,7 @@ impl ApaBibliographyFormatter {
     }
 }
 
-impl BibliographyFormatter for ApaBibliographyFormatter {
+impl BibliographyFormatter for Apa {
     fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         entry = delegate_titled_entry(entry);
 
@@ -1064,7 +1064,7 @@ impl BibliographyFormatter for ApaBibliographyFormatter {
 
 #[cfg(test)]
 mod tests {
-    use super::ApaBibliographyFormatter;
+    use super::Apa;
     use crate::types::EntryType;
     use crate::types::Person;
     use crate::Entry;
@@ -1082,7 +1082,7 @@ mod tests {
         let mut entry = Entry::new("test", EntryType::Newspaper);
         entry.set_authors(p);
 
-        let apa = ApaBibliographyFormatter::new();
+        let apa = Apa::new();
         assert_eq!(
             "van de Graf, J., Günther, H.-J., & Mädje, L. E.",
             apa.get_author(&entry)

@@ -13,7 +13,7 @@ use crate::{attrs, sel, Entry};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Generates the "Works Cited" entries
-pub struct MlaBibliographyFormatter {
+pub struct Mla {
     tc_formatter: TitleCase,
     /// Forces location element to appear whenever given.
     /// Otherwise, location will only appear for physical items.
@@ -170,7 +170,7 @@ fn is_religious(s: &str) -> bool {
     reference.binary_search(&s).is_ok()
 }
 
-impl MlaBibliographyFormatter {
+impl Mla {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
         let mut tc_formatter = TitleCase::new();
@@ -376,7 +376,7 @@ impl MlaBibliographyFormatter {
     }
 
     fn get_title(&self, mut entry: &Entry, use_quotes: bool) -> DisplayString {
-        let sc = !use_quotes || MlaBibliographyFormatter::own_container(entry);
+        let sc = !use_quotes || Mla::own_container(entry);
         let mut res = DisplayString::new();
 
         if use_quotes {
@@ -441,7 +441,7 @@ impl MlaBibliographyFormatter {
             sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))
                 .bound_element(entry, "p");
 
-        if entry != root || MlaBibliographyFormatter::own_container(entry) {
+        if entry != root || Mla::own_container(entry) {
             let mut container = ContainerInfo::new();
 
             // Title
@@ -743,7 +743,7 @@ impl MlaBibliographyFormatter {
     }
 }
 
-impl BibliographyFormatter for MlaBibliographyFormatter {
+impl BibliographyFormatter for Mla {
     fn format(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString {
         let mut res = DisplayString::from_string(self.get_author(entry, prev_entry));
         let title = self.get_title(entry, true);

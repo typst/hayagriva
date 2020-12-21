@@ -196,7 +196,7 @@ pub fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     (authors, add)
 }
 
-fn and_list_opt(
+pub(super) fn and_list_opt(
     names: impl IntoIterator<Item = String>,
     oxford: bool,
     et_al_limit: Option<usize>,
@@ -237,7 +237,7 @@ fn and_list_opt(
     res
 }
 
-fn and_list(
+pub(super) fn and_list(
     names: impl IntoIterator<Item = String>,
     oxford: bool,
     et_al_limit: Option<usize>,
