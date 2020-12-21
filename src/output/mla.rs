@@ -576,7 +576,7 @@ impl MlaBibliographyFormatter {
             let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).matches(entry);
             if physical || self.always_use_location || entry.publisher().is_none() {
                 if let Some(loc) = entry.location() {
-                    location.push(DisplayString::from_str(loc));
+                    location.push(DisplayString::from_string(loc));
                 }
             }
             if let Some(page_range) = entry.page_range() {

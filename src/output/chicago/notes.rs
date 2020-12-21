@@ -1,7 +1,8 @@
 //! Formats citations as footnotes for Chicago's Notes and Bibliography style.
 use crate::output::{
     abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
-    AtomicCitation, DisplayString, Formatting,
+    AtomicCitation, Bracket, BracketMode, BracketPreference, CitationError,
+    CitationFormatter, DisplayString, Formatting,
 };
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
@@ -298,7 +299,11 @@ impl<'s> NoteCitationFormatter<'s> {
         citation: AtomicCitation,
         kind: NoteType,
     ) -> Option<DisplayString> {
-        Some(self.get_entry_note(self.entries.get(citation.key).map(|o| o.clone())?, citation.supplement, kind))
+        Some(self.get_entry_note(
+            self.entries.get(citation.key).map(|o| o.clone())?,
+            citation.supplement,
+            kind,
+        ))
     }
 
     /// Format a citation as a note given an entry.
@@ -549,5 +554,35 @@ impl<'s> NoteCitationFormatter<'s> {
         }
 
         res
+    }
+}
+
+impl<'s> CitationFormatter<'s> for NoteCitationFormatter<'s> {
+    /// This implementation will always create full notes.
+    /// Use [`NoteCitationFormatter::get_note`] to set the
+    /// [`NoteType`].
+    fn format(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError> {
+        let mut items = vec![];
+        for c in citation {
+            items.push(
+                self.get_note(c, NoteType::Full)
+                    .ok_or_else(|| CitationError::KeyNotFound(c.key.into()))?,
+            )
+        }
+
+        Ok(DisplayString::join(&items, "\n"))
+    }
+}
+
+impl<'s> BracketPreference for NoteCitationFormatter<'s> {
+    fn default_brackets() -> Bracket {
+        Bracket::None
+    }
+
+    fn default_bracket_mode() -> BracketMode {
+        BracketMode::Unwrapped
     }
 }

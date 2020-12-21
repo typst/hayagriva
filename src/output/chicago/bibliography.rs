@@ -3,8 +3,8 @@
 //! be set through the [`BibliographyFormatter`] struct.
 
 use crate::output::{
-    abbreviate_publisher, chicago::web_creator, delegate_titled_entry, format_range,
-    push_comma_quote_aware, DisplayString, Formatting,
+    abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
+    format_range, push_comma_quote_aware, DisplayString, Formatting,
 };
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
@@ -292,7 +292,7 @@ impl BibliographyFormatter {
         let no_author = res.is_empty();
 
         let ad_date = if self.mode == Mode::AuthorDate {
-            let designator = num.map(|pos| (b'a' + (pos % 26) as u8) as char);
+            let designator = num.map(|pos| alph_designator(pos));
             let mut date = String::new();
 
             date += &entry_date(entry, true);

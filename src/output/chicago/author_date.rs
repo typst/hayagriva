@@ -4,7 +4,10 @@
 use super::{
     and_list_opt, get_chunk_title, get_creators, web_creator, CommonChicagoConfig,
 };
-use crate::output::{AtomicCitation, CitationError, CitationFormatter, DisplayString};
+use crate::output::{
+    alph_designator, AtomicCitation, Bracket, BracketMode, BracketPreference,
+    CitationError, CitationFormatter, DisplayString,
+};
 use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
 use crate::types::Person;
@@ -220,7 +223,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
 
             if similars.len() > 1 {
                 let pos = similars.iter().position(|&x| x == entry).unwrap();
-                let designator = (b'a' + (pos % 26) as u8) as char;
+                let designator = alph_designator(pos);
 
                 if space {
                     s.push(' ');
@@ -241,6 +244,16 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
         }
 
         Ok(DisplayString::join(&items, "; "))
+    }
+}
+
+impl<'s> BracketPreference for AuthorYear<'s> {
+    fn default_brackets() -> Bracket {
+        Bracket::Parentheses
+    }
+
+    fn default_bracket_mode() -> BracketMode {
+        BracketMode::Wrapped
     }
 }
 

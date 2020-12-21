@@ -648,7 +648,7 @@ impl ApaBibliographyFormatter {
         }
 
         if wrap && !res.is_empty() {
-            let mut new = DisplayString::from_str("[");
+            let mut new = DisplayString::from_string("[");
             new += res;
             new += "]";
             res = new;
@@ -748,7 +748,7 @@ impl ApaBibliographyFormatter {
                 }
 
                 if !res.is_empty() {
-                    let mut new = DisplayString::from_str("In ");
+                    let mut new = DisplayString::from_string("In ");
                     new += res;
                     res = new;
                 }
@@ -816,7 +816,7 @@ impl ApaBibliographyFormatter {
                 }
 
                 if !res.is_empty() {
-                    let mut new = DisplayString::from_str("In ");
+                    let mut new = DisplayString::from_string("In ");
                     new += res;
                     res = new;
                 }

@@ -130,16 +130,26 @@ impl CommonChicagoConfig {
     }
 }
 
-enum AuthorRole {
+/// Describes the role a creator had in terms of what Chicago accepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthorRole {
+    /// Think about this as an ordinary author.
     Normal,
+    /// This person was responsible for the collection and editing of the work.
     Editor,
+    /// The work consists of several smaller
+    /// items which were compiled by the creator.
     Compiler,
+    /// This person translated the work from another language.
     Translator,
+    /// This person directed the production of the work.
     Director,
+    /// This person oversaw the production of the work creatively.
     ExecutiveProducer,
 }
 
-fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
+/// Get the creator of an entry.
+pub fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     let mut add = AuthorRole::Normal;
     let authors = if let Some(authors) = entry.authors_fallible() {
         authors.to_vec()

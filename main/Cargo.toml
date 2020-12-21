@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 hayagriva = { path = ".." }
-biblatex = { path = "../../biblatex" }
+biblatex = "0.4.0"
 clap = "2.33.3"
 strum = { version = "0.20", features = ["derive"] }
 

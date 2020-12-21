@@ -6,13 +6,76 @@ use crate::selectors::Id;
 use crate::types::EntryType::{Chapter, Scene};
 use std::collections::HashMap;
 use std::convert::Into;
+use std::fmt::Write;
 use std::ops::{Add, AddAssign};
 use thiserror::Error;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub mod apa;
 pub mod chicago;
 pub mod ieee;
 pub mod mla;
+
+/// Describes a pair of brackets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Bracket {
+    /// "(...)" Parentheses.
+    Parentheses,
+    /// "[...]" Brackets.
+    SquareBrackets,
+    /// No brackets should be used.
+    None,
+}
+
+/// Describes a pair of brackets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BracketMode {
+    /// Expression is wrapped by [`Bracket`]s
+    Wrapped,
+    /// Expression is not wrapped by brackets.
+    Unwrapped,
+}
+
+impl Bracket {
+    /// Get the according left bracket.
+    pub fn left(&self) -> Option<char> {
+        match self {
+            Bracket::Parentheses => Some('('),
+            Bracket::SquareBrackets => Some('['),
+            Bracket::None => None,
+        }
+    }
+
+    /// Get the according right bracket.
+    pub fn right(&self) -> Option<char> {
+        match self {
+            Bracket::Parentheses => Some(')'),
+            Bracket::SquareBrackets => Some(']'),
+            Bracket::None => None,
+        }
+    }
+
+    /// Wrap some string in brackets.
+    pub fn wrap(&self, s: &mut String) {
+        if let Some(left) = self.left() {
+            s.insert(0, left)
+        }
+        if let Some(right) = self.right() {
+            s.push(right)
+        }
+    }
+
+    /// Wrap some [`DisplayString`] in brackets.
+    pub fn wrap_ds(&self, mut ds: DisplayString) -> DisplayString {
+        if let Some(left) = self.left() {
+            ds = DisplayString::from_string(left.to_string()) + ds;
+        }
+        if let Some(right) = self.right() {
+            ds.push(right)
+        }
+        ds
+    }
+}
 
 /// This enum describes where the output string of the [CitationFormatter]
 /// should be set: Inside the text or in a
@@ -43,6 +106,59 @@ pub trait BibliographyFormatter {
     /// Get a string with optional formatting that describes `Entry` in
     /// accordance with the implementing struct's style.
     fn format(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString;
+}
+
+/// Structs that can be used to get some string can implement this trait
+/// in order to indicate what kind of brackets their output is normally
+/// wrapped in.
+pub trait BracketPreference {
+    /// Indicates what brackets the output is normally wrapped in.
+    fn default_brackets() -> Bracket;
+    /// Indicates whether the output is normally wrapped at all.
+    fn default_bracket_mode() -> BracketMode;
+}
+
+/// Get citations wrapped in the right pair of brackets.
+/// This trait will be automatically implemented for all structs that are
+/// [`CitationFormatter`]s and have a [`BracketPreference`].
+pub trait BracketCitFormatter<'s> {
+    /// Get the citation in brackets if the citation style prefers that.
+    fn format_bracketed_default(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError>;
+
+    /// Get the citation with or without surrounding brackets, as specified
+    /// by the `mode` argument.
+    fn format_bracketed(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+        mode: BracketMode,
+    ) -> Result<DisplayString, CitationError>;
+}
+
+impl<'s, T> BracketCitFormatter<'s> for T
+where
+    T: CitationFormatter<'s> + BracketPreference,
+{
+    fn format_bracketed_default(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError> {
+        self.format_bracketed(citation, Self::default_bracket_mode())
+    }
+
+    fn format_bracketed(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+        mode: BracketMode,
+    ) -> Result<DisplayString, CitationError> {
+        if mode == BracketMode::Wrapped {
+            self.format(citation).map(|ds| Self::default_brackets().wrap_ds(ds))
+        } else {
+            self.format(citation)
+        }
+    }
 }
 
 /// Represents a citation of one or more database entries.
@@ -77,7 +193,15 @@ pub trait CitationFormatter<'s> {
 /// Checks if the keys are in the database and returns them as reference
 /// markers, since they are already unique.
 pub struct KeyCitationFormatter<'s> {
-    entries: &'s HashMap<String, Entry>,
+    entries: HashMap<&'s str, &'s Entry>,
+}
+
+impl<'s> KeyCitationFormatter<'s> {
+    /// Create a new `KeyCitationFormatter`.
+    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
+        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
+        Self { entries }
+    }
 }
 
 impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
@@ -98,13 +222,35 @@ impl<'s> CitationFormatter<'s> for KeyCitationFormatter<'s> {
             });
         }
 
-        Ok(items.join(", ").into())
+        let mut res = DisplayString::new();
+        res.start_format(Formatting::Bold);
+        res += &items.join(", ");
+        res.commit_formats();
+        Ok(res)
+    }
+}
+
+impl<'s> BracketPreference for KeyCitationFormatter<'s> {
+    fn default_brackets() -> Bracket {
+        Bracket::SquareBrackets
+    }
+
+    fn default_bracket_mode() -> BracketMode {
+        BracketMode::Unwrapped
     }
 }
 
 /// Output IEEE-style numerical reference markers.
 pub struct NumericalCitationFormatter<'s> {
-    entries: &'s HashMap<String, Entry>,
+    entries: HashMap<&'s str, &'s Entry>,
+}
+
+impl<'s> NumericalCitationFormatter<'s> {
+    /// Create a new `NumericalCitationFormatter`.
+    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
+        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
+        Self { entries }
+    }
 }
 
 impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
@@ -174,6 +320,16 @@ impl<'s> CitationFormatter<'s> for NumericalCitationFormatter<'s> {
             .join("; ");
 
         Ok(format!("[{}]", re).into())
+    }
+}
+
+impl<'s> BracketPreference for NumericalCitationFormatter<'s> {
+    fn default_brackets() -> Bracket {
+        Bracket::SquareBrackets
+    }
+
+    fn default_bracket_mode() -> BracketMode {
+        BracketMode::Wrapped
     }
 }
 
@@ -306,7 +462,7 @@ impl Into<DisplayString> for String {
 
 impl Into<DisplayString> for &str {
     fn into(self) -> DisplayString {
-        DisplayString::from_str(self)
+        DisplayString::from_string(self)
     }
 }
 
@@ -320,19 +476,10 @@ impl DisplayString {
         }
     }
 
-    /// Uses a string reference to create a display string.
-    pub fn from_str(s: &str) -> Self {
-        Self {
-            value: s.to_string(),
-            formatting: vec![],
-            pending_formatting: vec![],
-        }
-    }
-
     /// Use a String to create a display string.
-    pub fn from_string(s: String) -> Self {
+    pub fn from_string<S: Into<String>>(s: S) -> Self {
         Self {
-            value: s,
+            value: s.into(),
             formatting: vec![],
             pending_formatting: vec![],
         }
@@ -516,4 +663,113 @@ fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
     }
 
     entry
+}
+
+fn alph_designator(pos: usize) -> char {
+    (b'a' + (pos % 26) as u8) as char
+}
+/// Output citations like "Oba20" or "KMS96".
+pub struct Alphabetical<'s> {
+    entries: HashMap<&'s str, &'s Entry>,
+    /// How many letters to allow to describe an entry.
+    pub letters: usize,
+}
+
+impl<'s> Alphabetical<'s> {
+    /// Create a new `NumericalCitationFormatter`.
+    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
+        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
+        Self { entries, letters: 3 }
+    }
+}
+
+impl<'s> CitationFormatter<'s> for Alphabetical<'s> {
+    fn format(
+        &self,
+        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
+    ) -> Result<DisplayString, CitationError> {
+        let mut items = vec![];
+        for atomic in citation {
+            let entry = self
+                .entries
+                .get(atomic.key)
+                .ok_or_else(|| CitationError::KeyNotFound(atomic.key.into()))?;
+
+            let creators = chicago::get_creators(entry).0;
+            let mut res = match creators.len() {
+                0 => if let Some(org) = entry.organization() {
+                    org.into()
+                } else if let Some(title) = delegate_titled_entry(entry).title() {
+                    title.into()
+                } else {
+                    atomic.key.chars().filter(|c| c.is_alphabetic()).collect::<String>()
+                }
+                .graphemes(true)
+                .enumerate()
+                .filter(|(i, _)| *i < self.letters)
+                .map(|(_, e)| e)
+                .collect::<String>(),
+                1 => creators[0]
+                    .name
+                    .graphemes(true)
+                    .enumerate()
+                    .filter(|(i, _)| *i < self.letters)
+                    .map(|(_, e)| e)
+                    .collect::<String>(),
+                2 | 3 => {
+                    let mut res = String::new();
+                    for person in creators {
+                        res += person.name.graphemes(true).next().unwrap_or_default();
+                    }
+                    res
+                }
+                _ => {
+                    let mut s = creators[0]
+                        .name
+                        .graphemes(true)
+                        .enumerate()
+                        .filter(|(i, _)| *i < self.letters)
+                        .map(|(_, e)| e)
+                        .collect::<String>();
+                    s.push('+');
+                    s
+                }
+            };
+
+            let year = entry
+                .any_date()
+                .or_else(|| entry.any_url().and_then(|u| u.visit_date.as_ref()))
+                .map(|date| {
+                    let mut year = i32::abs(date.year % 100);
+                    if date.year <= 0 {
+                        year += 1;
+                    }
+                    year
+                });
+
+            if let Some(year) = year {
+                let mut num = String::with_capacity(2);
+                write!(&mut num, "{:02}", year).unwrap();
+                res += &num;
+            }
+
+            if let Some(number) = atomic.number {
+                res.push(alph_designator(number));
+            }
+
+            items.push(res);
+        }
+
+        Ok(items.join("; ").into())
+    }
+}
+
+impl<'s> BracketPreference for Alphabetical<'s> {
+    fn default_brackets() -> Bracket {
+        Bracket::SquareBrackets
+    }
+
+    fn default_bracket_mode() -> BracketMode {
+        BracketMode::Wrapped
+    }
 }
