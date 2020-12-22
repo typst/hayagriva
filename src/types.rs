@@ -604,6 +604,7 @@ pub struct FormattableString {
     pub(crate) verbatim: bool,
 }
 
+#[cfg(feature = "biblatex")]
 impl FormattableString {
     pub(crate) fn extend(&mut self, f2: Self) {
         self.value += &f2.value;

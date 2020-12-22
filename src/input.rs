@@ -1016,7 +1016,7 @@ mod tests {
 
     #[test]
     fn person_initials() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let yaml = bibliography_to_yaml_str(entries.clone()).unwrap();
         let reconstructed = load_yaml_structure(&yaml).unwrap();
