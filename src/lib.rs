@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 pub mod input;
-#[cfg(feature = "default")]
+#[cfg(feature = "biblatex")]
 mod interop;
 pub mod lang;
 pub mod output;

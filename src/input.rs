@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use crate::lang::{SentenceCase, CaseTransformer};
 use crate::types::{
     get_range, Date, DateError, Duration, DurationError, EntryType, FormattableString,
     FormattedString, NumOrStr, Person, PersonError, PersonRole, QualifiedUrl, Title,
@@ -328,6 +329,53 @@ fn persons_from_yaml(
     Ok(persons)
 }
 
+fn affiliated_from_yaml(item: Yaml, key: &str, field_name: &str) -> Result<(Vec<Person>, PersonRole), YamlBibliographyError> {
+    let mut map = yaml_hash_map_with_string_keys(
+        item.into_hash().ok_or_else(|| {
+            YamlBibliographyError::new_data_type_error(
+                &key,
+                &field_name,
+                "affiliated person",
+            )
+        })?,
+    );
+
+    let persons = map
+        .remove("names")
+        .ok_or_else(|| {
+            YamlBibliographyError::new_data_type_src_error(
+                &key,
+                &field_name,
+                YamlDataTypeError::MissingRequiredField,
+            )
+        })
+        .and_then(|value| persons_from_yaml(value, &key, &field_name))?;
+
+    let role = map
+        .remove("role")
+        .ok_or_else(|| {
+            YamlBibliographyError::new_data_type_src_error(
+                &key,
+                &field_name,
+                YamlDataTypeError::MissingRequiredField,
+            )
+        })
+        .and_then(|t| {
+            t.into_string().ok_or_else(|| {
+                YamlBibliographyError::new_data_type_src_error(
+                    &key,
+                    &field_name,
+                    YamlDataTypeError::MismatchedPrimitive,
+                )
+            })
+        })?;
+
+    let role = PersonRole::from_str(&role.to_lowercase())
+        .unwrap_or_else(|_| PersonRole::Unknown(role));
+
+    Ok((persons, role))
+}
+
 fn entry_from_yaml(
     key: String,
     yaml: Yaml,
@@ -414,59 +462,18 @@ fn entry_from_yaml(
             }
             "affiliated" => {
                 let mut res = vec![];
-                if !value.is_array() {
+                if value.is_array() {
+                    for item in value {
+                        res.push(affiliated_from_yaml(item, &key, &field_name)?);
+                    }
+                } else if let Yaml::Hash(item) = value {
+                    res.push(affiliated_from_yaml(Yaml::Hash(item), &key, &field_name)?);
+                } else {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
                         "affiliated person",
                     ));
-                }
-
-                for item in value {
-                    let mut map = yaml_hash_map_with_string_keys(
-                        item.into_hash().ok_or_else(|| {
-                            YamlBibliographyError::new_data_type_error(
-                                &key,
-                                &field_name,
-                                "affiliated person",
-                            )
-                        })?,
-                    );
-
-                    let persons = map
-                        .remove("names")
-                        .ok_or_else(|| {
-                            YamlBibliographyError::new_data_type_src_error(
-                                &key,
-                                &field_name,
-                                YamlDataTypeError::MissingRequiredField,
-                            )
-                        })
-                        .and_then(|value| persons_from_yaml(value, &key, &field_name))?;
-
-                    let role = map
-                        .remove("role")
-                        .ok_or_else(|| {
-                            YamlBibliographyError::new_data_type_src_error(
-                                &key,
-                                &field_name,
-                                YamlDataTypeError::MissingRequiredField,
-                            )
-                        })
-                        .and_then(|t| {
-                            t.into_string().ok_or_else(|| {
-                                YamlBibliographyError::new_data_type_src_error(
-                                    &key,
-                                    &field_name,
-                                    YamlDataTypeError::MismatchedPrimitive,
-                                )
-                            })
-                        })?;
-
-                    let role = PersonRole::from_str(&role.to_lowercase())
-                        .unwrap_or_else(|_| PersonRole::Unknown(role));
-
-                    res.push((persons, role))
                 }
 
                 FieldType::PersonsWithRoles(res)
@@ -772,14 +779,21 @@ impl Into<Yaml> for FormattableString {
         } else {
             let mut hm = LinkedHashMap::new();
 
+            let bt_equal = if let Some(sentence) = self.sentence_case.as_ref() {
+                let sc_formatter = SentenceCase::new();
+                self.title_case.is_none() && &sc_formatter.apply(&self.value) == sentence
+            } else {
+                false
+            };
+
             let same =  self.title_case.clone().unwrap_or_else(|| self.value.clone()) == self.value && self.sentence_case.clone().unwrap_or_else(|| self.value.clone()) == self.value;
             hm.insert(Yaml::String("value".into()), Yaml::String(self.value));
 
-            if self.verbatim || same {
+            if (self.verbatim || same) && !bt_equal {
                 hm.insert(Yaml::String("verbatim".into()), Yaml::Boolean(true));
             }
 
-            if !same {
+            if !same && !bt_equal {
                 if let Some(title) = self.title_case {
                     hm.insert(Yaml::String("title-case".into()), Yaml::String(title));
                 }
@@ -788,7 +802,11 @@ impl Into<Yaml> for FormattableString {
                 }
             }
 
-            Yaml::Hash(hm)
+            if hm.len() == 1 {
+                hm.remove(&Yaml::String("value".into())).unwrap()
+            } else {
+                Yaml::Hash(hm)
+            }
         }
     }
 }
@@ -952,11 +970,19 @@ fn language_into_yaml(lang: LanguageIdentifier) -> Yaml {
 }
 
 fn persons_into_yaml(pers: Vec<Person>) -> Yaml {
-    Yaml::Array(pers.into_iter().map(|p| p.into()).collect())
+    let mut persons: Vec<_> = pers.into_iter().map(|p| p.into()).collect();
+    match persons.len() {
+        1 => persons.pop().unwrap(),
+        _ => Yaml::Array(persons)
+    }
 }
 
 fn affiliateds_into_yaml(pers: Vec<(Vec<Person>, PersonRole)>) -> Yaml {
-    Yaml::Array(pers.into_iter().map(|p| affiliated_into_yaml(p)).collect())
+    let mut persons: Vec<_> = pers.into_iter().map(|p| affiliated_into_yaml(p)).collect();
+    match persons.len() {
+        1 => persons.pop().unwrap(),
+        _ => Yaml::Array(persons)
+    }
 }
 
 impl Into<Yaml> for Entry {

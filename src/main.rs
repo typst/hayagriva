@@ -4,7 +4,9 @@ use std::str::FromStr;
 use std::io;
 use std::io::Write;
 
+#[cfg(feature = "biblatex")]
 use biblatex::Bibliography as TexBibliography;
+
 use hayagriva::input::{bibliography_to_yaml_str, load_yaml_structure};
 use hayagriva::output::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::output::{
@@ -16,6 +18,7 @@ use hayagriva::selectors::parse;
 use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use strum::{EnumVariantNames, VariantNames};
 
+#[cfg(feature = "biblatex")]
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Format {
@@ -24,6 +27,7 @@ pub enum Format {
     Yaml,
 }
 
+#[cfg(feature = "biblatex")]
 impl FromStr for Format {
     type Err = &'static str;
 
@@ -87,15 +91,18 @@ impl FromStr for CitationStyle {
 
 /// Main function of the Hayagriva CLI.
 fn main() {
-    let matches = App::new("Hayagriva CLI")
+    let mut app = App::new("Hayagriva CLI")
         .version(crate_version!())
         .author("The Typst Project Developers <hi@typst.app>")
         .setting(AppSettings::VersionlessSubcommands)
         .about("Output appropriate references and citations for your YAML-encoded bibliography database. Query the database for various source types with selectors.")
         .arg(
             Arg::with_name("INPUT").help("Sets the bibliography to use").required(true).index(1)
-        )
-        .arg(
+        );
+
+    #[cfg(feature = "biblatex")]
+    {
+        app = app.arg(
             Arg::with_name("format")
                 .long("format")
                 .short("f")
@@ -104,7 +111,9 @@ fn main() {
                 .case_insensitive(true)
                 .takes_value(true)
         )
-        .arg(
+    }
+
+    let matches = app.arg(
             Arg::with_name("selector")
                 .long("select")
                 .help("Filter your bibliography using selectors")
@@ -198,6 +207,8 @@ fn main() {
         .get_matches();
 
     let input = matches.value_of("INPUT").unwrap();
+
+    #[cfg(feature = "biblatex")]
     let format = value_t!(matches, "format", Format).unwrap_or_else(|_| {
         if let Some(pos) = input.rfind('.') {
             let file_ext = &input[pos + 1 ..].to_lowercase();
@@ -210,12 +221,34 @@ fn main() {
         }
     });
 
-    let bibliography = match format {
-        Format::Yaml => load_yaml_structure(&read_to_string(input).unwrap()).unwrap(),
-        Format::Biblatex | Format::Bibtex => {
-            let tex = TexBibliography::parse(&read_to_string(input).unwrap()).unwrap();
-            tex.into_iter().map(|e| e.into()).collect()
+    let bibliography = {
+        let input = match read_to_string(input) {
+            Ok(s) => s,
+            Err(e) => {
+                if e.kind() == io::ErrorKind::NotFound {
+                    eprintln!("Bibliography file \"{}\" not found.", input);
+                    exit(5);
+                } else if let Some(os) = e.raw_os_error() {
+                    eprintln!("Error when reading the bibliography file \"{}\": {}", input, os);
+                    exit(6);
+                } else {
+                    eprintln!("Error when reading the bibliography file \"{}\".", input);
+                    exit(6);
+                }
+            }
+        };
+
+        #[cfg(feature = "biblatex")]
+        match format {
+            Format::Yaml => load_yaml_structure(&input).unwrap(),
+            Format::Biblatex | Format::Bibtex => {
+                let tex = TexBibliography::parse(&input).unwrap();
+                tex.into_iter().map(|e| e.into()).collect()
+            }
         }
+
+        #[cfg(not(feature = "biblatex"))]
+        load_yaml_structure(&input).unwrap()
     };
 
     let bib_len = bibliography.len();
@@ -425,11 +458,14 @@ fn main() {
                         );
                         exit(2);
                     } else if e.kind() == io::ErrorKind::PermissionDenied {
-                        eprintln!("The permission to create the file was denied.");
+                        eprintln!("The permission to create the file \"{}\" was denied.", path);
                         exit(3);
+                    } else if let Some(os) = e.raw_os_error() {
+                        eprintln!("Error when creating the file \"{}\": {}", path, os);
+                        exit(4);
                     } else {
-                        eprintln!("Error when creating the file.");
-                        exit(3);
+                        eprintln!("Error when creating the file \"{}\".", path);
+                        exit(4);
                     }
                 } else if let Ok(mut file) = options {
                     file.write_all(bib.as_bytes()).unwrap();

@@ -11,7 +11,7 @@ categories = ["database", "template-engine", "value-formatting"]
 keywords = ["bibtex", "bibliography", "citation", "reference", "literature"]
 
 [features]
-default = ["cli", "biblatex"]
+default = ["biblatex"]
 cli = ["clap"]
 
 [dependencies]
