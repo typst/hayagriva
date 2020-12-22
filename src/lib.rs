@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn apa() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let apa = apa::Apa::new();
         let mut last_entry = None;
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn ieee() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let ieee = ieee::Ieee::new();
         let mut last_entry = None;
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn mla() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let mla = mla::Mla::new();
         let mut last_entry = None;
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn chicago_n() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let chicago = chicago::notes::Note::new(entries.iter());
 
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn chicago_b() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
         let chicago =
             chicago::bibliography::Bibliography::new(chicago::Mode::AuthorDate);
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn selectors() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
 
         select_all!("Article > Proceedings", entries, ["zygos"]);
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn selector_bindings() {
-        let contents = fs::read_to_string("test/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = load_yaml_structure(&contents).unwrap();
 
         select!(
