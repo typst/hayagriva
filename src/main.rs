@@ -1,22 +1,22 @@
 use std::fs::{read_to_string, OpenOptions};
-use std::process::exit;
-use std::str::FromStr;
 use std::io;
 use std::io::Write;
+use std::process::exit;
+use std::str::FromStr;
+
+use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
+use strum::{EnumVariantNames, VariantNames};
 
 #[cfg(feature = "biblatex")]
 use biblatex::Bibliography as TexBibliography;
 
-use hayagriva::input::{bibliography_to_yaml_str, load_yaml_structure};
-use hayagriva::output::chicago::bibliography::Bibliography as ChicagoBib;
-use hayagriva::output::{
+use hayagriva::io::{from_yaml_str, to_yaml_str};
+use hayagriva::selectors::parse;
+use hayagriva::style::chicago::bibliography::Bibliography as ChicagoBib;
+use hayagriva::style::{
     apa, chicago, ieee, mla, Alphabetical, AtomicCitation, AuthorTitle,
     BibliographyFormatter, CitationFormatter,
 };
-use hayagriva::selectors::parse;
-
-use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
-use strum::{EnumVariantNames, VariantNames};
 
 #[cfg(feature = "biblatex")]
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
@@ -109,7 +109,7 @@ fn main() {
                 .help("What input file format to expect")
                 .possible_values(&Format::VARIANTS)
                 .case_insensitive(true)
-                .takes_value(true)
+                .takes_value(true),
         )
     }
 
@@ -182,15 +182,6 @@ fn main() {
         .subcommand(
             SubCommand::with_name("dump")
                 .about("Get a bibliography file with your selected entries. This can also be used to convert a BibTeX file to the YAML database format.")
-                // .arg(
-                //     Arg::with_name("output-format")
-                //         .long("output-format")
-                //         .short("f")
-                //         .help("Set the desired output format")
-                //         .possible_values(&Format::VARIANTS)
-                //         .case_insensitive(true)
-                //         .takes_value(true)
-                // )
                 .arg(
                     Arg::with_name("output")
                         .long("output")
@@ -229,7 +220,10 @@ fn main() {
                     eprintln!("Bibliography file \"{}\" not found.", input);
                     exit(5);
                 } else if let Some(os) = e.raw_os_error() {
-                    eprintln!("Error when reading the bibliography file \"{}\": {}", input, os);
+                    eprintln!(
+                        "Error when reading the bibliography file \"{}\": {}",
+                        input, os
+                    );
                     exit(6);
                 } else {
                     eprintln!("Error when reading the bibliography file \"{}\".", input);
@@ -240,7 +234,7 @@ fn main() {
 
         #[cfg(feature = "biblatex")]
         match format {
-            Format::Yaml => load_yaml_structure(&input).unwrap(),
+            Format::Yaml => from_yaml_str(&input).unwrap(),
             Format::Biblatex | Format::Bibtex => {
                 let tex = TexBibliography::parse(&input).unwrap();
                 tex.into_iter().map(|e| e.into()).collect()
@@ -248,7 +242,7 @@ fn main() {
         }
 
         #[cfg(not(feature = "biblatex"))]
-        load_yaml_structure(&input).unwrap()
+        from_yaml_str(&input).unwrap()
     };
 
     let bib_len = bibliography.len();
@@ -443,7 +437,7 @@ fn main() {
             }
         }
         ("dump", Some(sub_matches)) => {
-            let bib = bibliography_to_yaml_str(bibliography).unwrap();
+            let bib = to_yaml_str(bibliography).unwrap();
             if let Some(path) = sub_matches.value_of("output") {
                 let options = if sub_matches.is_present("force") {
                     OpenOptions::new().write(true).create(true).truncate(true).open(path)
@@ -458,7 +452,10 @@ fn main() {
                         );
                         exit(2);
                     } else if e.kind() == io::ErrorKind::PermissionDenied {
-                        eprintln!("The permission to create the file \"{}\" was denied.", path);
+                        eprintln!(
+                            "The permission to create the file \"{}\" was denied.",
+                            path
+                        );
                         exit(3);
                     } else if let Some(os) = e.raw_os_error() {
                         eprintln!("Error when creating the file \"{}\": {}", path, os);

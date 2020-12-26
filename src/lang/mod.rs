@@ -1,15 +1,13 @@
 //! Language-dependant string transformations.
 
-use super::types::{FormattableString, FormattedString, FormattedTitle, Title};
-use usize;
-
 pub(crate) mod en;
 
-/// Structs implementing the `CaseTransformer` trait offer a method to
-/// convert a string slice to a well-defined upper-/lowercase scheme.
-pub trait CaseTransformer {
+use super::types::{FormattableString, FormattedString, FormattedTitle, Title};
+
+/// Convert a string to a well-defined lower/uppercase scheme.
+pub trait Case {
     /// Apply the case transformation to the argument.
-    fn apply(&self, title: &str) -> String;
+    fn apply(&self, string: &str) -> String;
 }
 
 /// Rules for the title case transformation.
@@ -61,7 +59,7 @@ impl TitleCase {
     }
 }
 
-impl CaseTransformer for TitleCase {
+impl Case for TitleCase {
     /// Put the `title` argument into title case (every word starts with a capital
     /// letter, except for some prepositions...) as specified by `&self`.
     fn apply(&self, title: &str) -> String {
@@ -244,7 +242,7 @@ impl SentenceCase {
     }
 }
 
-impl CaseTransformer for SentenceCase {
+impl Case for SentenceCase {
     /// Put the `title` argument into sentence case (capitalize only after
     /// sentence ends or at the start, as well as (if the whitelist is used)
     /// select exceptions).
@@ -421,8 +419,8 @@ impl FormattableString {
     /// and the user did not override.
     pub fn format(
         self,
-        title: Option<&dyn CaseTransformer>,
-        sentence: Option<&dyn CaseTransformer>,
+        title: Option<&dyn Case>,
+        sentence: Option<&dyn Case>,
     ) -> FormattedString {
         let (sentence_case, title_case) = if self.verbatim {
             (
@@ -463,8 +461,8 @@ impl Title {
     /// and the user did not override.
     pub fn format(
         self,
-        title: Option<&dyn CaseTransformer>,
-        sentence: Option<&dyn CaseTransformer>,
+        title: Option<&dyn Case>,
+        sentence: Option<&dyn Case>,
     ) -> FormattedTitle {
         FormattedTitle {
             value: self.value.format(title, sentence),
@@ -476,7 +474,7 @@ impl Title {
 
 #[cfg(test)]
 mod tests {
-    use super::{CaseTransformer, SentenceCase, TitleCase};
+    use super::{Case, SentenceCase, TitleCase};
 
     #[test]
     fn title_case_last_word() {

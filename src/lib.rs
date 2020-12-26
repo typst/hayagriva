@@ -7,21 +7,16 @@
 
 #![warn(missing_docs)]
 
-use std::collections::HashMap;
-
-pub mod input;
 #[cfg(feature = "biblatex")]
 mod interop;
+pub mod io;
 pub mod lang;
-pub mod output;
 pub mod selectors;
+pub mod style;
 pub mod types;
 
-use lang::CaseTransformer;
-use types::{
-    Date, Duration, EntryType, FormattableString, FormattedString, FormattedTitle,
-    NumOrStr, Person, PersonRole, QualifiedUrl, Title,
-};
+
+use std::collections::HashMap;
 
 use paste::paste;
 use std::convert::TryFrom;
@@ -29,10 +24,17 @@ use strum::Display;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
-/// The field type enum variants describe what data types can possibly be held
-/// by the various content items of an [`Entry`].
+use lang::Case;
+use types::{
+    Date, Duration, EntryType, FormattableString, FormattedString, FormattedTitle,
+    NumOrStr, Person, PersonRole, QualifiedUrl, Title,
+};
+
+/// The data types that can possibly be held by the various fields of an
+/// [`Entry`].
 #[derive(Clone, Debug, Display, PartialEq)]
-pub enum FieldType {
+#[strum(serialize_all = "lowercase")]
+pub enum Value {
     /// A [Title] containing a canonical value and optionally translations and
     /// shorthands, all of which are formattable.
     Title(Title),
@@ -76,7 +78,7 @@ pub struct Entry {
     /// The kind of media this Entry represents.
     entry_type: EntryType,
     /// Information about the Entry.
-    pub(crate) content: HashMap<String, FieldType>,
+    pub(crate) content: HashMap<String, Value>,
 }
 
 impl Entry {
@@ -99,50 +101,57 @@ impl Entry {
         &self.entry_type
     }
 
-    /// Get the unconverted value of a certain key.
-    pub fn get(&self, key: &str) -> Option<&FieldType> {
+    /// Get the unconverted value of a certain field.
+    pub fn get(&self, key: &str) -> Option<&Value> {
         self.content.get(key)
     }
 
-    /// Set [any data type](FieldType) as value for a given key.
-    pub fn set(&mut self, key: String, value: FieldType) -> Result<(), EntrySetError> {
-        let valid = match key.as_ref() {
-            "parent" => matches!(value, FieldType::Entries(_)),
-            "title" => matches!(value, FieldType::Title(_)),
+    /// Set [any data type](Value) as value for a given field.
+    pub fn set(
+        &mut self,
+        field: impl Into<String>,
+        value: Value,
+    ) -> Result<(), SetFieldError> {
+        let field = field.into();
+        let valid = match field.as_ref() {
+            "parent" => matches!(value, Value::Entries(_)),
+            "title" => matches!(value, Value::Title(_)),
             "location" | "publisher" | "archive" | "archive-location" => {
-                matches!(value, FieldType::FormattableString(_))
+                matches!(value, Value::FormattableString(_))
             }
-            "author" | "editor" => matches!(value, FieldType::Persons(_)),
-            "date" => matches!(value, FieldType::Date(_)),
-            "affiliated" => matches!(value, FieldType::PersonsWithRoles(_)),
+            "author" | "editor" => matches!(value, Value::Persons(_)),
+            "date" => matches!(value, Value::Date(_)),
+            "affiliated" => matches!(value, Value::PersonsWithRoles(_)),
             "organization" | "issn" | "isbn" | "doi" | "serial-number" | "note" => {
-                matches!(value, FieldType::Text(_))
+                matches!(value, Value::Text(_))
             }
-            "issue" | "edition" => matches!(value, FieldType::IntegerOrText(_)),
-            "volume" | "page-range" => matches!(value, FieldType::Range(_)),
-            "volume-total" | "page-total" => matches!(value, FieldType::Integer(_)),
-            "time-range" => matches!(value, FieldType::TimeRange(_)),
-            "runtime" => matches!(value, FieldType::Duration(_)),
-            "url" => matches!(value, FieldType::Url(_)),
-            "language" => matches!(value, FieldType::Language(_)),
+            "issue" | "edition" => matches!(value, Value::IntegerOrText(_)),
+            "volume" | "page-range" => matches!(value, Value::Range(_)),
+            "volume-total" | "page-total" => matches!(value, Value::Integer(_)),
+            "time-range" => matches!(value, Value::TimeRange(_)),
+            "runtime" => matches!(value, Value::Duration(_)),
+            "url" => matches!(value, Value::Url(_)),
+            "language" => matches!(value, Value::Language(_)),
             _ => true,
         };
 
         if valid {
-            self.content.insert(key, value);
+            self.content.insert(field, value);
             Ok(())
         } else {
-            Err(EntrySetError::WrongType(key, value))
+            Err(SetFieldError { field, value })
         }
     }
 }
 
-/// Error which occurs if the value of an entry field could not be retrieved.
+/// The error when a value is invalid for a field.
 #[derive(Clone, Error, Debug, PartialEq)]
-pub enum EntrySetError {
-    /// The [field type enum](FieldType) does not match the expected variant(s).
-    #[error("Type `{1}` not allowed in field `{0}`")]
-    WrongType(String, FieldType),
+#[error("type `{value}` is not allowed in field `{field}`")]
+pub struct SetFieldError {
+    /// The field for which the value is invalid.
+    pub field: String,
+    /// The invalid value.
+    pub value: Value,
 }
 
 macro_rules! fields {
@@ -182,8 +191,8 @@ macro_rules! fields {
                 #[doc = "Get, parse, and format the `" $field_name "` field."]
                 pub fn [<$name _fmt>](
                     &self,
-                    title: Option<&dyn CaseTransformer>,
-                    sentence: Option<&dyn CaseTransformer>,
+                    title: Option<&dyn Case>,
+                    sentence: Option<&dyn Case>,
                 ) -> Option<$dst_type> {
                     self.get($field_name)
                         .map(|item| <$src_type>::try_from(item.clone()).unwrap().format(title, sentence))
@@ -226,7 +235,7 @@ macro_rules! fields {
         paste! {
             #[doc = "Set a value in the `" $field_name "` field."]
             pub fn [<set_ $name>](&mut self, item: $other_type) {
-                self.set($field_name.to_string(), FieldType::from(item)).unwrap();
+                self.content.insert($field_name.to_string(), Value::from(item));
             }
         }
     };
@@ -300,7 +309,7 @@ impl Entry {
         if let Some(parents) = self
             .content
             .get_mut("parent")
-            .and_then(|f| if let FieldType::Entries(e) = f { Some(e) } else { None })
+            .and_then(|f| if let Value::Entries(e) = f { Some(e) } else { None })
         {
             parents.push(entry);
         } else {
@@ -311,7 +320,7 @@ impl Entry {
     /// Adds affiliated persons. The list will be created if there is none.
     pub fn add_affiliated_persons(&mut self, new_persons: (Vec<Person>, PersonRole)) {
         if let Some(affiliated) = self.content.get_mut("affiliated").and_then(|f| {
-            if let FieldType::PersonsWithRoles(e) = f {
+            if let Value::PersonsWithRoles(e) = f {
                 Some(e)
             } else {
                 None
@@ -327,7 +336,7 @@ impl Entry {
     /// list will be created if there is none.
     pub fn parents_mut(&mut self) -> Option<&mut [Entry]> {
         self.content.get_mut("parent").and_then(|f| {
-            if let FieldType::Entries(e) = f {
+            if let Value::Entries(e) = f {
                 Some(e.as_mut_slice())
             } else {
                 None
@@ -351,7 +360,7 @@ impl Entry {
     pub fn page_total(&self) -> Option<i64> {
         self.get("page-total")
             .map(|ft| ft.clone())
-            .or_else(|| self.page_range().map(|r| FieldType::from(r.end - r.start)))
+            .or_else(|| self.page_range().map(|r| Value::from(r.end - r.start)))
             .map(|item| i64::try_from(item).unwrap())
     }
 
@@ -363,7 +372,7 @@ impl Entry {
     pub fn runtime(&self) -> Option<Duration> {
         self.get("runtime")
             .map(|ft| ft.clone())
-            .or_else(|| self.time_range().map(|r| FieldType::from(r.end - r.start)))
+            .or_else(|| self.time_range().map(|r| Value::from(r.end - r.start)))
             .map(|item| Duration::try_from(item).unwrap())
     }
 
@@ -388,15 +397,17 @@ impl Entry {
 
 #[cfg(test)]
 mod tests {
-    use crate::input::load_yaml_structure;
-    use crate::output::{apa, chicago, ieee, mla, AtomicCitation, BibliographyFormatter};
     use crate::selectors::parse;
     use std::fs;
+
+    use super::*;
+    use crate::io::from_yaml_str;
+    use crate::style::{apa, chicago, ieee, mla, AtomicCitation, BibliographyFormatter};
 
     #[test]
     fn apa() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
+        let entries = from_yaml_str(&contents).unwrap();
         let apa = apa::Apa::new();
         let mut last_entry = None;
 
@@ -410,7 +421,7 @@ mod tests {
     #[test]
     fn ieee() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
+        let entries = from_yaml_str(&contents).unwrap();
         let ieee = ieee::Ieee::new();
         let mut last_entry = None;
 
@@ -424,7 +435,7 @@ mod tests {
     #[test]
     fn mla() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
+        let entries = from_yaml_str(&contents).unwrap();
         let mla = mla::Mla::new();
         let mut last_entry = None;
 
@@ -438,7 +449,7 @@ mod tests {
     #[test]
     fn chicago_n() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
+        let entries = from_yaml_str(&contents).unwrap();
         let chicago = chicago::notes::Note::new(entries.iter());
 
         for entry in &entries {
@@ -453,14 +464,23 @@ mod tests {
     #[test]
     fn chicago_b() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
-        let chicago =
-            chicago::bibliography::Bibliography::new(chicago::Mode::AuthorDate);
+        let entries = from_yaml_str(&contents).unwrap();
+        let chicago = chicago::bibliography::Bibliography::new(chicago::Mode::AuthorDate);
 
         for entry in &entries {
             let refs = chicago.format(&entry, None);
             println!("{}", refs.print_ansi_vt100());
         }
+    }
+
+    #[test]
+    fn test_entry_set() {
+        let mut entry = Entry::new("key", EntryType::Misc);
+        let err = entry.set("author", Value::Integer(1)).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "type `integer` is not allowed in field `author`",
+        )
     }
 
     macro_rules! select_all {
@@ -497,16 +517,16 @@ mod tests {
     #[test]
     fn selectors() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
+        let entries = from_yaml_str(&contents).unwrap();
 
-        select_all!("Article > Proceedings", entries, ["zygos"]);
-        select_all!("Article > (Periodical | Newspaper)", entries, [
+        select_all!("article > proceedings", entries, ["zygos"]);
+        select_all!("article > (periodical | newspaper)", entries, [
             "omarova-libra",
             "kinetics",
             "house",
             "swedish",
         ]);
-        select_all!("(Chapter | Anthos) > (Anthology | Book)", entries, [
+        select_all!("(chapter | anthos) > (anthology | book)", entries, [
             "harry", "gedanken"
         ]);
         select_all!("*[url]", entries, [
@@ -551,10 +571,10 @@ mod tests {
     #[test]
     fn selector_bindings() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = load_yaml_structure(&contents).unwrap();
+        let entries = from_yaml_str(&contents).unwrap();
 
         select!(
-            "a:Article > (b:Conference & c:(Video|Blog|Web))",
+            "a:article > (b:conference & c:(video|blog|web))",
             entries >> "wwdc-network",
             ["a", "b", "c"]
         );

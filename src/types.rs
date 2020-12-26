@@ -6,8 +6,6 @@ use std::fmt::{Display, Formatter};
 use std::ops::Range;
 use std::ops::{Add, Sub};
 
-use super::{Entry, FieldType};
-
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -15,6 +13,8 @@ use strum::{Display, EnumString};
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};
+
+use super::{Entry, Value};
 
 #[rustfmt::skip]
 lazy_static! {
@@ -175,7 +175,7 @@ impl EntryType {
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
 #[derive(Clone, Debug, Display, EnumString, PartialEq, Eq)]
-#[strum(serialize_all = "lowercase")]
+#[strum(serialize_all = "kebab_case")]
 pub enum PersonRole {
     /// Translated the work from a foreign language to the cited edition.
     Translator,
@@ -774,8 +774,8 @@ pub struct Duration {
 #[derive(Clone, Error, Debug)]
 pub enum DurationError {
     /// The string is malformed.
-    #[error("string does not match duration regex")]
-    NoMatch,
+    #[error("duration string malformed")]
+    Malformed,
     /// The value is out of bounds when another, subsequent value is present (i.e. `01:61:48`).
     #[error("out of bounds value when greater order value is specified")]
     TooLarge,
@@ -814,8 +814,9 @@ impl Duration {
 
     /// Tries to create a duration from a string.
     pub fn from_str(source: &str) -> Result<Self, DurationError> {
-        let capt =
-            DURATION_REGEX.captures(source.trim()).ok_or(DurationError::NoMatch)?;
+        let capt = DURATION_REGEX
+            .captures(source.trim())
+            .ok_or(DurationError::Malformed)?;
 
         let seconds: u8 = capt.name("s").unwrap().as_str().parse().unwrap();
         let mut minutes: u32 = capt.name("m").unwrap().as_str().parse().unwrap();
@@ -861,7 +862,7 @@ impl Duration {
     pub fn range_from_str(source: &str) -> Result<std::ops::Range<Self>, DurationError> {
         let caps = DURATION_RANGE_REGEX
             .captures(source.trim())
-            .ok_or(DurationError::NoMatch)?;
+            .ok_or(DurationError::Malformed)?;
 
         let start = Self::from_str(caps.name("s").expect("start is mandatory").as_str())?;
         let end = caps
@@ -906,81 +907,81 @@ impl Add for Duration {
     }
 }
 
-/// Could not cast to the desired field type.
+/// Could not cast to the desired value.
 #[derive(Error, Debug)]
-#[error("Got wrong type `{0}`.")]
-pub struct EntryTypeCastError(FieldType);
+#[error("wrong type: `{0}`")]
+pub struct TypeError(Value);
 
-macro_rules! try_from_fieldtype {
+macro_rules! impl_try_from_value {
     ($variant:ident, $target:ty $(,)*) => {
-        try_from_fieldtype!(noref $variant, $target);
+        impl_try_from_value!(noref $variant, $target);
 
-        impl<'s> TryFrom<&'s FieldType> for &'s $target {
-            type Error = EntryTypeCastError;
+        impl<'s> TryFrom<&'s Value> for &'s $target {
+            type Error = TypeError;
 
-            fn try_from(value: &'s FieldType) -> Result<Self, Self::Error> {
+            fn try_from(value: &'s Value) -> Result<Self, Self::Error> {
                 match value {
-                    FieldType::$variant(f) => Ok(f),
-                    _ => Err(EntryTypeCastError(value.clone())),
+                    Value::$variant(f) => Ok(f),
+                    _ => Err(TypeError(value.clone())),
                 }
             }
         }
     };
 
     (noref $variant:ident, $target:ty $(,)*) => {
-        impl TryFrom<FieldType> for $target {
-            type Error = EntryTypeCastError;
+        impl TryFrom<Value> for $target {
+            type Error = TypeError;
 
-            fn try_from(value: FieldType) -> Result<Self, Self::Error> {
+            fn try_from(value: Value) -> Result<Self, Self::Error> {
                 match value {
-                    FieldType::$variant(f) => Ok(f),
-                    _ => Err(EntryTypeCastError(value)),
+                    Value::$variant(f) => Ok(f),
+                    _ => Err(TypeError(value)),
                 }
             }
         }
 
-        impl From<$target> for FieldType {
+        impl From<$target> for Value {
             fn from(value: $target) -> Self {
-                FieldType::$variant(value)
+                Value::$variant(value)
             }
         }
     };
 
     ($variant:ident, $target:ty, $ref_target:ty $(,)*) => {
-        try_from_fieldtype!(noref $variant, $target);
+        impl_try_from_value!(noref $variant, $target);
 
-        impl<'s> TryFrom<&'s FieldType> for &'s $ref_target {
-            type Error = EntryTypeCastError;
+        impl<'s> TryFrom<&'s Value> for &'s $ref_target {
+            type Error = TypeError;
 
-            fn try_from(value: &'s FieldType) -> Result<Self, Self::Error> {
+            fn try_from(value: &'s Value) -> Result<Self, Self::Error> {
                 match value {
-                    FieldType::$variant(f) => Ok(f),
-                    _ => Err(EntryTypeCastError(value.clone())),
+                    Value::$variant(f) => Ok(f),
+                    _ => Err(TypeError(value.clone())),
                 }
             }
         }
     }
 }
 
-try_from_fieldtype!(Title, Title);
-try_from_fieldtype!(FormattableString, FormattableString);
-try_from_fieldtype!(FormattedString, FormattedString);
-try_from_fieldtype!(Text, String, str);
-try_from_fieldtype!(Integer, i64);
-try_from_fieldtype!(Date, Date);
-try_from_fieldtype!(Persons, Vec<Person>, [Person]);
-try_from_fieldtype!(
+impl_try_from_value!(Title, Title);
+impl_try_from_value!(FormattableString, FormattableString);
+impl_try_from_value!(FormattedString, FormattedString);
+impl_try_from_value!(Text, String, str);
+impl_try_from_value!(Integer, i64);
+impl_try_from_value!(Date, Date);
+impl_try_from_value!(Persons, Vec<Person>, [Person]);
+impl_try_from_value!(
     PersonsWithRoles,
     Vec<(Vec<Person>, PersonRole)>,
     [(Vec<Person>, PersonRole)]
 );
-try_from_fieldtype!(IntegerOrText, NumOrStr);
-try_from_fieldtype!(Range, std::ops::Range<i64>);
-try_from_fieldtype!(Duration, Duration);
-try_from_fieldtype!(TimeRange, std::ops::Range<Duration>);
-try_from_fieldtype!(Url, QualifiedUrl);
-try_from_fieldtype!(Language, unic_langid::LanguageIdentifier);
-try_from_fieldtype!(Entries, Vec<Entry>, [Entry]);
+impl_try_from_value!(IntegerOrText, NumOrStr);
+impl_try_from_value!(Range, std::ops::Range<i64>);
+impl_try_from_value!(Duration, Duration);
+impl_try_from_value!(TimeRange, std::ops::Range<Duration>);
+impl_try_from_value!(Url, QualifiedUrl);
+impl_try_from_value!(Language, unic_langid::LanguageIdentifier);
+impl_try_from_value!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {

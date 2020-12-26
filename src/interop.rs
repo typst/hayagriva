@@ -1,15 +1,15 @@
 //! Provides conversion methods for BibLaTeX.
 
-use super::types::{
-    Date, EntryType, FormattableString, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
-};
-use super::Entry;
 use biblatex::{
     Chunks, ChunksExt, Date as TexDate, DateValue, Edition, EditorType,
     Entry as TexEntry, EntryType as TexKind, Person as TexPerson,
 };
-use std::convert::Into;
 use url::Url;
+
+use super::types::{
+    Date, EntryType, FormattableString, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
+};
+use super::Entry;
 
 macro_rules! tex_kinds {
     ($self:expr, $mv_attr:expr, [$({$kind:pat, $new_kind:expr, $top_level:expr, $expand_mv:expr}),* $(,)*] $(,)*) => {
