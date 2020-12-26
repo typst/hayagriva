@@ -15,6 +15,7 @@ Hayagriva is a tool that can help your or your apps deal with literature and oth
 Hayagriva can be used both as a library and as a Command Line Interface (CLI). Skip to the [section "Usage"](#usage) for more information about usage in your application or to the [section "Installation"](#installation) to learn about how to install and use Hayagriva on your terminal.
 
 ## Usage
+
 Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
@@ -162,6 +163,7 @@ hayagriva literature.bib dump -o converted.yml
 The converted file will instead be printed to the terminal if you omit the `-o` flag.
 
 ## Supported styles
+
 - Institute of Electrical and Electronics Engineers (IEEE)
     - References
     - Numerical citations (not available in CLI)
@@ -175,6 +177,7 @@ The converted file will instead be printed to the terminal if you omit the `-o` 
     - Author Title
 
 ## Contributing
+
 We are very happy to receive your bugs and feature requests in the Issues tab. We would be very happy to accept PRs for bug fixes, minor refactorings, features that were requested in the issues and greenlit by us, as well as the planned features listed below:
 
 - More citation and reference styles (especially styles used in the 'hard' sciences would be incredibly appreciated)

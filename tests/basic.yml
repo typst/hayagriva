@@ -187,7 +187,7 @@ plaque:
     parent:
         type: Artwork
         date: 1967
-        author: Max Jacoby
+        author: Jacoby, Max
         parent:
             type: Anthology
             title: Bleibtreustraße

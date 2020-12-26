@@ -166,6 +166,7 @@ impl EntryType {
             Self::Legislation => Self::Anthology,
             Self::Tweet => Self::Tweet,
             Self::Video => Self::Video,
+            Self::Audio => Self::Audio,
             _ => Self::Misc,
         }
     }
