@@ -4,31 +4,31 @@
 //! ["How to Cite References: The IEEE Citation Style"](https://ieee-dataport.org/sites/default/files/analysis/27/IEEE%20Citation%20Guidelines.pdf).
 
 mod abbreviations;
+
+use isolang::Language;
+
 use super::{
     format_range, name_list_straight, push_comma_quote_aware, BibliographyFormatter,
     DisplayString, Formatting,
 };
 use crate::lang::{en, SentenceCase, TitleCase};
-use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
 use crate::types::{Date, NumOrStr, PersonRole};
-use crate::{attrs, sel, Entry};
-use isolang::Language;
+use crate::Entry;
 
 /// Generator for the IEEE reference list.
 #[derive(Clone, Debug)]
 pub struct Ieee {
-    sc_formatter: SentenceCase,
-    tc_formatter: TitleCase,
+    sentence_case: SentenceCase,
+    title_case: TitleCase,
     et_al_threshold: Option<u32>,
 }
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
-    let section = sel!(sel!(alt Id(Chapter), Id(Scene), Id(Web)) => Bind("p", Wc()));
-    let anthology = sel!(Id(Anthos) => Bind("p", Id(Anthology)));
-    let entry_spec =
-        sel!(Id(Entry) => Bind("p", sel!(alt Id(Reference), Id(Repository))));
-    let proceedings = sel!(Wc() => Bind("p", sel!(alt Id(Conference), Id(Proceedings))));
+    let section = select!((Chapter | Scene | Web) > ("p":*));
+    let anthology = select!(Anthos > ("p": Anthology));
+    let entry_spec = select!(Entry > ("p":(Reference | Repository)));
+    let proceedings = select!(* > ("p":(Conference | Proceedings)));
 
     section
         .apply(entry)
@@ -41,11 +41,11 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
 impl Ieee {
     /// Creates a new IEEE bibliography generator.
     pub fn new() -> Self {
-        let mut tc_formatter = TitleCase::default();
-        tc_formatter.always_capitalize_min_len = Some(4);
+        let mut title_case = TitleCase::default();
+        title_case.always_capitalize_min_len = Some(4);
         Self {
-            sc_formatter: SentenceCase::default(),
-            tc_formatter,
+            sentence_case: SentenceCase::default(),
+            title_case,
             et_al_threshold: Some(6),
         }
     }
@@ -98,10 +98,10 @@ impl Ieee {
         let mut names = None;
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
-            let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
+            let tv_series = select!((Video["issue", "volume"]) > Video);
             let dirs = entry.affiliated_filtered(PersonRole::Director);
 
-            if tv_series.apply(entry).is_some() {
+            if tv_series.matches(entry) {
                 // TV episode
                 let mut dir_name_list_straight = name_list_straight(&dirs)
                     .into_iter()
@@ -182,8 +182,8 @@ impl Ieee {
         let mut res = DisplayString::new();
 
         if entry != canonical {
-            let entry_title = entry.title_fmt(None, Some(&self.sc_formatter));
-            let canon_title = canonical.title_fmt(Some(&self.tc_formatter), None);
+            let entry_title = entry.title_fmt(None, Some(&self.sentence_case));
+            let canon_title = canonical.title_fmt(Some(&self.title_case), None);
 
             if let Some(et) = entry_title {
                 if canonical.entry_type == Conference {
@@ -224,13 +224,11 @@ impl Ieee {
                     res.commit_formats();
 
                     // Do the series parentheses thing here
-                    let spec =
-                        sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")));
+                    let spec = select!(Anthology > ("p":(Anthology["title"])));
                     if let Some(mut bindings) = spec.apply(canonical) {
                         let parenth_anth = bindings.remove("p").unwrap();
-                        let parenth_title = parenth_anth
-                            .title_fmt(Some(&self.tc_formatter), None)
-                            .unwrap();
+                        let parenth_title =
+                            parenth_anth.title_fmt(Some(&self.title_case), None).unwrap();
                         res += " (";
                         res += &parenth_title.value.title_case;
 
@@ -243,11 +241,12 @@ impl Ieee {
                     }
 
                     // And the conference series thing as well
-                    let spec = sel!(Id(Proceedings) => Bind("p", sel!(alt Id(Proceedings), Id(Anthology), Id(Misc))));
+                    let spec =
+                        select!(Proceedings > ("p":(Proceedings | Anthology | Misc)));
                     if let Some(mut bindings) = spec.apply(canonical) {
                         let par_conf = bindings.remove("p").unwrap();
                         if let Some(parenth_title) =
-                            par_conf.title_fmt(Some(&self.tc_formatter), None)
+                            par_conf.title_fmt(Some(&self.title_case), None)
                         {
                             res += " in ";
                             res += &parenth_title.value.title_case;
@@ -273,7 +272,7 @@ impl Ieee {
                 res.add_if_some(entry.serial_number(), None, None);
             }
 
-            if let Some(title) = entry.title_fmt(Some(&self.tc_formatter), None) {
+            if let Some(title) = entry.title_fmt(Some(&self.title_case), None) {
                 if !res.is_empty() {
                     res += ", ";
                 }
@@ -282,7 +281,7 @@ impl Ieee {
             }
             res.commit_formats();
         } else {
-            if let Some(title) = entry.title_fmt(None, Some(&self.sc_formatter)) {
+            if let Some(title) = entry.title_fmt(None, Some(&self.sentence_case)) {
                 res += "“";
                 res += &title.value.sentence_case;
                 res += ",”";
@@ -300,9 +299,9 @@ impl Ieee {
         section: Option<u32>,
     ) -> Vec<String> {
         let mut res = vec![];
-        let preprint = sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Bind("p", Id(Repository))).apply(entry);
-        let web_parented =
-            sel!(Wc() => Bind("p", sel!(alt Id(Blog), Id(Web)))).apply(entry);
+        let preprint =
+            select!((Article | Book | Anthos) > ("p": Repository)).apply(entry);
+        let web_parented = select!(* > ("p":(Blog | Web))).apply(entry);
 
         match (entry.entry_type, canonical.entry_type) {
             (_, Conference) | (_, Proceedings) => {
@@ -794,7 +793,7 @@ impl BibliographyFormatter for Ieee {
     fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         let mut parent = entry.parents().and_then(|v| v.first());
         let mut sn_stack = vec![];
-        while entry.title().is_none() && sel!(alt Id(Chapter), Id(Scene)).matches(entry) {
+        while entry.title().is_none() && select!(Chapter | Scene).matches(entry) {
             if let Some(sn) = entry.serial_number() {
                 sn_stack.push(sn);
             }

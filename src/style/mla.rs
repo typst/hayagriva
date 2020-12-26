@@ -1,20 +1,19 @@
 //! Style for entries in the "Works Cited" listing as of the 8th edition
 //! of the MLA Handbook.
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use super::{
     abbreviate_publisher, format_range, offset_format_range, BibliographyFormatter,
     DisplayString, Formatting,
 };
 use crate::lang::{en, TitleCase};
-use crate::selectors::{Bind, Id, Neg, Wc};
-use crate::types::EntryType::*;
-use crate::types::{Date, NumOrStr, Person, PersonRole};
-use crate::{attrs, sel, Entry};
-use unicode_segmentation::UnicodeSegmentation;
+use crate::types::{Date, EntryType::*, NumOrStr, Person, PersonRole};
+use crate::Entry;
 
 /// Generates the "Works Cited" entries
 pub struct Mla {
-    tc_formatter: TitleCase,
+    title_case: TitleCase,
     /// Forces location element to appear whenever given.
     /// Otherwise, location will only appear for physical items.
     pub always_use_location: bool,
@@ -173,11 +172,11 @@ fn is_religious(s: &str) -> bool {
 impl Mla {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
-        let mut tc_formatter = TitleCase::new();
-        tc_formatter.always_capitalize_last_word = false;
+        let mut title_case = TitleCase::new();
+        title_case.always_capitalize_last_word = false;
 
         Self {
-            tc_formatter,
+            title_case,
             always_use_location: false,
             always_print_date: false,
         }
@@ -202,12 +201,7 @@ impl Mla {
         ];
 
         kinds.contains(&entry.entry_type)
-            || sel!(alt
-                attrs!(Wc(), "editor"),
-                attrs!(Wc(), "publisher"),
-                sel!(Wc() => Neg(Wc())),
-            )
-            .matches(entry)
+            || select!((*["editor"]) | (*["publisher"]) | (* > (!*))).matches(entry)
     }
 
     fn and_list(&self, names: Vec<String>, et_al: bool) -> String {
@@ -271,7 +265,7 @@ impl Mla {
         while entry.authors_fallible().is_none()
             && entry.affiliated_persons().is_none()
             && entry.editors().is_none()
-            && sel!(alt Id(Chapter), Id(Scene)).matches(entry)
+            && select!(Chapter | Scene).matches(entry)
         {
             if let Some(p) = entry.parents().and_then(|ps| ps.get(0)) {
                 entry = &p;
@@ -380,8 +374,7 @@ impl Mla {
         let mut res = DisplayString::new();
 
         if use_quotes {
-            if let Some(mut bindings) = sel!(Id(Chapter) => Bind("a", Wc())).apply(entry)
-            {
+            if let Some(mut bindings) = select!(Chapter > ("a":*)).apply(entry) {
                 let temp = bindings.remove("a").unwrap();
 
                 if ["preface", "introduction", "foreword", "afterword"]
@@ -392,7 +385,7 @@ impl Mla {
                     .is_some()
                 {
                     res += &entry
-                        .title_fmt(Some(&self.tc_formatter), None)
+                        .title_fmt(Some(&self.title_case), None)
                         .unwrap()
                         .value
                         .title_case;
@@ -402,9 +395,9 @@ impl Mla {
             }
         }
 
-        if let Some(title) = entry.title_fmt(Some(&self.tc_formatter), None) {
+        if let Some(title) = entry.title_fmt(Some(&self.title_case), None) {
             if sc
-                && !sel!(alt Id(Legislation), Id(Conference)).matches(entry)
+                && !select!(Legislation | Conference).matches(entry)
                 && !is_religious(&title.value.title_case)
             {
                 res.start_format(Formatting::Italic)
@@ -438,8 +431,7 @@ impl Mla {
     ) -> (Vec<ContainerInfo>, bool) {
         let mut containers: Vec<ContainerInfo> = vec![];
         let series: Option<&Entry> =
-            sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))
-                .bound_element(entry, "p");
+            select!(Anthology > ("p":(Anthology["title"]))).bound(entry, "p");
 
         if entry != root || Mla::own_container(entry) {
             let mut container = ContainerInfo::new();
@@ -530,7 +522,7 @@ impl Mla {
 
             // Number
             let mut number = String::new();
-            let tv = sel!(Id(Video) => Wc()).matches(entry);
+            let tv = select!(Video > *).matches(entry);
             if let Some(vols) = entry.volume() {
                 number += &if tv {
                     format_range("season", "seasons", &vols)
@@ -554,8 +546,7 @@ impl Mla {
             container.number = number;
 
             // Publisher
-            if !sel!(alt sel!(Id(Manuscript) => Neg(Wc())), Id(Periodical)).matches(entry)
-            {
+            if !select!((Manuscript > (!*)) | Periodical).matches(entry) {
                 if let Some(publisher) =
                     entry.publisher().or_else(|| entry.organization())
                 {
@@ -573,7 +564,8 @@ impl Mla {
 
             // Location
             let mut location: Vec<DisplayString> = vec![];
-            let physical = sel!(alt Id(Scene), Id(Artwork), Id(Case), Id(Conference), Id(Exhibition)).matches(entry);
+            let physical =
+                select!(Scene | Artwork | Case | Conference | Exhibition).matches(entry);
             if physical || self.always_use_location || entry.publisher().is_none() {
                 if let Some(loc) = entry.location() {
                     location.push(DisplayString::from_string(loc));
@@ -611,10 +603,7 @@ impl Mla {
                 has_url = true;
             } else if let Some(qurl) = entry.url() {
                 let vdate = qurl.visit_date.is_some()
-                    && sel!(alt
-                        Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")),
-                        sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))
-                    )
+                    && select!(Blog | Web | Misc | (!(*["date"])) | (* > (Blog | Web | Misc)))
                     .matches(entry);
 
                 if vdate {
@@ -646,7 +635,7 @@ impl Mla {
             if let Some(series) = series {
                 supplemental.push(
                     series
-                        .title_fmt(Some(&self.tc_formatter), None)
+                        .title_fmt(Some(&self.title_case), None)
                         .unwrap()
                         .value
                         .title_case,
@@ -680,7 +669,13 @@ impl Mla {
                     }
                     lc.location += &format!("doi:{}", doi);
                 } else if let Some(qurl) = entry.any_url() {
-                    let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
+                    let vdate = qurl.visit_date.is_some()
+                        && select!(
+                            Blog | Web | Misc |
+                            (!(*["date"])) |
+                            (* > (Blog | Web | Misc))
+                        )
+                        .matches(entry);
                     if vdate {
                         if !lc.optionals.is_empty() {
                             lc.optionals += ". ";
@@ -710,7 +705,7 @@ impl Mla {
                 nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += qurl.value.as_str();
                 nc.location.commit_formats();
-                let vdate = qurl.visit_date.is_some() && sel!(alt Id(Blog), Id(Web), Id(Misc), Neg(attrs!(Wc(), "date")), sel!(Wc() => sel!(alt Id(Blog), Id(Web), Id(Misc)))).matches(entry);
+                let vdate = qurl.visit_date.is_some() && select!(Blog | Web | Misc | (!(*["date"])) | (* > (Blog | Web | Misc))).matches(entry);
                 if vdate {
                     nc.optionals = format!(
                         "Accessed {}",

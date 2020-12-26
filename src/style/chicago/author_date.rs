@@ -1,18 +1,18 @@
 //! Author-Date citations as defined in chapter 15 of the 17th edition of the
 //! Chicago Manual of Style.
 
+use std::collections::{BTreeMap, HashMap};
+
 use super::{
     and_list_opt, get_chunk_title, get_creators, web_creator, CommonChicagoConfig,
 };
-use crate::output::{
+use crate::style::{
     alph_designator, AtomicCitation, Bracket, BracketMode, BracketPreference,
     CitationError, CitationFormatter, DisplayString,
 };
-use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
 use crate::types::Person;
-use crate::{sel, Entry};
-use std::collections::{BTreeMap, HashMap};
+use crate::Entry;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Uniqueness {
@@ -196,9 +196,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                 } else {
                     DisplayString::new()
                 }
-            } else if let Some(np) =
-                sel!(Wc() => Bind("p", Id(Newspaper))).bound_element(entry, "p")
-            {
+            } else if let Some(np) = select!(* > ("p":Newspaper)).bound(entry, "p") {
                 get_chunk_title(np, true, true, &self.common)
             } else {
                 DisplayString::new()
@@ -259,9 +257,9 @@ impl<'s> BracketPreference for AuthorYear<'s> {
 
 #[cfg(test)]
 mod tests {
-    use crate::output::CitationFormatter;
+    use crate::style::CitationFormatter;
     use crate::types::{Date, EntryType, Person, Title};
-    use crate::{output::AtomicCitation, Entry};
+    use crate::{style::AtomicCitation, Entry};
 
     use super::AuthorYear;
 

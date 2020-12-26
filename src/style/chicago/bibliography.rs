@@ -2,14 +2,13 @@
 //! _Notes and Bibliography_ and the _Author-Date_ style. The style can
 //! be set through the [`Bibliography`] struct.
 
-use crate::output::{
+use crate::style::{
     abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
     format_range, push_comma_quote_aware, BibliographyFormatter, DisplayString,
     Formatting,
 };
-use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
-use crate::{attrs, sel, Entry};
+use crate::Entry;
 
 use super::{
     and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
@@ -102,16 +101,14 @@ impl Bibliography {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let conference =
-            sel!(Wc() => Bind("p", Id(Conference))).bound_element(entry, "p");
+        let conference = select!(* > ("p":Conference)).bound(entry, "p");
         let mut res = if entry.entry_type == Thesis {
             "Thesis".to_string()
         } else {
             String::new()
         };
 
-        let published_entry =
-            sel!(Wc() => Bind("p", attrs!(Wc(), "publisher"))).bound_element(entry, "p");
+        let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if !conference.is_some() {
             if let Some(loc) = entry
                 .location()
@@ -151,7 +148,7 @@ impl Bibliography {
                 res += service;
             }
         }
-        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+        let preprint = select!(Article > Repository).matches(entry);
         if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
@@ -216,12 +213,9 @@ impl Bibliography {
             res += &publisher;
         }
 
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
-        )
-        .matches(entry);
+        let journal = select!((Article | Entry) > Periodical).matches(entry);
         let date = if self.mode == Mode::NotesAndBibliography
-            || sel!(alt sel!(Wc() => Id(Newspaper)), Id(Tweet), Id(Thread), sel!(Wc() => Id(Thread))).matches(entry)
+            || select!((* > Newspaper) | Tweet | Thread | (* > Thread)).matches(entry)
         {
             entry_date(entry, false)
         } else {
@@ -241,8 +235,7 @@ impl Bibliography {
 
             items.extend(entry.note().map(Into::into));
 
-            let parent =
-                sel!(Wc() => Bind("p", Id(Exhibition))).bound_element(entry, "p");
+            let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
                     .organization()
@@ -316,10 +309,8 @@ impl Bibliography {
             }
         }
 
-        let dictionary =
-            sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
-        let database =
-            sel!(Id(Entry) => Bind("p", Id(Repository))).bound_element(entry, "p");
+        let dictionary = select!(Entry > ("p": Reference)).bound(entry, "p");
+        let database = select!(Entry > ("p": Repository)).bound(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, false, &self.common, '.');
@@ -357,10 +348,8 @@ impl Bibliography {
         }
 
         let mut colon = false;
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
-        )
-        .matches(entry);
+        let journal =
+            select!((Article | Entry) > (Periodical | Newspaper)).matches(entry);
 
         let dict = if no_author { dictionary.unwrap_or(entry) } else { entry };
         let mut add = get_info_element(dict, &self.common, true);
@@ -486,7 +475,7 @@ impl Bibliography {
         let no_url = url.is_empty();
         res += url;
 
-        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+        let preprint = select!(Article > Repository).matches(entry);
         if no_url || entry.entry_type == Manuscript || preprint {
             if let Some(archive) = entry.archive() {
                 push_comma_quote_aware(&mut res.value, ',', true);

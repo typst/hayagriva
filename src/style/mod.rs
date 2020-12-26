@@ -1,17 +1,17 @@
 //! Citation and bibliography styles.
 
-use super::types::Person;
-use super::{sel, Entry};
-use crate::selectors::Id;
-use crate::types::EntryType::{Chapter, Scene};
-use chicago::CommonChicagoConfig;
-use isolang::Language;
 use std::collections::HashMap;
 use std::convert::Into;
 use std::fmt::Write;
 use std::ops::{Add, AddAssign};
+
+use isolang::Language;
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
+
+use super::types::Person;
+use super::Entry;
+use chicago::CommonChicagoConfig;
 
 pub mod apa;
 pub mod chicago;
@@ -655,7 +655,7 @@ fn abbreviate_publisher(s: &str, up: bool) -> String {
 
 fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
     let mut parent = entry.parents().and_then(|v| v.first());
-    while sel!(alt Id(Chapter), Id(Scene)).matches(entry) && entry.title().is_none() {
+    while select!(Chapter | Scene).matches(entry) && entry.title().is_none() {
         if let Some(p) = parent {
             entry = &p;
             parent = entry.parents().and_then(|v| v.first());

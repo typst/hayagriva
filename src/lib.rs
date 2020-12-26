@@ -7,14 +7,16 @@
 
 #![warn(missing_docs)]
 
+#[macro_use]
+mod selectors;
 #[cfg(feature = "biblatex")]
 mod interop;
 pub mod io;
 pub mod lang;
-pub mod selectors;
 pub mod style;
 pub mod types;
 
+pub use selectors::{Selector, SelectorError};
 
 use std::collections::HashMap;
 
@@ -397,7 +399,6 @@ impl Entry {
 
 #[cfg(test)]
 mod tests {
-    use crate::selectors::parse;
     use std::fs;
 
     use super::*;
@@ -486,9 +487,9 @@ mod tests {
     macro_rules! select_all {
         ($select:expr, $entries:tt, [$($key:expr),* $(,)*] $(,)*) => {
             let keys = vec![ $( $key , )* ];
-            let expr = parse($select).unwrap();
+            let selector = Selector::parse($select).unwrap();
             for entry in &$entries {
-                let res = expr.apply(entry);
+                let res = selector.apply(entry);
                 if keys.contains(&entry.key.as_str()) {
                     if res.is_none() {
                         panic!("Key {} not found in results", entry.key);
@@ -506,8 +507,8 @@ mod tests {
         ($select:expr, $entries:tt >> $entry_key:expr, [$($key:expr),* $(,)*] $(,)*) => {
             let keys = vec![ $( $key , )* ];
             let entry = $entries.iter().filter_map(|i| if i.key == $entry_key {Some(i)} else {None}).next().unwrap();
-            let expr = parse($select).unwrap();
-            let res = expr.apply(entry).unwrap();
+            let selector = Selector::parse($select).unwrap();
+            let res = selector.apply(entry).unwrap();
             if !keys.into_iter().all(|k| res.get(k).is_some()) {
                 panic!("Results do not contain binding");
             }

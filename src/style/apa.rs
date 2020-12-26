@@ -7,10 +7,8 @@ use super::{
 };
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
-use crate::selectors::{Bind, Id, Neg, Wc};
-use crate::types::EntryType::*;
-use crate::types::{NumOrStr, Person, PersonRole};
-use crate::{attrs, sel, Entry};
+use crate::types::{EntryType::*, NumOrStr, Person, PersonRole};
+use crate::Entry;
 
 /// Generates APA reference list entries.
 #[derive(Clone, Debug)]
@@ -37,27 +35,26 @@ enum SourceType<'s> {
 
 impl<'s> SourceType<'s> {
     fn for_entry(entry: &'s Entry) -> Self {
-        let periodical = sel!(Wc() => Bind("p", Id(Periodical)));
-        let collection = sel!(alt
-            sel!(Id(Anthos) => Bind("p", Id(Anthology))),
-            sel!(Id(Entry) => Bind("p", Wc())),
-            sel!(Wc() => Bind("p", Id(Reference))),
-            sel!(Id(Article) => Bind("p", Id(Proceedings))),
+        let periodical = select!(* > ("p":Periodical));
+        let collection = select!(
+            (Anthos > ("p":Anthology)) |
+            (Entry  > ("p":*)) |
+            (* > ("p":Reference)) |
+            (Article > ("p":Proceedings))
         );
-        let tv_series =
-            sel!(attrs!(Id(Video), "issue", "volume") => Bind("p", Id(Video)));
-        let thesis = Id(Thesis);
-        let manuscript = Id(Manuscript);
-        let art_container = sel!(Wc() => Bind("p", Id(Artwork)));
-        let art = sel!(alt Id(Artwork), Id(Exhibition));
-        let news_item = sel!(Wc() => Bind("p", Id(Newspaper)));
-        let web_standalone = Id(Web);
-        let web_contained = sel!(alt
-            sel!(Id(Web) => Bind("p", Wc())),
-            sel!(Wc() => Bind("p", sel!(alt attrs!(Id(Misc), "url"), Id(Blog), Id(Web)))),
+        let tv_series = select!((Video["issue", "volume"]) > ("p":Video));
+        let thesis = select!(Thesis);
+        let manuscript = select!(Manuscript);
+        let art_container = select!(* > ("p":Artwork));
+        let art = select!(Artwork | Exhibition);
+        let news_item = select!(* > ("p":Newspaper));
+        let web_standalone = select!(Web);
+        let web_contained = select!(
+            (Web > ("p":*)) |
+            (* > ("p":((Misc["url"]) | Blog | Web)))
         );
-        let talk = sel!(Wc() => Bind("p", Id(Conference)));
-        let generic_parent = sel!(Wc() => Bind("p", Wc()));
+        let talk = select!(* > ("p":Conference));
+        let generic_parent = select!(* > ("p":*));
 
         if let Some(mut bindings) = periodical.apply(entry) {
             Self::PeriodicalItem(bindings.remove("p").unwrap())
@@ -188,7 +185,7 @@ impl Apa {
         let mut names = None;
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
-            let tv_series = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
+            let tv_series = select!((Video["issue", "volume"]) > Video);
             let dirs = entry.affiliated_filtered(PersonRole::Director);
 
             if tv_series.apply(entry).is_some() {
@@ -269,7 +266,7 @@ impl Apa {
         };
 
         let mut details = vec![];
-        let booklike = sel!(alt Id(Book), Id(Proceedings), Id(Anthology));
+        let booklike = select!(Book | Proceedings | Anthology);
         if booklike.apply(entry).is_some() {
             let affs = entry
                 .affiliated_persons()
@@ -411,9 +408,8 @@ impl Apa {
             .into_iter()
             .any(|p| p.title().is_some())
         {
-            let talk = sel!(Wc() => Id(Conference));
-            let preprint =
-                sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Id(Repository));
+            let talk = select!(* > Conference);
+            let preprint = select!((Article | Book | Anthos) > Repository);
 
             talk.apply(entry).is_some() || preprint.apply(entry).is_some()
         } else {
@@ -421,17 +417,16 @@ impl Apa {
         };
 
         let mut res = DisplayString::new();
-        let vid_match = sel!(attrs!(Id(Video), "issue", "volume") => Id(Video));
+        let vid_match = select!((Video["issue", "volume"]) > Video);
 
         let book =
-            sel!(alt Id(Book), Id(Report), Id(Reference), Id(Anthology), Id(Proceedings))
-                .matches(entry);
+            select!(Book | Report | Reference | Anthology | Proceedings).matches(entry);
 
         if let Some(title) = entry.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
         {
-            let multivol_spec = sel!(
-                attrs!(sel!(alt Id(Book), Id(Proceedings), Id(Anthology)), "volume") =>
-                Bind("p", sel!(alt Id(Book), Id(Proceedings), Id(Anthology)))
+            let multivol_spec = select!(
+                ((Book | Proceedings | Anthology)["volume"])
+                > ("p":(Book | Proceedings | Anthology))
             );
 
             let multivolume_parent = multivol_spec
@@ -538,10 +533,9 @@ impl Apa {
             Tweet,
         }
 
-        let conf_spec = sel!(Id(Article) => Id(Proceedings));
-        let talk_spec = sel!(Wc() => Id(Conference));
-        let repo_item =
-            sel!(Neg(sel!(alt Id(Article), Id(Report), Id(Thesis))) => Id(Repository));
+        let conf_spec = select!(Article > Proceedings);
+        let talk_spec = select!(* > Conference);
+        let repo_item = select!((!(Article | Report | Thesis)) > Repository);
         let spec = if entry.entry_type == Case {
             TitleSpec::LegalProceedings
         } else if conf_spec.apply(entry).is_some() {
@@ -949,7 +943,7 @@ impl Apa {
             }
             SourceType::GenericParent(parent) => {
                 if let Some(title) = parent.title() {
-                    let preprint = sel!(sel!(alt Id(Article), Id(Book), Id(Anthos)) => Id(Repository));
+                    let preprint = select!((Article | Book | Anthos) > Repository);
 
                     if preprint.apply(entry).is_none() {
                         res.start_format(Formatting::Italic);
@@ -984,7 +978,7 @@ impl Apa {
             res += &format!("https://doi.org/{}", doi);
             res.commit_formats();
         } else {
-            let reference_entry = sel!(Id(Reference) => Id(Entry));
+            let reference_entry = select!(Reference > Entry);
             let url_str = self.get_retreival_date(
                 entry,
                 entry.date().is_none()
@@ -1008,7 +1002,7 @@ impl BibliographyFormatter for Apa {
     fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
         entry = delegate_titled_entry(entry);
 
-        let art_plaque = sel!(Wc() => Bind("p", Id(Artwork))).matches(entry);
+        let art_plaque = select!(* > ("p":Artwork)).matches(entry);
 
         let authors = self.get_author(entry);
         let date = self.get_date(entry);

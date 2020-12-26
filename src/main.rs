@@ -11,12 +11,12 @@ use strum::{EnumVariantNames, VariantNames};
 use biblatex::Bibliography as TexBibliography;
 
 use hayagriva::io::{from_yaml_str, to_yaml_str};
-use hayagriva::selectors::parse;
 use hayagriva::style::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::style::{
     apa, chicago, ieee, mla, Alphabetical, AtomicCitation, AuthorTitle,
     BibliographyFormatter, CitationFormatter,
 };
+use hayagriva::Selector;
 
 #[cfg(feature = "biblatex")]
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
@@ -256,7 +256,7 @@ fn main() {
         }
         res
     } else if let Some(selector) = matches.value_of("selector") {
-        let selector = parse(selector).expect("Invalid selector");
+        let selector = Selector::parse(selector).expect("Invalid selector");
         bibliography.into_iter().filter(|e| selector.matches(e)).collect()
     } else {
         bibliography
@@ -274,7 +274,8 @@ fn main() {
                 println!("{}", entry.key());
                 if sub_matches.is_present("bindings") {
                     if let Some(selector) = matches.value_of("selector") {
-                        let selector = parse(selector).unwrap();
+                        let selector =
+                            Selector::parse(selector).expect("Invalid selector");
                         let formatter = chicago::notes::Note::new(bibliography.iter());
                         for (k, v) in selector.apply(entry).unwrap() {
                             println!(

@@ -1,13 +1,14 @@
 //! Formats citations as footnotes for Chicago's Notes and Bibliography style.
-use crate::output::{
+
+use std::collections::HashMap;
+
+use crate::style::{
     abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
     AtomicCitation, Bracket, BracketMode, BracketPreference, CitationError,
     CitationFormatter, DisplayString, Formatting,
 };
-use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
-use crate::{attrs, sel, Entry};
-use std::collections::HashMap;
+use crate::Entry;
 
 use super::{
     and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
@@ -126,8 +127,7 @@ impl<'s> Note<'s> {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let conference =
-            sel!(Wc() => Bind("p", Id(Conference))).bound_element(entry, "p");
+        let conference = select!(* > ("p":Conference)).bound(entry, "p");
         let mut res = if entry.entry_type == Thesis {
             "thesis".to_string()
         } else if conference.is_some() {
@@ -136,8 +136,7 @@ impl<'s> Note<'s> {
             String::new()
         };
 
-        let published_entry =
-            sel!(Wc() => Bind("p", attrs!(Wc(), "publisher"))).bound_element(entry, "p");
+        let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if let Some(loc) = entry
             .location()
             .or_else(|| published_entry.and_then(|e| e.location()))
@@ -176,7 +175,7 @@ impl<'s> Note<'s> {
             }
         }
 
-        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+        let preprint = select!(Article > Repository).matches(entry);
         if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
@@ -257,8 +256,7 @@ impl<'s> Note<'s> {
 
             items.extend(entry.note().map(Into::into));
 
-            let parent =
-                sel!(Wc() => Bind("p", Id(Exhibition))).bound_element(entry, "p");
+            let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
                     .organization()
@@ -317,11 +315,7 @@ impl<'s> Note<'s> {
 
         entry = delegate_titled_entry(entry);
 
-        let web_thing = sel!(alt
-            Id(Web),
-            sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
-        )
-        .matches(entry);
+        let web_thing = select!(Web | ((Misc | Web) > Web)).matches(entry);
 
         let mut res: DisplayString = if (!web_thing
             && (entry.entry_type != Reference
@@ -336,10 +330,8 @@ impl<'s> Note<'s> {
 
         let no_author = res.is_empty();
 
-        let dictionary =
-            sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
-        let database =
-            sel!(Id(Entry) => Bind("p", Id(Repository))).bound_element(entry, "p");
+        let dictionary = select!(Entry > ("p": Reference)).bound(entry, "p");
+        let database = select!(Entry > ("p": Repository)).bound(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, short, &self.common, ',');
@@ -367,10 +359,8 @@ impl<'s> Note<'s> {
         }
 
         let mut colon = false;
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
-        )
-        .matches(entry);
+        let journal =
+            select!((Article | Entry) > (Periodical | Newspaper)).matches(entry);
 
         if !short {
             let add = if no_author && dictionary.is_some() {
@@ -534,7 +524,7 @@ impl<'s> Note<'s> {
             let no_url = url.is_empty();
             res += url;
 
-            let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+            let preprint = select!(Article > Repository).matches(entry);
             if no_url || entry.entry_type == Manuscript || preprint {
                 if let Some(archive) = entry.archive() {
                     push_comma_quote_aware(&mut res.value, ',', true);
