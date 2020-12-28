@@ -351,7 +351,7 @@ impl From<tex::Entry> for Entry {
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
             if let Some(volumes) = entry.volumes() {
-                parent.set_total_volumes(volumes);
+                parent.set_volume_total(volumes);
             }
         }
 
@@ -456,9 +456,9 @@ impl From<tex::Entry> for Entry {
             .and_then(|c| c.to_vec().format_verbatim().parse().ok())
         {
             if let Some(parent) = book(&mut item, parent) {
-                parent.set_total_pages(ptotal);
+                parent.set_page_total(ptotal);
             } else {
-                item.set_total_pages(ptotal);
+                item.set_page_total(ptotal);
             }
         }
 

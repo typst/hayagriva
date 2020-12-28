@@ -77,7 +77,7 @@ impl Ieee {
     }
 
     fn show_url(&self, entry: &Entry) -> bool {
-        entry.any_url().is_some()
+        entry.url_any().is_some()
     }
 
     fn get_author(&self, entry: &Entry, canonical: &Entry) -> String {
@@ -98,7 +98,7 @@ impl Ieee {
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
             let tv_series = select!((Video["issue", "volume"]) > Video);
-            let dirs = entry.affiliated_filtered(PersonRole::Director);
+            let dirs = entry.affiliated_with_role(PersonRole::Director);
 
             if tv_series.matches(entry) {
                 // TV episode
@@ -107,7 +107,7 @@ impl Ieee {
                     .map(|s| format!("{} (Director)", s))
                     .collect::<Vec<String>>();
 
-                let writers = entry.affiliated_filtered(PersonRole::Writer);
+                let writers = entry.affiliated_with_role(PersonRole::Writer);
                 let mut writers_name_list_straight = name_list_straight(&writers)
                     .into_iter()
                     .map(|s| format!("{} (Writer)", s))
@@ -124,7 +124,7 @@ impl Ieee {
                     role = AuthorRole::Director;
                 } else {
                     // TV show
-                    let prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
+                    let prods = entry.affiliated_with_role(PersonRole::ExecutiveProducer);
 
                     if !prods.is_empty() {
                         names = Some(name_list_straight(&prods));
@@ -136,8 +136,8 @@ impl Ieee {
 
         let authors = names.or_else(|| {
             entry
-                .authors_fallible()
-                .or_else(|| canonical.authors_fallible())
+                .authors()
+                .or_else(|| canonical.authors())
                 .map(|n| name_list_straight(n))
         });
         let al = if let Some(authors) = authors {
@@ -335,7 +335,7 @@ impl Ieee {
                 }
 
                 if canonical.entry_type != Conference || !self.show_url(entry) {
-                    if let Some(date) = entry.any_date() {
+                    if let Some(date) = entry.date_any() {
                         if let Some(month) = date.month {
                             res.push(if let Some(day) = date.day {
                                 format!(
@@ -368,7 +368,7 @@ impl Ieee {
             }
             (_, Reference) => {
                 let has_url = self.show_url(entry);
-                let date = entry.any_date().map(|date| {
+                let date = entry.date_any().map(|date| {
                     let mut res = if let Some(month) = date.month {
                         if let Some(day) = date.day {
                             format!(
@@ -425,7 +425,7 @@ impl Ieee {
             (_, Repository) => {
                 if let Some(sn) = canonical.serial_number() {
                     res.push(format!("(version {})", sn));
-                } else if let Some(date) = canonical.date().or_else(|| entry.any_date()) {
+                } else if let Some(date) = canonical.date().or_else(|| entry.date_any()) {
                     res.push(format!("({})", date.year));
                 }
 
@@ -453,7 +453,7 @@ impl Ieee {
                 }
             }
             (_, Video) => {
-                if let Some(date) = canonical.date().or_else(|| entry.any_date()) {
+                if let Some(date) = canonical.date().or_else(|| entry.date_any()) {
                     res.push(format!("({})", date.year));
                 }
             }
@@ -472,7 +472,7 @@ impl Ieee {
 
                 if self.show_url(entry) {
                     let mut fin = String::new();
-                    if let Some(date) = entry.any_date() {
+                    if let Some(date) = entry.date_any() {
                         fin += "(";
                         fin += &date.display_year();
                         if let Some(month) = date.month {
@@ -496,7 +496,7 @@ impl Ieee {
                 } else {
                     res.push(start);
 
-                    if let Some(date) = entry.any_date() {
+                    if let Some(date) = entry.date_any() {
                         if let Some(month) = date.month {
                             res.push(if let Some(day) = date.day {
                                 format!(
@@ -529,7 +529,7 @@ impl Ieee {
                     false
                 };
 
-                if let Some(date) = entry.any_date() {
+                if let Some(date) = entry.date_any() {
                     if let Some(month) = date.month {
                         res.push(if let Some(day) = date.day {
                             format!(
@@ -570,7 +570,7 @@ impl Ieee {
                     res.push(format!("Rep. {}", sn));
                 }
 
-                let date = entry.any_date().map(|date| {
+                let date = entry.date_any().map(|date| {
                     let mut res = if let Some(month) = date.month {
                         if let Some(day) = date.day {
                             format!(
@@ -625,7 +625,7 @@ impl Ieee {
                     res.push(sn.into());
                 }
 
-                if let Some(date) = entry.any_date() {
+                if let Some(date) = entry.date_any() {
                     res.push(date.display_year());
                 }
             }
@@ -636,7 +636,7 @@ impl Ieee {
             _ if preprint.is_some() => {
                 let parent = preprint.unwrap().remove("p").unwrap();
                 if let Some(serial) = entry.serial_number() {
-                    let mut sn = if let Some(url) = entry.any_url() {
+                    let mut sn = if let Some(url) = entry.url_any() {
                         let has_arxiv_serial = serial.to_lowercase().contains("arxiv");
 
                         let has_url = url
@@ -668,7 +668,7 @@ impl Ieee {
                     res.push(sn);
                 }
 
-                if let Some(date) = entry.any_date() {
+                if let Some(date) = entry.date_any() {
                     if let Some(month) = date.month {
                         res.push(if let Some(day) = date.day {
                             format!(
@@ -709,7 +709,7 @@ impl Ieee {
             }
             _ => {
                 if let (Some(_), Some(eds)) = (
-                    entry.authors().get(0),
+                    entry.authors().unwrap_or_default().get(0),
                     entry.editors().or_else(|| canonical.editors()),
                 ) {
                     let mut al = self.and_list(name_list_straight(&eds));
@@ -759,7 +759,7 @@ impl Ieee {
                     res.push(publ);
                 }
 
-                if let Some(date) = canonical.any_date() {
+                if let Some(date) = canonical.date_any() {
                     res.push(date.display_year());
                 }
 
@@ -863,7 +863,7 @@ impl BibliographyFormatter for Ieee {
             || ((canonical.entry_type == Conference || canonical.entry_type == Patent)
                 && url)
         {
-            if let Some(date) = entry.any_date() {
+            if let Some(date) = entry.date_any() {
                 if !res.is_empty() {
                     res += ". ";
                 }
@@ -913,7 +913,7 @@ impl BibliographyFormatter for Ieee {
         push_comma_quote_aware(&mut res.value, '.', false);
 
         if url {
-            if let Some(url) = entry.any_url() {
+            if let Some(url) = entry.url_any() {
                 if !res.is_empty() {
                     res += " ";
                 }

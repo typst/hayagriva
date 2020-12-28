@@ -232,7 +232,7 @@ impl Mla {
 
     fn get_main_contributors(&self, entry: &Entry) -> Option<Vec<Person>> {
         entry
-            .authors_fallible()
+            .authors()
             .map(|a| a.to_vec())
             .or_else(|| {
                 entry
@@ -262,7 +262,7 @@ impl Mla {
 
     /// Prints the names of the main creators of the item.
     fn get_author(&self, mut entry: &Entry, prev_entry: Option<&Entry>) -> String {
-        while entry.authors_fallible().is_none()
+        while entry.authors().is_none()
             && entry.affiliated_persons().is_none()
             && entry.editors().is_none()
             && select!(Chapter | Scene).matches(entry)
@@ -282,7 +282,7 @@ impl Mla {
         } else {
             (String::new(), false)
         };
-        res += &if let Some(authors) = entry.authors_fallible() {
+        res += &if let Some(authors) = entry.authors() {
             if !previous && entry.entry_type == Tweet {
                 self.and_list(self.name_list(authors, Some(entry)), true)
             } else if !previous {
@@ -447,7 +447,7 @@ impl Mla {
             // Other contributors.
             let mut contributors = vec![];
             if let Some(affiliated) = entry.affiliated_persons() {
-                if entry != root || entry.authors_fallible().is_some() {
+                if entry != root || entry.authors().is_some() {
                     for (ps, r) in affiliated.iter() {
                         if ps.is_empty() {
                             continue;
@@ -500,7 +500,7 @@ impl Mla {
             if let Some(eds) = entry.editors() {
                 if !eds.is_empty()
                     && (entry != root
-                        || entry.authors_fallible().is_some()
+                        || entry.authors().is_some()
                         || entry.affiliated_persons().is_some())
                 {
                     let mut res = "edited by ".to_string();
@@ -629,7 +629,7 @@ impl Mla {
             }
 
             // Supplemental
-            if let Some(&tvol) = entry.total_volumes() {
+            if let Some(&tvol) = entry.volume_total() {
                 if tvol > 1 {
                     supplemental.push(format!("{} vols", tvol));
                 }
@@ -667,7 +667,7 @@ impl Mla {
                         lc.location += ", ";
                     }
                     lc.location += &format!("doi:{}", doi);
-                } else if let Some(qurl) = entry.any_url() {
+                } else if let Some(qurl) = entry.url_any() {
                     let vdate = qurl.visit_date.is_some()
                         && select!(
                             Blog | Web | Misc |
@@ -699,7 +699,7 @@ impl Mla {
                 nc.location += &format!("doi:{}", doi);
                 nc.location.commit_formats();
                 containers.push(nc);
-            } else if let Some(qurl) = entry.any_url() {
+            } else if let Some(qurl) = entry.url_any() {
                 let mut nc = ContainerInfo::new();
                 nc.location.start_format(Formatting::NoHyphenation);
                 nc.location += qurl.value.as_str();

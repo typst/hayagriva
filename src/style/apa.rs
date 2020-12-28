@@ -126,7 +126,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
 
     let ed = if is_tv_show { entry.issue() } else { entry.edition() };
 
-    let translator = entry.affiliated_filtered(PersonRole::Translator);
+    let translator = entry.affiliated_with_role(PersonRole::Translator);
 
     let translator = if translator.is_empty() {
         None
@@ -186,7 +186,7 @@ impl Apa {
         let mut role = AuthorRole::default();
         if entry.entry_type == Video {
             let tv_series = select!((Video["issue", "volume"]) > Video);
-            let dirs = entry.affiliated_filtered(PersonRole::Director);
+            let dirs = entry.affiliated_with_role(PersonRole::Director);
 
             if tv_series.apply(entry).is_some() {
                 // TV episode
@@ -195,7 +195,7 @@ impl Apa {
                     .map(|s| format!("{} (Director)", s))
                     .collect::<Vec<String>>();
 
-                let writers = entry.affiliated_filtered(PersonRole::Writer);
+                let writers = entry.affiliated_with_role(PersonRole::Writer);
                 let mut writers_name_list = name_list(&writers)
                     .into_iter()
                     .map(|s| format!("{} (Writer)", s))
@@ -212,7 +212,7 @@ impl Apa {
                     role = AuthorRole::Director;
                 } else {
                     // TV show
-                    let prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
+                    let prods = entry.affiliated_with_role(PersonRole::ExecutiveProducer);
 
                     if !prods.is_empty() {
                         names = Some(name_list(&prods));
@@ -222,7 +222,7 @@ impl Apa {
             }
         }
 
-        let authors = names.or_else(|| entry.authors_fallible().map(|n| name_list(n)));
+        let authors = names.or_else(|| entry.authors().map(|n| name_list(n)));
         let mut al = if let Some(mut authors) = authors {
             let count = authors.len();
             if entry.entry_type == Tweet {
@@ -317,7 +317,7 @@ impl Apa {
     }
 
     fn get_date(&self, entry: &Entry) -> String {
-        if let Some(date) = entry.any_date() {
+        if let Some(date) = entry.date_any() {
             match (date.month, date.day) {
                 (None, _) => format!("({}).", date.display_year()),
                 (Some(month), None) => format!(
@@ -338,7 +338,7 @@ impl Apa {
     }
 
     fn get_retreival_date(&self, entry: &Entry, use_date: bool) -> Option<DisplayString> {
-        let url = entry.any_url();
+        let url = entry.url_any();
 
         if let Some(qurl) = url {
             let uv = qurl.value.as_str();
@@ -485,7 +485,7 @@ impl Apa {
             }
 
             if entry.note().and_then(|_| entry.editors()).is_some()
-                && !entry.authors().is_empty()
+                && !entry.authors().unwrap_or_default().is_empty()
             {
                 let editors = entry.editors().unwrap();
                 let amp_list = ampersand_list(name_list_straight(&editors));
@@ -566,7 +566,7 @@ impl Apa {
                 .flatten()
                 .collect::<Vec<&Person>>();
             if !dirs.is_empty()
-                && entry.total_volumes().is_none()
+                && entry.volume_total().is_none()
                 && entry.parents().is_none()
             {
                 TitleSpec::Film
@@ -585,11 +585,11 @@ impl Apa {
                 if is_online_vid {
                     TitleSpec::Video
                 } else {
-                    let prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
+                    let prods = entry.affiliated_with_role(PersonRole::ExecutiveProducer);
 
                     if vid_match.apply(entry).is_some() {
                         TitleSpec::TvEpisode
-                    } else if !prods.is_empty() || entry.total_volumes().is_some() {
+                    } else if !prods.is_empty() || entry.volume_total().is_some() {
                         TitleSpec::TvShow
                     } else {
                         TitleSpec::Video
@@ -756,9 +756,9 @@ impl Apa {
                 }
             }
             SourceType::TvSeries(parent) => {
-                let mut prods = entry.affiliated_filtered(PersonRole::ExecutiveProducer);
+                let mut prods = entry.affiliated_with_role(PersonRole::ExecutiveProducer);
                 if prods.is_empty() {
-                    prods = entry.authors().to_vec();
+                    prods = entry.authors().unwrap_or_default().to_vec();
                 }
                 let mut comma = if !prods.is_empty() {
                     let names = name_list(&prods);
@@ -880,7 +880,7 @@ impl Apa {
                     entry.publisher().value().or_else(|| entry.organization());
 
                 if let Some(publisher) = publisher {
-                    let authors = entry.authors();
+                    let authors = entry.authors().unwrap_or_default();
                     if authors.len() != 1
                         || authors.get(0).map(|a| a.name.as_ref()) != Some(publisher)
                     {
@@ -890,7 +890,7 @@ impl Apa {
             }
             SourceType::Web(parent) => {
                 if let Some(title) = parent.title().map(|t| &t.canonical) {
-                    let authors = entry.authors();
+                    let authors = entry.authors().unwrap_or_default();
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {

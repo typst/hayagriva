@@ -145,7 +145,7 @@ impl<'s> Note<'s> {
             }
             res += &loc.value;
         } else if matches!(&entry.entry_type, Book | Anthology)
-            && entry.any_date().map(|d| d.year).unwrap_or(2020) < 1981
+            && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
         {
             if !res.is_empty() {
                 res += ", ";
@@ -155,7 +155,7 @@ impl<'s> Note<'s> {
 
         if entry.entry_type == Tweet {
             if let Some(host) = entry
-                .any_url()
+                .url_any()
                 .and_then(|u| u.value.host_str())
                 .map(|h| h.to_lowercase())
             {
@@ -219,7 +219,7 @@ impl<'s> Note<'s> {
             .map(Into::into)
             .or_else(|| {
                 if entry.entry_type == Reference && entry.volume().is_none() {
-                    entry.authors_fallible().map(|a| {
+                    entry.authors().map(|a| {
                         and_list(
                             a.into_iter().map(|p| p.given_first(false)),
                             false,
@@ -414,7 +414,7 @@ impl<'s> Note<'s> {
             }
         }
 
-        if no_author && dictionary.is_some() && entry.authors_fallible().is_none() {
+        if no_author && dictionary.is_some() && entry.authors().is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.common);
@@ -465,7 +465,7 @@ impl<'s> Note<'s> {
                 res += &format!("https://doi.org/{}", doi);
                 res.commit_formats();
                 res
-            } else if let Some(qurl) = entry.any_url() {
+            } else if let Some(qurl) = entry.url_any() {
                 let mut res = DisplayString::new();
                 if let Some(date) = qurl.visit_date.as_ref() {
                     if database.is_none() && self.common.url_access_date.needs_date(entry)
@@ -496,7 +496,7 @@ impl<'s> Note<'s> {
                 }
                 if self.common.url_access_date.needs_date(entry) {
                     if let Some(date) =
-                        entry.any_url().and_then(|u| u.visit_date.as_ref())
+                        entry.url_any().and_then(|u| u.visit_date.as_ref())
                     {
                         push_comma_quote_aware(&mut brack_content.value, ';', true);
                         brack_content +=

@@ -48,13 +48,13 @@ impl AccessDateConfig {
     pub fn needs_date(&self, entry: &Entry) -> bool {
         match self {
             AccessDateConfig::Never => false,
-            AccessDateConfig::NoDate => entry.any_date().is_none(),
+            AccessDateConfig::NoDate => entry.date_any().is_none(),
             AccessDateConfig::InherentlyOnline => {
                 select!(Web | ((Misc | Web) > Web)).matches(entry)
-                    || entry.any_date().is_none()
+                    || entry.date_any().is_none()
             }
             AccessDateConfig::NotFormallyPublished => {
-                !is_formally_published(entry) || entry.any_date().is_none()
+                !is_formally_published(entry) || entry.date_any().is_none()
             }
             AccessDateConfig::Always => true,
         }
@@ -146,7 +146,8 @@ pub enum AuthorRole {
 /// Get the creator of an entry.
 pub fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     let mut add = AuthorRole::Normal;
-    let authors = if let Some(authors) = entry.authors_fallible() {
+
+    let authors = if let Some(authors) = entry.authors() {
         authors.to_vec()
     } else if let Some(eds) = entry.editors() {
         add = AuthorRole::Editor;
@@ -154,28 +155,28 @@ pub fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     } else if entry.entry_type == Video {
         let tv_series = select!((Video["issue", "volume"]) > ("p":Video));
         if let Some(mut bindings) = tv_series.apply(entry) {
-            let mut affs = entry.affiliated_filtered(PersonRole::Director);
-            affs.extend(entry.affiliated_filtered(PersonRole::Writer));
+            let mut affs = entry.affiliated_with_role(PersonRole::Director);
+            affs.extend(entry.affiliated_with_role(PersonRole::Writer));
             if !affs.is_empty() {
                 affs
             } else {
                 let parent = bindings.remove("p").unwrap();
                 add = AuthorRole::ExecutiveProducer;
-                parent.affiliated_filtered(PersonRole::ExecutiveProducer)
+                parent.affiliated_with_role(PersonRole::ExecutiveProducer)
             }
         } else {
-            let dir = entry.affiliated_filtered(PersonRole::Director);
+            let dir = entry.affiliated_with_role(PersonRole::Director);
             if !dir.is_empty() {
                 add = AuthorRole::Director;
                 dir
             } else {
                 add = AuthorRole::ExecutiveProducer;
-                entry.affiliated_filtered(PersonRole::ExecutiveProducer)
+                entry.affiliated_with_role(PersonRole::ExecutiveProducer)
             }
         }
     } else {
-        let compilers = entry.affiliated_filtered(PersonRole::Compiler);
-        let translators = entry.affiliated_filtered(PersonRole::Translator);
+        let compilers = entry.affiliated_with_role(PersonRole::Compiler);
+        let translators = entry.affiliated_with_role(PersonRole::Translator);
         if !compilers.is_empty() {
             add = AuthorRole::Compiler;
             compilers
@@ -286,7 +287,7 @@ fn get_title(
             }
             res += get_chunk_title(parent, false, true, common);
 
-            if parent.authors_fallible().is_none() {
+            if parent.authors().is_none() {
                 if let Some(eds) = parent.editors() {
                     let ed_names =
                         eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
@@ -479,7 +480,7 @@ fn web_creator(
     web_thing.map(|wt| {
         if let Some(org) = entry.organization() {
             org.into()
-        } else if wt.get("p").and_then(|e| e.authors_fallible()).is_some() {
+        } else if wt.get("p").and_then(|e| e.authors()).is_some() {
             let authors =
                 get_creators(wt.get("p").unwrap()).0.into_iter().enumerate().map(
                     |(i, p)| {
@@ -584,17 +585,17 @@ fn get_info_element(
     let eds = ed_match.map(|e| e.editors().unwrap());
 
     let translators = affs.and_then(|e| {
-        let ts = e.affiliated_filtered(PersonRole::Translator);
+        let ts = e.affiliated_with_role(PersonRole::Translator);
         if ts.is_empty() { None } else { Some(ts) }
     });
 
     let compilers = affs.and_then(|e| {
-        let ts = e.affiliated_filtered(PersonRole::Compiler);
+        let ts = e.affiliated_with_role(PersonRole::Compiler);
         if ts.is_empty() { None } else { Some(ts) }
     });
 
     if let Some(trans) = translators {
-        if orig_entry.authors_fallible().is_some() || orig_entry.editors().is_some() {
+        if orig_entry.authors().is_some() || orig_entry.editors().is_some() {
             let trans_names = trans.into_iter().map(|p| p.given_first(false));
 
             let mut local =
@@ -614,7 +615,7 @@ fn get_info_element(
         )
         .bound(entry, "p");
 
-        if orig_entry.authors_fallible().is_some() && ed_match != edited_book {
+        if orig_entry.authors().is_some() && ed_match != edited_book {
             let ed_names =
                 eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
@@ -698,7 +699,7 @@ fn get_info_element(
     }
 
     if let Some(comp) = compilers {
-        if (orig_entry.authors_fallible().is_some() || orig_entry.entry_type == Reference)
+        if (orig_entry.authors().is_some() || orig_entry.entry_type == Reference)
             || orig_entry.editors().is_some()
         {
             let comp_names =
@@ -747,7 +748,7 @@ fn get_info_element(
             }
         }
 
-        if let Some(&vtotal) = orig_entry.total_volumes() {
+        if let Some(&vtotal) = orig_entry.volume_total() {
             if vtotal > 1 {
                 if series {
                     res.push(format!("{} seasons", vtotal).into())
@@ -882,7 +883,7 @@ fn get_info_element(
 }
 
 fn entry_date(entry: &Entry, force_year: bool) -> String {
-    if let Some(date) = entry.any_date() {
+    if let Some(date) = entry.date_any() {
         let mode = if force_year {
             DateMode::Year
         } else {
@@ -905,7 +906,7 @@ fn entry_date(entry: &Entry, force_year: bool) -> String {
         format_date(date, mode)
     } else if force_year
         || (matches!(&entry.entry_type, Book | Anthology)
-            && entry.any_url().and_then(|url| url.visit_date.as_ref()).is_none())
+            && entry.url_any().and_then(|url| url.visit_date.as_ref()).is_none())
     {
         "n.d.".to_string()
     } else {

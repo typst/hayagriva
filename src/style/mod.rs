@@ -741,8 +741,8 @@ impl<'s> CitationFormatter<'s> for Alphabetical<'s> {
             };
 
             let year = entry
-                .any_date()
-                .or_else(|| entry.any_url().and_then(|u| u.visit_date.as_ref()))
+                .date_any()
+                .or_else(|| entry.url_any().and_then(|u| u.visit_date.as_ref()))
                 .map(|date| {
                     let mut year = i32::abs(date.year % 100);
                     if date.year <= 0 {

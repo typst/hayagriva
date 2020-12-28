@@ -124,7 +124,7 @@ impl Entry {
             return None;
         }
 
-        let authors = self.authors();
+        let authors = self.authors().unwrap_or_default();
 
         if user_index > 0 && user_index >= authors.len() {
             return None;

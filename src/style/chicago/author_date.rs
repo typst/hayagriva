@@ -106,13 +106,13 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
 
             let authors = self.get_authors(atomic.key).unwrap();
 
-            let date = entry.any_date();
+            let date = entry.date_any();
             let similars = self
                 .entries
                 .iter()
                 .map(|(_, e)| e)
                 .filter(|&e| {
-                    e.any_date().map(|d| d.year) == date.map(|d| d.year)
+                    e.date_any().map(|d| d.year) == date.map(|d| d.year)
                         && self.get_authors(&e.key).unwrap() == authors
                 })
                 .collect::<Vec<_>>();

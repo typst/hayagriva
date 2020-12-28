@@ -393,7 +393,7 @@ fn main() {
                             bibliography.iter().find(|i| i.key() == atomic.key).unwrap();
                         let creators = chicago::get_creators(item).0;
                         let mut same = bibliography.iter().filter(|e| {
-                            item.any_date() == e.any_date()
+                            item.date_any() == e.date_any()
                                 && chicago::get_creators(e).0 == creators
                                 && creators.len() >= 1
                         });

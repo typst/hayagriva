@@ -155,109 +155,138 @@ pub struct SetFieldError {
 }
 
 macro_rules! fields {
-    ($($name:ident: $field_name:expr $(=> $res:ty)?),* $(,)*) => {
+    ($($name:ident: $field_name:expr $(=> $set_type:ty $(, $get_type:ty)?)?);* $(;)*) => {
         $(
-            paste! {
-                #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn $name(&self) -> Option<fields!(@type ref $($res)?)> {
-                    self.get($field_name)
-                        .map(|item| <fields!(@type ref $($res)?)>::try_from(item).unwrap())
-                }
-
-                fields!(single_set $name => $field_name, fields!(@type $($res)?));
-            }
+            fields!(@get $name: $field_name $(=> $($get_type,)? &$set_type)?);
+            fields!(@set $name: $field_name $(=> $set_type)?);
         )*
     };
 
-    ($($name:ident: $field_name:expr => $res:ty, $res_ref:ty),* $(,)*) => {
-        $(
-            paste! {
-                #[doc = "Get and parse the `" $field_name "` field."]
-                pub fn $name(&self) -> Option<$res_ref> {
-                    self.get($field_name)
-                        .map(|item| <$res_ref>::try_from(item).unwrap())
-                }
-
-                fields!(single_set $name => $field_name, $res);
-            }
-        )*
+    (@get $name:ident: $field_name:expr) => {
+        fields!(@get $name: $field_name => &str);
     };
 
-    (single_set $name:ident => $field_name:expr, $other_type:ty) => {
+    (@get $name:ident: $field_name:expr => $get_type:ty $(, $ignore:ty)?) => {
         paste! {
-            #[doc = "Set a value in the `" $field_name "` field."]
-            pub fn [<set_ $name>](&mut self, item: $other_type) {
-                self.content.insert($field_name.to_string(), Value::from(item));
+            #[doc = "Get and parse the `" $field_name "` field."]
+            pub fn $name(&self) -> Option<$get_type> {
+                self.get($field_name)
+                    .map(|item| <$get_type>::try_from(item).unwrap())
             }
         }
     };
 
-    (@type) => {String};
-    (@type $res:ty) => {$res};
-    (@type ref) => {&str};
-    (@type ref $res:ty) => {&$res};
+    (@set $name:ident: $field_name:expr) => {
+        fields!(@set $name: $field_name => String);
+    };
+
+    (@set $name:ident: $field_name:expr => $set_type:ty) => {
+        paste! {
+            #[doc = "Set a value in the `" $field_name "` field."]
+            pub fn [<set_ $name>](&mut self, item: $set_type) {
+                self.content.insert($field_name.to_string(), Value::from(item));
+            }
+        }
+    };
 }
 
 impl Entry {
-    fields!(parents: "parent" => Vec<Entry>, &[Entry]);
-    fields!(title: "title" => Title);
-
-    /// Get and parse the `author` field. This will always return a result
-    pub fn authors(&self) -> &[Person] {
-        self.get("author")
-            .map(|item| <&[Person]>::try_from(item).unwrap())
-            .unwrap_or_default()
+    fields! {
+        title: "title" => Title;
+        authors: "author" => Vec<Person>, &[Person];
     }
+    fields! { @get date: "date" => &Date }
 
-    /// Get and parse the `author` field.
-    /// This will fail if there are no authors.
-    pub fn authors_fallible(&self) -> Option<&[Person]> {
-        self.get("author").map(|item| <&[Person]>::try_from(item).unwrap())
-    }
-
-    fields!(single_set authors => "author", Vec<Person>);
-
-    fields!(date: "date" => Date);
-    fields!(
-        editors: "editor" => Vec<Person>, &[Person],
-        affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>, &[(Vec<Person>, PersonRole)]
-    );
-
-    /// Get and parse the `affiliated` field and only return persons of a given
-    /// [role](PersonRole).
-    pub fn affiliated_filtered(&self, role: PersonRole) -> Vec<Person> {
-        self.affiliated_persons()
-            .into_iter()
-            .flat_map(|v| v)
-            .filter_map(|(v, erole)| if erole == &role { Some(v) } else { None })
-            .flatten()
-            .cloned()
-            .collect::<Vec<Person>>()
-    }
-
-    fields!(
-        organization: "organization",
-        issue: "issue" => NumOrStr,
-        edition: "edition" => NumOrStr,
-        volume: "volume" => std::ops::Range<i64>,
-        total_volumes: "volume-total" => i64,
-        page_range: "page-range" => std::ops::Range<i64>
-    );
-
-    /// Will recursively get a date off either the entry or its parents.
-    pub fn any_date(&self) -> Option<&Date> {
+    /// Will recursively get a date off either the entry or any of its ancestors.
+    pub fn date_any(&self) -> Option<&Date> {
         self.date().or_else(|| {
             self.parents()
                 .into_iter()
                 .flat_map(|v| v)
-                .filter_map(|p| p.any_date())
+                .filter_map(|p| p.date_any())
                 .next()
         })
     }
 
+    fields! { @set date: "date" => Date }
+    fields! {
+        parents: "parent" => Vec<Entry>, &[Entry];
+        editors: "editor" => Vec<Person>, &[Person];
+        affiliated_persons: "affiliated" => Vec<(Vec<Person>, PersonRole)>, &[(Vec<Person>, PersonRole)];
+        publisher: "publisher" => FmtString;
+        location: "location" => FmtString;
+        organization: "organization";
+        issue: "issue" => NumOrStr;
+        volume: "volume" => std::ops::Range<i64>;
+        volume_total: "volume-total" => i64;
+        edition: "edition" => NumOrStr;
+        page_range: "page-range" => std::ops::Range<i64>;
+    }
+
+    /// Get and parse the `page-total` field, falling back on `page-range` if
+    /// not specified.
+    pub fn page_total(&self) -> Option<i64> {
+        self.get("page-total")
+            .map(|ft| ft.clone())
+            .or_else(|| self.page_range().map(|r| Value::from(r.end - r.start)))
+            .map(|item| i64::try_from(item).unwrap())
+    }
+
+    fields! { @set page_total: "page-total" => i64 }
+    fields! { time_range: "time-range" => std::ops::Range<Duration> }
+
+    /// Get and parse the `runtime` field, falling back on `time-range` if not
+    /// specified.
+    pub fn runtime(&self) -> Option<Duration> {
+        self.get("runtime")
+            .map(|ft| ft.clone())
+            .or_else(|| self.time_range().map(|r| Value::from(r.end - r.start)))
+            .map(|item| Duration::try_from(item).unwrap())
+    }
+
+    fields! { @set runtime: "runtime" => Duration }
+    fields! { @get url: "url" => &QualifiedUrl }
+
+    /// Will recursively get an URL off either the entry or any of its ancestors.
+    pub fn url_any(&self) -> Option<&QualifiedUrl> {
+        self.url().or_else(|| {
+            self.parents()
+                .into_iter()
+                .flat_map(|v| v)
+                .filter_map(|p| p.url_any())
+                .next()
+        })
+    }
+
+    fields! { @set url: "url" => QualifiedUrl }
+    fields! {
+        doi: "doi";
+        serial_number: "serial-number";
+        isbn: "isbn";
+        issn: "issn";
+        language: "language" => LanguageIdentifier;
+        archive: "archive" => FmtString;
+        archive_location: "archive-location" => FmtString;
+        note: "note";
+    }
+}
+
+impl Entry {
+    /// Get and parse the `affiliated` field and only return persons of a given
+    /// [role](PersonRole).
+    pub(crate) fn affiliated_with_role(&self, role: PersonRole) -> Vec<Person> {
+        self.affiliated_persons()
+            .into_iter()
+            .flat_map(|affiliated| affiliated)
+            .filter_map(|(persons, r)| if r == &role { Some(persons) } else { None })
+            .flatten()
+            .cloned()
+            .collect()
+    }
+
     /// Adds a parent to the currrent entry. The parent
     /// list will be created if there is none.
-    pub fn add_parent(&mut self, entry: Entry) {
+    pub(crate) fn add_parent(&mut self, entry: Entry) {
         if let Some(parents) = self
             .content
             .get_mut("parent")
@@ -270,7 +299,10 @@ impl Entry {
     }
 
     /// Adds affiliated persons. The list will be created if there is none.
-    pub fn add_affiliated_persons(&mut self, new_persons: (Vec<Person>, PersonRole)) {
+    pub(crate) fn add_affiliated_persons(
+        &mut self,
+        new_persons: (Vec<Person>, PersonRole),
+    ) {
         if let Some(affiliated) = self.content.get_mut("affiliated").and_then(|f| {
             if let Value::PersonsWithRoles(e) = f {
                 Some(e)
@@ -284,9 +316,7 @@ impl Entry {
         }
     }
 
-    /// Adds a parent to the currrent entry. The parent
-    /// list will be created if there is none.
-    pub fn parents_mut(&mut self) -> Option<&mut [Entry]> {
+    pub(crate) fn parents_mut(&mut self) -> Option<&mut [Entry]> {
         self.content.get_mut("parent").and_then(|f| {
             if let Value::Entries(e) = f {
                 Some(e.as_mut_slice())
@@ -295,56 +325,6 @@ impl Entry {
             }
         })
     }
-
-    /// Will recursively get an url off either the entry or its parents.
-    pub fn any_url(&self) -> Option<&QualifiedUrl> {
-        self.url().or_else(|| {
-            self.parents()
-                .into_iter()
-                .flat_map(|v| v)
-                .filter_map(|p| p.any_url())
-                .next()
-        })
-    }
-
-    /// Get and parse the `page-total` field, falling back on
-    /// `page-range` if not specified.
-    pub fn page_total(&self) -> Option<i64> {
-        self.get("page-total")
-            .map(|ft| ft.clone())
-            .or_else(|| self.page_range().map(|r| Value::from(r.end - r.start)))
-            .map(|item| i64::try_from(item).unwrap())
-    }
-
-    fields!(single_set total_pages => "page-total", i64);
-    fields!(time_range: "time-range" => std::ops::Range<Duration>);
-
-    /// Get and parse the `runtime` field, falling back on
-    /// `time-range` if not specified.
-    pub fn runtime(&self) -> Option<Duration> {
-        self.get("runtime")
-            .map(|ft| ft.clone())
-            .or_else(|| self.time_range().map(|r| Value::from(r.end - r.start)))
-            .map(|item| Duration::try_from(item).unwrap())
-    }
-
-    fields!(single_set runtime => "runtime", Duration);
-
-    fields!(
-        issn: "issn",
-        isbn: "isbn",
-        doi: "doi",
-        serial_number: "serial-number",
-        url: "url" => QualifiedUrl,
-        language: "language" => LanguageIdentifier,
-        note: "note"
-    );
-    fields!(
-        location: "location" => FmtString,
-        publisher: "publisher" => FmtString,
-        archive: "archive" => FmtString,
-        archive_location: "archive-location" => FmtString,
-    );
 }
 
 #[cfg(test)]
