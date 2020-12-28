@@ -8,7 +8,7 @@ use super::{
     DisplayString, Formatting,
 };
 use crate::lang::{en, TitleCase};
-use crate::types::{Date, EntryType::*, NumOrStr, Person, PersonRole};
+use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
 /// Generates the "Works Cited" entries
@@ -380,31 +380,34 @@ impl Mla {
                 if ["preface", "introduction", "foreword", "afterword"]
                     .iter()
                     .position(|&x| {
-                        Some(x.into()) == entry.title().map(|x| x.to_lowercase())
+                        Some(x.into())
+                            == entry.title().map(|x| x.canonical.value.to_lowercase())
                     })
                     .is_some()
                 {
                     res += &entry
-                        .title_fmt(Some(&self.title_case), None)
+                        .title()
                         .unwrap()
-                        .value
-                        .title_case;
+                        .canonical
+                        .format_title_case(&self.title_case);
+
                     res += ". ";
                     entry = temp;
                 }
             }
         }
 
-        if let Some(title) = entry.title_fmt(Some(&self.title_case), None) {
+        if let Some(title) = entry.title() {
+            let fmt = title.canonical.format_title_case(&self.title_case);
             if sc
                 && !select!(Legislation | Conference).matches(entry)
-                && !is_religious(&title.value.title_case)
+                && !is_religious(&fmt)
             {
                 res.start_format(Formatting::Italic)
             } else if !sc {
                 res += "“"
             }
-            res += &title.value.title_case;
+            res += &fmt;
             if !res.is_empty() && res.last() != Some('.') && use_quotes {
                 res.push('.');
             }
@@ -548,7 +551,7 @@ impl Mla {
             // Publisher
             if !select!((Manuscript > (!*)) | Periodical).matches(entry) {
                 if let Some(publisher) =
-                    entry.publisher().or_else(|| entry.organization())
+                    entry.publisher().value().or_else(|| entry.organization())
                 {
                     container.publisher = abbreviate_publisher(publisher, true);
                 }
@@ -568,7 +571,7 @@ impl Mla {
                 select!(Scene | Artwork | Case | Conference | Exhibition).matches(entry);
             if physical || self.always_use_location || entry.publisher().is_none() {
                 if let Some(loc) = entry.location() {
-                    location.push(DisplayString::from_string(loc));
+                    location.push(DisplayString::from_string(loc.value.clone()));
                 }
             }
             if let Some(page_range) = entry.page_range() {
@@ -585,10 +588,10 @@ impl Mla {
 
             if let Some(archive) = entry.archive() {
                 if let Some(aloc) = entry.archive_location() {
-                    location.push(aloc.into());
+                    location.push(aloc.value.clone().into());
                 }
 
-                location.push(archive.into());
+                location.push(archive.value.clone().into());
             }
 
             let mut supplemental = vec![];
@@ -634,11 +637,7 @@ impl Mla {
 
             if let Some(series) = series {
                 supplemental.push(
-                    series
-                        .title_fmt(Some(&self.title_case), None)
-                        .unwrap()
-                        .value
-                        .title_case,
+                    series.title().unwrap().canonical.format_title_case(&self.title_case),
                 );
             }
 

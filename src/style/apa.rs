@@ -7,7 +7,7 @@ use super::{
 };
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
-use crate::types::{EntryType::*, NumOrStr, Person, PersonRole};
+use crate::types::{EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
 /// Generates APA reference list entries.
@@ -422,8 +422,8 @@ impl Apa {
         let book =
             select!(Book | Report | Reference | Anthology | Proceedings).matches(entry);
 
-        if let Some(title) = entry.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
-        {
+        if let Some(title) = entry.title() {
+            let sent_cased = title.canonical.format_sentence_case(&self.formatter);
             let multivol_spec = select!(
                 ((Book | Proceedings | Anthology)["volume"])
                 > ("p":(Book | Proceedings | Anthology))
@@ -437,11 +437,11 @@ impl Apa {
                 res.start_format(Formatting::Italic);
             }
             if entry.entry_type == Tweet {
-                let words = &title.value.split_whitespace().collect::<Vec<_>>();
+                let words = &title.canonical.value.split_whitespace().collect::<Vec<_>>();
                 res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
                     .join(" ");
             } else {
-                res += &title.sentence_case;
+                res += &sent_cased;
             }
             res.commit_formats();
 
@@ -450,10 +450,10 @@ impl Apa {
                 let mut new = DisplayString::from_string(format!(
                     "{}: {} ",
                     mv_parent
-                        .title_fmt(None, Some(&self.formatter))
+                        .title()
                         .unwrap()
-                        .value
-                        .sentence_case,
+                        .canonical
+                        .format_sentence_case(&self.formatter),
                     format_range("Vol.", "Vols.", &vols),
                 ));
                 new += res;
@@ -663,11 +663,9 @@ impl Apa {
 
         match st {
             SourceType::PeriodicalItem(parent) => {
-                let mut comma = if let Some(title) =
-                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
-                {
+                let mut comma = if let Some(title) = parent.title() {
                     res.start_format(Formatting::Italic);
-                    res += &title.sentence_case;
+                    res += &title.canonical.format_sentence_case(&self.formatter);
                     res.commit_formats();
                     true
                 } else {
@@ -720,13 +718,13 @@ impl Apa {
                     false
                 };
 
-                if let Some(title) = parent.title_fmt(None, Some(&self.formatter)) {
+                if let Some(title) = parent.title() {
                     if comma {
                         res += ", ";
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.value.sentence_case;
+                    res += &title.canonical.format_sentence_case(&self.formatter);
                     res.commit_formats();
                     comma = true;
 
@@ -751,7 +749,7 @@ impl Apa {
                     res.push(' ');
 
                     if let Some(publisher) = parent.publisher() {
-                        res += publisher;
+                        res += &publisher.value;
                     } else if let Some(organization) = parent.organization() {
                         res += organization;
                     }
@@ -782,13 +780,13 @@ impl Apa {
                     false
                 };
 
-                if let Some(title) = parent.title_fmt(None, Some(&self.formatter)) {
+                if let Some(title) = parent.title() {
                     if comma {
                         res += ", ";
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.value.sentence_case;
+                    res += &title.canonical.format_sentence_case(&self.formatter);
                     res.commit_formats();
                     comma = false;
 
@@ -819,7 +817,7 @@ impl Apa {
                     res.push(' ');
 
                     if let Some(publisher) = parent.publisher() {
-                        res += publisher;
+                        res += &publisher.value;
                     } else if let Some(organization) = parent.organization() {
                         res += organization;
                     }
@@ -827,7 +825,7 @@ impl Apa {
             }
             SourceType::Thesis => {
                 if let Some(archive) = entry.archive() {
-                    res += archive;
+                    res += &archive.value;
                 } else if let Some(org) = entry.organization() {
                     if entry.url().is_none() {
                         res += org;
@@ -836,17 +834,17 @@ impl Apa {
             }
             SourceType::Manuscript => {
                 if let Some(archive) = entry.archive() {
-                    res += archive;
+                    res += &archive.value;
                 }
             }
             SourceType::ArtContainer(parent) => {
                 let org = parent
                     .organization()
-                    .or_else(|| parent.archive())
-                    .or_else(|| parent.publisher())
+                    .or_else(|| parent.archive().value())
+                    .or_else(|| parent.publisher().value())
                     .or_else(|| entry.organization())
-                    .or_else(|| entry.archive())
-                    .or_else(|| entry.publisher());
+                    .or_else(|| entry.archive().value())
+                    .or_else(|| entry.publisher().value());
 
                 if let Some(org) = org {
                     if let Some(loc) = parent
@@ -855,7 +853,7 @@ impl Apa {
                         .or_else(|| entry.location())
                         .or_else(|| entry.archive_location())
                     {
-                        res += &format!("{}, {}.", org, loc);
+                        res += &format!("{}, {}.", org, loc.value);
                     } else {
                         res += org;
                     }
@@ -864,21 +862,22 @@ impl Apa {
             SourceType::StandaloneArt => {
                 let org = entry
                     .organization()
-                    .or_else(|| entry.archive())
-                    .or_else(|| entry.publisher());
+                    .or_else(|| entry.archive().value())
+                    .or_else(|| entry.publisher().value());
 
                 if let Some(org) = org {
                     if let Some(loc) =
                         entry.location().or_else(|| entry.archive_location())
                     {
-                        res += &format!("{}, {}.", org, loc);
+                        res += &format!("{}, {}.", org, loc.value);
                     } else {
                         res += org;
                     }
                 }
             }
             SourceType::StandaloneWeb => {
-                let publisher = entry.publisher().or_else(|| entry.organization());
+                let publisher =
+                    entry.publisher().value().or_else(|| entry.organization());
 
                 if let Some(publisher) = publisher {
                     let authors = entry.authors();
@@ -890,25 +889,21 @@ impl Apa {
                 }
             }
             SourceType::Web(parent) => {
-                if let Some(title) =
-                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
-                {
+                if let Some(title) = parent.title().map(|t| &t.canonical) {
                     let authors = entry.authors();
                     if authors.len() != 1
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {
                         res.start_format(Formatting::Italic);
-                        res += &title.sentence_case;
+                        res += &title.format_sentence_case(&self.formatter);
                         res.commit_formats();
                     }
                 }
             }
             SourceType::NewsItem(parent) => {
-                let comma = if let Some(title) =
-                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
-                {
+                let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
                     res.start_format(Formatting::Italic);
-                    res += &title.sentence_case;
+                    res += &title.format_sentence_case(&self.formatter);
                     res.commit_formats();
                     true
                 } else {
@@ -924,10 +919,8 @@ impl Apa {
                 }
             }
             SourceType::ConferenceTalk(parent) => {
-                let comma = if let Some(title) =
-                    parent.title_fmt(None, Some(&self.formatter)).map(|t| t.value)
-                {
-                    res += &title.sentence_case;
+                let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
+                    res += &title.format_sentence_case(&self.formatter);
                     true
                 } else {
                     false
@@ -938,24 +931,23 @@ impl Apa {
                         res += ", ";
                     }
 
-                    res += loc;
+                    res += &loc.value;
                 }
             }
             SourceType::GenericParent(parent) => {
                 if let Some(title) = parent.title() {
                     let preprint = select!((Article | Book | Anthos) > Repository);
-
                     if preprint.apply(entry).is_none() {
                         res.start_format(Formatting::Italic);
                     }
-                    res += title;
+                    res += &title.canonical.value;
                     res.commit_formats();
                 }
             }
             SourceType::Generic => {
                 if entry.publisher().is_some() || entry.organization().is_some() {
                     if let Some(publisher) = entry.publisher() {
-                        res += publisher;
+                        res += &publisher.value;
                     } else if let Some(organization) = entry.organization() {
                         res += organization;
                     }

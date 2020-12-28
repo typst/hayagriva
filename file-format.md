@@ -287,7 +287,7 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | url                                                       |
-| **Description:** | cannonical public URL of the item, can have access date   |
+| **Description:** | canonical public URL of the item, can have access date    |
 | **Example:**     | `url: { value: https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/, date: 2020-12-29 }` |
 
 #### `doi`

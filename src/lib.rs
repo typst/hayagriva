@@ -11,6 +11,7 @@
 mod selectors;
 #[cfg(feature = "biblatex")]
 mod interop;
+
 pub mod io;
 pub mod lang;
 pub mod style;
@@ -26,26 +27,23 @@ use strum::Display;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
-use lang::Case;
 use types::{
-    Date, Duration, EntryType, FormattableString, FormattedString, FormattedTitle,
-    NumOrStr, Person, PersonRole, QualifiedUrl, Title,
+    Date, Duration, EntryType, FmtString, NumOrStr, Person, PersonRole, QualifiedUrl,
+    Title,
 };
 
 /// The data types that can possibly be held by the various fields of an
 /// [`Entry`].
 #[derive(Clone, Debug, Display, PartialEq)]
+#[non_exhaustive]
 #[strum(serialize_all = "lowercase")]
 pub enum Value {
     /// A [Title] containing a canonical value and optionally translations and
     /// shorthands, all of which are formattable.
     Title(Title),
-    /// A [FormattableString] with which the user can override various
+    /// A [FmtString] with which the user can override various
     /// automatic formatters.
-    FormattableString(FormattableString),
-    /// A [FormattedString] is a [FormattableString] to which all desired
-    /// formatters have been applied.
-    FormattedString(FormattedString),
+    FmtString(FmtString),
     /// A string to be reproduced as-is.
     Text(String),
     /// An integer.
@@ -119,7 +117,7 @@ impl Entry {
             "parent" => matches!(value, Value::Entries(_)),
             "title" => matches!(value, Value::Title(_)),
             "location" | "publisher" | "archive" | "archive-location" => {
-                matches!(value, Value::FormattableString(_))
+                matches!(value, Value::FmtString(_))
             }
             "author" | "editor" => matches!(value, Value::Persons(_)),
             "date" => matches!(value, Value::Date(_)),
@@ -157,54 +155,6 @@ pub struct SetFieldError {
 }
 
 macro_rules! fields {
-    ($($name:ident: $field_name:expr => FormattableString),* $(,)*) => {
-        $(
-            fields!(fmt $name: $field_name => FormattableString, FormattedString);
-            paste! {
-                #[doc = "Get and parse the `" $field_name "` field's value.'"]
-                pub fn $name(&self) -> Option<&str> {
-                    self.get($field_name)
-                        .map(|item| <&FormattableString>::try_from(item).unwrap().value.as_ref())
-                }
-            }
-        )*
-    };
-    ($($name:ident: $field_name:expr => Title),* $(,)*) => {
-        $(
-            fields!(fmt $name: $field_name => Title, FormattedTitle);
-            paste! {
-                #[doc = "Get and parse the `" $field_name "` field's value.'"]
-                pub fn $name(&self) -> Option<&str> {
-                    self.get($field_name)
-                        .map(|item| <&Title>::try_from(item).unwrap().value.value.as_ref())
-                }
-            }
-        )*
-    };
-    (fmt $($name:ident: $field_name:expr => $src_type:ty, $dst_type:ty),* $(,)*) => {
-        $(
-            paste! {
-                #[doc = "Get and parse the `" $field_name "` field as it stands (no formatting applied)."]
-                pub fn [<$name _raw>](&self) -> Option<&$src_type> {
-                    self.get($field_name)
-                        .map(|item| <&$src_type>::try_from(item).unwrap())
-                }
-
-                #[doc = "Get, parse, and format the `" $field_name "` field."]
-                pub fn [<$name _fmt>](
-                    &self,
-                    title: Option<&dyn Case>,
-                    sentence: Option<&dyn Case>,
-                ) -> Option<$dst_type> {
-                    self.get($field_name)
-                        .map(|item| <$src_type>::try_from(item.clone()).unwrap().format(title, sentence))
-                }
-
-                fields!(single_set $name => $field_name, $src_type);
-            }
-        )*
-    };
-
     ($($name:ident: $field_name:expr $(=> $res:ty)?),* $(,)*) => {
         $(
             paste! {
@@ -390,10 +340,10 @@ impl Entry {
         note: "note"
     );
     fields!(
-        location: "location" => FormattableString,
-        publisher: "publisher" => FormattableString,
-        archive: "archive" => FormattableString,
-        archive_location: "archive-location" => FormattableString,
+        location: "location" => FmtString,
+        publisher: "publisher" => FmtString,
+        archive: "archive" => FmtString,
+        archive_location: "archive-location" => FmtString,
     );
 }
 

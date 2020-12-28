@@ -9,8 +9,9 @@ use isolang::Language;
 
 use super::{format_range, push_comma_quote_aware, DisplayString, Formatting};
 use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
-use crate::types::EntryType::*;
-use crate::types::{Date, FormattableString, NumOrStr, Person, PersonRole, Title};
+use crate::types::{
+    Date, EntryType::*, FmtOptionExt, FmtString, NumOrStr, Person, PersonRole, Title,
+};
 use crate::Entry;
 
 /// Determines the mode of the bibliography and citation.
@@ -338,7 +339,7 @@ pub(super) fn get_chunk_title(
 ) -> DisplayString {
     let mut res = DisplayString::new();
 
-    if entry.title() == Some("Wikipedia") || entry.entry_type == Repository {
+    if entry.title().value() == Some("Wikipedia") || entry.entry_type == Repository {
         fmt = false;
     }
     let sc = fmt && self_contained(entry);
@@ -352,23 +353,22 @@ pub(super) fn get_chunk_title(
     let np = entry.entry_type == Newspaper;
 
     if short {
-        if let Some(title) = entry.title_raw().map(|t| shorthand(t)) {
-            let title = title.format(Some(&common.title_case), None);
+        if let Some(title) = entry.title().map(|t| shorthand(t)) {
             res += &if entry.entry_type == Entry {
                 title.value
             } else {
-                title.title_case
+                title.format_title_case(&common.title_case)
             };
         }
     } else {
-        if let Some(title) = entry.title_fmt(Some(&common.title_case), None) {
-            let title = title.value;
+        if let Some(title) = entry.title() {
+            let tc = title.canonical.format_title_case(&common.title_case);
             res += &if entry.entry_type == Entry {
-                title.value
+                title.canonical.value.clone()
             } else if entry.entry_type == Case {
-                title.title_case.replace("V.", "v.")
+                tc.replace("V.", "v.")
             } else {
-                title.title_case
+                tc
             };
         }
     }
@@ -385,15 +385,16 @@ pub(super) fn get_chunk_title(
 
     if !short {
         if let Some(translation) = entry
-            .title_fmt(None, Some(&common.sentence_case))
-            .and_then(|f| f.translated)
+            .title()
+            .and_then(|title| title.translated.as_ref())
+            .map(|transl| transl.format_sentence_case(&common.sentence_case))
         {
             if !res.is_empty() {
                 res.push(' ');
             }
 
             res.push('[');
-            res += &translation.sentence_case;
+            res += &translation;
             res.push(']');
         }
     }
@@ -451,24 +452,21 @@ fn omit_initial_articles(s: &str) -> String {
     }
 }
 
-fn shorthand(title: &Title) -> FormattableString {
+fn shorthand(title: &Title) -> FmtString {
     if let Some(sh) = title.shorthand.as_ref() {
         sh.clone()
     } else {
-        FormattableString {
-            value: omit_initial_articles(&title.value.value),
-            title_case: title
-                .value
-                .title_case
-                .as_ref()
-                .map(|tc| omit_initial_articles(tc)),
-            sentence_case: title
-                .value
-                .sentence_case
-                .as_ref()
-                .map(|tc| omit_initial_articles(tc)),
-            verbatim: title.value.verbatim,
+        let mut fmt = FmtString::new(omit_initial_articles(&title.canonical.value))
+            .verbatim(title.canonical.verbatim);
+
+        if let Some(tc) = title.canonical.title_case.as_ref() {
+            fmt = fmt.title_case(omit_initial_articles(tc))
         }
+        if let Some(sc) = title.canonical.sentence_case.as_ref() {
+            fmt = fmt.sentence_case(omit_initial_articles(sc))
+        }
+
+        fmt
     }
 }
 
@@ -543,7 +541,7 @@ fn get_info_element(
     .matches(entry);
 
     let prepend = if let Some(lang) = entry.language() {
-        if entry.title_raw().and_then(|t| t.translated.as_ref()).is_none() {
+        if entry.title().and_then(|t| t.translated.as_ref()).is_none() {
             let mut lingo = if capitals { "[In " } else { "[in " }.to_string();
             lingo += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
             if capitals {
@@ -645,7 +643,9 @@ fn get_info_element(
                     local.push(' ');
                 }
 
-                local += &format!("({})", location);
+                local.push('(');
+                local += &location.value;
+                local.push(')');
             }
         }
 
@@ -769,9 +769,8 @@ fn get_info_element(
         if mv_title.is_some() {
             let mut title = DisplayString::new();
             title.start_format(Formatting::Italic);
-            if let Some(own_title) = orig_entry.title_fmt(Some(&common.title_case), None)
-            {
-                title += &own_title.value.title_case;
+            if let Some(own_title) = orig_entry.title() {
+                title += &own_title.canonical.format_title_case(&common.title_case);
             }
             if let Some(eds) = orig_entry.editors() {
                 push_comma_quote_aware(&mut title.value, ',', true);

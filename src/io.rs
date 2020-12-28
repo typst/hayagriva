@@ -11,8 +11,8 @@ use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
 
 use crate::lang::{Case, SentenceCase};
 use crate::types::{
-    get_range, Date, DateError, Duration, DurationError, EntryType, FormattableString,
-    FormattedString, NumOrStr, Person, PersonError, PersonRole, QualifiedUrl, Title,
+    get_range, Date, DateError, Duration, DurationError, EntryType, FmtString, NumOrStr,
+    Person, PersonError, PersonRole, QualifiedUrl, Title,
 };
 use crate::{Entry, Value};
 
@@ -66,10 +66,10 @@ pub enum YamlBibliographyError {
     },
 }
 
-/// Errors that can occur when reading a [FormattableString] from the yaml
+/// Errors that can occur when reading a [FmtString] from the yaml
 /// bibliography file
 #[derive(Clone, Error, Debug)]
-pub enum YamlFormattableStringError {
+pub enum YamlFmtStringError {
     /// A key of a sub-field cannot be parsed as a string.
     #[error("key cannot be parsed as a string")]
     KeyNoString,
@@ -87,9 +87,9 @@ pub enum YamlFormattableStringError {
 /// An error that can occur for each of the parsable data types.
 #[derive(Clone, Error, Debug)]
 pub enum YamlDataTypeError {
-    /// Error when parsing a [FormattableString].
+    /// Error when parsing a [FmtString].
     #[error("formattable string structurally malformed")]
-    FormattableString(#[from] YamlFormattableStringError),
+    FmtString(#[from] YamlFmtStringError),
     /// Error when parsing a [Date].
     #[error("date string structurally malformed")]
     Date(#[from] DateError),
@@ -191,17 +191,17 @@ fn yaml_hash_map_with_string_keys(
 
 fn title_from_hash_map(
     map: LinkedHashMap<Yaml, Yaml>,
-) -> Result<Title, YamlFormattableStringError> {
-    let value = formattable_str_from_hash_map(map.clone())?;
+) -> Result<Title, YamlFmtStringError> {
+    let canonical = fmt_str_from_hash_map(map.clone())?;
     let map = yaml_hash_map_with_string_keys(map);
 
     let shorthand = if let Some(sh) = map.get("shorthand") {
         let sh = if let Some(s) = sh.as_str() {
-            FormattableString::new_shorthand(s.into())
+            FmtString::new(s)
         } else if let Some(hm) = sh.clone().into_hash() {
-            formattable_str_from_hash_map(hm)?
+            fmt_str_from_hash_map(hm)?
         } else {
-            return Err(YamlFormattableStringError::NoValue);
+            return Err(YamlFmtStringError::NoValue);
         };
 
         Some(sh)
@@ -211,11 +211,11 @@ fn title_from_hash_map(
 
     let translated = if let Some(tl) = map.get("translation") {
         let tl = if let Some(s) = tl.as_str() {
-            FormattableString::new_shorthand(s.into())
+            FmtString::new(s)
         } else if let Some(hm) = tl.clone().into_hash() {
-            formattable_str_from_hash_map(hm)?
+            fmt_str_from_hash_map(hm)?
         } else {
-            return Err(YamlFormattableStringError::NoValue);
+            return Err(YamlFmtStringError::NoValue);
         };
 
         Some(tl)
@@ -223,12 +223,12 @@ fn title_from_hash_map(
         None
     };
 
-    Ok(Title { value, shorthand, translated })
+    Ok(Title { canonical, shorthand, translated })
 }
 
-fn formattable_str_from_hash_map(
+fn fmt_str_from_hash_map(
     map: LinkedHashMap<Yaml, Yaml>,
-) -> Result<FormattableString, YamlFormattableStringError> {
+) -> Result<FmtString, YamlFmtStringError> {
     let map = yaml_hash_map_with_string_keys(map);
 
     let fields = ["value", "sentence-case", "title-case"];
@@ -238,44 +238,35 @@ fn formattable_str_from_hash_map(
         .collect();
 
     if fields.is_empty() {
-        return Err(YamlFormattableStringError::NoValue);
+        return Err(YamlFmtStringError::NoValue);
     }
 
     let value = fields.remove(0);
-    let verbatim = if let Some(verbatim) = map.get("verbatim") {
-        verbatim.as_bool().ok_or(YamlFormattableStringError::VerbatimNoBool)?
-    } else {
-        false
-    };
+    let mut fmt = FmtString::new(value);
 
-    let sentence_case = if let Some(sentence_case) = map.get("sentence-case") {
-        Some(
+    if let Some(verbatim) = map.get("verbatim") {
+        fmt = fmt.verbatim(verbatim.as_bool().ok_or(YamlFmtStringError::VerbatimNoBool)?);
+    }
+
+    if let Some(sentence_case) = map.get("sentence-case") {
+        fmt = fmt.sentence_case(
             sentence_case
                 .clone()
                 .into_string()
-                .ok_or(YamlFormattableStringError::ValueNoString)?,
-        )
-    } else {
-        None
-    };
+                .ok_or(YamlFmtStringError::ValueNoString)?,
+        );
+    }
 
-    let title_case = if let Some(title_case) = map.get("title-case") {
-        Some(
+    if let Some(title_case) = map.get("title-case") {
+        fmt = fmt.title_case(
             title_case
                 .clone()
                 .into_string()
-                .ok_or(YamlFormattableStringError::ValueNoString)?,
-        )
-    } else {
-        None
-    };
+                .ok_or(YamlFmtStringError::ValueNoString)?,
+        );
+    }
 
-    Ok(FormattableString::new(
-        value,
-        title_case,
-        sentence_case,
-        verbatim,
-    ))
+    Ok(fmt)
 }
 
 fn person_from_yaml(
@@ -396,7 +387,7 @@ fn entry_from_yaml(
         content: HashMap::new(),
         entry_type: default_type,
     };
-    for (field_name, value) in yaml
+    for (field_name, yaml) in yaml
         .into_hash()
         .ok_or_else(|| YamlBibliographyError::EntryStructure { key: key.clone() })?
         .into_iter()
@@ -407,7 +398,7 @@ fn entry_from_yaml(
         let fname_str = field_name.as_str();
 
         if fname_str == "type" {
-            let val = value.into_string().ok_or_else(|| {
+            let val = yaml.into_string().ok_or_else(|| {
                 YamlBibliographyError::new_data_type_src_error(
                     &key,
                     &field_name,
@@ -423,18 +414,18 @@ fn entry_from_yaml(
         }
 
         let value = match fname_str {
-            "title" => match value {
+            "title" => match yaml {
                 Yaml::Hash(map) => {
                     Value::Title(title_from_hash_map(map).map_err(|e| {
                         YamlBibliographyError::new_data_type_src_error(
                             &key,
                             &field_name,
-                            YamlDataTypeError::FormattableString(e),
+                            YamlDataTypeError::FmtString(e),
                         )
                     })?)
                 }
                 Yaml::String(t) => Value::Title(Title {
-                    value: FormattableString::new_shorthand(t),
+                    canonical: FmtString::new(t),
                     shorthand: None,
                     translated: None,
                 }),
@@ -446,19 +437,17 @@ fn entry_from_yaml(
                     ));
                 }
             },
-            "publisher" | "location" | "archive" | "archive-location" => match value {
-                Yaml::Hash(map) => Value::FormattableString(
-                    formattable_str_from_hash_map(map).map_err(|e| {
+            "publisher" | "location" | "archive" | "archive-location" => match yaml {
+                Yaml::Hash(map) => {
+                    Value::FmtString(fmt_str_from_hash_map(map).map_err(|e| {
                         YamlBibliographyError::new_data_type_src_error(
                             &key,
                             &field_name,
-                            YamlDataTypeError::FormattableString(e),
+                            YamlDataTypeError::FmtString(e),
                         )
-                    })?,
-                ),
-                Yaml::String(t) => {
-                    Value::FormattableString(FormattableString::new_shorthand(t))
+                    })?)
                 }
+                Yaml::String(t) => Value::FmtString(FmtString::new(t)),
                 _ => {
                     return Err(YamlBibliographyError::new_data_type_error(
                         &key,
@@ -468,15 +457,15 @@ fn entry_from_yaml(
                 }
             },
             "author" | "editor" => {
-                Value::Persons(persons_from_yaml(value, &key, &field_name)?)
+                Value::Persons(persons_from_yaml(yaml, &key, &field_name)?)
             }
             "affiliated" => {
                 let mut res = vec![];
-                if value.is_array() {
-                    for item in value {
+                if yaml.is_array() {
+                    for item in yaml {
                         res.push(affiliated_from_yaml(item, &key, &field_name)?);
                     }
-                } else if let Yaml::Hash(item) = value {
+                } else if let Yaml::Hash(item) = yaml {
                     res.push(affiliated_from_yaml(Yaml::Hash(item), &key, &field_name)?);
                 } else {
                     return Err(YamlBibliographyError::new_data_type_error(
@@ -488,7 +477,7 @@ fn entry_from_yaml(
 
                 Value::PersonsWithRoles(res)
             }
-            "date" => Value::Date(match value {
+            "date" => Value::Date(match yaml {
                 Yaml::Integer(value) => Date::from_year(value as i32),
                 Yaml::String(value) => Date::from_str(&value).map_err(|e| {
                     YamlBibliographyError::new_data_type_src_error(
@@ -506,8 +495,8 @@ fn entry_from_yaml(
                 }
             }),
             "issue" | "edition" => {
-                let as_int = value.as_i64();
-                let as_str = if as_int == None { value.into_string() } else { None };
+                let as_int = yaml.as_i64();
+                let as_str = if as_int == None { yaml.into_string() } else { None };
 
                 if let Some(i) = as_int {
                     Value::IntegerOrText(NumOrStr::Number(i))
@@ -522,7 +511,7 @@ fn entry_from_yaml(
                 }
             }
             "volume-total" | "page-total" => {
-                Value::Integer(value.into_i64().ok_or_else(|| {
+                Value::Integer(yaml.into_i64().ok_or_else(|| {
                     YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
@@ -530,7 +519,7 @@ fn entry_from_yaml(
                     )
                 })?)
             }
-            "volume" | "page-range" => Value::Range(match value {
+            "volume" | "page-range" => Value::Range(match yaml {
                 Yaml::Integer(value) => (value .. value),
                 Yaml::String(value) => get_range(&value).ok_or_else(|| {
                     YamlBibliographyError::new_data_type_src_error(
@@ -548,7 +537,7 @@ fn entry_from_yaml(
                 }
             }),
             "runtime" => {
-                let v = value
+                let v = yaml
                     .into_string()
                     .ok_or_else(|| {
                         YamlBibliographyError::new_data_type_error(
@@ -570,7 +559,7 @@ fn entry_from_yaml(
                 Value::Duration(v)
             }
             "time-range" => {
-                let v = value
+                let v = yaml
                     .into_string()
                     .ok_or_else(|| {
                         YamlBibliographyError::new_data_type_error(
@@ -592,7 +581,7 @@ fn entry_from_yaml(
                 Value::TimeRange(v)
             }
             "url" => {
-                let (url, date) = match value {
+                let (url, date) = match yaml {
                     Yaml::String(s) => (
                         Url::parse(&s).map_err(|e| {
                             YamlBibliographyError::new_data_type_src_error(
@@ -673,7 +662,7 @@ fn entry_from_yaml(
                 Value::Url(QualifiedUrl { value: url, visit_date: date })
             }
             "language" => Value::Language(
-                value.into_string().and_then(|f| f.parse().ok()).ok_or_else(|| {
+                yaml.into_string().and_then(|f| f.parse().ok()).ok_or_else(|| {
                     YamlBibliographyError::new_data_type_error(
                         &key,
                         &field_name,
@@ -682,10 +671,10 @@ fn entry_from_yaml(
                 })?,
             ),
             "parent" => {
-                if value.is_array() {
+                if yaml.is_array() {
                     let mut entries = vec![];
 
-                    for item in value {
+                    for item in yaml {
                         entries.push(entry_from_yaml(
                             key.clone(),
                             item,
@@ -697,17 +686,17 @@ fn entry_from_yaml(
                 } else {
                     Value::Entries(vec![entry_from_yaml(
                         key.clone(),
-                        value,
+                        yaml,
                         entry.entry_type.default_parent(),
                     )?])
                 }
             }
             _ => {
-                if let Some(t) = value.clone().into_string() {
+                if let Some(t) = yaml.clone().into_string() {
                     Value::Text(t)
-                } else if let Some(i) = value.as_i64() {
+                } else if let Some(i) = yaml.as_i64() {
                     Value::Text(i.to_string())
-                } else if let Some(i) = value.as_f64() {
+                } else if let Some(i) = yaml.as_f64() {
                     Value::Text(i.to_string())
                 } else {
                     return Err(YamlBibliographyError::new_data_type_error(
@@ -782,7 +771,7 @@ impl Into<Yaml> for EntryType {
     }
 }
 
-impl Into<Yaml> for FormattableString {
+impl Into<Yaml> for FmtString {
     fn into(self) -> Yaml {
         if !self.verbatim && self.title_case.is_none() && self.sentence_case.is_none() {
             Yaml::String(self.value)
@@ -823,24 +812,6 @@ impl Into<Yaml> for FormattableString {
                 Yaml::Hash(hm)
             }
         }
-    }
-}
-
-impl Into<Yaml> for FormattedString {
-    fn into(self) -> Yaml {
-        let mut hm = LinkedHashMap::new();
-
-        hm.insert(Yaml::String("value".into()), Yaml::String(self.value));
-        hm.insert(
-            Yaml::String("title-case".into()),
-            Yaml::String(self.title_case),
-        );
-        hm.insert(
-            Yaml::String("sentence-case".into()),
-            Yaml::String(self.sentence_case),
-        );
-
-        Yaml::Hash(hm)
     }
 }
 
@@ -918,27 +889,27 @@ impl Into<Yaml> for QualifiedUrl {
 impl Into<Yaml> for Title {
     fn into(self) -> Yaml {
         if self.translated.is_none() && self.shorthand.is_none() {
-            self.value.into()
+            self.canonical.into()
         } else {
-            let into = self.value.into();
-            let mut hm = if let Yaml::Hash(map) = into {
-                map
-            } else if let Yaml::String(s) = into {
-                let mut hm = LinkedHashMap::new();
-                hm.insert(Yaml::String("value".into()), Yaml::String(s));
-                hm
-            } else {
-                unreachable!()
+            let mut map = match self.canonical.into() {
+                Yaml::Hash(map) => map,
+                Yaml::String(s) => {
+                    let mut map = LinkedHashMap::new();
+                    map.insert(Yaml::String("value".into()), Yaml::String(s));
+                    map
+                }
+                _ => unreachable!(),
             };
 
             if let Some(translated) = self.translated {
-                hm.insert(Yaml::String("translation".into()), translated.into());
-            }
-            if let Some(shorthand) = self.shorthand {
-                hm.insert(Yaml::String("shorthand".into()), shorthand.into());
+                map.insert(Yaml::String("translation".into()), translated.into());
             }
 
-            Yaml::Hash(hm)
+            if let Some(shorthand) = self.shorthand {
+                map.insert(Yaml::String("shorthand".into()), shorthand.into());
+            }
+
+            Yaml::Hash(map)
         }
     }
 }
@@ -1005,8 +976,7 @@ impl Into<Yaml> for Entry {
         for (s, item) in self.content {
             let content = match item {
                 Value::Title(i) => i.into(),
-                Value::FormattableString(i) => i.into(),
-                Value::FormattedString(i) => i.into(),
+                Value::FmtString(i) => i.into(),
                 Value::Text(i) => Yaml::String(i),
                 Value::Integer(i) => Yaml::Integer(i),
                 Value::Date(i) => i.into(),

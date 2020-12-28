@@ -15,6 +15,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};
 
 use super::{Entry, Value};
+use crate::lang::Case;
 
 #[rustfmt::skip]
 lazy_static! {
@@ -32,6 +33,7 @@ lazy_static! {
 
 /// Describes which kind of work a database entry refers to.
 #[derive(Copy, Clone, Display, Debug, EnumString, PartialEq, Eq)]
+#[non_exhaustive]
 #[strum(serialize_all = "lowercase")]
 pub enum EntryType {
     /// A short text, possibly of journalistic or scientific nature,
@@ -175,6 +177,7 @@ impl EntryType {
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
 #[derive(Clone, Debug, Display, EnumString, PartialEq, Eq)]
+#[non_exhaustive]
 #[strum(serialize_all = "kebab_case")]
 pub enum PersonRole {
     /// Translated the work from a foreign language to the cited edition.
@@ -594,9 +597,9 @@ impl Date {
 /// A string with a value and possibly user-defined overrides for various
 /// formattings.
 #[derive(Clone, Debug, PartialEq)]
-pub struct FormattableString {
+pub struct FmtString {
     /// Canonical string value.
-    pub(crate) value: String,
+    pub value: String,
     /// User-defined title case override.
     pub(crate) title_case: Option<String>,
     /// User-defined sentence case override.
@@ -605,8 +608,59 @@ pub struct FormattableString {
     pub(crate) verbatim: bool,
 }
 
+impl FmtString {
+    /// Create a new formattable string.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            title_case: None,
+            sentence_case: None,
+            verbatim: false,
+        }
+    }
+
+    /// Set the verbatim property.
+    pub fn verbatim(self, verbatim: bool) -> Self {
+        Self { verbatim, ..self }
+    }
+
+    /// Set the title case override.
+    pub fn title_case(self, title_case: impl Into<String>) -> Self {
+        Self {
+            title_case: Some(title_case.into()),
+            ..self
+        }
+    }
+
+    /// Set the sentence case override.
+    pub fn sentence_case(self, sentence_case: impl Into<String>) -> Self {
+        Self {
+            sentence_case: Some(sentence_case.into()),
+            ..self
+        }
+    }
+
+    /// Format this formattable string in title case.
+    ///
+    /// This uses an override defined through [`title_case`](Self::title_case)
+    /// if present, or falls back to the given title case formatter otherwise.
+    pub fn format_title_case(&self, title: &dyn Case) -> String {
+        self.title_case.clone().unwrap_or_else(|| title.apply(&self.value))
+    }
+
+    /// Format this formattable string in sentence case.
+    ///
+    /// This uses an override defined through [`sentence_case`](Self::sentence_case)
+    /// if present, or falls back to the given sentence case formatter otherwise.
+    pub fn format_sentence_case(&self, sentence: &dyn Case) -> String {
+        self.sentence_case
+            .clone()
+            .unwrap_or_else(|| sentence.apply(&self.value))
+    }
+}
+
 #[cfg(feature = "biblatex")]
-impl FormattableString {
+impl FmtString {
     pub(crate) fn extend(&mut self, f2: Self) {
         self.value += &f2.value;
         self.verbatim = self.verbatim || f2.verbatim;
@@ -640,95 +694,76 @@ impl FormattableString {
     }
 }
 
-/// A collection of formattable Strings consisting of a title, a translated title, and a shorthand.
+impl AsRef<str> for FmtString {
+    fn as_ref(&self) -> &str {
+        &self.value
+    }
+}
+
+impl From<&str> for FmtString {
+    fn from(string: &str) -> FmtString {
+        FmtString::new(string)
+    }
+}
+
+impl From<String> for FmtString {
+    fn from(string: String) -> FmtString {
+        FmtString::new(string)
+    }
+}
+
+/// A collection of formattable strings consisting of a title, a translated
+/// title, and a shorthand.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Title {
     /// Canonical title.
-    pub value: FormattableString,
+    pub canonical: FmtString,
     /// Optional title shorthand.
-    pub shorthand: Option<FormattableString>,
+    pub shorthand: Option<FmtString>,
     /// Optional title translation.
-    pub translated: Option<FormattableString>,
+    pub translated: Option<FmtString>,
 }
 
 impl Title {
-    /// Create a new Title.
-    pub fn new(
-        value: FormattableString,
-        shorthand: Option<FormattableString>,
-        translated: Option<FormattableString>,
-    ) -> Self {
-        Self { value, shorthand, translated }
-    }
-
-    /// Create a new title using a [`FormattableString`].
-    pub fn from_fs(value: FormattableString) -> Self {
-        Self { value, shorthand: None, translated: None }
-    }
-
-    /// Create a new title from a string reference.
-    pub fn from_str(s: &str) -> Self {
-        Self::from_fs(FormattableString::new_shorthand(s.into()))
-    }
-}
-
-/// Just like a [Title], but with formatting applied.
-#[derive(Clone, Debug, PartialEq)]
-pub struct FormattedTitle {
-    /// Canonical title.
-    pub value: FormattedString,
-    /// Optional title shorthand.
-    pub shorthand: Option<FormattedString>,
-    /// Optional title translation.
-    pub translated: Option<FormattedString>,
-}
-
-/// A string with a canonical value and title and sentence formatted variants.
-#[derive(Clone, Debug, PartialEq)]
-pub struct FormattedString {
-    /// Canonical string value.
-    pub value: String,
-    /// String formatted as title case.
-    pub title_case: String,
-    /// String formatted as sentence case.
-    pub sentence_case: String,
-}
-
-impl FormattableString {
-    /// Creates a new formattable string.
-    pub fn new(
-        value: String,
-        title_case: Option<String>,
-        sentence_case: Option<String>,
-        verbatim: bool,
-    ) -> Self {
+    /// Create a new title.
+    pub fn new(canonical: impl Into<FmtString>) -> Self {
         Self {
-            value,
-            title_case,
-            sentence_case,
-            verbatim,
+            canonical: canonical.into(),
+            shorthand: None,
+            translated: None,
         }
     }
 
-    /// Creates a new formattable string from just a string.
-    pub fn new_shorthand(value: String) -> Self {
+    /// Set a shorthand version.
+    pub fn shorthand(self, shorthand: impl Into<FmtString>) -> Self {
         Self {
-            value,
-            title_case: None,
-            sentence_case: None,
-            verbatim: false,
+            shorthand: Some(shorthand.into()),
+            ..self
         }
     }
 
-    /// Creates a new formattable string that opts out of automatic
-    /// formatting.
-    pub fn new_verbatim(value: String, verbatim: bool) -> Self {
+    /// Set a translated version.
+    pub fn translated(self, translated: impl Into<FmtString>) -> Self {
         Self {
-            value,
-            verbatim,
-            title_case: None,
-            sentence_case: None,
+            translated: Some(translated.into()),
+            ..self
         }
+    }
+}
+
+pub(crate) trait FmtOptionExt<'a> {
+    fn value(self) -> Option<&'a str>;
+}
+
+impl<'a> FmtOptionExt<'a> for Option<&'a FmtString> {
+    fn value(self) -> Option<&'a str> {
+        self.map(|fmt| fmt.value.as_str())
+    }
+}
+
+impl<'a> FmtOptionExt<'a> for Option<&'a Title> {
+    fn value(self) -> Option<&'a str> {
+        self.map(|title| title.canonical.value.as_str())
     }
 }
 
@@ -964,8 +999,7 @@ macro_rules! impl_try_from_value {
 }
 
 impl_try_from_value!(Title, Title);
-impl_try_from_value!(FormattableString, FormattableString);
-impl_try_from_value!(FormattedString, FormattedString);
+impl_try_from_value!(FmtString, FmtString);
 impl_try_from_value!(Text, String, str);
 impl_try_from_value!(Integer, i64);
 impl_try_from_value!(Date, Date);

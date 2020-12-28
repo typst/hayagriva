@@ -401,7 +401,7 @@ mod tests {
     fn no_author() {
         let mut e = Entry::new("report", EntryType::Report);
         e.set_date(Date::from_year(1999));
-        e.set_title(Title::from_str("Third International Report on Reporting"));
+        e.set_title(Title::new("Third International Report on Reporting"));
         let es = vec![e];
         let formatter = AuthorYear::new(es.iter());
         let citations = Cs(&es);

@@ -1,5 +1,10 @@
 //! Citation and bibliography styles.
 
+pub mod apa;
+pub mod chicago;
+pub mod ieee;
+pub mod mla;
+
 use std::collections::HashMap;
 use std::convert::Into;
 use std::fmt::Write;
@@ -11,12 +16,8 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::types::Person;
 use super::Entry;
-use chicago::CommonChicagoConfig;
 
-pub mod apa;
-pub mod chicago;
-pub mod ieee;
-pub mod mla;
+use chicago::CommonChicagoConfig;
 
 /// Describes a pair of brackets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -702,43 +703,40 @@ impl<'s> CitationFormatter<'s> for Alphabetical<'s> {
             entry = delegate_titled_entry(entry);
 
             let creators = chicago::get_creators(entry).0;
-            let mut res = match creators.len() {
-                0 => if let Some(org) = entry.organization() {
-                    org.into()
-                } else if let Some(title) = delegate_titled_entry(entry).title() {
-                    title.into()
-                } else {
-                    atomic.key.chars().filter(|c| c.is_alphabetic()).collect::<String>()
+
+            #[rustfmt::skip]
+            let mut res: String = match creators.len() {
+                0 => {
+                    let pseudo_creator = if let Some(org) = entry.organization() {
+                        org.into()
+                    } else if let Some(title) = delegate_titled_entry(entry).title() {
+                        title.canonical.value.clone()
+                    } else {
+                        atomic
+                            .key
+                            .chars()
+                            .filter(|c| c.is_alphabetic())
+                            .collect::<String>()
+                    };
+
+                    pseudo_creator.graphemes(true).take(self.letters).collect()
                 }
-                .graphemes(true)
-                .enumerate()
-                .filter(|(i, _)| *i < self.letters)
-                .map(|(_, e)| e)
-                .collect::<String>(),
-                1 => creators[0]
-                    .name
-                    .graphemes(true)
-                    .enumerate()
-                    .filter(|(i, _)| *i < self.letters)
-                    .map(|(_, e)| e)
-                    .collect::<String>(),
+                1 => {
+                    creators[0].name.graphemes(true).take(self.letters).collect()
+                }
                 2 | 3 => {
-                    let mut res = String::new();
-                    for person in creators {
-                        res += person.name.graphemes(true).next().unwrap_or_default();
-                    }
-                    res
+                    creators
+                        .iter()
+                        .filter_map(|person| person.name.graphemes(true).next())
+                        .collect()
                 }
                 _ => {
-                    let mut s = creators[0]
+                    creators[0]
                         .name
                         .graphemes(true)
-                        .enumerate()
-                        .filter(|(i, _)| *i < self.letters)
-                        .map(|(_, e)| e)
-                        .collect::<String>();
-                    s.push('+');
-                    s
+                        .take(self.letters)
+                        .chain(std::iter::once("+"))
+                        .collect()
                 }
             };
 

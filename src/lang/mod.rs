@@ -2,8 +2,6 @@
 
 pub(crate) mod en;
 
-use super::types::{FormattableString, FormattedString, FormattedTitle, Title};
-
 /// Convert a string to a well-defined lower/uppercase scheme.
 pub trait Case {
     /// Apply the case transformation to the argument.
@@ -411,64 +409,6 @@ impl Case for SentenceCase {
         }
 
         res
-    }
-}
-
-impl FormattableString {
-    /// Apply title and sentence case formatting, if the formatters are provided
-    /// and the user did not override.
-    pub fn format(
-        self,
-        title: Option<&dyn Case>,
-        sentence: Option<&dyn Case>,
-    ) -> FormattedString {
-        let (sentence_case, title_case) = if self.verbatim {
-            (
-                self.sentence_case.as_ref().unwrap_or(&self.value).clone(),
-                self.title_case.as_ref().unwrap_or(&self.value).clone(),
-            )
-        } else {
-            (
-                self.sentence_case.clone().unwrap_or_else(|| {
-                    if let Some(tf) = sentence {
-                        tf.apply(&self.value)
-                    } else {
-                        self.value.clone()
-                    }
-                }),
-                self.title_case.clone().unwrap_or_else(|| {
-                    if let Some(tf) = title {
-                        tf.apply(&self.value)
-                    } else {
-                        self.value.clone()
-                    }
-                }),
-            )
-        };
-
-        let fstr = FormattedString {
-            sentence_case,
-            title_case,
-            value: self.value.clone(),
-        };
-
-        fstr
-    }
-}
-
-impl Title {
-    /// Apply title and sentence case formatting, if the formatters are provided
-    /// and the user did not override.
-    pub fn format(
-        self,
-        title: Option<&dyn Case>,
-        sentence: Option<&dyn Case>,
-    ) -> FormattedTitle {
-        FormattedTitle {
-            value: self.value.format(title, sentence),
-            shorthand: self.shorthand.map(|s| s.format(title, sentence)),
-            translated: self.translated.map(|s| s.format(title, sentence)),
-        }
     }
 }
 

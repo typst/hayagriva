@@ -2,18 +2,17 @@
 
 use std::collections::HashMap;
 
+use super::{
+    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
+    get_title, is_authoritative, web_creator, AuthorRole, CommonChicagoConfig, DateMode,
+};
 use crate::style::{
     abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
     AtomicCitation, Bracket, BracketMode, BracketPreference, CitationError,
     CitationFormatter, DisplayString, Formatting,
 };
-use crate::types::EntryType::*;
+use crate::types::{EntryType::*, FmtOptionExt};
 use crate::Entry;
-
-use super::{
-    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
-    get_title, is_authoritative, web_creator, AuthorRole, CommonChicagoConfig, DateMode,
-};
 
 /// Describes the desired note type. This normally depends on the
 /// previously cited keys, depending on the behavior. Also see the Chicago
@@ -144,7 +143,7 @@ impl<'s> Note<'s> {
             if !res.is_empty() {
                 res += ", ";
             }
-            res += loc;
+            res += &loc.value;
         } else if matches!(&entry.entry_type, Book | Anthology)
             && entry.any_date().map(|d| d.year).unwrap_or(2020) < 1981
         {
@@ -201,11 +200,12 @@ impl<'s> Note<'s> {
 
             if let Some(loc) = conf.location() {
                 res += ", ";
-                res += loc;
+                res += &loc.value;
             }
         } else if let Some(publisher) = entry
             .publisher()
-            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
+            .value()
+            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
             .or_else(|| {
                 if matches!(&entry.entry_type, Report | Thesis)
                     || (matches!(&entry.entry_type, Case | Legislation)
@@ -260,9 +260,9 @@ impl<'s> Note<'s> {
             items.extend(
                 entry
                     .organization()
-                    .or_else(|| entry.publisher())
+                    .or_else(|| entry.publisher().value())
                     .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher()))
+                    .or_else(|| parent.and_then(|p| p.publisher().value()))
                     .map(Into::into),
             );
 
@@ -270,6 +270,7 @@ impl<'s> Note<'s> {
                 entry
                     .location()
                     .or_else(|| parent.and_then(|p| p.location()))
+                    .value()
                     .map(Into::into),
             );
 
@@ -529,11 +530,11 @@ impl<'s> Note<'s> {
                 if let Some(archive) = entry.archive() {
                     push_comma_quote_aware(&mut res.value, ',', true);
 
-                    res += archive;
+                    res += &archive.value;
 
                     if let Some(al) = entry.archive_location() {
                         res += ", ";
-                        res += al;
+                        res += &al.value;
                     }
                 }
             }

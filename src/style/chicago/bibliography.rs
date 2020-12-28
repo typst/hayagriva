@@ -2,18 +2,17 @@
 //! _Notes and Bibliography_ and the _Author-Date_ style. The style can
 //! be set through the [`Bibliography`] struct.
 
+use super::{
+    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
+    get_title, AuthorRole, CommonChicagoConfig, DateMode, Mode,
+};
 use crate::style::{
     abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
     format_range, push_comma_quote_aware, BibliographyFormatter, DisplayString,
     Formatting,
 };
-use crate::types::EntryType::*;
+use crate::types::{EntryType::*, FmtOptionExt};
 use crate::Entry;
-
-use super::{
-    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
-    get_title, AuthorRole, CommonChicagoConfig, DateMode, Mode,
-};
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -117,7 +116,7 @@ impl Bibliography {
                 if !res.is_empty() {
                     res += ", ";
                 }
-                res += loc;
+                res += &loc.value;
             } else if matches!(&entry.entry_type, Book | Anthology)
                 && entry.any_date().map(|d| d.year).unwrap_or(2020) < 1981
             {
@@ -176,11 +175,12 @@ impl Bibliography {
 
             if let Some(loc) = conf.location() {
                 res += ", ";
-                res += loc;
+                res += &loc.value;
             }
         } else if let Some(publisher) = entry
             .publisher()
-            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
+            .value()
+            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
             .or_else(|| {
                 if matches!(&entry.entry_type, Report | Thesis)
                     || (matches!(&entry.entry_type, Case | Legislation)
@@ -239,9 +239,9 @@ impl Bibliography {
             items.extend(
                 entry
                     .organization()
-                    .or_else(|| entry.publisher())
+                    .or_else(|| entry.publisher().value())
                     .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher()))
+                    .or_else(|| parent.and_then(|p| p.publisher().value()))
                     .map(Into::into),
             );
 
@@ -249,6 +249,7 @@ impl Bibliography {
                 entry
                     .location()
                     .or_else(|| parent.and_then(|p| p.location()))
+                    .value()
                     .map(Into::into),
             );
 
@@ -480,11 +481,11 @@ impl Bibliography {
             if let Some(archive) = entry.archive() {
                 push_comma_quote_aware(&mut res.value, ',', true);
 
-                res += archive;
+                res += &archive.value;
 
                 if let Some(al) = entry.archive_location() {
                     res += ", ";
-                    res += al;
+                    res += &al.value;
                 }
             }
         }
