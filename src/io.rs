@@ -14,8 +14,8 @@ use biblatex::Bibliography;
 
 use crate::lang::{Case, SentenceCase};
 use crate::types::{
-    get_range, Date, DateError, Duration, DurationError, EntryType, FmtString, NumOrStr,
-    Person, PersonError, PersonRole, QualifiedUrl, Title,
+    parse_range, Date, DateError, Duration, DurationError, EntryType, FmtString,
+    NumOrStr, Person, PersonError, PersonRole, QualifiedUrl, Title,
 };
 use crate::{Entry, Value};
 
@@ -536,7 +536,7 @@ fn entry_from_yaml(
             }
             "volume" | "page-range" => Value::Range(match yaml {
                 Yaml::Integer(value) => (value .. value),
-                Yaml::String(value) => get_range(&value).ok_or_else(|| {
+                Yaml::String(value) => parse_range(&value).ok_or_else(|| {
                     YamlBibliographyError::new_data_type_src_error(
                         &key,
                         &field_name,

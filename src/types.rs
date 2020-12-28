@@ -253,20 +253,19 @@ pub enum PersonError {
 }
 
 impl Person {
-    /// This function expects a `parts` &str slice of the length between one
-    /// and three. The first part will be interpreted as the <prefix> <Name>,
-    /// the second part as the given name and the third part as the suffix.
+    /// This function expects a list of strings with its length between one and
+    /// three. The first part will be interpreted as the <prefix> <Name>, the
+    /// second part as the given name and the third part as the suffix.
     ///
     /// The prefix and name are seperated just like in BiBTeX, as described
-    /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The
-    /// gist is that the given name will start at the first word with a capital
+    /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The gist
+    /// is that the given name will start at the first word with a capital
     /// letter, if there are any such words.
     ///
     /// The call site of this function in the library obtains the slice by
     /// calling `split(",")` on a string like `"Des Egdens, Britta"`.
     ///
     /// [taming]: https://ftp.rrze.uni-erlangen.de/ctan/info/bibtex/tamethebeast/ttb_en.pdf
-
     pub fn from_strings(parts: &[&str]) -> Result<Self, PersonError> {
         if parts.is_empty() {
             return Err(PersonError::Empty);
@@ -345,9 +344,13 @@ impl Person {
         })
     }
 
-    /// Formats the given name into initials, `"Judith Beatrice"`
-    /// would yield `"J. B."` if the `delimiter` argument is set to
-    /// `Some(".")`, `"Klaus-Peter"` would become `"K-P"` without a delimiter.
+    /// Formats the given name into initials.
+    ///
+    /// For example, `"Judith Beatrice"` would yield `"J. B."` if the
+    /// `delimiter` argument is set to `Some(".")`, `"Klaus-Peter"` would become
+    /// `"K-P"` without a delimiter.
+    ///
+    /// Returns `None` if the person has no given name.
     pub fn initials(&self, delimiter: Option<&str>) -> Option<String> {
         if let Some(gn) = &self.given_name {
             let mut collect = true;
@@ -504,7 +507,7 @@ pub enum DateError {
 }
 
 impl Date {
-    /// Parse a date atom from a string.
+    /// Parse a date from a string.
     pub fn from_str(source: &str) -> Result<Self, DateError> {
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
@@ -544,13 +547,14 @@ impl Date {
         Self { year, month: None, day: None }
     }
 
-    /// Prints the year as a human-readable gregorian year.
+    /// Returns the year as a human-readable gregorian year.
+    ///
     /// Non-positive values will be marked with a "BCE" postfix.
     pub fn display_year(&self) -> String {
         self.display_year_opt(true, false, false, false)
     }
 
-    /// Prints the year as a human-readable gregorian year with controllable
+    /// Returns the year as a human-readable gregorian year with controllable
     /// pre- and postfixes denominating the year's positivity.
     ///
     /// ## Arguments
@@ -772,12 +776,12 @@ impl<'a> FmtOptionExt<'a> for Option<&'a Title> {
 pub struct QualifiedUrl {
     /// The [Url].
     pub value: Url,
-    /// The possible last visited Date.
+    /// The last visited date.
     pub visit_date: Option<Date>,
 }
 
 /// Parses an integer range from a string reference.
-pub fn get_range(source: &str) -> Option<Range<i64>> {
+pub(crate) fn parse_range(source: &str) -> Option<Range<i64>> {
     RANGE_REGEX.captures(source).map(|caps| {
         let start: i64 = str::parse(caps.name("s").expect("start is mandatory").as_str())
             .expect("Only queried for digits");
