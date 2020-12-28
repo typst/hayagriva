@@ -1,16 +1,13 @@
 use std::fs::{read_to_string, OpenOptions};
-use std::io;
-use std::io::Write;
+use std::io::{ErrorKind as IoErrorKind, Write};
+use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
 
 use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use strum::{EnumVariantNames, VariantNames};
 
-#[cfg(feature = "biblatex")]
-use biblatex::Bibliography as TexBibliography;
-
-use hayagriva::io::{from_yaml_str, to_yaml_str};
+use hayagriva::io;
 use hayagriva::style::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::style::{
     apa, chicago, ieee, mla, Alphabetical, AtomicCitation, AuthorTitle,
@@ -18,22 +15,24 @@ use hayagriva::style::{
 };
 use hayagriva::Selector;
 
-#[cfg(feature = "biblatex")]
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Format {
+    #[cfg(feature = "biblatex")]
     Bibtex,
+    #[cfg(feature = "biblatex")]
     Biblatex,
     Yaml,
 }
 
-#[cfg(feature = "biblatex")]
 impl FromStr for Format {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, &'static str> {
         match s.to_ascii_lowercase().as_ref() {
+            #[cfg(feature = "biblatex")]
             "bibtex" => Ok(Format::Bibtex),
+            #[cfg(feature = "biblatex")]
             "biblatex" => Ok(Format::Biblatex),
             "yaml" => Ok(Format::Yaml),
             _ => Err("unknown format"),
@@ -91,18 +90,14 @@ impl FromStr for CitationStyle {
 
 /// Main function of the Hayagriva CLI.
 fn main() {
-    let mut app = App::new("Hayagriva CLI")
+    let matches = App::new("Hayagriva CLI")
         .version(crate_version!())
         .author("The Typst Project Developers <hi@typst.app>")
         .setting(AppSettings::VersionlessSubcommands)
         .about("Output appropriate references and citations for your YAML-encoded bibliography database. Query the database for various source types with selectors.")
         .arg(
             Arg::with_name("INPUT").help("Sets the bibliography to use").required(true).index(1)
-        );
-
-    #[cfg(feature = "biblatex")]
-    {
-        app = app.arg(
+        ).arg(
             Arg::with_name("format")
                 .long("format")
                 .short("f")
@@ -110,10 +105,7 @@ fn main() {
                 .possible_values(&Format::VARIANTS)
                 .case_insensitive(true)
                 .takes_value(true),
-        )
-    }
-
-    let matches = app.arg(
+        ).arg(
             Arg::with_name("selector")
                 .long("select")
                 .help("Filter your bibliography using selectors")
@@ -197,52 +189,53 @@ fn main() {
         )
         .get_matches();
 
-    let input = matches.value_of("INPUT").unwrap();
+    let input = Path::new(matches.value_of("INPUT").unwrap());
 
-    #[cfg(feature = "biblatex")]
     let format = value_t!(matches, "format", Format).unwrap_or_else(|_| {
-        if let Some(pos) = input.rfind('.') {
-            let file_ext = &input[pos + 1 ..].to_lowercase();
-            match file_ext.as_ref() {
-                "bib" => Format::Bibtex,
-                _ => Format::Yaml,
-            }
-        } else {
-            Format::Yaml
+        #[allow(unused_mut)]
+        let mut format = Format::Yaml;
+
+        #[cfg(feature = "biblatex")]
+        if input
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map_or(false, |ext| ext.to_lowercase() == "bib")
+        {
+            format = Format::Bibtex;
         }
+
+        format
     });
 
     let bibliography = {
         let input = match read_to_string(input) {
             Ok(s) => s,
             Err(e) => {
-                if e.kind() == io::ErrorKind::NotFound {
-                    eprintln!("Bibliography file \"{}\" not found.", input);
+                if e.kind() == IoErrorKind::NotFound {
+                    eprintln!("Bibliography file \"{}\" not found.", input.display());
                     exit(5);
                 } else if let Some(os) = e.raw_os_error() {
                     eprintln!(
                         "Error when reading the bibliography file \"{}\": {}",
-                        input, os
+                        input.display(),
+                        os
                     );
                     exit(6);
                 } else {
-                    eprintln!("Error when reading the bibliography file \"{}\".", input);
+                    eprintln!(
+                        "Error when reading the bibliography file \"{}\".",
+                        input.display()
+                    );
                     exit(6);
                 }
             }
         };
 
-        #[cfg(feature = "biblatex")]
         match format {
-            Format::Yaml => from_yaml_str(&input).unwrap(),
-            Format::Biblatex | Format::Bibtex => {
-                let tex = TexBibliography::parse(&input).unwrap();
-                tex.into_iter().map(|e| e.into()).collect()
-            }
+            Format::Yaml => io::from_yaml_str(&input).unwrap(),
+            #[cfg(feature = "biblatex")]
+            Format::Biblatex | Format::Bibtex => io::from_biblatex_str(&input).unwrap(),
         }
-
-        #[cfg(not(feature = "biblatex"))]
-        from_yaml_str(&input).unwrap()
     };
 
     let bib_len = bibliography.len();
@@ -438,7 +431,7 @@ fn main() {
             }
         }
         ("dump", Some(sub_matches)) => {
-            let bib = to_yaml_str(bibliography).unwrap();
+            let bib = io::to_yaml_str(bibliography).unwrap();
             if let Some(path) = sub_matches.value_of("output") {
                 let options = if sub_matches.is_present("force") {
                     OpenOptions::new().write(true).create(true).truncate(true).open(path)
@@ -447,12 +440,12 @@ fn main() {
                 };
 
                 if let Err(e) = options {
-                    if e.kind() == io::ErrorKind::AlreadyExists {
+                    if e.kind() == IoErrorKind::AlreadyExists {
                         eprintln!(
                             "The file already exists. If you want to override its contents, add the `--force` flag."
                         );
                         exit(2);
-                    } else if e.kind() == io::ErrorKind::PermissionDenied {
+                    } else if e.kind() == IoErrorKind::PermissionDenied {
                         eprintln!(
                             "The permission to create the file \"{}\" was denied.",
                             path

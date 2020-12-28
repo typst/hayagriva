@@ -283,7 +283,10 @@ impl Entry {
             .cloned()
             .collect()
     }
+}
 
+#[cfg(feature = "biblatex")]
+impl Entry {
     /// Adds a parent to the currrent entry. The parent
     /// list will be created if there is none.
     pub(crate) fn add_parent(&mut self, entry: Entry) {

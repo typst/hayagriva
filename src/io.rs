@@ -9,6 +9,9 @@ use unic_langid::LanguageIdentifier;
 use url::Url;
 use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
 
+#[cfg(feature = "biblatex")]
+use biblatex::Bibliography;
+
 use crate::lang::{Case, SentenceCase};
 use crate::types::{
     get_range, Date, DateError, Duration, DurationError, EntryType, FmtString, NumOrStr,
@@ -173,6 +176,18 @@ pub fn from_yaml(yaml: Yaml) -> Result<Vec<Entry>, YamlBibliographyError> {
     }
 
     Ok(entries)
+}
+
+/// Parse a bibliography from a BibLaTeX source string.
+#[cfg(feature = "biblatex")]
+pub fn from_biblatex_str(biblatex: &str) -> Option<Vec<Entry>> {
+    Bibliography::parse(biblatex).map(from_biblatex)
+}
+
+/// Parse a bibliography from a BibLaTeX [`Bibliography`].
+#[cfg(feature = "biblatex")]
+pub fn from_biblatex(bibliography: Bibliography) -> Vec<Entry> {
+    bibliography.into_iter().map(Into::into).collect()
 }
 
 fn yaml_hash_map_with_string_keys(
