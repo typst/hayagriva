@@ -10,7 +10,7 @@ Hayagriva is a tool that can help your or your apps deal with literature and oth
 - Reading and writing said databases from YAML files
 - Formatting literature into reference list entries and in-text citations as defined by popular style guides
 - Interoperability with BibTeX
-- Querying your literature items by type and available meta data
+- Querying your literature items by type and available metadata
 
 Hayagriva can be used both as a library and as a Command Line Interface (CLI). Skip to the [section "Usage"](#usage) for more information about usage in your application or to the [section "Installation"](#installation) to learn about how to install and use Hayagriva on your terminal.
 
@@ -22,7 +22,7 @@ Add this to your `Cargo.toml`:
 hayagriva = "0.1"
 ```
 
-Below, there is an example about how to parse a YAML database and get an Modern Language Association-style citation.
+Below, there is an example of how to parse a YAML database and get a Modern Language Association-style citation.
 
 ```rust
 // Parse a bibliography
@@ -45,15 +45,18 @@ assert_eq!(bib[0].date().unwrap().year, 2014);
 use hayagriva::style::BibliographyFormatter;
 use hayagriva::style::mla::Mla;
 
-let foratter = Mla::new();
-let citation = Mla::format(&bib[0], None);
+let formatter = Mla::new();
+let citation = formatter::format(&bib[0], None);
 assert_eq!(citation.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
 // Information about the italicisation is available in `citation.formatting`
 ```
 
 Formatting for in-text citations is available through implementors of the `hayagriva::style::CitationFormatter` trait.
 
-If the default features are enabled, the [`Entry`](https://docs.rs/biblatex/latest/biblatex/struct.Entry.html)-struct of [biblatex](https://crates.io/crates/biblatex) will receive an implementation of the `Into<hayagriva::Entry>`-Trait. Therefore you can use your Biblatex content like this:
+If the default features are enabled, Hayagriva supports BibTeX and BibLaTeX bibliographies.
+You can then use `io::from_biblatex_str` to parse such bibliographies.
+
+Should you need more manual control, the library's native `Entry` struct also offers an implementation of the `From<biblatex::Entry>`-Trait. You will need to depend on the [biblatex](https://docs.rs/biblatex/latest/biblatex/) crate to obtain its Entry. Therefore you could also use your BibLaTeX content like this:
 
 ```rust
 use hayagriva::Entry;
@@ -67,13 +70,33 @@ If you do not need BibLaTeX compatibility, you can use Hayagriva without the def
 hayagriva = { version = "0.1", default-features = false }
 ```
 
-Hayagriva uses a custom selector language that enables you to filter bibliographies by type of media. For more information about selectors, refer to the [selectors.md file](https://github.com/typst/hayagriva/blob/main/selectors.md). While you can parse user-defined selectors using the function `hayagriva::selectors::parse`, you may instead want to use the selector functions and macros to avoid the run time cost of parsing a selector when working with constant selectors.
+Hayagriva uses a custom selector language that enables you to filter bibliographies by type of media. For more information about selectors, refer to the [selectors.md file](https://github.com/typst/hayagriva/blob/main/selectors.md). While you can parse user-defined selectors using the function `hayagriva::selectors::parse`, you may instead want to use the selector macro to avoid the run time cost of parsing a selector when working with constant selectors.
 
-The functions `Id` (identifier of the entry type) and `Wc` (wildcard) allow you to create atomic selectors while the functions `Neg` (negate an expression) and `Bind` (obtain a reference to a matching parent) as well as the `attrs!` macro (specify attributes like `volume` that have to be set on matching entries) allow to modify selectors. The macro `sel` allows to compose selectors:
+The macro `select!` in the crate's root enables you to write selectors in a syntax very close to the parsed selectors. There are three notable differences:
 
-- `sel!(Id("article") => Id("proceedings"))` finds an article that is parented by a conference proceedings volume
-- `sel!(alt Id("video"), Id("audio"), Id("artwork"))` will match either a video or audio item or an artwork.
-- `sel!(Wc() => sel!(mul Id("blog"), Id("newspapaer")))` will match anything that is parented by both a blog and a newspaper.
+- Type names are case sensitive and have to start with a capital letter since they are just variants of `types::EntryType`
+- Binding variables and required attributes are strings and therefore have to be surrounded by double quotes
+- Any non-atomic selector (`*` or an `EntryType` variant are atomic) in other constructions like ancestrage selectors or bindings must be in parentheses since they have to parse as a single token tree for correct expansion. If you get an error message along the lines of having too much recursion, you likely forgot some parentheses.
+
+Consider these examples of selectors in both notations:
+
+```rust
+use hayagriva::select;
+use hayagriva::selectors::parse;
+
+// finds an article that is parented by a conference proceedings volume
+assert_eq!(parse("article > proceedings"), select!(Article > Proceedings));
+
+// matches either a video or audio item or an artwork
+assert_eq!(parse("video | audio | artwork"), select!(Video | Audio | Artwork));
+
+// matches anything that is parented by both a blog and a newspaper
+assert_eq!(parse("* > (blog | newspaper)"), select!(* > (Blog | Newspaper)));
+
+// matches anything with a URL or a parent with a URL and binds the entry with the attribute to the variable `i`.
+// Note that expressions like i:*[url] do not need parentheses in the parsed selector, but they do in the macro!
+assert_eq!(parse("i:*[url] | * > i:*[url]"), select!(("i":(*["url"])) | (* > "i":(*["url"]))));
+```
 
 There are two ways to check if a selector matches an entry:
 
@@ -97,7 +120,7 @@ Cargo will install the Hayagriva Command Line Interface for you. Now, you just n
 Suppose you have this file saved as `literature.yml` in your current working directory:
 
 ```yaml
-dependance:
+dependence:
     type: Article
     title: The program dependence graph and its use in optimization
     author: ["Ferrante, Jeanne", "Ottenstein, Karl J.", "Warren, Joe D."]
@@ -126,7 +149,7 @@ You can then issue the following command to get reference list entries for both 
 hayagriva literature.yml reference
 ```
 
-Hayagriva defaults to the Author Date style of the Chicago Manual of Style (17th edition). If you prefer to use another style, you can, for example, do the following to use the style of ther American Psychological Association instead:
+Hayagriva defaults to the Author-Date style of the Chicago Manual of Style (17th edition). If you prefer to use another style, you can, for example, do the following to use the style of the American Psychological Association instead:
 ```bash
 hayagriva literature.yml reference -s apa
 ```
@@ -138,7 +161,7 @@ If you now need an in-text citation to the second article in the above file, you
 hayagriva literature.yml -k feminism citation
 ```
 
-The `-k` flag preceeds the sub-command (e.g. `citation`, `reference`) and takes a comma-separated list of keys (or a single one). The sub-command will then only work on the specified keys. The `citation` sub-command also allows for a `-s` flag. Its possible values can be viewed with `hayagriva help citation`, it will default to an author-date style.
+The `-k` flag precedes the sub-command (e. g. `citation`, `reference`) and takes a comma-separated list of keys (or a single one). The sub-command will then only work on the specified keys. The `citation` sub-command also allows for a `-s` flag. Its possible values can be viewed with `hayagriva help citation`, it will default to an author-date style.
 
 Instead of the `-k` flag, you can also use the `--select` flag to provide a custom [Hayagriva selector.](https://github.com/typst/hayagriva/blob/main/selectors.md) For example, you could run the following to only reference entries that have a URL or DOI at the top level:
 ```bash
@@ -147,7 +170,7 @@ hayagriva literature.yml --select "*[url] | *[doi]" reference
 
 This expression would match both entries in our example and therefore the command would return the same result as the first reference command.
 
-Hayagriva also allows you to explore which values where bound to which sub-entries if the selector matches. This is especially useful if you intend to consume Hayagriva as a dependancy in your application and need to debug an expression. Suppose this selector that always binds the sub-entry with the volume field to `a`, regardless of if it occurred at the top level or in the first parent: `a:*[volume] | * > a:[volume]`. You can then use the command below to show which sub-entry was bound as `a` for each match:
+Hayagriva also allows you to explore which values were bound to which sub-entries if the selector matches. This is especially useful if you intend to consume Hayagriva as a dependency in your application and need to debug an expression. Consider this selector which always binds the sub-entry with the volume field to `a`, regardless of if it occurred at the top level or in the first parent: `a:*[volume] | * > a:[volume]`. You can then use the command below to show which sub-entry the selector bound as `a` for each match:
 ```bash
 hayagriva literature.yml --select "a:*[volume] | * > a:[volume]" keys --show-bound
 ```
@@ -170,20 +193,20 @@ The converted file will instead be printed to the terminal if you omit the `-o` 
 - Modern Language Association (MLA) "Works Cited" references from the 8th edition of the MLA Handbook
 - Chicago Manual of Style (CMoS), 17th edition
     - Notes and Bibliography
-    - Author Date references and citations
+    - Author-Date references and citations
 - American Psychological Association (APA) style from the 7th edition of the APA Publication Manual
 - Other in-text citation styles:
-    - Alphabetical (e.g. "Rass97")
+    - Alphabetical (e. g. "Rass97")
     - Author Title
 
 ## Contributing
 
-We are very happy to receive your bugs and feature requests in the Issues tab. We would be very happy to accept PRs for bug fixes, minor refactorings, features that were requested in the issues and greenlit by us, as well as the planned features listed below:
+We are looking forward to receiving your bugs and feature requests in the Issues tab. We would also be very happy to accept PRs for bug fixes, minor refactorings, features that were requested in the issues and greenlit by us, as well as the planned features listed below:
 
 - More citation and reference styles (especially styles used in the 'hard' sciences would be incredibly appreciated)
 - Implementing the YAML-to-BibLaTeX conversion
 - Improvements to the sentence and title formatter
-- Work for non-english bibliographies
+- Work for non-English bibliographies
 - Documentation improvements
 
 We wish to thank each and every prospective contributor for the effort you (plan to) invest in this project and for adopting it!

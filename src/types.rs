@@ -25,7 +25,7 @@ lazy_static! {
     static ref DURATION_REGEX: Regex = Regex::new(r"^(((?P<d>\d+)\s*:\s*)?(?P<h>\d{2,})\s*:\s*)?(?P<m>\d{2,})\s*:\s*(?P<s>\d{2})(\s*,\s*(?P<ms>\d+))?").unwrap();
     static ref DURATION_RANGE_REGEX: Regex = Regex::new(r"^(?P<s>((\d+\s*:\s*)?\d{2,}\s*:\s*)?\d{2,}\s*:\s*\d{2}(\s*,\s*\d+)?)(\s*-+\s*(?P<e>((\d+\s*:\s*)?\d{2,}\s*:\s*)?\d{2,}\s*:\s*\d{2}(\s*,\s*\d+)?))?").unwrap();
 
-    // Definite (i.e. non-range) date regexes.
+    // Definite (i. e. non-range) date regexes.
     static ref MONTH_REGEX: Regex = Regex::new(r"^(?P<y>(\+|-)?\s*\d{4})\s*-\s*(?P<m>\d{2})").unwrap();
     static ref YEAR_REGEX: Regex = Regex::new(r"^(?P<y>(\+|-)?\s*\d{4})").unwrap();
 }
@@ -39,31 +39,29 @@ pub enum EntryType {
     Article,
     /// A section of a greater containing work.
     Chapter,
-    /// A short segment of media pertaining to some subject matter.
-    /// Could appear in a work of reference or a data set.
+    /// A short segment of media on some subject matter.
+    /// Could appear in a work of reference or a data set
     Entry,
     /// Text published within an Anthology.
     Anthos,
-    /// A document compiled by authors that may be affiliated to an organisation.
+    /// A document compiled by authors that may be affiliated to an organization.
     /// Presents information for a specific audience or purpose.
     Report,
     /// Scholarly work delivered to fulfill degree requirements at a higher
     /// education institution.
     Thesis,
-    /// Piece of content that can be found on the internet and is native
-    /// to the medium, like an animation, a web app, or a form of content not
-    /// found elsewhere. Do not use this entry type when
-    /// referencing a textual blog article, instead use an `Article` with
-    /// a `Blog` parent.
+    /// Piece of content that can be found on the internet and is native to the
+    /// medium, like an animation, a web app, or a form of content not found
+    /// elsewhere. Do not use this entry type when referencing a textual blog
+    /// article, instead use an `Article` with a `Blog` parent.
     Web,
     /// A part of a show or another type of performed media, typically all
     /// taking place in the same location.
     Scene,
-    /// A form of artistic / creative expression.
+    /// A form of artistic/creative expression.
     Artwork,
-    /// A technical document deposited at a government agency that describes
-    /// an invention in order to legally limit the rights of reproduction
-    /// to the inventors.
+    /// A technical document deposited at a government agency that describes an
+    /// invention to legally limit the rights of reproduction to the inventors.
     Patent,
     /// Reference to a legal case that was or is to be heared at a court of law.
     Case,
@@ -72,7 +70,8 @@ pub enum EntryType {
     /// Legal document or draft there of that is, is to be, or was to be
     /// enacted into binding law.
     Legislation,
-    /// Written document that is submitted as a candidate for publication.
+    /// Legal document or draft thereof that is, is to be, or was to be enacted
+    /// into binding law.
     Manuscript,
     /// A post on a micro-blogging platform like Twitter.
     Tweet,
@@ -81,8 +80,8 @@ pub enum EntryType {
     /// A publication that periodically publishes issues with unique content.
     /// This includes scientific journals and news magazines.
     Periodical,
-    /// The official published record of the subjects
-    /// of a professional conference.
+    /// The official published record of the events at a professional
+    /// conference.
     Proceedings,
     /// Long-form work published pysically as a set of bound sheets.
     Book,
@@ -92,10 +91,10 @@ pub enum EntryType {
     Reference,
     /// Professional conference. This Entry type implies that the item
     /// referenced has been an event at the conference itself. If you instead
-    /// want to reference a paper published in the published proceedings
-    /// of the conference, use an `Article` with a `Proceedings` parent.
+    /// want to reference a paper published in the published proceedings of the
+    /// conference, use an `Article` with a `Proceedings` parent.
     Conference,
-    /// Collection of different texts pertaining to a single topic.
+    /// Collection of different texts on a single topic/theme.
     Anthology,
     /// Publicly visible storage of the source code for a particular software
     /// and its modifications over time.
@@ -254,7 +253,7 @@ impl Person {
     /// and three. The first part will be interpreted as the <prefix> <Name>,
     /// the second part as the given name and the third part as the suffix.
     ///
-    /// The prefix and name are seperated just like in BiBTeX, as described
+    /// The prefix and name are separated just like in BiBTeX, as described
     /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The
     /// gist is that the given name will start at the first word with a capital
     /// letter, if there are any such words.
@@ -384,7 +383,7 @@ impl Person {
     }
 
     /// Get the name with the family name fist, the initials
-    /// afterwards, seperated by a comma.
+    /// afterwards, separated by a comma.
     pub fn name_first(&self, initials: bool, prefix_given_name: bool) -> String {
         let mut res = if !prefix_given_name {
             if let Some(prefix) = &self.prefix {
@@ -776,7 +775,7 @@ pub enum DurationError {
     /// The string is malformed.
     #[error("string does not match duration regex")]
     NoMatch,
-    /// The value is out of bounds when another, subsequent value is present (i.e. `01:61:48`).
+    /// The value is out of bounds when another, subsequent value is present (i. e. `01:61:48`).
     #[error("out of bounds value when greater order value is specified")]
     TooLarge,
 }

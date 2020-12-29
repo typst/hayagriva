@@ -25,7 +25,7 @@ pub struct TitleCase {
     /// Always capitalize a word matching or exceeding a certain length, even
     /// if it is on the capitalization blacklist.
     pub always_capitalize_min_len: Option<usize>,
-    /// Treat the hyphen as a word seperator, i.e. capitalize in hyphenated
+    /// Treat the hyphen as a word seperator, i. e. capitalize in hyphenated
     /// expressions.
     pub hyphen_word_seperator: bool,
     /// Do not touch all-uppercase words like "USA" if the title contains
@@ -208,10 +208,10 @@ impl CaseTransformer for TitleCase {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SentenceCase {
     /// Capitalize words that contain caps
-    /// in a non-start position (e.g. `fahrCard`).
+    /// in a non-start position (e. g. `fahrCard`).
     pub capitalize_words_with_caps_inside: bool,
     /// Enables the output of characters that directly follow a dot in the case
-    /// that they appear in the source argument (e.g. `fig. 4.C`).
+    /// that they appear in the source argument (e. g. `fig. 4.C`).
     pub do_not_format_after_dot: bool,
     /// Do not touch all-uppercase words like "ISS" if the title contains
     /// lower-case characters at all.

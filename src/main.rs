@@ -123,7 +123,7 @@ fn main() {
             Arg::with_name("key")
                 .long("key")
                 .short("k")
-                .help("Filter the database using a comma-seperated list of keys")
+                .help("Filter the database using a comma-separated list of keys")
                 .takes_value(true)
         )
         .arg(
@@ -146,7 +146,7 @@ fn main() {
                 .arg(
                     Arg::with_name("supplement")
                         .long("supplement")
-                        .help("Specify some information for the citation, e.g. \"p. 6\", in a comma-seperated list.")
+                        .help("Specify some information for the citation, e. g. \"p. 6\", in a comma-separated list.")
                         .takes_value(true)
                 )
         )

@@ -375,7 +375,7 @@ pub enum Formatting {
     Bold,
     /// _italic print_
     Italic,
-    /// Do not hyphenate, e.g. for URLs.
+    /// Do not hyphenate, e. g. for URLs.
     NoHyphenation,
 }
 
