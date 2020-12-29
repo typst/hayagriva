@@ -101,7 +101,9 @@ assert_eq!(parse("i:*[url] | * > i:*[url]"), select!(("i":(*["url"])) | (* > "i"
 There are two ways to check if a selector matches an entry:
 
 ```rust
-let journal = sel!(Id("article") => Bind("journal", Id("periodical")));
+use hayagriva::select;
+
+let journal = select!(Article > ("journal":Periodical));
 journal.matches(&your_entry); // Returns a `bool`
 journal.apply(&your_entry); // Returns an `Option<HashMap<String, &Entry>>` that is `Some(...)` if the selector matched
 ```
@@ -207,6 +209,7 @@ We are looking forward to receiving your bugs and feature requests in the Issues
 - Implementing the YAML-to-BibLaTeX conversion
 - Improvements to the sentence and title formatter
 - Work for non-English bibliographies
+- Sorting bibliographies
 - Documentation improvements
 
 We wish to thank each and every prospective contributor for the effort you (plan to) invest in this project and for adopting it!

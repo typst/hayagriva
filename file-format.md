@@ -486,10 +486,10 @@ names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
 - `founder`. Founded the publication.
 - `collaborator`. Collaborated on the cited item.
 - `organizer`. Organized the creation of the cited item.
-- `cast-.ember`, Performed in the cited item.
+- `cast-member`. Performed in the cited item.
 - `composer`. Composed all or parts of the cited item's musical/audible components.
 - `producer`. Produced the cited item.
-- `executive-.roducer`, Lead Producer for the cited item.
+- `executive-producer`. Lead Producer for the cited item.
 - `writer`. Did the writing for the cited item.
 - `cinematography`. Shot film/video for the cited item.
 - `director`. Directed the cited item.
