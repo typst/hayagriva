@@ -1,12 +1,12 @@
 # Selectors
 
-As you have seen in the Readme and the [file format documentation](https://github.com/typst/hayagriva/blob/main/file-format.md), a Hayagriva entry not only has a type but also parents that can have their own type. With this architecture, differentiation between articles from blogs, newspapers, and conference proceedings is easy without having a dedicated type for each of them!
+As you have seen in the Readme and the [file format documentation](https://github.com/typst/hayagriva/blob/main/docs/file-format.md), a Hayagriva entry not only has a type but also parents that can have their own type. With this architecture, differentiation between articles from blogs, newspapers, and conference proceedings is easy without having a dedicated type for each of them!
 
 However, this also means that you cannot just match on the top-level type of an entry to make all the distinctions that you or your citation and reference styles may require.
 
 Enter selectors: They provide a convenient way to query entries by structure and retrieve parents that hold crucial information for your use case.
 
-Two ways of macro usage are offered: Either as a string or, if you are depending on Hayagriva as a library, with the `select!` macro. Library users can parse string selectors using `hayagriva::selectors::parse`. The Readme explains the fundamental differences between the two formats. If there are divergences between both forms, we will provide both variants as examples. In the case that you only use Hayagriva on the Command Line and did not get the above paragraph, do not despair: If there are multiple variants of examples, only the top-most one applies.
+Two ways of macro usage are offered: Either as a string (used on the command line) or, if you are depending on Hayagriva as a library, with the `select!` macro. Library users can parse string selectors using `Selector::parse`. The Readme explains the fundamental differences between the two formats. If there are divergences between both forms, we will provide both variants as examples.
 
 ## Entry type selector
 
@@ -17,7 +17,7 @@ The most basic selectors are entry types; they will match any entry that has the
 | **String:** | `thesis`                                             |
 | **Macro:**  | `Thesis`                                             |
 
-This works with any of the [entry types](https://github.com/typst/hayagriva/blob/main/file-format.md#entry-type). Be aware that you have to capitalize exactly like in the EntryType struct variants when using the macro.
+This works with any of the [entry types](https://github.com/typst/hayagriva/blob/main/docs/file-format.md#entry-type). Be aware that you have to capitalize exactly like in the EntryType struct variants when using the macro.
 The string selectors are case-insensitive.
 
 ## Wildcard
@@ -56,15 +56,17 @@ The disjunction operator `|` allows you to offer multiple alternative selectors,
 
 | Variant     | Example 1                                            |
 |-------------|------------------------------------------------------|
-| **String:** | `anthology | *[volume]`                              |
-| **Macro:**  | `Anthology | (*["volume"])`                          |
+| **String:** | `anthology \| *[volume]`                             |
+| **Macro:**  | `Anthology \| (*["volume"])`                         |
+
+<!-- The pipe character (|) is escaped with a backslash because it would otherwise break GitHub's Markdown tables. When writing real selectors, of course, omit the backslash. -->
 
 Either an anthology or anything with a volume field.
 
 | Variant     | Example 2                                            |
 |-------------|------------------------------------------------------|
-| **String:** | `(video | audio | web[runtime])[affiliated]`         |
-| **Macro:**  | `(Video | Audio | (Web["runtime"]))["affiliated"]`   |
+| **String:** | `(video \| audio \| web[runtime])[affiliated]`       |
+| **Macro:**  | `(Video \| Audio \| (Web["runtime"]))["affiliated"]` |
 
 Matches every video, audio, and web (with runtime field) entry, given that it has the affiliated field set.
 
@@ -81,8 +83,8 @@ This selector finds published conference articles.
 
 | Variant     | Example 2                                            |
 |-------------|------------------------------------------------------|
-| **String:** | `chapter > (book | anthology) > (book | anthology)`  |
-| **Macro:**  | `Chapter > (Book | Anthology) > (Book | Anthology)`  |
+| **String:** | `chapter > (book \| anthology) > (book \| anthology)`|
+| **Macro:**  | `Chapter > (Book \| Anthology) > (Book \| Anthology)`|
 
 This selects a chapter in a monograph (a long-form text on a subject published in another book).
 
@@ -95,8 +97,8 @@ Create a binding using the `:`-operator. To the left of the selector, you provid
 
 | Variant     | Example                                              |
 |-------------|------------------------------------------------------|
-| **String:** | `article > parent:(blog | newspaper)`                |
-| **Macro:**  | `Article > ("parent":(Blog | Newspaper))`            |
+| **String:** | `article > parent:(blog \| newspaper)`               |
+| **Macro:**  | `Article > ("parent":(Blog \| Newspaper))`           |
 
 The binding name has to be a string for macro use.
 This binds the blog or newspaper parent of an article to 'parent' if the selector matches.

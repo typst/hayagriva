@@ -70,7 +70,7 @@ If you do not need BibLaTeX compatibility, you can use Hayagriva without the def
 hayagriva = { version = "0.1", default-features = false }
 ```
 
-Hayagriva uses a custom selector language that enables you to filter bibliographies by type of media. For more information about selectors, refer to the [selectors.md file](https://github.com/typst/hayagriva/blob/main/selectors.md). While you can parse user-defined selectors using the function `hayagriva::selectors::parse`, you may instead want to use the selector macro to avoid the run time cost of parsing a selector when working with constant selectors.
+Hayagriva uses a custom selector language that enables you to filter bibliographies by type of media. For more information about selectors, refer to the [selectors.md file](https://github.com/typst/hayagriva/blob/main/docs/selectors.md). While you can parse user-defined selectors using the function `Selector::parse`, you may instead want to use the selector macro to avoid the run time cost of parsing a selector when working with constant selectors.
 
 The macro `select!` in the crate's root enables you to write selectors in a syntax very close to the parsed selectors. There are three notable differences:
 
@@ -82,20 +82,20 @@ Consider these examples of selectors in both notations:
 
 ```rust
 use hayagriva::select;
-use hayagriva::selectors::parse;
+use hayagriva::Selector;
 
 // finds an article that is parented by a conference proceedings volume
-assert_eq!(parse("article > proceedings"), select!(Article > Proceedings));
+assert_eq!(Selector::parse("article > proceedings"), select!(Article > Proceedings));
 
 // matches either a video or audio item or an artwork
-assert_eq!(parse("video | audio | artwork"), select!(Video | Audio | Artwork));
+assert_eq!(Selector::parse("video | audio | artwork"), select!(Video | Audio | Artwork));
 
 // matches anything that is parented by both a blog and a newspaper
-assert_eq!(parse("* > (blog | newspaper)"), select!(* > (Blog | Newspaper)));
+assert_eq!(Selector::parse("* > (blog | newspaper)"), select!(* > (Blog | Newspaper)));
 
 // matches anything with a URL or a parent with a URL and binds the entry with the attribute to the variable `i`.
 // Note that expressions like i:*[url] do not need parentheses in the parsed selector, but they do in the macro!
-assert_eq!(parse("i:*[url] | * > i:*[url]"), select!(("i":(*["url"])) | (* > "i":(*["url"]))));
+assert_eq!(Selector::parse("i:*[url] | * > i:*[url]"), select!(("i":(*["url"])) | (* > "i":(*["url"]))));
 ```
 
 There are two ways to check if a selector matches an entry:
@@ -117,7 +117,7 @@ Run this in your terminal:
 cargo install hayagriva --features cli
 ```
 
-Cargo will install the Hayagriva Command Line Interface for you. Now, you just need a Hayagriva YAML literature file or a Bib(La)TeX file to get started. The Hayagriva YAML file is intuitive to write and can represent a wealth of media types, [learn how to write one in its dedicated documentation.](https://github.com/typst/hayagriva/blob/main/file-format.md)
+Cargo will install the Hayagriva Command Line Interface for you. Now, you just need a Hayagriva YAML literature file or a Bib(La)TeX file to get started. The Hayagriva YAML file is intuitive to write and can represent a wealth of media types, [learn how to write one in its dedicated documentation.](https://github.com/typst/hayagriva/blob/main/docs/file-format.md)
 
 Suppose you have this file saved as `literature.yml` in your current working directory:
 
@@ -165,7 +165,7 @@ hayagriva literature.yml -k feminism citation
 
 The `-k` flag precedes the sub-command (e. g. `citation`, `reference`) and takes a comma-separated list of keys (or a single one). The sub-command will then only work on the specified keys. The `citation` sub-command also allows for a `-s` flag. Its possible values can be viewed with `hayagriva help citation`, it will default to an author-date style.
 
-Instead of the `-k` flag, you can also use the `--select` flag to provide a custom [Hayagriva selector.](https://github.com/typst/hayagriva/blob/main/selectors.md) For example, you could run the following to only reference entries that have a URL or DOI at the top level:
+Instead of the `-k` flag, you can also use the `--select` flag to provide a custom [Hayagriva selector.](https://github.com/typst/hayagriva/blob/main/docs/selectors.md) For example, you could run the following to only reference entries that have a URL or DOI at the top level:
 ```bash
 hayagriva literature.yml --select "*[url] | *[doi]" reference
 ```
