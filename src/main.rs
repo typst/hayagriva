@@ -7,13 +7,15 @@ use std::str::FromStr;
 use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use strum::{EnumVariantNames, VariantNames};
 
-use hayagriva::io;
-use hayagriva::style::chicago::bibliography::Bibliography as ChicagoBib;
 use hayagriva::style::{
-    apa, chicago, ieee, mla, Alphabetical, AtomicCitation, AuthorTitle,
-    BibliographyFormatter, CitationFormatter,
+    Apa, AuthorTitle, BibliographyStyle, ChicagoAuthorDate, ChicagoNotes, Citation,
+    CitationStyle as UsableCitationStyle, Database, Ieee, Mla,
 };
 use hayagriva::Selector;
+use hayagriva::{
+    io,
+    style::{Alphanumerical, Numerical},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
@@ -70,8 +72,9 @@ impl FromStr for Style {
 pub enum CitationStyle {
     AuthorDate,
     ChicagoNote,
-    Alphabetical,
+    Alphanumerical,
     AuthorTitle,
+    Numerical,
 }
 
 impl FromStr for CitationStyle {
@@ -81,7 +84,7 @@ impl FromStr for CitationStyle {
         match s.to_ascii_lowercase().as_ref() {
             "author-date" | "author-year" => Ok(CitationStyle::AuthorDate),
             "note" | "chicago-note" | "chicago" => Ok(CitationStyle::ChicagoNote),
-            "alphabetic" | "alpha" | "alphabetical" => Ok(CitationStyle::Alphabetical),
+            "alphabetic" | "alpha" | "alphabetical" => Ok(CitationStyle::Alphanumerical),
             "author-title" => Ok(CitationStyle::AuthorTitle),
             _ => Err("unknown style"),
         }
@@ -135,12 +138,6 @@ fn main() {
                         .case_insensitive(true)
                         .takes_value(true)
                 )
-                .arg(
-                    Arg::with_name("supplement")
-                        .long("supplement")
-                        .help("Specify some information for the citation, e.g. \"p. 6\", in a comma-seperated list.")
-                        .takes_value(true)
-                )
         )
         .subcommand(
             SubCommand::with_name("keys")
@@ -165,10 +162,21 @@ fn main() {
                         .takes_value(true)
                 )
                 .arg(
+                    Arg::with_name("supplement")
+                        .long("supplement")
+                        .help("Specify some information for the citation, e.g. \"p. 6\", in a comma-seperated list.")
+                        .takes_value(true)
+                )
+                .arg(
                     Arg::with_name("combined")
                         .long("combined")
                         .short("c")
                         .help("Combine all keys into one citation (ignored for Chicago Notes)")
+                )
+                .arg(
+                    Arg::with_name("no-prepopulate")
+                        .long("no-prepopulate")
+                        .help("Whether the database should be prepared with all selected entries or be built as we go")
                 )
         )
         .subcommand(
@@ -269,19 +277,17 @@ fn main() {
                     if let Some(selector) = matches.value_of("selector") {
                         let selector =
                             Selector::parse(selector).expect("Invalid selector");
-                        let formatter = chicago::notes::Note::new(bibliography.iter());
+
+                        let mut style = ChicagoNotes::default();
+                        let mut database = Database::new();
+
                         for (k, v) in selector.apply(entry).unwrap() {
                             println!(
                                 "\t{} => [{}] {}",
                                 k,
                                 v.kind(),
-                                formatter
-                                    .get_entry_note(
-                                        v,
-                                        None,
-                                        chicago::notes::NoteType::Short
-                                    )
-                                    .value
+                                database
+                                    .citation(&mut style, &[Citation::new(entry, None)])
                             );
                         }
                     }
@@ -289,145 +295,80 @@ fn main() {
             }
         }
         ("reference", Some(sub_matches)) => {
-            let rows = match value_t!(sub_matches, "style", Style)
-                .unwrap_or_else(|_| Style::ChicagoAuthorDate)
-            {
-                Style::Chicago => {
-                    let chicago = ChicagoBib::new(chicago::Mode::NotesAndBibliography);
-                    bibliography
-                        .iter()
-                        .map(|entry| chicago.format(entry, None))
-                        .collect::<Vec<_>>()
-                }
-                Style::ChicagoAuthorDate => {
-                    let chicago = ChicagoBib::new(chicago::Mode::AuthorDate);
-                    bibliography
-                        .iter()
-                        .map(|entry| chicago.format(entry, None))
-                        .collect::<Vec<_>>()
-                }
-                Style::Apa => {
-                    let apa = apa::Apa::new();
-                    bibliography
-                        .iter()
-                        .map(|entry| apa.format(entry, None))
-                        .collect::<Vec<_>>()
-                }
-                Style::Ieee => {
-                    let ieee = ieee::Ieee::new();
-                    bibliography
-                        .iter()
-                        .map(|entry| ieee.format(entry, None))
-                        .collect::<Vec<_>>()
-                }
-                Style::Mla => {
-                    let mla = mla::Mla::new();
-                    bibliography
-                        .iter()
-                        .map(|entry| mla.format(entry, None))
-                        .collect::<Vec<_>>()
-                }
-            };
+            let style: Box<dyn BibliographyStyle> =
+                match value_t!(sub_matches, "style", Style)
+                    .unwrap_or_else(|_| Style::ChicagoAuthorDate)
+                {
+                    Style::Chicago => Box::new(ChicagoNotes::default()),
+                    Style::ChicagoAuthorDate => Box::new(ChicagoAuthorDate::default()),
+                    Style::Apa => Box::new(Apa::new()),
+                    Style::Ieee => Box::new(Ieee::new()),
+                    Style::Mla => Box::new(Mla::new()),
+                };
+
+            let mut database = Database::new();
+            for entry in &bibliography {
+                database.push(entry);
+            }
+
+            let rows = database.bibliography(&*style);
 
             for row in rows {
                 if matches.is_present("no-fmt") {
-                    println!("{}", row.value);
+                    println!("{:#}", row.display);
                 } else {
-                    println!("{}", row.print_ansi_vt100())
+                    println!("{}", row.display)
                 }
             }
         }
         ("citation", Some(sub_matches)) => {
             let style = value_t!(sub_matches, "style", CitationStyle)
                 .unwrap_or_else(|_| CitationStyle::AuthorDate);
-            let supplements = matches
+            let supplements = sub_matches
                 .value_of("supplement")
                 .map(|sup| sup.split(',').collect::<Vec<_>>())
                 .unwrap_or_default();
-            let mut atomics = bibliography
+            let citations = bibliography
                 .iter()
                 .enumerate()
                 .map(|(i, e)| {
                     let supp = supplements.get(i).cloned();
-                    AtomicCitation::new(e.key(), supp, None)
+                    Citation::new(e, supp)
                 })
                 .collect::<Vec<_>>();
             let combined = sub_matches.is_present("combined");
-            let rows = match style {
-                CitationStyle::AuthorDate => {
-                    let formatter =
-                        chicago::author_date::AuthorYear::new(bibliography.iter());
-                    if !combined {
-                        let mut res = vec![];
-                        for atomic in atomics {
-                            res.push(formatter.format(vec![atomic].into_iter()).unwrap())
-                        }
-                        res
-                    } else {
-                        vec![formatter.format(atomics).unwrap()]
-                    }
+
+            let mut database = Database::new();
+
+            if !sub_matches.is_present("no-prepopulate") {
+                for entry in &bibliography {
+                    database.push(entry);
                 }
-                CitationStyle::AuthorTitle => {
-                    let formatter = AuthorTitle::new(bibliography.iter());
-                    if !combined {
-                        let mut res = vec![];
-                        for atomic in atomics {
-                            res.push(formatter.format(vec![atomic].into_iter()).unwrap());
-                        }
-                        res
-                    } else {
-                        vec![formatter.format(atomics).unwrap()]
-                    }
-                }
-                CitationStyle::Alphabetical => {
-                    let formatter = Alphabetical::new(bibliography.iter());
-                    for atomic in atomics.iter_mut() {
-                        let item =
-                            bibliography.iter().find(|i| i.key() == atomic.key).unwrap();
-                        let creators = chicago::get_creators(item).0;
-                        let mut same = bibliography.iter().filter(|e| {
-                            item.date_any() == e.date_any()
-                                && chicago::get_creators(e).0 == creators
-                                && creators.len() >= 1
-                        });
-                        if same.clone().count() > 1 {
-                            atomic.number.replace(
-                                same.position(|e| e.key() == item.key()).unwrap(),
-                            );
-                        }
-                    }
-                    if !combined {
-                        let mut res = vec![];
-                        for atomic in atomics {
-                            res.push(formatter.format(vec![atomic].into_iter()).unwrap());
-                        }
-                        res
-                    } else {
-                        vec![formatter.format(atomics).unwrap()]
-                    }
-                }
-                CitationStyle::ChicagoNote => {
-                    let formatter = chicago::notes::Note::new(bibliography.iter());
-                    let mut res = vec![];
-                    for atomic in atomics {
-                        res.push(
-                            formatter
-                                .get_note(atomic, chicago::notes::NoteType::Full)
-                                .unwrap(),
-                        );
-                    }
-                    res
-                }
+            }
+
+            let mut style: Box<dyn UsableCitationStyle> = match style {
+                CitationStyle::Alphanumerical => Box::new(Alphanumerical::new()),
+                CitationStyle::AuthorDate => Box::new(ChicagoAuthorDate::default()),
+                CitationStyle::AuthorTitle => Box::new(AuthorTitle::new()),
+                CitationStyle::ChicagoNote => Box::new(ChicagoNotes::default()),
+                CitationStyle::Numerical => Box::new(Numerical::new()),
             };
 
-            for r in rows.iter().map(|r| {
-                if !matches.is_present("no-fmt") {
-                    r.print_ansi_vt100()
+            let lines = if combined {
+                vec![database.citation(style.as_mut(), &citations)]
+            } else {
+                citations
+                    .into_iter()
+                    .map(|c| database.citation(&mut *style, &[c]))
+                    .collect()
+            };
+
+            for r in &lines {
+                if matches.is_present("no-fmt") {
+                    println!("{:#}", r);
                 } else {
-                    r.value.clone()
+                    println!("{}", r)
                 }
-            }) {
-                println!("{}", r);
             }
         }
         ("dump", Some(sub_matches)) => {

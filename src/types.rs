@@ -460,6 +460,22 @@ impl Person {
     }
 }
 
+impl Ord for Person {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name
+            .cmp(&other.name)
+            .then(self.given_name.cmp(&other.given_name))
+            .then(self.suffix.cmp(&other.suffix))
+            .then(self.prefix.cmp(&other.prefix))
+    }
+}
+
+impl PartialOrd for Person {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// A value that could be either a number or a string.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumOrStr {
@@ -478,9 +494,9 @@ impl Display for NumOrStr {
     }
 }
 
-impl Into<String> for NumOrStr {
-    fn into(self) -> String {
-        self.to_string()
+impl From<NumOrStr> for String {
+    fn from(num: NumOrStr) -> Self {
+        num.to_string()
     }
 }
 

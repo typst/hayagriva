@@ -1,17 +1,19 @@
-//! Style for entries in the "Works Cited" listing as of the 8th edition
-//! of the MLA Handbook.
-
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{
-    abbreviate_publisher, format_range, offset_format_range, BibliographyFormatter,
-    DisplayString, Formatting,
+    abbreviate_publisher, alph_designator, author_title_ord_custom, format_range,
+    offset_format_range, BibliographyOrdering, BibliographyStyle, Database,
+    DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::{en, TitleCase};
 use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
-/// Generates the "Works Cited" entries
+/// Bibliographies following MLA guidance.
+///
+/// See the 8th edition of the MLA Handbook for details on how the Modern
+/// Language Association advises you to format citations and bibliographies
+/// (_Works Cited_ lists).
 pub struct Mla {
     title_case: TitleCase,
     /// Forces location element to appear whenever given.
@@ -20,6 +22,8 @@ pub struct Mla {
     /// Forces all dates to be printed if true. Otherwise,
     /// only the most top-level date field will be printed.
     pub always_print_date: bool,
+    /// How to sort the bibliography.
+    pub sort: BibliographyOrdering,
 }
 
 struct ContainerInfo {
@@ -179,6 +183,7 @@ impl Mla {
             title_case,
             always_use_location: false,
             always_print_date: false,
+            sort: BibliographyOrdering::ByAuthor,
         }
     }
 
@@ -261,7 +266,11 @@ impl Mla {
     }
 
     /// Prints the names of the main creators of the item.
-    fn get_author(&self, mut entry: &Entry, prev_entry: Option<&Entry>) -> String {
+    fn get_author(
+        &self,
+        mut entry: &Entry,
+        prev_entry: Option<&Entry>,
+    ) -> (String, Vec<Person>) {
         while entry.authors().is_none()
             && entry.affiliated_persons().is_none()
             && entry.editors().is_none()
@@ -275,6 +284,7 @@ impl Mla {
         }
 
         let main_contribs = self.get_main_contributors(entry);
+        let mut contribs = vec![];
         let (mut res, previous) = if main_contribs.is_some()
             && Some(main_contribs) == prev_entry.map(|s| self.get_main_contributors(s))
         {
@@ -283,6 +293,7 @@ impl Mla {
             (String::new(), false)
         };
         res += &if let Some(authors) = entry.authors() {
+            contribs.extend(authors.into_iter().cloned());
             if !previous && entry.entry_type == Tweet {
                 self.and_list(self.name_list(authors, Some(entry)), true)
             } else if !previous {
@@ -333,6 +344,7 @@ impl Mla {
                 if desc.is_empty() || persons.is_empty() {
                     continue;
                 }
+                contribs.extend(persons.into_iter().cloned());
 
                 if !res.is_empty() {
                     res += ", ";
@@ -352,6 +364,7 @@ impl Mla {
             } else {
                 String::new()
             };
+            contribs.extend(eds.into_iter().cloned());
 
             res += ", editor";
             if plural {
@@ -366,7 +379,7 @@ impl Mla {
         if !res.is_empty() && res.chars().last() != Some('.') {
             res.push('.');
         }
-        res
+        (res, contribs)
     }
 
     fn get_title(&self, mut entry: &Entry, use_quotes: bool) -> DisplayString {
@@ -429,6 +442,7 @@ impl Mla {
         &self,
         entry: &Entry,
         root: &Entry,
+        disambiguation: Option<usize>,
         mut has_date: bool,
         mut has_url: bool,
     ) -> (Vec<ContainerInfo>, bool) {
@@ -562,6 +576,9 @@ impl Mla {
                 if !has_date || self.always_print_date {
                     has_date = true;
                     container.date = format_date(&date);
+                    if let Some(disambiguation) = disambiguation {
+                        container.date.push(alph_designator(disambiguation))
+                    }
                 }
             }
 
@@ -655,7 +672,8 @@ impl Mla {
                 continue;
             }
 
-            let parents = self.get_parent_container_infos(p, root, has_date, has_url);
+            let parents =
+                self.get_parent_container_infos(p, root, None, has_date, has_url);
             has_url = has_url || parents.1;
             containers.extend(parents.0.into_iter());
         }
@@ -718,9 +736,13 @@ impl Mla {
         (containers, has_url)
     }
 
-    fn get_container_info(&self, entry: &Entry) -> DisplayString {
+    fn get_container_info(
+        &self,
+        entry: &Entry,
+        disambiguation: Option<usize>,
+    ) -> DisplayString {
         let ds = self
-            .get_parent_container_infos(entry, entry, false, false)
+            .get_parent_container_infos(entry, entry, disambiguation, false, false)
             .0
             .into_iter()
             .map(|p| p.into_display_string())
@@ -735,23 +757,75 @@ impl Mla {
         }
         res
     }
-}
 
-impl BibliographyFormatter for Mla {
-    fn format(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString {
-        let mut res = DisplayString::from_string(self.get_author(entry, prev_entry));
+    fn get_single_record<'a>(
+        &self,
+        record: &Record<'a>,
+        last_record: Option<&Record<'a>>,
+    ) -> (DisplayReference<'a>, Vec<Person>) {
+        let entry = record.entry;
+        let (authors, auth_list) = self.get_author(entry, last_record.map(|r| r.entry));
+
+        let mut res = DisplayString::from_string(authors);
         let title = self.get_title(entry, true);
 
         if !res.is_empty() && !title.is_empty() {
             res.push(' ');
         }
         res += title;
-        let container_info = self.get_container_info(entry);
+        let container_info = self.get_container_info(entry, record.disambiguation);
 
         if !res.is_empty() && !container_info.is_empty() {
             res.push(' ');
         }
         res += container_info;
-        res
+
+        (
+            DisplayReference::new(
+                record.entry,
+                record.prefix.clone().map(Into::into),
+                res,
+            ),
+            auth_list,
+        )
+    }
+}
+
+impl<'a> BibliographyStyle<'a> for Mla {
+    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+        let mut items = vec![];
+
+        for i in 0 .. db.records.len() {
+            let record = db.records().nth(i).unwrap();
+            let last_record = if let Some(prev) = i.checked_sub(1) {
+                db.records().nth(prev)
+            } else {
+                None
+            };
+            items.push(self.get_single_record(record, last_record))
+        }
+
+        match self.sort {
+            BibliographyOrdering::ByPrefix => {
+                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
+            }
+            BibliographyOrdering::ByAuthor => {
+                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
+                    author_title_ord_custom(
+                        a_ref.entry,
+                        b_ref.entry,
+                        Some(a_auths),
+                        Some(b_auths),
+                    )
+                });
+            }
+            _ => {}
+        }
+
+        items.into_iter().map(|(a, _)| a).collect()
+    }
+
+    fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
+        self.get_single_record(record, None).0
     }
 }

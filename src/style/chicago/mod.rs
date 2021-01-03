@@ -2,12 +2,15 @@
 //! in the 17th edition of the Chicago Manual of Style.
 
 pub mod author_date;
-pub mod bibliography;
+mod bibliography;
 pub mod notes;
 
 use isolang::Language;
 
-use super::{format_range, push_comma_quote_aware, DisplayString, Formatting};
+use super::{
+    format_range, omit_initial_articles, push_comma_quote_aware, DisplayString,
+    Formatting,
+};
 use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
 use crate::types::{
     Date, EntryType::*, FmtOptionExt, FmtString, NumOrStr, Person, PersonRole, Title,
@@ -16,7 +19,7 @@ use crate::Entry;
 
 /// Determines the mode of the bibliography and citation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Mode {
+pub(crate) enum Mode {
     /// Use references in footnotes in addition to a detailed bibliography.
     /// See chap. 14 of the CMoS.
     NotesAndBibliography,
@@ -25,9 +28,13 @@ pub enum Mode {
     AuthorDate,
 }
 
-/// Configure when to print access dates. Also see Chicago 14.12.
+/// Configures when to print access dates in the Chicago styles.
+///
+/// # Reference
+/// See the 17th edition of the Chicago Manual of Style, Chapter 14, Section 12,
+/// for more details.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum AccessDateConfig {
+pub enum ChicagoAccessDateVisibility {
     /// Never print access dates.
     Never,
     /// Print if no other date was found.
@@ -42,22 +49,28 @@ pub enum AccessDateConfig {
     Always,
 }
 
-impl AccessDateConfig {
+impl ChicagoAccessDateVisibility {
     /// Will determine, given the value of `self` and a [`Entry`], if an access
     /// date should be provided.
-    pub fn needs_date(&self, entry: &Entry) -> bool {
+    pub(crate) fn needs_date(&self, entry: &Entry) -> bool {
         match self {
-            AccessDateConfig::Never => false,
-            AccessDateConfig::NoDate => entry.date_any().is_none(),
-            AccessDateConfig::InherentlyOnline => {
+            ChicagoAccessDateVisibility::Never => false,
+            ChicagoAccessDateVisibility::NoDate => entry.date_any().is_none(),
+            ChicagoAccessDateVisibility::InherentlyOnline => {
                 select!(Web | ((Misc | Web) > Web)).matches(entry)
                     || entry.date_any().is_none()
             }
-            AccessDateConfig::NotFormallyPublished => {
+            ChicagoAccessDateVisibility::NotFormallyPublished => {
                 !is_formally_published(entry) || entry.date_any().is_none()
             }
-            AccessDateConfig::Always => true,
+            ChicagoAccessDateVisibility::Always => true,
         }
+    }
+}
+
+impl Default for ChicagoAccessDateVisibility {
+    fn default() -> Self {
+        Self::NotFormallyPublished
     }
 }
 
@@ -102,26 +115,33 @@ fn is_formally_published(entry: &Entry) -> bool {
     .matches(entry)
 }
 
-/// Settings that all Chicago styles need.
-pub struct CommonChicagoConfig {
+/// Common configuration options for the Chicago styles.
+#[derive(Clone, Debug)]
+pub struct ChicagoConfig {
     /// If there is greater or equal to this number of authors, they will be
     /// abbreviated using et. al. after the first name.
     pub et_al_limit: Option<usize>,
     /// When to print URL access dates.
-    pub url_access_date: AccessDateConfig,
+    pub url_access_date: ChicagoAccessDateVisibility,
     title_case: TitleCase,
     sentence_case: SentenceCase,
 }
 
-impl CommonChicagoConfig {
-    /// Create a new [`CommonChicagoConfig`].
-    pub fn new() -> Self {
+impl Default for ChicagoConfig {
+    fn default() -> Self {
         Self {
             title_case: TitleCase::new(),
             sentence_case: SentenceCase::new(),
             et_al_limit: Some(4),
-            url_access_date: AccessDateConfig::NotFormallyPublished,
+            url_access_date: ChicagoAccessDateVisibility::default(),
         }
+    }
+}
+
+impl ChicagoConfig {
+    /// Create a new chicago config.
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -132,8 +152,8 @@ pub enum AuthorRole {
     Normal,
     /// This person was responsible for the collection and editing of the work.
     Editor,
-    /// The work consists of several smaller
-    /// items which were compiled by the creator.
+    /// The work consists of several smaller items which were compiled by the
+    /// creator.
     Compiler,
     /// This person translated the work from another language.
     Translator,
@@ -144,7 +164,7 @@ pub enum AuthorRole {
 }
 
 /// Get the creator of an entry.
-pub fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
+pub(crate) fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     let mut add = AuthorRole::Normal;
 
     let authors = if let Some(authors) = entry.authors() {
@@ -243,7 +263,7 @@ pub(super) fn and_list(
 fn get_title(
     entry: &Entry,
     short: bool,
-    common: &CommonChicagoConfig,
+    common: &ChicagoConfig,
     comma: char,
 ) -> DisplayString {
     let mv_title =
@@ -336,7 +356,7 @@ pub(super) fn get_chunk_title(
     entry: &Entry,
     short: bool,
     mut fmt: bool,
-    common: &CommonChicagoConfig,
+    common: &ChicagoConfig,
 ) -> DisplayString {
     let mut res = DisplayString::new();
 
@@ -440,19 +460,6 @@ fn self_contained(entry: &Entry) -> bool {
         .matches(entry))
 }
 
-fn omit_initial_articles(s: &str) -> String {
-    let parts = s.split(' ').collect::<Vec<_>>();
-    if parts.len() < 2 {
-        return s.to_string();
-    }
-
-    if ["a", "an", "the"].contains(&parts.first().unwrap().to_lowercase().as_ref()) {
-        (&parts[1 ..]).join(" ")
-    } else {
-        s.to_string()
-    }
-}
-
 fn shorthand(title: &Title) -> FmtString {
     if let Some(sh) = title.shorthand.as_ref() {
         sh.clone()
@@ -530,7 +537,7 @@ fn format_date(date: &Date, mode: DateMode) -> String {
 
 fn get_info_element(
     mut entry: &Entry,
-    common: &CommonChicagoConfig,
+    common: &ChicagoConfig,
     capitals: bool,
 ) -> DisplayString {
     let series = select!(

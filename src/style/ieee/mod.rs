@@ -1,26 +1,35 @@
-//! Consolidated IEEE bibliography style as defined in the
-//! [2018 IEEE Reference Guide](https://ieeeauthorcenter.ieee.org/wp-content/uploads/IEEE-Reference-Guide.pdf)
-//! and the document
-//! ["How to Cite References: The IEEE Citation Style"](https://ieee-dataport.org/sites/default/files/analysis/27/IEEE%20Citation%20Guidelines.pdf).
-
 mod abbreviations;
+
+use std::vec;
 
 use isolang::Language;
 
 use super::{
-    format_range, name_list_straight, push_comma_quote_aware, BibliographyFormatter,
-    DisplayString, Formatting,
+    alph_designator, author_title_ord_custom, format_range, name_list_straight,
+    push_comma_quote_aware, BibliographyOrdering, BibliographyStyle, Database,
+    DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::{en, SentenceCase, TitleCase};
-use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, PersonRole};
+use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
-/// Generator for the IEEE reference list.
+/// Citations and bibliographies following IEEE guidance.
+///
+/// See the following documents for details on how the Institute of Electrical
+/// and Electronics Engineers advises you to format citations and
+/// bibliographies:
+/// - [2018 IEEE Reference Guide][ref-guide]
+/// - ["How to Cite References: The IEEE Citation Style"][how-to]
+///
+/// [ref-guide]: https://ieeeauthorcenter.ieee.org/wp-content/uploads/IEEE-Reference-Guide.pdf
+/// [how-to]: https://ieee-dataport.org/sites/default/files/analysis/27/IEEE%20Citation%20Guidelines.pdf
 #[derive(Clone, Debug)]
 pub struct Ieee {
     sentence_case: SentenceCase,
     title_case: TitleCase,
     et_al_threshold: Option<u32>,
+    /// Indicates the desired ordering of items.
+    pub sort: BibliographyOrdering,
 }
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
@@ -46,6 +55,7 @@ impl Ieee {
             sentence_case: SentenceCase::default(),
             title_case,
             et_al_threshold: Some(6),
+            sort: BibliographyOrdering::ByPrefix,
         }
     }
 
@@ -80,7 +90,7 @@ impl Ieee {
         entry.url_any().is_some()
     }
 
-    fn get_author(&self, entry: &Entry, canonical: &Entry) -> String {
+    fn get_author(&self, entry: &Entry, canonical: &Entry) -> (String, Vec<Person>) {
         #[derive(Clone, Debug)]
         enum AuthorRole {
             Normal,
@@ -96,6 +106,7 @@ impl Ieee {
 
         let mut names = None;
         let mut role = AuthorRole::default();
+        let mut pers_refs = vec![];
         if entry.entry_type == Video {
             let tv_series = select!((Video["issue", "volume"]) > Video);
             let dirs = entry.affiliated_with_role(PersonRole::Director);
@@ -116,11 +127,14 @@ impl Ieee {
 
                 if !dirs.is_empty() {
                     names = Some(dir_name_list_straight);
+                    pers_refs.extend(dirs);
+                    pers_refs.extend(writers);
                 }
             } else {
                 // Film
                 if !dirs.is_empty() {
                     names = Some(name_list_straight(&dirs));
+                    pers_refs.extend(dirs);
                     role = AuthorRole::Director;
                 } else {
                     // TV show
@@ -128,18 +142,23 @@ impl Ieee {
 
                     if !prods.is_empty() {
                         names = Some(name_list_straight(&prods));
+                        pers_refs.extend(prods);
                         role = AuthorRole::ExecutiveProducer;
                     }
                 }
             }
         }
 
-        let authors = names.or_else(|| {
-            entry
-                .authors()
-                .or_else(|| canonical.authors())
-                .map(|n| name_list_straight(n))
-        });
+        let authors = if let Some(names) = names {
+            Some(names)
+        } else if let Some(authors) = entry.authors().or_else(|| canonical.authors()) {
+            let list = name_list_straight(&authors);
+            pers_refs.extend(authors.into_iter().cloned());
+            Some(list)
+        } else {
+            None
+        };
+
         let al = if let Some(authors) = authors {
             let count = authors.len();
             let amps = self.and_list(authors);
@@ -153,7 +172,7 @@ impl Ieee {
                 AuthorRole::Director => format!("{}, Directors", amps),
             }
         } else if let Some(eds) = entry.editors() {
-            if !eds.is_empty() {
+            let res = if !eds.is_empty() {
                 format!(
                     "{}, {}",
                     self.and_list(name_list_straight(&eds)),
@@ -161,12 +180,14 @@ impl Ieee {
                 )
             } else {
                 String::new()
-            }
+            };
+            pers_refs.extend(eds.into_iter().cloned());
+            res
         } else {
             String::new()
         };
 
-        al
+        (al, pers_refs)
     }
 
     fn get_title_element(&self, entry: &Entry, canonical: &Entry) -> DisplayString {
@@ -295,6 +316,7 @@ impl Ieee {
         canonical: &Entry,
         chapter: Option<u32>,
         section: Option<u32>,
+        disamb: Option<usize>,
     ) -> Vec<String> {
         let mut res = vec![];
         let preprint =
@@ -336,19 +358,7 @@ impl Ieee {
 
                 if canonical.entry_type != Conference || !self.show_url(entry) {
                     if let Some(date) = entry.date_any() {
-                        if let Some(month) = date.month {
-                            res.push(if let Some(day) = date.day {
-                                format!(
-                                    "{} {}",
-                                    en::get_month_abbr(month, true).unwrap(),
-                                    day + 1
-                                )
-                            } else {
-                                en::get_month_abbr(month, true).unwrap()
-                            });
-                        }
-
-                        res.push(date.display_year());
+                        res.push(format_date(date, disamb))
                     }
                 }
 
@@ -368,24 +378,7 @@ impl Ieee {
             }
             (_, Reference) => {
                 let has_url = self.show_url(entry);
-                let date = entry.date_any().map(|date| {
-                    let mut res = if let Some(month) = date.month {
-                        if let Some(day) = date.day {
-                            format!(
-                                "{} {}, ",
-                                en::get_month_abbr(month, true).unwrap(),
-                                day + 1
-                            )
-                        } else {
-                            format!("{} ", en::get_month_abbr(month, true).unwrap())
-                        }
-                    } else {
-                        String::new()
-                    };
-
-                    res += &date.display_year();
-                    res
-                });
+                let date = entry.date_any().map(|date| format_date(date, disamb));
 
                 if let Some(ed) = canonical.edition() {
                     match ed {
@@ -497,19 +490,7 @@ impl Ieee {
                     res.push(start);
 
                     if let Some(date) = entry.date_any() {
-                        if let Some(month) = date.month {
-                            res.push(if let Some(day) = date.day {
-                                format!(
-                                    "{} {}",
-                                    en::get_month_abbr(month, true).unwrap(),
-                                    day + 1
-                                )
-                            } else {
-                                en::get_month_abbr(month, true).unwrap()
-                            });
-                        }
-
-                        res.push(date.display_year());
+                        res.push(format_date(date, disamb));
                     }
                 }
             }
@@ -530,19 +511,7 @@ impl Ieee {
                 };
 
                 if let Some(date) = entry.date_any() {
-                    if let Some(month) = date.month {
-                        res.push(if let Some(day) = date.day {
-                            format!(
-                                "{} {}",
-                                en::get_month_abbr(month, true).unwrap(),
-                                day + 1
-                            )
-                        } else {
-                            en::get_month_abbr(month, true).unwrap()
-                        });
-                    }
-
-                    res.push(date.display_year());
+                    res.push(format_date(date, disamb));
                 }
 
                 if !pages {
@@ -570,24 +539,7 @@ impl Ieee {
                     res.push(format!("Rep. {}", sn));
                 }
 
-                let date = entry.date_any().map(|date| {
-                    let mut res = if let Some(month) = date.month {
-                        if let Some(day) = date.day {
-                            format!(
-                                "{} {}, ",
-                                en::get_month_abbr(month, true).unwrap(),
-                                day + 1
-                            )
-                        } else {
-                            format!("{} ", en::get_month_abbr(month, true).unwrap())
-                        }
-                    } else {
-                        String::new()
-                    };
-
-                    res += &date.display_year();
-                    res
-                });
+                let date = entry.date_any().map(|date| format_date(date, disamb));
 
                 if !self.show_url(entry) {
                     if let Some(date) = date.clone() {
@@ -669,19 +621,7 @@ impl Ieee {
                 }
 
                 if let Some(date) = entry.date_any() {
-                    if let Some(month) = date.month {
-                        res.push(if let Some(day) = date.day {
-                            format!(
-                                "{} {}",
-                                en::get_month_abbr(month, true).unwrap(),
-                                day + 1
-                            )
-                        } else {
-                            en::get_month_abbr(month, true).unwrap()
-                        });
-                    }
-
-                    res.push(date.display_year());
+                    res.push(format_date(date, disamb));
                 }
             }
             (Web, _) | (Blog, _) => {
@@ -780,24 +720,11 @@ impl Ieee {
         res
     }
 
-    fn formt_date(&self, date: &Date) -> String {
-        let mut res = String::new();
-        if let Some(month) = date.month {
-            res += &(if let Some(day) = date.day {
-                format!("{} {},", en::get_month_abbr(month, true).unwrap(), day + 1)
-            } else {
-                en::get_month_abbr(month, true).unwrap()
-            });
-            res += " ";
-        }
-
-        res += &date.display_year();
-        res
-    }
-}
-
-impl BibliographyFormatter for Ieee {
-    fn format(&self, mut entry: &Entry, _prev: Option<&Entry>) -> DisplayString {
+    fn get_single_record<'a>(
+        &self,
+        record: &Record<'a>,
+    ) -> (DisplayReference<'a>, Vec<Person>) {
+        let mut entry = record.entry;
         let mut parent = entry.parents().and_then(|v| v.first());
         let mut sn_stack = vec![];
         while entry.title().is_none() && select!(Chapter | Scene).matches(entry) {
@@ -837,9 +764,10 @@ impl BibliographyFormatter for Ieee {
         let parent = get_canonical_parent(entry);
         let canonical = parent.unwrap_or(entry);
 
-        let authors = self.get_author(entry, canonical);
+        let (authors, al) = self.get_author(entry, canonical);
         let title = self.get_title_element(entry, canonical);
-        let addons = self.get_addons(entry, canonical, chapter, section);
+        let addons =
+            self.get_addons(entry, canonical, chapter, section, record.disambiguation);
 
         let mut res = DisplayString::from_string(authors);
 
@@ -868,7 +796,7 @@ impl BibliographyFormatter for Ieee {
                     res += ". ";
                 }
                 res.push('(');
-                res += &self.formt_date(&date);
+                res += &format_date(&date, record.disambiguation);
                 res.push(')');
             }
         }
@@ -920,7 +848,7 @@ impl BibliographyFormatter for Ieee {
 
                 if canonical.entry_type != Web && canonical.entry_type != Blog {
                     if let Some(date) = &url.visit_date {
-                        res += &format!("Accessed: {}. ", self.formt_date(&date));
+                        res += &format!("Accessed: {}. ", format_date(&date, None));
                     }
 
                     if canonical.entry_type == Video {
@@ -939,7 +867,7 @@ impl BibliographyFormatter for Ieee {
                     res.commit_formats();
 
                     if let Some(date) = &url.visit_date {
-                        res += &format!(" (accessed: {}).", self.formt_date(&date));
+                        res += &format!(" (accessed: {}).", format_date(&date, None));
                     }
                 }
             }
@@ -953,6 +881,64 @@ impl BibliographyFormatter for Ieee {
             res += &format!("({})", note);
         }
 
-        res
+        (
+            DisplayReference::new(
+                record.entry,
+                record.prefix.clone().map(Into::into),
+                res,
+            ),
+            al,
+        )
+    }
+}
+
+fn format_date(date: &Date, disamb: Option<usize>) -> String {
+    let mut res = String::new();
+    if let Some(month) = date.month {
+        res += &(if let Some(day) = date.day {
+            format!("{} {},", en::get_month_abbr(month, true).unwrap(), day + 1)
+        } else {
+            en::get_month_abbr(month, true).unwrap()
+        });
+        res += " ";
+    }
+
+    res += &date.display_year();
+    if let Some(disamb) = disamb {
+        res.push(alph_designator(disamb).to_ascii_uppercase());
+    }
+    res
+}
+
+impl<'a> BibliographyStyle<'a> for Ieee {
+    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+        let mut items = vec![];
+
+        for record in db.records() {
+            items.push(self.get_single_record(record));
+        }
+
+        match self.sort {
+            BibliographyOrdering::ByPrefix => {
+                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
+            }
+            BibliographyOrdering::ByAuthor => {
+                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
+                    author_title_ord_custom(
+                        a_ref.entry,
+                        b_ref.entry,
+                        Some(a_auths),
+                        Some(b_auths),
+                    )
+                });
+            }
+            _ => {}
+        }
+
+        items.into_iter().map(|(a, _)| a).collect()
+    }
+
+    fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
+        self.get_single_record(record).0
     }
 }

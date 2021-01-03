@@ -334,21 +334,25 @@ impl Entry {
 mod tests {
     use std::fs;
 
+    use style::Citation;
+
     use super::*;
     use crate::io::from_yaml_str;
-    use crate::style::{apa, chicago, ieee, mla, AtomicCitation, BibliographyFormatter};
+    use crate::style::{Apa, ChicagoNotes, Database, Ieee, Mla};
 
     #[test]
     fn apa() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
-        let apa = apa::Apa::new();
-        let mut last_entry = None;
+        let apa = Apa::new();
 
+        let mut db = Database::new();
         for entry in &entries {
-            let refs = apa.format(&entry, last_entry);
-            println!("{}", refs.print_ansi_vt100());
-            last_entry = Some(entry);
+            db.push(entry);
+        }
+
+        for reference in db.bibliography(&apa) {
+            println!("{:#}", reference.display);
         }
     }
 
@@ -356,13 +360,15 @@ mod tests {
     fn ieee() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
-        let ieee = ieee::Ieee::new();
-        let mut last_entry = None;
+        let ieee = Ieee::new();
 
+        let mut db = Database::new();
         for entry in &entries {
-            let refs = ieee.format(&entry, last_entry);
-            println!("{}", refs.print_ansi_vt100());
-            last_entry = Some(entry);
+            db.push(entry);
+        }
+
+        for reference in db.bibliography(&ieee) {
+            println!("{:#}", reference.display);
         }
     }
 
@@ -370,13 +376,15 @@ mod tests {
     fn mla() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
-        let mla = mla::Mla::new();
-        let mut last_entry = None;
+        let mla = Mla::new();
 
+        let mut db = Database::new();
         for entry in &entries {
-            let refs = mla.format(&entry, last_entry);
-            println!("{}", refs.print_ansi_vt100());
-            last_entry = Some(entry);
+            db.push(entry);
+        }
+
+        for reference in db.bibliography(&mla) {
+            println!("{:#}", reference.display);
         }
     }
 
@@ -384,14 +392,16 @@ mod tests {
     fn chicago_n() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
-        let chicago = chicago::notes::Note::new(entries.iter());
+        let mut chicago = ChicagoNotes::default();
+
+        let mut db = Database::new();
+        for entry in &entries {
+            db.push(entry);
+        }
 
         for entry in &entries {
-            let citation = AtomicCitation::new(&entry.key, None, None);
-
-            let refs =
-                chicago.get_note(citation, chicago::notes::NoteType::Full).unwrap();
-            println!("{}", refs.print_ansi_vt100());
+            let citation = Citation::new(&entry, None);
+            println!("{:#}", db.citation(&mut chicago, &[citation]));
         }
     }
 
@@ -399,11 +409,15 @@ mod tests {
     fn chicago_b() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
-        let chicago = chicago::bibliography::Bibliography::new(chicago::Mode::AuthorDate);
+        let chicago = ChicagoNotes::default();
 
+        let mut db = Database::new();
         for entry in &entries {
-            let refs = chicago.format(&entry, None);
-            println!("{}", refs.print_ansi_vt100());
+            db.push(entry);
+        }
+
+        for reference in db.bibliography(&chicago) {
+            println!("{:#}", reference.display);
         }
     }
 

@@ -1,275 +1,369 @@
 //! Citation and bibliography styles.
 
-pub mod apa;
-pub mod chicago;
-pub mod ieee;
-pub mod mla;
+mod apa;
+mod chicago;
+mod ieee;
+mod mla;
 
-use std::collections::HashMap;
-use std::convert::Into;
-use std::fmt::Write;
+pub use apa::Apa;
+pub use chicago::author_date::ChicagoAuthorDate;
+pub use chicago::notes::{ChicagoNoteStyle, ChicagoNotes};
+pub use chicago::{ChicagoAccessDateVisibility, ChicagoConfig};
+pub use ieee::Ieee;
+use linked_hash_map::LinkedHashMap;
+pub use mla::Mla;
+
+use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::ops::{Add, AddAssign};
+use std::{cmp::Ordering, convert::Into};
 
 use isolang::Language;
-use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::types::Person;
 use super::Entry;
 
-use chicago::CommonChicagoConfig;
+/// A database record that contains some style-set supplementary info.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Record<'a> {
+    /// The entry the record is associated with.
+    pub entry: &'a Entry,
+    /// A prefix set by the citation styles that is reproduced in the bibliography.
+    pub prefix: Option<String>,
+    /// A disambiguation between similar entries set by the citation styles that is reproduced in the bibliography.
+    ///
+    /// Often turns up as `0` becomes `a` and so forth.
+    pub disambiguation: Option<usize>,
+    /// Indicates whether the entry's prefix
+    /// and disambiguation can still be changed.
+    pub pristine: bool,
+}
 
-/// Describes a pair of brackets.
+impl<'a> Record<'a> {
+    /// Create a new database record with a prefix and a disambiguation option.
+    pub fn new(
+        entry: &'a Entry,
+        prefix: Option<String>,
+        disambiguation: Option<usize>,
+    ) -> Self {
+        Self {
+            entry,
+            prefix,
+            disambiguation,
+            pristine: true,
+        }
+    }
+
+    /// Create a new database record from an entry.
+    ///
+    /// Will default to `None` for the `prefix` and `disambiguation` fields.
+    pub fn from_entry(entry: &'a Entry) -> Self {
+        Self {
+            entry,
+            prefix: None,
+            disambiguation: None,
+            pristine: true,
+        }
+    }
+}
+
+/// A citation of a single entry.
+#[derive(Copy, Clone, Debug)]
+pub struct Citation<'a> {
+    /// The cited entry.
+    pub entry: &'a Entry,
+    /// Supplement for the entry such as page or chapter number.
+    pub supplement: Option<&'a str>,
+}
+
+impl<'a> Citation<'a> {
+    /// Create a new citation.
+    pub fn new(entry: &'a Entry, supplement: Option<&'a str>) -> Self {
+        Self { entry, supplement }
+    }
+}
+
+/// Contains the [`DisplayString`] for a citation and indicates its recommended
+/// placement within a document.
+#[non_exhaustive]
+pub struct DisplayCitation {
+    /// The formatted citation.
+    pub display: DisplayString,
+    /// Whether this citation is, in fact, a footnote.
+    pub is_footnote: bool,
+}
+
+/// Contains the [`DisplayString`] for a bibliography reference as well as
+/// the prefix nececcitated by any previously used citation styles and a
+/// reference to the matching [`Entry`].
+#[non_exhaustive]
+pub struct DisplayReference<'a> {
+    /// The cited entry.
+    pub entry: &'a Entry,
+    /// The prefix of the reference.
+    pub prefix: Option<DisplayString>,
+    /// The formatted reference.
+    pub display: DisplayString,
+}
+
+impl<'a> DisplayReference<'a> {
+    fn new(
+        entry: &'a Entry,
+        prefix: Option<DisplayString>,
+        display: DisplayString,
+    ) -> Self {
+        DisplayReference { entry, prefix, display }
+    }
+}
+
+/// A database of citation entries.
+#[non_exhaustive]
+pub struct Database<'a> {
+    /// Records in order of insertion. Citation style might change their content.
+    pub records: LinkedHashMap<&'a str, Record<'a>>,
+}
+
+impl<'a> Database<'a> {
+    /// Create a new citation database.
+    pub fn new() -> Self {
+        Self { records: LinkedHashMap::new() }
+    }
+
+    /// Push an entry into the database, making it part of the resulting
+    /// bibliography.
+    ///
+    /// If you push an entry, but do not cite it afterwards, some more complex
+    /// citation elements may become malformed (e.g. if you push two entries
+    /// with same author and year, but cite only one of them, Chicago
+    /// Author-Date will format this one as "2020A" instead of "2020").
+    pub fn push(&mut self, entry: &'a Entry) {
+        let record = Record::from_entry(entry);
+        self.records.insert(record.entry.key(), record);
+    }
+
+    fn records(&self) -> linked_hash_map::Values<&'a str, Record<'a>> {
+        self.records.values()
+    }
+
+    /// Cite entries and format them with the given style.
+    ///
+    /// The `parts` are the individual cited entries in a composite citation
+    /// like "[1 p. 5, 2]". If you want to cite only one entry, you might want
+    /// to use `std::iter::once`.
+    ///
+    /// If you cite an entry that has not yet been pushed, it is pushed for you
+    /// automatically. However, some more complex citation elements may become
+    /// malformed (e.g. if you cite two entries with the same author and year,
+    /// but pushed only one of them, Chicago Author-Date will format them as
+    /// "2020" and "2020A" instead of "2020A" and "2020B").
+    pub fn citation<S>(&mut self, style: &mut S, parts: &[Citation<'a>]) -> DisplayString
+    where
+        S: CitationStyle<'a> + ?Sized,
+    {
+        for p in parts {
+            self.push(p.entry);
+        }
+
+        style.citation(self, parts)
+    }
+
+    /// Format a bibliography of all cited entries with the given style.
+    ///
+    /// Returns the entry along with their styled reference.
+    pub fn bibliography<S>(&self, style: &S) -> Vec<DisplayReference<'a>>
+    where
+        S: BibliographyStyle<'a> + ?Sized,
+    {
+        style.bibliography(self)
+    }
+
+    /// Format a single entry for a bibliography with the given style.
+    ///
+    /// Returns the entry along with their styled reference if it is present in
+    /// the database, otherwise the return value will be `None`.
+    pub fn reference<S>(&self, style: &S, key: &str) -> Option<DisplayReference<'a>>
+    where
+        S: BibliographyStyle<'a>,
+    {
+        self.records.get(key).map(|record| style.reference(record))
+    }
+}
+
+/// Provides a function to create in-text citations.
+pub trait CitationStyle<'a> {
+    /// Formats several [`Citation`]s using a [`Database`].
+    ///
+    /// This function is best used through [`Database::citation`] which performs
+    /// additional processing on the database to support the operation.
+    /// Implementors of this trait should expect corresponding records for the
+    /// items in `parts` to be already present in the database.
+    fn citation(
+        &mut self,
+        db: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayString;
+
+    /// Indicates which brackets to wrap citations in if brackets are desired.
+    fn brackets(&self) -> Brackets;
+
+    /// Indicates whether citations should normally be wrapped in brackets.
+    fn wrapped(&self) -> bool;
+}
+
+/// Provides a function to create bibliographies.
+pub trait BibliographyStyle<'a> {
+    /// Formats a single reference from a [`Record`] as a bibliography.
+    fn reference(&self, record: &Record<'a>) -> DisplayReference<'a>;
+
+    /// Formats all records in a [`Database`] as a bibliography. This function is best
+    /// used through [`Database::bibliography`].
+    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>>;
+}
+
+/// Describes the bracket preference of a citation style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Bracket {
+pub enum Brackets {
     /// "(...)" Parentheses.
-    Parentheses,
+    Round,
     /// "[...]" Brackets.
-    SquareBrackets,
-    /// No brackets should be used.
+    Square,
+    /// No brackets.
     None,
 }
 
-/// Describes a pair of brackets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BracketMode {
-    /// Expression is wrapped by [`Bracket`]s
-    Wrapped,
-    /// Expression is not wrapped by brackets.
-    Unwrapped,
-}
-
-impl Bracket {
+impl Brackets {
     /// Get the according left bracket.
     pub fn left(&self) -> Option<char> {
         match self {
-            Bracket::Parentheses => Some('('),
-            Bracket::SquareBrackets => Some('['),
-            Bracket::None => None,
+            Brackets::Round => Some('('),
+            Brackets::Square => Some('['),
+            Brackets::None => None,
         }
     }
 
     /// Get the according right bracket.
     pub fn right(&self) -> Option<char> {
         match self {
-            Bracket::Parentheses => Some(')'),
-            Bracket::SquareBrackets => Some(']'),
-            Bracket::None => None,
+            Brackets::Round => Some(')'),
+            Brackets::Square => Some(']'),
+            Brackets::None => None,
         }
     }
 
-    /// Wrap some string in brackets.
-    pub fn wrap(&self, s: &mut String) {
+    /// Wrap a [`DisplayString`] in brackets.
+    pub fn wrap(&self, mut display: DisplayString) -> DisplayString {
         if let Some(left) = self.left() {
-            s.insert(0, left)
+            display = DisplayString::from_string(left.to_string()) + display;
         }
         if let Some(right) = self.right() {
-            s.push(right)
+            display.push(right)
         }
-    }
-
-    /// Wrap some [`DisplayString`] in brackets.
-    pub fn wrap_ds(&self, mut ds: DisplayString) -> DisplayString {
-        if let Some(left) = self.left() {
-            ds = DisplayString::from_string(left.to_string()) + ds;
-        }
-        if let Some(right) = self.right() {
-            ds.push(right)
-        }
-        ds
+        display
     }
 }
 
-/// This enum describes where the output string of the [CitationFormatter]
-/// should be set: Inside the text or in a
-pub enum CitationMode {
-    /// Set citation text in a footnote. Only produce a superscript footnote
-    /// symbol at the matching position of the text. (footnote numbers are
-    /// managed by the callee; may be rendered as endnotes).
-    Footnote,
-    /// The citation text should be set directly where the text appears.
-    InText,
+/// Specify the ordering of bibliography items.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BibliographyOrdering {
+    /// Order items by the alphanumerical order of their prefixes.
+    ByPrefix,
+    /// Order items by their authors, then titles, and finally dates.
+    ByAuthor,
+    /// Do not order. Bibliography will be in insertion order of the database.
+    None,
 }
 
-/// Will be raised if a user-specified citation is not possible with the given
-/// database.
-#[derive(Debug, Error)]
-pub enum CitationError {
-    /// A key could not be found.
-    #[error("key {0} could not be fount in the citation database")]
-    KeyNotFound(String),
-    /// A number was required for this citation format but not found.
-    #[error("key {0} did not contain a number")]
-    NoNumber(String),
-}
+/// Citations that just consist of entry keys.
+pub struct Keys {}
 
-/// Structs that implement this can be used to generate bibliography references
-/// for sources.
-pub trait BibliographyFormatter {
-    /// Get a string with optional formatting that describes `Entry` in
-    /// accordance with the implementing struct's style.
-    fn format(&self, entry: &Entry, prev_entry: Option<&Entry>) -> DisplayString;
-}
-
-/// Structs that can be used to get some string can implement this trait
-/// in order to indicate what kind of brackets their output is normally
-/// wrapped in.
-pub trait BracketPreference {
-    /// Indicates what brackets the output is normally wrapped in.
-    fn default_brackets() -> Bracket;
-    /// Indicates whether the output is normally wrapped at all.
-    fn default_bracket_mode() -> BracketMode;
-}
-
-/// Get citations wrapped in the right pair of brackets.
-/// This trait will be automatically implemented for all structs that are
-/// [`CitationFormatter`]s and have a [`BracketPreference`].
-pub trait BracketCitFormatter<'s> {
-    /// Get the citation in brackets if the citation style prefers that.
-    fn format_bracketed_default(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError>;
-
-    /// Get the citation with or without surrounding brackets, as specified
-    /// by the `mode` argument.
-    fn format_bracketed(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-        mode: BracketMode,
-    ) -> Result<DisplayString, CitationError>;
-}
-
-impl<'s, T> BracketCitFormatter<'s> for T
-where
-    T: CitationFormatter<'s> + BracketPreference,
-{
-    fn format_bracketed_default(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
-        self.format_bracketed(citation, Self::default_bracket_mode())
-    }
-
-    fn format_bracketed(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-        mode: BracketMode,
-    ) -> Result<DisplayString, CitationError> {
-        if mode == BracketMode::Wrapped {
-            self.format(citation).map(|ds| Self::default_brackets().wrap_ds(ds))
-        } else {
-            self.format(citation)
-        }
-    }
-}
-
-/// Represents a citation of one or more database entries.
-#[derive(Clone, Copy, Debug)]
-pub struct AtomicCitation<'s> {
-    /// Key of the cited entry.
-    pub key: &'s str,
-    /// Supplements for each entry key such as page or chapter number.
-    pub supplement: Option<&'s str>,
-    /// Assigned number of the citation.
-    pub number: Option<usize>,
-}
-
-impl<'s> AtomicCitation<'s> {
-    /// Create a new atomic citation.
-    pub fn new(key: &'s str, supplement: Option<&'s str>, number: Option<usize>) -> Self {
-        Self { key, supplement, number }
-    }
-}
-
-/// Structs implementing this trait can generate the appropriate reference
-/// markers for a single `Citation` struct. They do not have to see subsequent
-/// citations to determine the marker value.
-pub trait CitationFormatter<'s> {
-    /// Get a reference for the passed citation struct.
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError>;
-}
-
-/// Checks if the keys are in the database and returns them as reference
-/// markers, since they are already unique.
-pub struct KeyDump<'s> {
-    entries: HashMap<&'s str, &'s Entry>,
-}
-
-impl<'s> KeyDump<'s> {
-    /// Create a new `KeyDump`.
-    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
-        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
-        Self { entries }
-    }
-}
-
-impl<'s> CitationFormatter<'s> for KeyDump<'s> {
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
+impl<'a> CitationStyle<'a> for Keys {
+    fn citation(
+        &mut self,
+        _: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayString {
         let mut items = vec![];
-        for atomic in citation {
-            if !self.entries.contains_key(atomic.key) {
-                return Err(CitationError::KeyNotFound(atomic.key.to_string()));
+        for atomic in parts {
+            let mut res = DisplayString::new();
+            res.start_format(Formatting::Bold);
+            res += atomic.entry.key();
+            res.commit_formats();
+
+            if let Some(supplement) = atomic.supplement {
+                res += " (";
+                res += supplement;
+                res.push(')');
             }
 
-            items.push(if let Some(supplement) = atomic.supplement {
-                format!("{} ({})", atomic.key, supplement)
-            } else {
-                atomic.key.to_string()
-            });
+            items.push(res)
         }
 
-        let mut res = DisplayString::new();
-        res.start_format(Formatting::Bold);
-        res += &items.join(", ");
-        res.commit_formats();
-        Ok(res)
-    }
-}
-
-impl<'s> BracketPreference for KeyDump<'s> {
-    fn default_brackets() -> Bracket {
-        Bracket::SquareBrackets
+        DisplayString::join(&items, ", ")
     }
 
-    fn default_bracket_mode() -> BracketMode {
-        BracketMode::Unwrapped
+    fn brackets(&self) -> Brackets {
+        Brackets::Square
+    }
+
+    fn wrapped(&self) -> bool {
+        false
     }
 }
 
 /// Output IEEE-style numerical reference markers.
-pub struct Numerical<'s> {
-    entries: HashMap<&'s str, &'s Entry>,
+pub struct Numerical {
+    used_numbers: Vec<usize>,
 }
 
-impl<'s> Numerical<'s> {
-    /// Create a new `Numerical`.
-    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
-        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
-        Self { entries }
+impl Numerical {
+    /// Creates a new instance.
+    pub fn new() -> Self {
+        Self { used_numbers: vec![] }
     }
 }
 
-impl<'s> CitationFormatter<'s> for Numerical<'s> {
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
+impl<'a> CitationStyle<'a> for Numerical {
+    fn citation(
+        &mut self,
+        db: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayString {
         let mut ids = vec![];
-        for atomic in citation {
-            if !self.entries.contains_key(atomic.key) {
-                return Err(CitationError::KeyNotFound(atomic.key.to_string()));
-            }
+        let mut sorted = db.records.clone().into_iter().collect::<Vec<_>>();
+        sorted.sort_by(|(_, v), (_, v2)| author_title_ord(v.entry, v2.entry));
+        db.records = sorted.into_iter().collect();
 
-            let number = atomic
-                .number
-                .ok_or_else(|| CitationError::NoNumber(atomic.key.to_string()))?;
+        for atomic in parts {
+            let index = db
+                .records()
+                .position(|r| r.entry == atomic.entry)
+                .expect("database record for entry has to exist at this point");
+
+            let number = if let Some(prefix) = db
+                .records
+                .get(atomic.entry.key())
+                .unwrap()
+                .prefix
+                .as_ref()
+                .and_then(|p| p.parse().ok())
+            {
+                prefix
+            } else {
+                let mut counter = index;
+
+                if self.used_numbers.contains(&counter) {
+                    counter = 0;
+                }
+
+                while self.used_numbers.contains(&counter) {
+                    counter += 1;
+                }
+                self.used_numbers.push(counter);
+
+                counter + 1
+            };
+            db.records.get_mut(atomic.entry.key()).unwrap().pristine = false;
             ids.push((number, atomic.supplement));
         }
 
@@ -322,17 +416,15 @@ impl<'s> CitationFormatter<'s> for Numerical<'s> {
             .collect::<Vec<_>>()
             .join("; ");
 
-        Ok(format!("[{}]", re).into())
-    }
-}
-
-impl<'s> BracketPreference for Numerical<'s> {
-    fn default_brackets() -> Bracket {
-        Bracket::SquareBrackets
+        format!("[{}]", re).into()
     }
 
-    fn default_bracket_mode() -> BracketMode {
-        BracketMode::Wrapped
+    fn brackets(&self) -> Brackets {
+        Brackets::Square
+    }
+
+    fn wrapped(&self) -> bool {
+        true
     }
 }
 
@@ -381,110 +473,40 @@ pub enum Formatting {
 }
 
 /// Will move a format range's indicies by `o`.
-pub(crate) fn offset_format_range(
+fn offset_format_range(
     r: (std::ops::Range<usize>, Formatting),
     o: usize,
 ) -> (std::ops::Range<usize>, Formatting) {
     ((r.0.start + o) .. (r.0.end + o), r.1)
 }
 
-/// A printable string with a list of formatting modifications
-#[derive(Clone, Debug)]
+/// A printable string with a list of formatting modifications.
+#[derive(Clone, PartialEq, Eq)]
 pub struct DisplayString {
     /// The string content.
     pub value: String,
     /// Information about formatted ranges.
     pub formatting: Vec<(std::ops::Range<usize>, Formatting)>,
-
-    pending_formatting: Vec<(usize, Formatting)>,
-}
-
-impl Add<&str> for DisplayString {
-    type Output = DisplayString;
-
-    #[inline]
-    fn add(mut self, other: &str) -> DisplayString {
-        self.value.push_str(other);
-        self
-    }
-}
-
-impl Add<Self> for DisplayString {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, other: Self) -> Self {
-        self.formatting.append(
-            &mut other
-                .formatting
-                .into_iter()
-                .map(|e| offset_format_range(e, self.value.len()))
-                .collect(),
-        );
-        self.value.push_str(&other.value);
-        self
-    }
-}
-
-impl AddAssign<&String> for DisplayString {
-    fn add_assign(&mut self, other: &String) {
-        self.value.push_str(other);
-    }
-}
-
-impl AddAssign<&str> for DisplayString {
-    fn add_assign(&mut self, other: &str) {
-        self.value.push_str(other);
-    }
-}
-
-impl AddAssign<Self> for DisplayString {
-    fn add_assign(&mut self, other: Self) {
-        self.formatting.append(
-            &mut other
-                .formatting
-                .into_iter()
-                .map(|e| offset_format_range(e, self.value.len()))
-                .collect(),
-        );
-        self.value.push_str(&other.value);
-    }
-}
-
-impl Into<String> for DisplayString {
-    fn into(self) -> String {
-        self.value
-    }
-}
-
-impl Into<DisplayString> for String {
-    fn into(self) -> DisplayString {
-        DisplayString::from_string(self)
-    }
-}
-
-impl Into<DisplayString> for &str {
-    fn into(self) -> DisplayString {
-        DisplayString::from_string(self)
-    }
+    /// Formatting with still unknown end.
+    pending: Option<(std::ops::RangeFrom<usize>, Formatting)>,
 }
 
 impl DisplayString {
-    /// Constructs a new DisplayString.
+    /// Constructs an empty display string.
     pub fn new() -> Self {
         Self {
             value: String::new(),
             formatting: vec![],
-            pending_formatting: vec![],
+            pending: None,
         }
     }
 
-    /// Use a String to create a display string.
-    pub fn from_string<S: Into<String>>(s: S) -> Self {
+    /// Create a display string from a string.
+    pub fn from_string(value: impl Into<String>) -> Self {
         Self {
-            value: s.into(),
+            value: value.into(),
             formatting: vec![],
-            pending_formatting: vec![],
+            pending: None,
         }
     }
 
@@ -508,22 +530,44 @@ impl DisplayString {
         self.value.push(ch);
     }
 
-    pub(crate) fn start_format(&mut self, f: Formatting) {
-        debug_assert!(!self.pending_formatting.iter().any(|e| e.1 == f));
-        self.pending_formatting.push((self.len(), f));
-    }
-
-    /// Resets all of the formatting.
+    /// Removes all of the formatting.
     pub fn clear_formatting(&mut self) {
         self.formatting.clear();
     }
 
-    pub(crate) fn commit_formats(&mut self) {
-        for (start, f) in self.pending_formatting.iter() {
-            self.formatting.push((*start .. self.len(), *f))
+    /// Wrap the display string with the citation style's
+    /// [preferred brackets](CitationStyle::brackets) if
+    /// the citation style [typically uses brackets](CitationStyle::wrapped).
+    pub fn with_default_brackets<'a, S>(self, style: &S) -> Self
+    where
+        S: CitationStyle<'a>,
+    {
+        if style.wrapped() {
+            style.brackets().wrap(self)
+        } else {
+            self
         }
+    }
 
-        self.pending_formatting.clear();
+    /// Wrap the display string with the citation style's
+    /// [preferred brackets](CitationStyle::brackets), disregarding whether
+    /// the citation style [typically uses brackets](CitationStyle::wrapped).
+    pub fn with_forced_brackets<'a, S>(self, style: &S) -> Self
+    where
+        S: CitationStyle<'a>,
+    {
+        style.brackets().wrap(self)
+    }
+
+    pub(crate) fn start_format(&mut self, f: Formatting) {
+        debug_assert!(self.pending.is_none());
+        self.pending = Some((self.len() .., f));
+    }
+
+    pub(crate) fn commit_formats(&mut self) {
+        if let Some((range, fmt)) = self.pending.take() {
+            self.formatting.push((range.start .. self.len(), fmt))
+        }
     }
 
     pub(crate) fn add_if_some<S: Into<String>>(
@@ -557,9 +601,8 @@ impl DisplayString {
         res
     }
 
-    /// Applies the formatting as ANSI / VT100 control sequences and
-    /// prints that formatted string to standard output.
-    pub fn print_ansi_vt100(&self) -> String {
+    /// Applies the formatting as ANSI / VT100 control sequences.
+    pub fn ansi_vt100(&self) -> String {
         let mut start_end = vec![];
 
         for item in &self.formatting {
@@ -597,6 +640,101 @@ impl DisplayString {
         res = (&self.value[0 .. pointer]).to_string() + &res;
 
         res
+    }
+}
+
+impl Add<&str> for DisplayString {
+    type Output = DisplayString;
+
+    fn add(mut self, other: &str) -> DisplayString {
+        self.value.push_str(other);
+        self
+    }
+}
+
+impl Add<Self> for DisplayString {
+    type Output = Self;
+
+    fn add(mut self, other: Self) -> Self {
+        let len = self.value.len();
+        self.formatting
+            .extend(other.formatting.into_iter().map(|e| offset_format_range(e, len)));
+        self.value.push_str(&other.value);
+        self
+    }
+}
+
+impl AddAssign<&String> for DisplayString {
+    fn add_assign(&mut self, other: &String) {
+        self.value.push_str(other);
+    }
+}
+
+impl AddAssign<&str> for DisplayString {
+    fn add_assign(&mut self, other: &str) {
+        self.value.push_str(other);
+    }
+}
+
+impl AddAssign<Self> for DisplayString {
+    fn add_assign(&mut self, other: Self) {
+        self.formatting.append(
+            &mut other
+                .formatting
+                .into_iter()
+                .map(|e| offset_format_range(e, self.value.len()))
+                .collect(),
+        );
+        self.value.push_str(&other.value);
+    }
+}
+
+impl Display for DisplayString {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if f.alternate() {
+            f.pad(&self.value)
+        } else {
+            f.pad(&self.ansi_vt100())
+        }
+    }
+}
+
+impl Debug for DisplayString {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("DisplayString")
+            .field("value", &self.value)
+            .field("formatting", &self.formatting)
+            .finish()
+    }
+}
+
+impl PartialOrd for DisplayString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
+
+impl Ord for DisplayString {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl From<DisplayString> for String {
+    fn from(display: DisplayString) -> Self {
+        display.value
+    }
+}
+
+impl From<String> for DisplayString {
+    fn from(string: String) -> Self {
+        Self::from_string(string)
+    }
+}
+
+impl From<&str> for DisplayString {
+    fn from(string: &str) -> Self {
+        Self::from_string(string)
     }
 }
 
@@ -672,172 +810,255 @@ fn alph_designator(pos: usize) -> char {
     (b'a' + (pos % 26) as u8) as char
 }
 
-/// Output citations like "Oba20" or "KMS96".
-pub struct Alphabetical<'s> {
-    entries: HashMap<&'s str, &'s Entry>,
+fn omit_initial_articles(s: &str) -> String {
+    let parts = s.split(' ').collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return s.to_string();
+    }
+
+    if ["a", "an", "the"].contains(&parts.first().unwrap().to_lowercase().as_ref()) {
+        (&parts[1 ..]).join(" ")
+    } else {
+        s.to_string()
+    }
+}
+
+fn author_title_ord(item: &Entry, other: &Entry) -> Ordering {
+    author_title_ord_custom(item, other, item.authors(), other.authors())
+}
+
+fn author_title_ord_custom(
+    item: &Entry,
+    other: &Entry,
+    mut auth1: Option<&[Person]>,
+    mut auth2: Option<&[Person]>,
+) -> Ordering {
+    if let Some(a) = auth1 {
+        if a.is_empty() {
+            auth1 = None;
+        }
+    }
+    if let Some(a) = auth2 {
+        if a.is_empty() {
+            auth2 = None;
+        }
+    }
+
+    match (auth1, auth2) {
+        (Some(authors), Some(other_authors)) => authors.cmp(other_authors),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+    .then_with(|| {
+        if let (Some(title), Some(other_title)) = (item.title(), other.title()) {
+            omit_initial_articles(&title.canonical.value)
+                .cmp(&omit_initial_articles(&other_title.canonical.value))
+        } else {
+            Ordering::Equal
+        }
+    })
+    .then_with(|| {
+        if let (Some(date), Some(other_date)) = (item.date_any(), other.date_any()) {
+            date.year.cmp(&other_date.year).then(
+                if let (Some(month), Some(other_month)) = (date.month, other_date.month) {
+                    month.cmp(&other_month).then(
+                        if let (Some(day), Some(other_day)) = (date.day, other_date.day) {
+                            day.cmp(&other_day)
+                        } else {
+                            Ordering::Equal
+                        },
+                    )
+                } else {
+                    Ordering::Equal
+                },
+            )
+        } else {
+            Ordering::Equal
+        }
+    })
+}
+
+/// Citations following a simple alphanumerical style.
+///
+/// Corresponds to LaTeX's `alphabetical` style.
+pub struct Alphanumerical {
     /// How many letters to allow to describe an entry.
     pub letters: usize,
 }
 
-impl<'s> Alphabetical<'s> {
+impl Alphanumerical {
     /// Create a new `Alphabetical`.
-    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
-        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
-        Self { entries, letters: 3 }
+    pub fn new() -> Self {
+        Self { letters: 3 }
+    }
+
+    fn creators(&self, entry: &Entry) -> String {
+        let creators = chicago::get_creators(entry).0;
+
+        match creators.len() {
+            0 => {
+                let pseudo_creator = if let Some(org) = entry.organization() {
+                    org.into()
+                } else if let Some(title) = delegate_titled_entry(entry).title() {
+                    title.canonical.value.clone()
+                } else {
+                    entry.key().chars().filter(|c| c.is_alphabetic()).collect::<String>()
+                };
+
+                pseudo_creator.graphemes(true).take(self.letters).collect()
+            }
+            1 => creators[0].name.graphemes(true).take(self.letters).collect(),
+            2 | 3 => creators
+                .iter()
+                .filter_map(|person| person.name.graphemes(true).next())
+                .collect(),
+            _ => creators[0]
+                .name
+                .graphemes(true)
+                .take(self.letters)
+                .chain(std::iter::once("+"))
+                .collect(),
+        }
+    }
+
+    fn year(entry: &Entry) -> Option<String> {
+        let year = entry
+            .date_any()
+            .or_else(|| entry.url_any().and_then(|u| u.visit_date.as_ref()))
+            .map(|date| {
+                let mut year = i32::abs(date.year % 100);
+                if date.year <= 0 {
+                    year += 1;
+                }
+                year
+            });
+
+        year.map(|y| {
+            let mut num = String::with_capacity(2);
+            write!(&mut num, "{:02}", y).unwrap();
+            num
+        })
     }
 }
 
-impl<'s> CitationFormatter<'s> for Alphabetical<'s> {
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
+impl<'a> CitationStyle<'a> for Alphanumerical {
+    fn citation(
+        &mut self,
+        db: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayString {
         let mut items = vec![];
-        for atomic in citation {
-            let mut entry = self
-                .entries
-                .get(atomic.key)
-                .cloned()
-                .ok_or_else(|| CitationError::KeyNotFound(atomic.key.into()))?;
+        for atomic in parts {
+            let mut entry = atomic.entry;
 
             entry = delegate_titled_entry(entry);
 
-            let creators = chicago::get_creators(entry).0;
-
-            #[rustfmt::skip]
-            let mut res: String = match creators.len() {
-                0 => {
-                    let pseudo_creator = if let Some(org) = entry.organization() {
-                        org.into()
-                    } else if let Some(title) = delegate_titled_entry(entry).title() {
-                        title.canonical.value.clone()
-                    } else {
-                        atomic
-                            .key
-                            .chars()
-                            .filter(|c| c.is_alphabetic())
-                            .collect::<String>()
-                    };
-
-                    pseudo_creator.graphemes(true).take(self.letters).collect()
-                }
-                1 => {
-                    creators[0].name.graphemes(true).take(self.letters).collect()
-                }
-                2 | 3 => {
-                    creators
-                        .iter()
-                        .filter_map(|person| person.name.graphemes(true).next())
-                        .collect()
-                }
-                _ => {
-                    creators[0]
-                        .name
-                        .graphemes(true)
-                        .take(self.letters)
-                        .chain(std::iter::once("+"))
-                        .collect()
-                }
-            };
-
-            let year = entry
-                .date_any()
-                .or_else(|| entry.url_any().and_then(|u| u.visit_date.as_ref()))
-                .map(|date| {
-                    let mut year = i32::abs(date.year % 100);
-                    if date.year <= 0 {
-                        year += 1;
-                    }
-                    year
-                });
-
-            if let Some(year) = year {
-                let mut num = String::with_capacity(2);
-                write!(&mut num, "{:02}", year).unwrap();
-                res += &num;
+            let creators = self.creators(entry);
+            let mut res = creators.clone();
+            let year_opt = Self::year(entry);
+            if let Some(year) = year_opt.as_ref() {
+                res += year;
             }
 
-            if let Some(number) = atomic.number {
-                res.push(alph_designator(number));
+            if !db.records.get(atomic.entry.key()).unwrap().pristine {
+                if let Some(num) =
+                    db.records.get(atomic.entry.key()).unwrap().disambiguation
+                {
+                    res.push(alph_designator(num));
+                }
+            } else {
+                let similar: Vec<_> = db
+                    .records()
+                    .filter(|r| {
+                        (&self.creators(r.entry), Self::year(r.entry).as_ref())
+                            == (&creators, year_opt.as_ref())
+                    })
+                    .collect();
+                if similar.len() > 1 {
+                    let disambiguation =
+                        similar.iter().position(|&r| r.entry == entry).unwrap();
+                    db.records.get_mut(atomic.entry.key()).unwrap().disambiguation =
+                        Some(disambiguation);
+                    res.push(alph_designator(disambiguation));
+                }
             }
+
+            let record = db.records.get_mut(atomic.entry.key()).unwrap();
+            record.pristine = false;
+            record.prefix = Some(res.clone());
 
             items.push(res);
         }
 
-        Ok(items.join("; ").into())
+        items.join("; ").into()
+    }
+
+    fn brackets(&self) -> Brackets {
+        Brackets::Square
+    }
+
+    fn wrapped(&self) -> bool {
+        true
     }
 }
 
-impl<'s> BracketPreference for Alphabetical<'s> {
-    fn default_brackets() -> Bracket {
-        Bracket::SquareBrackets
-    }
-
-    fn default_bracket_mode() -> BracketMode {
-        BracketMode::Wrapped
-    }
-}
-
-/// Output citations with the authors last names and the title of the work.
-pub struct AuthorTitle<'s> {
-    entries: HashMap<&'s str, &'s Entry>,
+/// Citations following a Chicago-like author-title format.
+pub struct AuthorTitle {
     /// This citation style uses code from Chicago, therefore the settings are
     /// contined within this struct.
-    pub config: CommonChicagoConfig,
+    pub config: ChicagoConfig,
 }
 
-impl<'s> AuthorTitle<'s> {
+impl AuthorTitle {
     /// Create a new `Alphabetical`.
-    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
-        let entries = entries.map(|e| (e.key.as_ref(), e)).collect();
-        Self {
-            entries,
-            config: CommonChicagoConfig::new(),
+    pub fn new() -> Self {
+        Self { config: ChicagoConfig::new() }
+    }
+
+    fn creator_list(&self, entry: &Entry) -> String {
+        let creators = chicago::get_creators(entry).0;
+        match creators.len() {
+            0 => {
+                if let Some(org) = entry.organization() {
+                    org.into()
+                } else {
+                    String::new()
+                }
+            }
+            _ => chicago::and_list(
+                creators.into_iter().map(|person| {
+                    if let Some(prefix) = person.prefix {
+                        format!("{} {}", prefix, person.name)
+                    } else {
+                        person.name.clone()
+                    }
+                }),
+                false,
+                self.config.et_al_limit,
+            ),
         }
     }
 }
 
-impl<'s> CitationFormatter<'s> for AuthorTitle<'s> {
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
+impl<'a> CitationStyle<'a> for AuthorTitle {
+    fn citation(
+        &mut self,
+        _: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayString {
         let mut items = vec![];
-        for atomic in citation {
-            let mut entry = self
-                .entries
-                .get(atomic.key)
-                .cloned()
-                .ok_or_else(|| CitationError::KeyNotFound(atomic.key.into()))?;
+        for atomic in parts {
+            let entry = delegate_titled_entry(atomic.entry);
 
-            entry = delegate_titled_entry(entry);
+            let mut res: DisplayString = self.creator_list(entry).into();
+            let title = entry
+                .title()
+                .map(|_| chicago::get_chunk_title(entry, false, true, &self.config));
 
-            let creators = chicago::get_creators(entry).0;
-            let mut res: DisplayString = match creators.len() {
-                0 => {
-                    if let Some(org) = entry.organization() {
-                        org.into()
-                    } else {
-                        String::new()
-                    }
-                }
-                _ => chicago::and_list(
-                    creators.into_iter().map(|person| {
-                        if let Some(prefix) = person.prefix {
-                            format!("{} {}", prefix, person.name)
-                        } else {
-                            person.name.clone()
-                        }
-                    }),
-                    false,
-                    self.config.et_al_limit,
-                ),
-            }
-            .into();
-
-            if entry.title().is_some() {
+            if let Some(title) = title.clone() {
                 push_comma_quote_aware(&mut res.value, ',', true);
-                res += chicago::get_chunk_title(entry, false, true, &self.config);
+                res += title;
             }
 
             if let Some(lang) = entry.language() {
@@ -850,16 +1071,14 @@ impl<'s> CitationFormatter<'s> for AuthorTitle<'s> {
             items.push(res);
         }
 
-        Ok(DisplayString::join(&items, "; "))
-    }
-}
-
-impl<'s> BracketPreference for AuthorTitle<'s> {
-    fn default_brackets() -> Bracket {
-        Bracket::Parentheses
+        DisplayString::join(&items, "; ")
     }
 
-    fn default_bracket_mode() -> BracketMode {
-        BracketMode::Unwrapped
+    fn brackets(&self) -> Brackets {
+        Brackets::Round
+    }
+
+    fn wrapped(&self) -> bool {
+        false
     }
 }
