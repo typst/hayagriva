@@ -1,59 +1,117 @@
-//! Formats citations as footnotes for Chicago's Notes and Bibliography style.
-use crate::output::{
-    abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
-    AtomicCitation, Bracket, BracketMode, BracketPreference, CitationError,
-    CitationFormatter, DisplayString, Formatting,
-};
-use crate::selectors::{Bind, Id, Wc};
-use crate::types::EntryType::*;
-use crate::{attrs, sel, Entry};
-use std::collections::HashMap;
+//! Formats citations as footnotes for Chicago'a Notes and Bibliography style.
 
 use super::{
-    and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
-    get_title, is_authoritative, web_creator, AuthorRole, CommonChicagoConfig, DateMode,
+    and_list, bibliography::Bibliography, entry_date, format_date, get_chunk_title,
+    get_creators, get_info_element, get_title, is_authoritative, web_creator, AuthorRole,
+    ChicagoConfig, DateMode, Mode,
 };
+use crate::style::{
+    abbreviate_publisher, author_title_ord_custom, delegate_titled_entry, format_range,
+    push_comma_quote_aware, BibliographyOrdering, BibliographyStyle, Brackets, Citation,
+    CitationStyle, Database, DisplayCitation, DisplayReference, DisplayString,
+    Formatting, Record,
+};
+use crate::types::{EntryType::*, FmtOptionExt};
+use crate::Entry;
 
-/// Describes the desired note type. This normally depends on the
-/// previously cited keys, depending on the behavior. Also see the Chicago
-/// Manual of Style, 17. ed., 14.20, 14.30, 14.34.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum NoteType {
-    /// Creates a full citation. Should always be used if this is the first
-    /// occurrance of the key in a section and the work contains no
-    /// bibliography. E.g. "Barack Obama, A Promised Land (London: Penguin
-    /// Books 2020), 364-371."
-    Full,
-    /// Creates a compact citation. This can be used if either the source was
-    /// already cited in the section or if there is a bibliography.
-    /// E.g. "Obama, Promised Land, 292."
+/// Verbosity of Chicago _Notes_.
+///
+/// # Reference
+/// See the 17th edition of the Chicago Manual of Style (CMoS), Chapters 14,
+/// Sections 20, 30, and 34.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ChicagoNoteStyle {
+    /// Uses [`Full`](Self::Full) for the first and [`Short`](Self::Short) for
+    /// all subsequent notes, except if the same entry is cited twice in a row.
+    /// Then, depending on the value of [`ibid`](Self::Automatic::ibid), either
+    /// the string "ibid" or the very short [`Author`](Self::Author) mode is
+    /// used.
+    ///
+    /// Please note that the CMoS 14.34 discourages "ibid" citations in favor of
+    /// the shorter author style.
+    Automatic {
+        /// Whether to shorten repeating entries with the latin abbreviation
+        /// "ibid".
+        ibid: bool,
+    },
+    /// Very short note style.
+    Author,
+    /// Relatively short note style.
     Short,
-    /// Creates a minimal citation, ommitting the title. This should only be
-    /// used if the same source is cited multiple times without citing another
-    /// source in-between. Also compare the `ibid`-Option of the
-    /// [Note]. E.g. "Obama, 517."
-    OnlyAuthor,
+    /// Long and verbose note style.
+    Full,
 }
 
-/// The struct doing the formatting.
-pub struct Note<'s> {
-    /// Entries within the database.
-    entries: HashMap<String, &'s Entry>,
-    /// Use ibid. instead of the repetition of the source.
-    /// Discouraged by Chicago, 14.34.
-    pub ibid: bool,
+impl Default for ChicagoNoteStyle {
+    fn default() -> Self {
+        Self::Automatic { ibid: false }
+    }
+}
+
+/// Citations and bibliographies following the Chicago _Notes and Bibliography_
+/// style.
+///
+/// # Examples
+/// Notes with differing verbosity:
+/// - [Author]: Tolkien, p. 129.
+/// - [Short]: Tolkien, _Lord of the Rings_, p. 129.
+/// - [Full]: J. R. R. Tolkien, _The Lord of the Rings,_ vol. 1, _The Fellowship
+///   of the Ring_ (London: Allen & Unwin, 1954), p. 129.
+///
+/// Bibliography:
+/// - Tolkien, J. R. R. _The Lord of the Rings._ Vol. 1. _The Fellowship of the
+///   Ring._ London: Allen & Unwin, 1954.
+///
+/// # Reference
+/// See the 17th edition of the Chicago Manual of Style, Chapter 14, for details
+/// on how Chicago advises you to format citations and bibliographies.
+///
+/// If you're unsure on which Chicago style to use, the manual generally
+/// recommends [_Notes and Bibliography_](ChicagoNotes) for the humanities and
+/// social sciences whereas [_Author Date_](super::author_date::ChicagoAuthorDate) is recommended
+/// for natural sciences, mathematics, and engineering.
+///
+/// [Author]: ChicagoNoteStyle::Author
+/// [Short]: ChicagoNoteStyle::Short
+/// [Full]: ChicagoNoteStyle::Full
+pub struct ChicagoNotes<'a> {
+    cited: Vec<&'a Entry>,
+    bib_format: Bibliography,
+    /// Which form of notes to produce.
+    pub style: ChicagoNoteStyle,
     /// Properties shared with the bibliography.
-    pub common: CommonChicagoConfig,
+    common: ChicagoConfig,
+    /// How the bibliography should be sorted.
+    pub sort_bibliography: BibliographyOrdering,
 }
 
-impl<'s> Note<'s> {
-    /// Create a new [Note].
-    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
+impl<'a> Default for ChicagoNotes<'a> {
+    fn default() -> Self {
+        Self::new(ChicagoConfig::default())
+    }
+}
+
+impl<'a> ChicagoNotes<'a> {
+    /// Create the struct using a configuration struct.
+    ///
+    /// You can use [the default trait implementation](Self::default) to
+    /// initialize with the standard configuaration.
+    pub fn new(common: ChicagoConfig) -> Self {
         Self {
-            entries: entries.map(|e| (e.key.clone(), e)).collect(),
-            ibid: false,
-            common: CommonChicagoConfig::new(),
+            cited: vec![],
+            style: ChicagoNoteStyle::default(),
+            bib_format: Bibliography::new(Mode::NotesAndBibliography, common.clone()),
+            common,
+            sort_bibliography: BibliographyOrdering::ByAuthor,
         }
+    }
+
+    /// Reset the citation shortening state.
+    ///
+    /// Does not affect references and is only applicable if the note type
+    /// is [`Automatic`](ChicagoNoteStyle::Automatic).
+    pub fn reset_shortening(&mut self) {
+        self.cited.clear();
     }
 
     fn get_author(&self, entry: &Entry, short: bool) -> String {
@@ -126,8 +184,7 @@ impl<'s> Note<'s> {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let conference =
-            sel!(Wc() => Bind("p", Id(Conference))).bound_element(entry, "p");
+        let conference = select!(* > ("p":Conference)).bound(entry, "p");
         let mut res = if entry.entry_type == Thesis {
             "thesis".to_string()
         } else if conference.is_some() {
@@ -136,8 +193,7 @@ impl<'s> Note<'s> {
             String::new()
         };
 
-        let published_entry =
-            sel!(Wc() => Bind("p", attrs!(Wc(), "publisher"))).bound_element(entry, "p");
+        let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if let Some(loc) = entry
             .location()
             .or_else(|| published_entry.and_then(|e| e.location()))
@@ -145,9 +201,9 @@ impl<'s> Note<'s> {
             if !res.is_empty() {
                 res += ", ";
             }
-            res += loc;
+            res += &loc.value;
         } else if matches!(&entry.entry_type, Book | Anthology)
-            && entry.any_date().map(|d| d.year).unwrap_or(2020) < 1981
+            && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
         {
             if !res.is_empty() {
                 res += ", ";
@@ -157,7 +213,7 @@ impl<'s> Note<'s> {
 
         if entry.entry_type == Tweet {
             if let Some(host) = entry
-                .any_url()
+                .url_any()
                 .and_then(|u| u.value.host_str())
                 .map(|h| h.to_lowercase())
             {
@@ -176,7 +232,7 @@ impl<'s> Note<'s> {
             }
         }
 
-        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+        let preprint = select!(Article > Repository).matches(entry);
         if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
@@ -202,11 +258,12 @@ impl<'s> Note<'s> {
 
             if let Some(loc) = conf.location() {
                 res += ", ";
-                res += loc;
+                res += &loc.value;
             }
         } else if let Some(publisher) = entry
             .publisher()
-            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
+            .value()
+            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
             .or_else(|| {
                 if matches!(&entry.entry_type, Report | Thesis)
                     || (matches!(&entry.entry_type, Case | Legislation)
@@ -220,7 +277,7 @@ impl<'s> Note<'s> {
             .map(Into::into)
             .or_else(|| {
                 if entry.entry_type == Reference && entry.volume().is_none() {
-                    entry.authors_fallible().map(|a| {
+                    entry.authors().map(|a| {
                         and_list(
                             a.into_iter().map(|p| p.given_first(false)),
                             false,
@@ -257,14 +314,13 @@ impl<'s> Note<'s> {
 
             items.extend(entry.note().map(Into::into));
 
-            let parent =
-                sel!(Wc() => Bind("p", Id(Exhibition))).bound_element(entry, "p");
+            let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
                     .organization()
-                    .or_else(|| entry.publisher())
+                    .or_else(|| entry.publisher().value())
                     .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher()))
+                    .or_else(|| parent.and_then(|p| p.publisher().value()))
                     .map(Into::into),
             );
 
@@ -272,6 +328,7 @@ impl<'s> Note<'s> {
                 entry
                     .location()
                     .or_else(|| parent.and_then(|p| p.location()))
+                    .value()
                     .map(Into::into),
             );
 
@@ -293,37 +350,23 @@ impl<'s> Note<'s> {
         res
     }
 
-    /// Format a citation as a note.
-    pub fn get_note(
-        &self,
-        citation: AtomicCitation,
-        kind: NoteType,
-    ) -> Option<DisplayString> {
-        Some(self.get_entry_note(
-            self.entries.get(citation.key).map(|o| o.clone())?,
-            citation.supplement,
-            kind,
-        ))
-    }
-
     /// Format a citation as a note given an entry.
-    pub fn get_entry_note(
-        &self,
-        mut entry: &Entry,
-        supplement: Option<&str>,
-        kind: NoteType,
-    ) -> DisplayString {
-        let short = kind != NoteType::Full;
+    pub fn get_note(&mut self, citation: Citation<'a>) -> DisplayString {
+        let mut entry = citation.entry;
+        let short = self.style == ChicagoNoteStyle::Short
+            || self.style == ChicagoNoteStyle::Author
+            || (matches!(self.style, ChicagoNoteStyle::Automatic{ ibid: _ })
+                && self.cited.contains(&entry));
 
         entry = delegate_titled_entry(entry);
 
-        let web_thing = sel!(alt
-            Id(Web),
-            sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
-        )
-        .matches(entry);
+        let web_thing = select!(Web | ((Misc | Web) > Web)).matches(entry);
 
-        let mut res: DisplayString = if (!web_thing
+        let ibid = matches!(self.style, ChicagoNoteStyle::Automatic { ibid: true })
+            && self.cited.last() == Some(&entry);
+        let mut res: DisplayString = if ibid {
+            "Ibid".into()
+        } else if (!web_thing
             && (entry.entry_type != Reference
                 || entry.publisher().is_some()
                 || entry.volume().is_some()))
@@ -336,10 +379,8 @@ impl<'s> Note<'s> {
 
         let no_author = res.is_empty();
 
-        let dictionary =
-            sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
-        let database =
-            sel!(Id(Entry) => Bind("p", Id(Repository))).bound_element(entry, "p");
+        let dictionary = select!(Entry > ("p": Reference)).bound(entry, "p");
+        let database = select!(Entry > ("p": Repository)).bound(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, short, &self.common, ',');
@@ -351,7 +392,11 @@ impl<'s> Note<'s> {
                 res.push(' ');
             }
             res += title;
-        } else if kind != NoteType::OnlyAuthor || no_author {
+        } else if !(self.style == ChicagoNoteStyle::Author
+            || (matches!(self.style, ChicagoNoteStyle::Automatic{ ibid: _ })
+                && self.cited.last() == Some(&entry)))
+            || no_author
+        {
             let mut title = get_title(entry, short, &self.common, ',');
             if (entry.entry_type == Case || entry.entry_type == Legislation) && !short {
                 title.clear_formatting();
@@ -367,10 +412,8 @@ impl<'s> Note<'s> {
         }
 
         let mut colon = false;
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
-        )
-        .matches(entry);
+        let journal =
+            select!((Article | Entry) > (Periodical | Newspaper)).matches(entry);
 
         if !short {
             let add = if no_author && dictionary.is_some() {
@@ -423,13 +466,13 @@ impl<'s> Note<'s> {
             }
         }
 
-        if no_author && dictionary.is_some() && entry.authors_fallible().is_none() {
+        if no_author && dictionary.is_some() && entry.authors().is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.common);
         }
 
-        if let Some(supplement) = supplement {
+        if let Some(supplement) = citation.supplement {
             if !res.is_empty() {
                 if colon {
                     res.push(':');
@@ -474,7 +517,7 @@ impl<'s> Note<'s> {
                 res += &format!("https://doi.org/{}", doi);
                 res.commit_formats();
                 res
-            } else if let Some(qurl) = entry.any_url() {
+            } else if let Some(qurl) = entry.url_any() {
                 let mut res = DisplayString::new();
                 if let Some(date) = qurl.visit_date.as_ref() {
                     if database.is_none() && self.common.url_access_date.needs_date(entry)
@@ -505,7 +548,7 @@ impl<'s> Note<'s> {
                 }
                 if self.common.url_access_date.needs_date(entry) {
                     if let Some(date) =
-                        entry.any_url().and_then(|u| u.visit_date.as_ref())
+                        entry.url_any().and_then(|u| u.visit_date.as_ref())
                     {
                         push_comma_quote_aware(&mut brack_content.value, ';', true);
                         brack_content +=
@@ -534,16 +577,16 @@ impl<'s> Note<'s> {
             let no_url = url.is_empty();
             res += url;
 
-            let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+            let preprint = select!(Article > Repository).matches(entry);
             if no_url || entry.entry_type == Manuscript || preprint {
                 if let Some(archive) = entry.archive() {
                     push_comma_quote_aware(&mut res.value, ',', true);
 
-                    res += archive;
+                    res += &archive.value;
 
                     if let Some(al) = entry.archive_location() {
                         res += ", ";
-                        res += al;
+                        res += &al.value;
                     }
                 }
             }
@@ -553,36 +596,77 @@ impl<'s> Note<'s> {
             res.push('.');
         }
 
+        self.cited.push(citation.entry);
+
         res
     }
 }
 
-impl<'s> CitationFormatter<'s> for Note<'s> {
-    /// This implementation will always create full notes.
-    /// Use [`Note::get_note`] to set the
-    /// [`NoteType`].
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
+impl<'a> CitationStyle<'a> for ChicagoNotes<'a> {
+    fn citation(
+        &mut self,
+        _: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayCitation {
         let mut items = vec![];
-        for c in citation {
-            items.push(
-                self.get_note(c, NoteType::Full)
-                    .ok_or_else(|| CitationError::KeyNotFound(c.key.into()))?,
-            )
+        for &c in parts {
+            items.push(self.get_note(c))
         }
 
-        Ok(DisplayString::join(&items, "\n"))
+        DisplayCitation::new(DisplayString::join(&items, "\n"), true)
+    }
+
+    fn brackets(&self) -> Brackets {
+        Brackets::None
+    }
+
+    fn wrapped(&self) -> bool {
+        false
     }
 }
 
-impl<'s> BracketPreference for Note<'s> {
-    fn default_brackets() -> Bracket {
-        Bracket::None
+impl<'a> BibliographyStyle<'a> for ChicagoNotes<'a> {
+    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+        let mut items = vec![];
+
+        for record in db.records() {
+            let (bib, al) = self.bib_format.format(record.entry, record.disambiguation);
+            items.push((
+                DisplayReference {
+                    display: bib,
+                    entry: record.entry,
+                    prefix: record.prefix.clone().map(Into::into),
+                },
+                al,
+            ))
+        }
+
+        match self.sort_bibliography {
+            BibliographyOrdering::ByPrefix => {
+                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
+            }
+            BibliographyOrdering::ByAuthor => {
+                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
+                    author_title_ord_custom(
+                        a_ref.entry,
+                        b_ref.entry,
+                        Some(a_auths),
+                        Some(b_auths),
+                    )
+                });
+            }
+            _ => {}
+        }
+
+        items.into_iter().map(|(a, _)| a).collect()
     }
 
-    fn default_bracket_mode() -> BracketMode {
-        BracketMode::Unwrapped
+    fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
+        let (bib, _) = self.bib_format.format(record.entry, record.disambiguation);
+        DisplayReference {
+            display: bib,
+            entry: record.entry,
+            prefix: record.prefix.clone().map(Into::into),
+        }
     }
 }

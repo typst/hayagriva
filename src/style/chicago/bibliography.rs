@@ -2,34 +2,31 @@
 //! _Notes and Bibliography_ and the _Author-Date_ style. The style can
 //! be set through the [`Bibliography`] struct.
 
-use crate::output::{
-    abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
-    format_range, push_comma_quote_aware, BibliographyFormatter, DisplayString,
-    Formatting,
-};
-use crate::selectors::{Bind, Id, Wc};
-use crate::types::EntryType::*;
-use crate::{attrs, sel, Entry};
-
 use super::{
     and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
-    get_title, AuthorRole, CommonChicagoConfig, DateMode, Mode,
+    get_title, AuthorRole, ChicagoConfig, DateMode, Mode,
 };
+use crate::style::{
+    abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
+    format_range, push_comma_quote_aware, DisplayString, Formatting,
+};
+use crate::types::{EntryType::*, FmtOptionExt, Person};
+use crate::Entry;
 
 use unicode_segmentation::UnicodeSegmentation;
 
 /// The struct doing the formatting.
-pub struct Bibliography {
+pub(crate) struct Bibliography {
     /// Properties shared with the bibliography.
-    pub common: CommonChicagoConfig,
+    pub common: ChicagoConfig,
     /// Selects the bibliography mode.
     pub mode: Mode,
 }
 
 impl Bibliography {
     /// Create a new Bibliography.
-    pub fn new(mode: Mode) -> Self {
-        Self { common: CommonChicagoConfig::new(), mode }
+    pub fn new(mode: Mode, common: ChicagoConfig) -> Self {
+        Self { common, mode }
     }
 
     fn get_author(&self, entry: &Entry) -> String {
@@ -102,16 +99,14 @@ impl Bibliography {
     }
 
     fn get_publication_info(&self, entry: &Entry) -> String {
-        let conference =
-            sel!(Wc() => Bind("p", Id(Conference))).bound_element(entry, "p");
+        let conference = select!(* > ("p":Conference)).bound(entry, "p");
         let mut res = if entry.entry_type == Thesis {
             "Thesis".to_string()
         } else {
             String::new()
         };
 
-        let published_entry =
-            sel!(Wc() => Bind("p", attrs!(Wc(), "publisher"))).bound_element(entry, "p");
+        let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if !conference.is_some() {
             if let Some(loc) = entry
                 .location()
@@ -120,9 +115,9 @@ impl Bibliography {
                 if !res.is_empty() {
                     res += ", ";
                 }
-                res += loc;
+                res += &loc.value;
             } else if matches!(&entry.entry_type, Book | Anthology)
-                && entry.any_date().map(|d| d.year).unwrap_or(2020) < 1981
+                && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
             {
                 if !res.is_empty() {
                     res += ", ";
@@ -133,7 +128,7 @@ impl Bibliography {
 
         if entry.entry_type == Tweet {
             if let Some(host) = entry
-                .any_url()
+                .url_any()
                 .and_then(|u| u.value.host_str())
                 .map(|h| h.to_lowercase())
             {
@@ -151,7 +146,7 @@ impl Bibliography {
                 res += service;
             }
         }
-        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+        let preprint = select!(Article > Repository).matches(entry);
         if entry.entry_type == Manuscript || preprint {
             if !res.is_empty() {
                 res += ": ";
@@ -179,11 +174,12 @@ impl Bibliography {
 
             if let Some(loc) = conf.location() {
                 res += ", ";
-                res += loc;
+                res += &loc.value;
             }
         } else if let Some(publisher) = entry
             .publisher()
-            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
+            .value()
+            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
             .or_else(|| {
                 if matches!(&entry.entry_type, Report | Thesis)
                     || (matches!(&entry.entry_type, Case | Legislation)
@@ -197,7 +193,7 @@ impl Bibliography {
             .map(Into::into)
             .or_else(|| {
                 if entry.entry_type == Reference && entry.volume().is_none() {
-                    entry.authors_fallible().map(|a| {
+                    entry.authors().map(|a| {
                         and_list(
                             a.into_iter().map(|p| p.given_first(false)),
                             false,
@@ -216,12 +212,9 @@ impl Bibliography {
             res += &publisher;
         }
 
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
-        )
-        .matches(entry);
+        let journal = select!((Article | Entry) > Periodical).matches(entry);
         let date = if self.mode == Mode::NotesAndBibliography
-            || sel!(alt sel!(Wc() => Id(Newspaper)), Id(Tweet), Id(Thread), sel!(Wc() => Id(Thread))).matches(entry)
+            || select!((* > Newspaper) | Tweet | Thread | (* > Thread)).matches(entry)
         {
             entry_date(entry, false)
         } else {
@@ -241,14 +234,13 @@ impl Bibliography {
 
             items.extend(entry.note().map(Into::into));
 
-            let parent =
-                sel!(Wc() => Bind("p", Id(Exhibition))).bound_element(entry, "p");
+            let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
                     .organization()
-                    .or_else(|| entry.publisher())
+                    .or_else(|| entry.publisher().value())
                     .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher()))
+                    .or_else(|| parent.and_then(|p| p.publisher().value()))
                     .map(Into::into),
             );
 
@@ -256,6 +248,7 @@ impl Bibliography {
                 entry
                     .location()
                     .or_else(|| parent.and_then(|p| p.location()))
+                    .value()
                     .map(Into::into),
             );
 
@@ -278,7 +271,11 @@ impl Bibliography {
     }
 
     /// Format a citation as a note.
-    pub fn format(&self, mut entry: &Entry, num: Option<usize>) -> DisplayString {
+    pub fn format(
+        &self,
+        mut entry: &Entry,
+        num: Option<usize>,
+    ) -> (DisplayString, Vec<Person>) {
         entry = delegate_titled_entry(entry);
 
         let mut res: DisplayString = if entry.entry_type != Reference
@@ -316,10 +313,8 @@ impl Bibliography {
             }
         }
 
-        let dictionary =
-            sel!(Id(Entry) => Bind("p", Id(Reference))).bound_element(entry, "p");
-        let database =
-            sel!(Id(Entry) => Bind("p", Id(Repository))).bound_element(entry, "p");
+        let dictionary = select!(Entry > ("p": Reference)).bound(entry, "p");
+        let database = select!(Entry > ("p": Repository)).bound(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
             let title = get_title(dictionary, false, &self.common, '.');
@@ -357,10 +352,8 @@ impl Bibliography {
         }
 
         let mut colon = false;
-        let journal = sel!(
-            sel!(alt Id(Article), Id(Entry)) => sel!(alt Id(Periodical), Id(Newspaper))
-        )
-        .matches(entry);
+        let journal =
+            select!((Article | Entry) > (Periodical | Newspaper)).matches(entry);
 
         let dict = if no_author { dictionary.unwrap_or(entry) } else { entry };
         let mut add = get_info_element(dict, &self.common, true);
@@ -392,7 +385,7 @@ impl Bibliography {
             colon = true;
         }
 
-        if no_author && dictionary.is_some() && entry.authors_fallible().is_none() {
+        if no_author && dictionary.is_some() && entry.authors().is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.common);
@@ -431,7 +424,7 @@ impl Bibliography {
             res += &format!("https://doi.org/{}", doi);
             res.commit_formats();
             res
-        } else if let Some(qurl) = entry.any_url() {
+        } else if let Some(qurl) = entry.url_any() {
             let mut res = DisplayString::new();
             if let Some(date) = qurl.visit_date.as_ref() {
                 if database.is_none() && self.common.url_access_date.needs_date(entry) {
@@ -458,7 +451,7 @@ impl Bibliography {
                 brack_content += sn;
             }
             if self.common.url_access_date.needs_date(entry) {
-                if let Some(date) = entry.any_url().and_then(|u| u.visit_date.as_ref()) {
+                if let Some(date) = entry.url_any().and_then(|u| u.visit_date.as_ref()) {
                     push_comma_quote_aware(&mut brack_content.value, ';', true);
                     brack_content +=
                         &format!("accessed {}", format_date(date, DateMode::Day));
@@ -486,16 +479,16 @@ impl Bibliography {
         let no_url = url.is_empty();
         res += url;
 
-        let preprint = sel!(Id(Article) => Id(Repository)).matches(entry);
+        let preprint = select!(Article > Repository).matches(entry);
         if no_url || entry.entry_type == Manuscript || preprint {
             if let Some(archive) = entry.archive() {
                 push_comma_quote_aware(&mut res.value, ',', true);
 
-                res += archive;
+                res += &archive.value;
 
                 if let Some(al) = entry.archive_location() {
                     res += ", ";
-                    res += al;
+                    res += &al.value;
                 }
             }
         }
@@ -504,45 +497,6 @@ impl Bibliography {
             res.push('.');
         }
 
-        res
-    }
-}
-
-/// A struct containing the [`Bibliography`] formatter that is preset to
-/// the [`Mode`] `NotesAndBibliography` and implements the BibliographyFormatter trait.
-/// Does *not* support letters to disambiguate between multiple contributions
-/// by the same authors in the same year.
-pub struct ChicagoNote(Bibliography);
-
-impl ChicagoNote {
-    /// Create the struct.
-    pub fn new() -> Self {
-        let bib = Bibliography::new(Mode::NotesAndBibliography);
-        Self(bib)
-    }
-}
-
-impl BibliographyFormatter for ChicagoNote {
-    fn format(&self, entry: &Entry, _: Option<&Entry>) -> DisplayString {
-        self.0.format(entry, None)
-    }
-}
-/// A struct containing the [`Bibliography`] formatter that is preset to
-/// the [`Mode`] `AuthorDate` and implements the BibliographyFormatter trait.
-/// Does *not* support letters to disambiguate between multiple contributions
-/// by the same authors in the same year.
-pub struct ChicagoAuthorYear(Bibliography);
-
-impl ChicagoAuthorYear {
-    /// Create the struct.
-    pub fn new() -> Self {
-        let bib = Bibliography::new(Mode::AuthorDate);
-        Self(bib)
-    }
-}
-
-impl BibliographyFormatter for ChicagoAuthorYear {
-    fn format(&self, entry: &Entry, _: Option<&Entry>) -> DisplayString {
-        self.0.format(entry, None)
+        (res, get_creators(entry).0)
     }
 }

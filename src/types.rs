@@ -6,8 +6,6 @@ use std::fmt::{Display, Formatter};
 use std::ops::Range;
 use std::ops::{Add, Sub};
 
-use super::{Entry, FieldType};
-
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -15,6 +13,9 @@ use strum::{Display, EnumString};
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};
+
+use super::{Entry, Value};
+use crate::lang::Case;
 
 #[rustfmt::skip]
 lazy_static! {
@@ -32,6 +33,7 @@ lazy_static! {
 
 /// Describes which kind of work a database entry refers to.
 #[derive(Copy, Clone, Display, Debug, EnumString, PartialEq, Eq)]
+#[non_exhaustive]
 #[strum(serialize_all = "lowercase")]
 pub enum EntryType {
     /// A short text, possibly of journalistic or scientific nature,
@@ -121,7 +123,7 @@ impl Entry {
             return None;
         }
 
-        let authors = self.authors();
+        let authors = self.authors().unwrap_or_default();
 
         if user_index > 0 && user_index >= authors.len() {
             return None;
@@ -174,7 +176,8 @@ impl EntryType {
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
 #[derive(Clone, Debug, Display, EnumString, PartialEq, Eq)]
-#[strum(serialize_all = "lowercase")]
+#[non_exhaustive]
+#[strum(serialize_all = "kebab_case")]
 pub enum PersonRole {
     /// Translated the work from a foreign language to the cited edition.
     Translator,
@@ -249,20 +252,19 @@ pub enum PersonError {
 }
 
 impl Person {
-    /// This function expects a `parts` &str slice of the length between one
-    /// and three. The first part will be interpreted as the <prefix> <Name>,
-    /// the second part as the given name and the third part as the suffix.
+    /// This function expects a list of strings with its length between one and
+    /// three. The first part will be interpreted as the <prefix> <Name>, the
+    /// second part as the given name and the third part as the suffix.
     ///
-    /// The prefix and name are separated just like in BiBTeX, as described
-    /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The
-    /// gist is that the given name will start at the first word with a capital
+    /// The prefix and name are seperated just like in BiBTeX, as described
+    /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The gist
+    /// is that the given name will start at the first word with a capital
     /// letter, if there are any such words.
     ///
     /// The call site of this function in the library obtains the slice by
     /// calling `split(",")` on a string like `"Des Egdens, Britta"`.
     ///
     /// [taming]: https://ftp.rrze.uni-erlangen.de/ctan/info/bibtex/tamethebeast/ttb_en.pdf
-
     pub fn from_strings(parts: &[&str]) -> Result<Self, PersonError> {
         if parts.is_empty() {
             return Err(PersonError::Empty);
@@ -341,9 +343,13 @@ impl Person {
         })
     }
 
-    /// Formats the given name into initials, `"Judith Beatrice"`
-    /// would yield `"J. B."` if the `delimiter` argument is set to
-    /// `Some(".")`, `"Klaus-Peter"` would become `"K-P"` without a delimiter.
+    /// Formats the given name into initials.
+    ///
+    /// For example, `"Judith Beatrice"` would yield `"J. B."` if the
+    /// `delimiter` argument is set to `Some(".")`, `"Klaus-Peter"` would become
+    /// `"K-P"` without a delimiter.
+    ///
+    /// Returns `None` if the person has no given name.
     pub fn initials(&self, delimiter: Option<&str>) -> Option<String> {
         if let Some(gn) = &self.given_name {
             let mut collect = true;
@@ -453,6 +459,22 @@ impl Person {
     }
 }
 
+impl Ord for Person {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name
+            .cmp(&other.name)
+            .then(self.given_name.cmp(&other.given_name))
+            .then(self.suffix.cmp(&other.suffix))
+            .then(self.prefix.cmp(&other.prefix))
+    }
+}
+
+impl PartialOrd for Person {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// A value that could be either a number or a string.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumOrStr {
@@ -471,9 +493,9 @@ impl Display for NumOrStr {
     }
 }
 
-impl Into<String> for NumOrStr {
-    fn into(self) -> String {
-        self.to_string()
+impl From<NumOrStr> for String {
+    fn from(num: NumOrStr) -> Self {
+        num.to_string()
     }
 }
 
@@ -500,7 +522,7 @@ pub enum DateError {
 }
 
 impl Date {
-    /// Parse a date atom from a string.
+    /// Parse a date from a string.
     pub fn from_str(source: &str) -> Result<Self, DateError> {
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
@@ -540,13 +562,14 @@ impl Date {
         Self { year, month: None, day: None }
     }
 
-    /// Prints the year as a human-readable gregorian year.
+    /// Returns the year as a human-readable gregorian year.
+    ///
     /// Non-positive values will be marked with a "BCE" postfix.
     pub fn display_year(&self) -> String {
         self.display_year_opt(true, false, false, false)
     }
 
-    /// Prints the year as a human-readable gregorian year with controllable
+    /// Returns the year as a human-readable gregorian year with controllable
     /// pre- and postfixes denominating the year's positivity.
     ///
     /// ## Arguments
@@ -593,9 +616,9 @@ impl Date {
 /// A string with a value and possibly user-defined overrides for various
 /// formattings.
 #[derive(Clone, Debug, PartialEq)]
-pub struct FormattableString {
+pub struct FmtString {
     /// Canonical string value.
-    pub(crate) value: String,
+    pub value: String,
     /// User-defined title case override.
     pub(crate) title_case: Option<String>,
     /// User-defined sentence case override.
@@ -604,8 +627,59 @@ pub struct FormattableString {
     pub(crate) verbatim: bool,
 }
 
+impl FmtString {
+    /// Create a new formattable string.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            title_case: None,
+            sentence_case: None,
+            verbatim: false,
+        }
+    }
+
+    /// Set the verbatim property.
+    pub fn verbatim(self, verbatim: bool) -> Self {
+        Self { verbatim, ..self }
+    }
+
+    /// Set the title case override.
+    pub fn title_case(self, title_case: impl Into<String>) -> Self {
+        Self {
+            title_case: Some(title_case.into()),
+            ..self
+        }
+    }
+
+    /// Set the sentence case override.
+    pub fn sentence_case(self, sentence_case: impl Into<String>) -> Self {
+        Self {
+            sentence_case: Some(sentence_case.into()),
+            ..self
+        }
+    }
+
+    /// Format this formattable string in title case.
+    ///
+    /// This uses an override defined through [`title_case`](Self::title_case)
+    /// if present, or falls back to the given title case formatter otherwise.
+    pub fn format_title_case(&self, title: &dyn Case) -> String {
+        self.title_case.clone().unwrap_or_else(|| title.apply(&self.value))
+    }
+
+    /// Format this formattable string in sentence case.
+    ///
+    /// This uses an override defined through [`sentence_case`](Self::sentence_case)
+    /// if present, or falls back to the given sentence case formatter otherwise.
+    pub fn format_sentence_case(&self, sentence: &dyn Case) -> String {
+        self.sentence_case
+            .clone()
+            .unwrap_or_else(|| sentence.apply(&self.value))
+    }
+}
+
 #[cfg(feature = "biblatex")]
-impl FormattableString {
+impl FmtString {
     pub(crate) fn extend(&mut self, f2: Self) {
         self.value += &f2.value;
         self.verbatim = self.verbatim || f2.verbatim;
@@ -639,95 +713,76 @@ impl FormattableString {
     }
 }
 
-/// A collection of formattable Strings consisting of a title, a translated title, and a shorthand.
+impl AsRef<str> for FmtString {
+    fn as_ref(&self) -> &str {
+        &self.value
+    }
+}
+
+impl From<&str> for FmtString {
+    fn from(string: &str) -> FmtString {
+        FmtString::new(string)
+    }
+}
+
+impl From<String> for FmtString {
+    fn from(string: String) -> FmtString {
+        FmtString::new(string)
+    }
+}
+
+/// A collection of formattable strings consisting of a title, a translated
+/// title, and a shorthand.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Title {
     /// Canonical title.
-    pub value: FormattableString,
+    pub canonical: FmtString,
     /// Optional title shorthand.
-    pub shorthand: Option<FormattableString>,
+    pub shorthand: Option<FmtString>,
     /// Optional title translation.
-    pub translated: Option<FormattableString>,
+    pub translated: Option<FmtString>,
 }
 
 impl Title {
-    /// Create a new Title.
-    pub fn new(
-        value: FormattableString,
-        shorthand: Option<FormattableString>,
-        translated: Option<FormattableString>,
-    ) -> Self {
-        Self { value, shorthand, translated }
-    }
-
-    /// Create a new title using a [`FormattableString`].
-    pub fn from_fs(value: FormattableString) -> Self {
-        Self { value, shorthand: None, translated: None }
-    }
-
-    /// Create a new title from a string reference.
-    pub fn from_str(s: &str) -> Self {
-        Self::from_fs(FormattableString::new_shorthand(s.into()))
-    }
-}
-
-/// Just like a [Title], but with formatting applied.
-#[derive(Clone, Debug, PartialEq)]
-pub struct FormattedTitle {
-    /// Canonical title.
-    pub value: FormattedString,
-    /// Optional title shorthand.
-    pub shorthand: Option<FormattedString>,
-    /// Optional title translation.
-    pub translated: Option<FormattedString>,
-}
-
-/// A string with a canonical value and title and sentence formatted variants.
-#[derive(Clone, Debug, PartialEq)]
-pub struct FormattedString {
-    /// Canonical string value.
-    pub value: String,
-    /// String formatted as title case.
-    pub title_case: String,
-    /// String formatted as sentence case.
-    pub sentence_case: String,
-}
-
-impl FormattableString {
-    /// Creates a new formattable string.
-    pub fn new(
-        value: String,
-        title_case: Option<String>,
-        sentence_case: Option<String>,
-        verbatim: bool,
-    ) -> Self {
+    /// Create a new title.
+    pub fn new(canonical: impl Into<FmtString>) -> Self {
         Self {
-            value,
-            title_case,
-            sentence_case,
-            verbatim,
+            canonical: canonical.into(),
+            shorthand: None,
+            translated: None,
         }
     }
 
-    /// Creates a new formattable string from just a string.
-    pub fn new_shorthand(value: String) -> Self {
+    /// Set a shorthand version.
+    pub fn shorthand(self, shorthand: impl Into<FmtString>) -> Self {
         Self {
-            value,
-            title_case: None,
-            sentence_case: None,
-            verbatim: false,
+            shorthand: Some(shorthand.into()),
+            ..self
         }
     }
 
-    /// Creates a new formattable string that opts out of automatic
-    /// formatting.
-    pub fn new_verbatim(value: String, verbatim: bool) -> Self {
+    /// Set a translated version.
+    pub fn translated(self, translated: impl Into<FmtString>) -> Self {
         Self {
-            value,
-            verbatim,
-            title_case: None,
-            sentence_case: None,
+            translated: Some(translated.into()),
+            ..self
         }
+    }
+}
+
+pub(crate) trait FmtOptionExt<'a> {
+    fn value(self) -> Option<&'a str>;
+}
+
+impl<'a> FmtOptionExt<'a> for Option<&'a FmtString> {
+    fn value(self) -> Option<&'a str> {
+        self.map(|fmt| fmt.value.as_str())
+    }
+}
+
+impl<'a> FmtOptionExt<'a> for Option<&'a Title> {
+    fn value(self) -> Option<&'a str> {
+        self.map(|title| title.canonical.value.as_str())
     }
 }
 
@@ -736,12 +791,12 @@ impl FormattableString {
 pub struct QualifiedUrl {
     /// The [Url].
     pub value: Url,
-    /// The possible last visited Date.
+    /// The last visited date.
     pub visit_date: Option<Date>,
 }
 
 /// Parses an integer range from a string reference.
-pub fn get_range(source: &str) -> Option<Range<i64>> {
+pub(crate) fn parse_range(source: &str) -> Option<Range<i64>> {
     RANGE_REGEX.captures(source).map(|caps| {
         let start: i64 = str::parse(caps.name("s").expect("start is mandatory").as_str())
             .expect("Only queried for digits");
@@ -773,9 +828,9 @@ pub struct Duration {
 #[derive(Clone, Error, Debug)]
 pub enum DurationError {
     /// The string is malformed.
-    #[error("string does not match duration regex")]
-    NoMatch,
-    /// The value is out of bounds when another, subsequent value is present (i. e. `01:61:48`).
+    #[error("duration string malformed")]
+    Malformed,
+    /// The value is out of bounds when another, subsequent value is present (i.e. `01:61:48`).
     #[error("out of bounds value when greater order value is specified")]
     TooLarge,
 }
@@ -813,8 +868,9 @@ impl Duration {
 
     /// Tries to create a duration from a string.
     pub fn from_str(source: &str) -> Result<Self, DurationError> {
-        let capt =
-            DURATION_REGEX.captures(source.trim()).ok_or(DurationError::NoMatch)?;
+        let capt = DURATION_REGEX
+            .captures(source.trim())
+            .ok_or(DurationError::Malformed)?;
 
         let seconds: u8 = capt.name("s").unwrap().as_str().parse().unwrap();
         let mut minutes: u32 = capt.name("m").unwrap().as_str().parse().unwrap();
@@ -860,7 +916,7 @@ impl Duration {
     pub fn range_from_str(source: &str) -> Result<std::ops::Range<Self>, DurationError> {
         let caps = DURATION_RANGE_REGEX
             .captures(source.trim())
-            .ok_or(DurationError::NoMatch)?;
+            .ok_or(DurationError::Malformed)?;
 
         let start = Self::from_str(caps.name("s").expect("start is mandatory").as_str())?;
         let end = caps
@@ -905,81 +961,80 @@ impl Add for Duration {
     }
 }
 
-/// Could not cast to the desired field type.
+/// Could not cast to the desired value.
 #[derive(Error, Debug)]
-#[error("Got wrong type `{0}`.")]
-pub struct EntryTypeCastError(FieldType);
+#[error("wrong type: `{0}`")]
+pub struct TypeError(Value);
 
-macro_rules! try_from_fieldtype {
+macro_rules! impl_try_from_value {
     ($variant:ident, $target:ty $(,)*) => {
-        try_from_fieldtype!(noref $variant, $target);
+        impl_try_from_value!(noref $variant, $target);
 
-        impl<'s> TryFrom<&'s FieldType> for &'s $target {
-            type Error = EntryTypeCastError;
+        impl<'s> TryFrom<&'s Value> for &'s $target {
+            type Error = TypeError;
 
-            fn try_from(value: &'s FieldType) -> Result<Self, Self::Error> {
+            fn try_from(value: &'s Value) -> Result<Self, Self::Error> {
                 match value {
-                    FieldType::$variant(f) => Ok(f),
-                    _ => Err(EntryTypeCastError(value.clone())),
+                    Value::$variant(f) => Ok(f),
+                    _ => Err(TypeError(value.clone())),
                 }
             }
         }
     };
 
     (noref $variant:ident, $target:ty $(,)*) => {
-        impl TryFrom<FieldType> for $target {
-            type Error = EntryTypeCastError;
+        impl TryFrom<Value> for $target {
+            type Error = TypeError;
 
-            fn try_from(value: FieldType) -> Result<Self, Self::Error> {
+            fn try_from(value: Value) -> Result<Self, Self::Error> {
                 match value {
-                    FieldType::$variant(f) => Ok(f),
-                    _ => Err(EntryTypeCastError(value)),
+                    Value::$variant(f) => Ok(f),
+                    _ => Err(TypeError(value)),
                 }
             }
         }
 
-        impl From<$target> for FieldType {
+        impl From<$target> for Value {
             fn from(value: $target) -> Self {
-                FieldType::$variant(value)
+                Value::$variant(value)
             }
         }
     };
 
     ($variant:ident, $target:ty, $ref_target:ty $(,)*) => {
-        try_from_fieldtype!(noref $variant, $target);
+        impl_try_from_value!(noref $variant, $target);
 
-        impl<'s> TryFrom<&'s FieldType> for &'s $ref_target {
-            type Error = EntryTypeCastError;
+        impl<'s> TryFrom<&'s Value> for &'s $ref_target {
+            type Error = TypeError;
 
-            fn try_from(value: &'s FieldType) -> Result<Self, Self::Error> {
+            fn try_from(value: &'s Value) -> Result<Self, Self::Error> {
                 match value {
-                    FieldType::$variant(f) => Ok(f),
-                    _ => Err(EntryTypeCastError(value.clone())),
+                    Value::$variant(f) => Ok(f),
+                    _ => Err(TypeError(value.clone())),
                 }
             }
         }
     }
 }
 
-try_from_fieldtype!(Title, Title);
-try_from_fieldtype!(FormattableString, FormattableString);
-try_from_fieldtype!(FormattedString, FormattedString);
-try_from_fieldtype!(Text, String, str);
-try_from_fieldtype!(Integer, i64);
-try_from_fieldtype!(Date, Date);
-try_from_fieldtype!(Persons, Vec<Person>, [Person]);
-try_from_fieldtype!(
+impl_try_from_value!(Title, Title);
+impl_try_from_value!(FmtString, FmtString);
+impl_try_from_value!(Text, String, str);
+impl_try_from_value!(Integer, i64);
+impl_try_from_value!(Date, Date);
+impl_try_from_value!(Persons, Vec<Person>, [Person]);
+impl_try_from_value!(
     PersonsWithRoles,
     Vec<(Vec<Person>, PersonRole)>,
     [(Vec<Person>, PersonRole)]
 );
-try_from_fieldtype!(IntegerOrText, NumOrStr);
-try_from_fieldtype!(Range, std::ops::Range<i64>);
-try_from_fieldtype!(Duration, Duration);
-try_from_fieldtype!(TimeRange, std::ops::Range<Duration>);
-try_from_fieldtype!(Url, QualifiedUrl);
-try_from_fieldtype!(Language, unic_langid::LanguageIdentifier);
-try_from_fieldtype!(Entries, Vec<Entry>, [Entry]);
+impl_try_from_value!(IntegerOrText, NumOrStr);
+impl_try_from_value!(Range, std::ops::Range<i64>);
+impl_try_from_value!(Duration, Duration);
+impl_try_from_value!(TimeRange, std::ops::Range<Duration>);
+impl_try_from_value!(Url, QualifiedUrl);
+impl_try_from_value!(Language, unic_langid::LanguageIdentifier);
+impl_try_from_value!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {

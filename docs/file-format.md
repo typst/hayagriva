@@ -146,14 +146,6 @@ This section lists all possible fields and data types for them.
 | **Description:** | media type of the item, often determines the structure of references. |
 | **Example:**     | `type: video`                                             |
 
-#### `parent`
-
-|                  |                                                           |
-|------------------|-----------------------------------------------------------|
-| **Data type:**   | entry                                                     |
-| **Description:** | item in which the item was published / to which it is strongly associated to |
-| **Example:**     | <pre>parent:<br>    type: Anthology<br>    title: Automata studies<br>    editor: ["Shannon, C. E.", "McCarthy, J."]</pre> |
-
 #### `title`
 
 |                  |                                                           |
@@ -177,6 +169,14 @@ This section lists all possible fields and data types for them.
 | **Data type:**   | date                                                      |
 | **Description:** | date at which the item was published                      |
 | **Example:**     | `date: 1949-05`                                           |
+
+#### `parent`
+
+|                  |                                                           |
+|------------------|-----------------------------------------------------------|
+| **Data type:**   | entry                                                     |
+| **Description:** | item in which the item was published / to which it is strongly associated to |
+| **Example:**     | <pre>parent:<br>    type: Anthology<br>    title: Automata studies<br>    editor: ["Shannon, C. E.", "McCarthy, J."]</pre> |
 
 #### `editor`
 

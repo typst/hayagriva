@@ -1,18 +1,16 @@
-//! Author-Date citations as defined in chapter 15 of the 17th edition of the
-//! Chicago Manual of Style.
+use std::collections::HashSet;
 
 use super::{
-    and_list_opt, get_chunk_title, get_creators, web_creator, CommonChicagoConfig,
+    and_list_opt, bibliography::Bibliography, get_chunk_title, get_creators, web_creator,
+    ChicagoConfig, Mode,
 };
-use crate::output::{
-    alph_designator, AtomicCitation, Bracket, BracketMode, BracketPreference,
-    CitationError, CitationFormatter, DisplayString,
+use crate::style::{
+    alph_designator, author_title_ord_custom, BibliographyOrdering, BibliographyStyle,
+    Brackets, Citation, CitationStyle, Database, DisplayCitation, DisplayReference,
+    DisplayString, Record,
 };
-use crate::selectors::{Bind, Id, Wc};
 use crate::types::EntryType::*;
 use crate::types::Person;
-use crate::{sel, Entry};
-use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Uniqueness {
@@ -21,110 +19,94 @@ enum Uniqueness {
     Full,
 }
 
-/// Checks if the keys are in the database and returns them as reference
-/// markers, since they are already unique.
-pub struct AuthorYear<'s> {
-    entries: BTreeMap<&'s str, &'s Entry>,
-    authors: Vec<Person>,
-    entry_authors: HashMap<&'s str, Vec<usize>>,
-    unique: Vec<Uniqueness>,
+/// Citations and bibliographies following the Chicago _Author Date_ style.
+///
+/// See the 17th edition of the Chicago Manual of Style, Chapter 15, for details
+/// on how Chicago advises you to format citations and bibliographies.
+///
+/// If you're unsure on which Chicago style to use, the manual generally
+/// recommends [_Notes and Bibliography_](super::notes::ChicagoNotes) for the humanities and
+/// social sciences whereas [_Author Date_](ChicagoAuthorDate) is recommended
+/// for natural sciences, mathematics, and engineering.
+pub struct ChicagoAuthorDate {
     /// Common config options for all chicago styles.
     /// Primarily important for works without titles.
-    pub common: CommonChicagoConfig,
+    pub common: ChicagoConfig,
     /// Number of authors (equal or greater) for which the author
     /// list is truncated.
     pub et_al_limit: u8,
+    bib_format: Bibliography,
+    /// How the bibliography should be sorted.
+    pub sort_bibliography: BibliographyOrdering,
 }
 
-impl<'s> AuthorYear<'s> {
+impl Default for ChicagoAuthorDate {
+    fn default() -> Self {
+        Self::new(ChicagoConfig::default())
+    }
+}
+
+impl ChicagoAuthorDate {
     /// Create a new author year citation formatter.
-    pub fn new(entries: impl Iterator<Item = &'s Entry>) -> Self {
-        let entries: BTreeMap<&'s str, &Entry> =
-            entries.map(|e| (e.key.as_ref(), e)).collect();
-        let mut i = 0;
-        let mut authors = vec![];
-        let entry_authors: HashMap<&'s str, Vec<usize>> = entries
-            .iter()
-            .map(|(k, e)| {
-                (k.clone(), {
-                    let creators = get_creators(e).0;
-                    let mut indices = vec![];
-                    for creator in creators.into_iter() {
-                        indices.push(i);
-                        i += 1;
-                        authors.push(creator);
-                    }
-                    indices
-                })
-            })
+    pub fn new(common: ChicagoConfig) -> Self {
+        Self {
+            bib_format: Bibliography::new(Mode::AuthorDate, common.clone()),
+            common,
+            et_al_limit: 4,
+            sort_bibliography: BibliographyOrdering::ByAuthor,
+        }
+    }
+
+    fn uniqueness<'a>(author: &Person, db: &Database<'a>) -> Uniqueness {
+        let total_authors: HashSet<_> = db
+            .records()
+            .flat_map(|e| get_creators(e.entry).0)
+            .filter(|a| a != author)
             .collect();
 
-        let mut unique = vec![];
-        for author in &authors {
-            let mut uniqueness = Uniqueness::Full;
-
-            for other in &authors {
-                if other != author && other.name == author.name {
-                    if other.initials(None) == author.initials(None) {
-                        uniqueness = Uniqueness::None;
-                    } else if uniqueness != Uniqueness::None {
-                        uniqueness = Uniqueness::Initials;
-                    }
+        let mut unique = Uniqueness::Full;
+        for other in total_authors {
+            if other.name == author.name {
+                if other.initials(None) == author.initials(None) {
+                    return Uniqueness::None;
+                } else {
+                    unique = Uniqueness::Initials;
                 }
             }
-
-            unique.push(uniqueness);
         }
-        Self {
-            entries,
-            entry_authors,
-            authors,
-            unique,
-            common: CommonChicagoConfig::new(),
-            et_al_limit: 4,
-        }
-    }
 
-    fn get_authors(&self, key: &str) -> Option<Vec<&Person>> {
-        self.entry_authors
-            .get(key)
-            .map(|indices| indices.iter().map(|&i| &self.authors[i]).collect())
+        unique
     }
 }
 
-impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
-    fn format(
-        &self,
-        citation: impl IntoIterator<Item = AtomicCitation<'s>>,
-    ) -> Result<DisplayString, CitationError> {
+impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
+    fn citation(
+        &mut self,
+        db: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayCitation {
         let mut items: Vec<DisplayString> = vec![];
-        for atomic in citation.into_iter() {
-            let entry = self
-                .entries
-                .get(atomic.key)
-                .ok_or_else(|| CitationError::KeyNotFound(atomic.key.into()))?;
+        for atomic in parts {
+            let entry = atomic.entry;
 
-            let authors = self.get_authors(atomic.key).unwrap();
+            let authors = get_creators(entry).0;
 
-            let date = entry.any_date();
-            let similars = self
-                .entries
-                .iter()
-                .map(|(_, e)| e)
-                .filter(|&e| {
-                    e.any_date().map(|d| d.year) == date.map(|d| d.year)
-                        && self.get_authors(&e.key).unwrap() == authors
+            let date = entry.date_any();
+            let similars = db
+                .records()
+                .filter(|&r| {
+                    r.entry.date_any().map(|d| d.year) == date.map(|d| d.year)
+                        && get_creators(r.entry).0 == authors
                 })
                 .collect::<Vec<_>>();
 
             let mut s = if !authors.is_empty() {
                 let mut last_full = false;
-                let names = self.entry_authors[atomic.key]
+                let names = authors
                     .iter()
-                    .map(|&index| {
-                        let uniqueness = self.unique[index];
+                    .map(|author| {
+                        let uniqueness = ChicagoAuthorDate::uniqueness(author, db);
                         last_full = uniqueness == Uniqueness::None;
-                        let author = &self.authors[index];
                         match uniqueness {
                             Uniqueness::Full => author.name.clone(),
                             Uniqueness::Initials => author.given_first(true),
@@ -134,30 +116,23 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                     .collect::<Vec<_>>();
 
                 let et_al_auth = if names.len() >= self.et_al_limit as usize {
-                    let local_authors = self.entry_authors[atomic.key]
-                        .iter()
-                        .map(|&index| &self.authors[index])
-                        .collect::<Vec<_>>();
                     // 0: First author is different
                     let mut distinction_authors = 0;
-                    for (&key, authors) in self.entry_authors.iter() {
-                        if key == atomic.key {
+                    for entry in db.records().map(|r| r.entry) {
+                        if entry == atomic.entry {
                             continue;
                         }
-                        let authors = authors
-                            .into_iter()
-                            .map(|&index| &self.authors[index])
-                            .collect::<Vec<_>>();
-                        let mut mismatch = authors.len();
+                        let other_authors = get_creators(entry).0;
+                        let mut mismatch = other_authors.len();
 
-                        for (i, author) in authors.iter().enumerate() {
-                            if author != &local_authors[i] {
+                        for (i, author) in other_authors.iter().enumerate() {
+                            if author != &authors[i] {
                                 mismatch = i;
                                 break;
                             }
                         }
 
-                        if mismatch == authors.len() {
+                        if mismatch == other_authors.len() {
                             continue;
                         }
 
@@ -196,9 +171,7 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
                 } else {
                     DisplayString::new()
                 }
-            } else if let Some(np) =
-                sel!(Wc() => Bind("p", Id(Newspaper))).bound_element(entry, "p")
-            {
+            } else if let Some(np) = select!(* > ("p":Newspaper)).bound(entry, "p") {
                 get_chunk_title(np, true, true, &self.common)
             } else {
                 DisplayString::new()
@@ -222,8 +195,21 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
             };
 
             if similars.len() > 1 {
-                let pos = similars.iter().position(|&x| x == entry).unwrap();
-                let designator = alph_designator(pos);
+                let pos = similars.iter().position(|&x| x.entry == entry).unwrap();
+                let num = if let Some(disambiguation) = similars[pos].disambiguation {
+                    disambiguation
+                } else {
+                    db.records
+                        .iter_mut()
+                        .find(|(_, r)| r.entry == entry)
+                        .unwrap()
+                        .1
+                        .disambiguation = Some(pos);
+                    pos
+                };
+
+
+                let designator = alph_designator(num);
 
                 if space {
                     s.push(' ');
@@ -243,27 +229,71 @@ impl<'s> CitationFormatter<'s> for AuthorYear<'s> {
             items.push(s);
         }
 
-        Ok(DisplayString::join(&items, "; "))
+        DisplayCitation::new(DisplayString::join(&items, "; "), false)
+    }
+
+    fn brackets(&self) -> Brackets {
+        Brackets::Round
+    }
+
+    fn wrapped(&self) -> bool {
+        true
     }
 }
 
-impl<'s> BracketPreference for AuthorYear<'s> {
-    fn default_brackets() -> Bracket {
-        Bracket::Parentheses
+impl<'a> BibliographyStyle<'a> for ChicagoAuthorDate {
+    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+        let mut items = vec![];
+
+        for record in db.records() {
+            let (bib, al) = self.bib_format.format(record.entry, record.disambiguation);
+            items.push((
+                DisplayReference {
+                    display: bib,
+                    entry: record.entry,
+                    prefix: record.prefix.clone().map(Into::into),
+                },
+                al,
+            ))
+        }
+
+        match self.sort_bibliography {
+            BibliographyOrdering::ByPrefix => {
+                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
+            }
+            BibliographyOrdering::ByAuthor => {
+                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
+                    author_title_ord_custom(
+                        a_ref.entry,
+                        b_ref.entry,
+                        Some(a_auths),
+                        Some(b_auths),
+                    )
+                });
+            }
+            _ => {}
+        }
+
+        items.into_iter().map(|(a, _)| a).collect()
     }
 
-    fn default_bracket_mode() -> BracketMode {
-        BracketMode::Wrapped
+    fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
+        let (bib, _) = self.bib_format.format(record.entry, record.disambiguation);
+        DisplayReference {
+            display: bib,
+            entry: record.entry,
+            prefix: record.prefix.clone().map(Into::into),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::output::CitationFormatter;
+    use crate::style::Database;
     use crate::types::{Date, EntryType, Person, Title};
-    use crate::{output::AtomicCitation, Entry};
+    use crate::{style::Citation, Entry};
 
-    use super::AuthorYear;
+    use super::ChicagoAuthorDate;
 
     fn date_author_entry(key: &str, authors: Vec<Person>, year: i32) -> Entry {
         let mut e = Entry::new(key, EntryType::Article);
@@ -278,21 +308,32 @@ mod tests {
     }
 
     #[allow(non_snake_case)]
-    fn C(key: &str) -> AtomicCitation {
-        AtomicCitation::new(key, None, None)
+    fn C(entry: &Entry) -> Citation {
+        Citation::new(entry, None)
     }
 
     #[allow(non_snake_case)]
-    fn Cs(entries: &[Entry]) -> Vec<AtomicCitation> {
-        entries.iter().map(|e| C(e.key.as_ref())).collect::<Vec<_>>()
+    fn Cs(entries: &[Entry]) -> (Vec<Citation>, Database) {
+        let cv = entries.iter().map(|e| C(e)).collect();
+
+        let mut db = Database::new();
+
+        for entry in entries {
+            db.push(entry);
+        }
+
+        (cv, db)
     }
 
     #[test]
     fn simple() {
         let es = vec![date_author_entry("key", vec![A("Martin", "Haug")], 2018)];
-        let formatter = AuthorYear::new(es.iter());
-        let citations = Cs(&es);
-        assert_eq!(formatter.format(citations).unwrap().value, "Haug 2018");
+        let mut formatter = ChicagoAuthorDate::default();
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut formatter, &citations).display.value,
+            "Haug 2018"
+        );
     }
 
     #[test]
@@ -305,10 +346,10 @@ mod tests {
             date_author_entry("klaus4", vec![A("Klaus", "Kinsky")], 2019),
             date_author_entry("klaus5", vec![A("Klaus", "Kinsky")], 2019),
         ];
-        let formatter = AuthorYear::new(es.iter());
-        let citations = Cs(&es);
+        let mut formatter = ChicagoAuthorDate::default();
+        let (citations, mut database) = Cs(&es);
         assert_eq!(
-            formatter.format(citations).unwrap().value,
+            database.citation(&mut formatter, &citations).display.value,
             "Kinsky 2018a; Kinsky 2018b; Hinsky 2018; Kinsky 2018c; Kinsky 2019a; Kinsky 2019b"
         );
     }
@@ -319,10 +360,10 @@ mod tests {
             date_author_entry("1", vec![A("John", "Doe")], 1967),
             date_author_entry("2", vec![A("Rich", "Doe")], 2011),
         ];
-        let formatter = AuthorYear::new(es.iter());
-        let citations = Cs(&es);
+        let mut formatter = ChicagoAuthorDate::default();
+        let (citations, mut database) = Cs(&es);
         assert_eq!(
-            formatter.format(citations).unwrap().value,
+            database.citation(&mut formatter, &citations).display.value,
             "J. Doe 1967; R. Doe 2011"
         );
     }
@@ -333,10 +374,10 @@ mod tests {
             date_author_entry("1", vec![A("John", "Doe")], 1967),
             date_author_entry("2", vec![A("Janet", "Doe")], 2011),
         ];
-        let formatter = AuthorYear::new(es.iter());
-        let citations = Cs(&es);
+        let mut formatter = ChicagoAuthorDate::default();
+        let (citations, mut database) = Cs(&es);
         assert_eq!(
-            formatter.format(citations).unwrap().value,
+            database.citation(&mut formatter, &citations).display.value,
             "Doe, John. 1967; Doe, Janet. 2011"
         );
     }
@@ -359,11 +400,11 @@ mod tests {
                 1648,
             ),
         ];
-        let mut formatter = AuthorYear::new(es.iter());
+        let mut formatter = ChicagoAuthorDate::default();
         formatter.et_al_limit = 3;
-        let citations = Cs(&es);
+        let (citations, mut database) = Cs(&es);
         assert_eq!(
-            formatter.format(citations).unwrap().value,
+            database.citation(&mut formatter, &citations).display.value,
             "Mädje and Haug 2020; Poquelin et al. 1648"
         );
     }
@@ -390,11 +431,11 @@ mod tests {
                 1662,
             ),
         ];
-        let mut formatter = AuthorYear::new(es.iter());
+        let mut formatter = ChicagoAuthorDate::default();
         formatter.et_al_limit = 3;
-        let citations = Cs(&es);
+        let (citations, mut database) = Cs(&es);
         assert_eq!(
-            formatter.format(citations).unwrap().value,
+            database.citation(&mut formatter, &citations).display.value,
             "Poquelin, M. Béjart, et al. 1648; Poquelin, A. Béjart, et al. 1662"
         );
     }
@@ -403,12 +444,12 @@ mod tests {
     fn no_author() {
         let mut e = Entry::new("report", EntryType::Report);
         e.set_date(Date::from_year(1999));
-        e.set_title(Title::from_str("Third International Report on Reporting"));
+        e.set_title(Title::new("Third International Report on Reporting"));
         let es = vec![e];
-        let formatter = AuthorYear::new(es.iter());
-        let citations = Cs(&es);
+        let mut formatter = ChicagoAuthorDate::default();
+        let (citations, mut database) = Cs(&es);
         assert_eq!(
-            formatter.format(citations).unwrap().value,
+            database.citation(&mut formatter, &citations).display.value,
             "Third International Report on Reporting 1999"
         );
     }
@@ -418,8 +459,11 @@ mod tests {
         let mut e = Entry::new("report", EntryType::Report);
         e.set_authors(vec![A("John", "Doe")]);
         let es = vec![e];
-        let formatter = AuthorYear::new(es.iter());
-        let citations = Cs(&es);
-        assert_eq!(formatter.format(citations).unwrap().value, "Doe, n.d.");
+        let mut formatter = ChicagoAuthorDate::default();
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut formatter, &citations).display.value,
+            "Doe, n.d."
+        );
     }
 }

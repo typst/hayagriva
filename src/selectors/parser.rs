@@ -1,177 +1,369 @@
-use std::fmt::{self, Debug, Formatter};
+use std::str::FromStr;
 
-use super::token::Tokens;
-use super::{Pos, SpanWith, Spanned, Token};
+use super::{Selector, SelectorError, SelectorResult};
+use crate::types::EntryType;
 
-/// Construct a new error.
-#[macro_export]
-macro_rules! error {
-    ($fmt:literal $($tts:tt)*) => {
-        $crate::selectors::parser::Diag::new(format!($fmt $($tts)*))
-    };
-
-    ($span:expr, $fmt:literal $($tts:tt)*) => {
-        $crate::selectors::Spanned::new(
-            $crate::error!($fmt $($tts)*),
-            $span,
-        )
-    };
+/// Parse a selector.
+pub fn parse(src: &str) -> SelectorResult<Selector> {
+    let mut p = Parser::new(src);
+    Ok(expr(&mut p)?)
 }
 
-/// A convenient token-based parser.
-pub struct Parser<'s> {
+/// Parse an expression, with optional ancestrage relation.
+fn expr(p: &mut Parser) -> SelectorResult<Selector> {
+    let mut lhs = term(p)?;
+    while p.eat_if(Token::Chevron) {
+        lhs = Selector::Ancestrage(Box::new(lhs), Box::new(term(p)?));
+    }
+    Ok(lhs)
+}
+
+/// Parse a term, consisting of alternatives or multi-parents.
+fn term(p: &mut Parser) -> SelectorResult<Selector> {
+    let mut lhs = binding(p)?;
+
+    loop {
+        if p.eat_if(Token::Pipe) {
+            let mut alternatives = vec![lhs];
+            loop {
+                alternatives.push(binding(p)?);
+                if !p.eat_if(Token::Pipe) {
+                    break;
+                }
+            }
+            lhs = Selector::Alt(alternatives);
+        } else if p.eat_if(Token::Ampersand) {
+            let mut parents = vec![lhs];
+            loop {
+                parents.push(binding(p)?);
+                if !p.eat_if(Token::Ampersand) {
+                    break;
+                }
+            }
+            lhs = Selector::Multi(parents);
+        } else {
+            break;
+        }
+    }
+
+    Ok(lhs)
+}
+
+/// Parse an expression with an optional binding `a:expr`.
+fn binding(p: &mut Parser) -> SelectorResult<Selector> {
+    let start = p.index();
+    if let Some(id) = ident(p) {
+        if p.eat_if(Token::Colon) {
+            return Ok(Selector::Binding(id, Box::new(attributes(p)?)));
+        } else {
+            p.jump(start);
+        }
+    }
+    attributes(p)
+}
+
+/// Parse a factor with optional attributes: `factor[attr, ...]`.
+fn attributes(p: &mut Parser) -> SelectorResult<Selector> {
+    let inner = factor(p)?;
+    if p.eat_if(Token::LeftBracket) {
+        let mut attrs: Vec<String> = vec![];
+        loop {
+            match p.eat() {
+                Some(Token::RightBracket) => break,
+                Some(Token::Ident(id)) => attrs.push(id.into()),
+                _ => return Err(SelectorError::MalformedAttribute),
+            }
+
+            match p.eat() {
+                Some(Token::RightBracket) => break,
+                Some(Token::Comma) => continue,
+                _ => return Err(SelectorError::MissingComma),
+            }
+        }
+        Ok(Selector::Attr(Box::new(inner), attrs))
+    } else {
+        Ok(inner)
+    }
+}
+
+/// Parse a value with optional negation: `!value`.
+fn factor(p: &mut Parser) -> SelectorResult<Selector> {
+    if p.eat_if(Token::ExclamationMark) {
+        Ok(Selector::Neg(Box::new(factor(p)?)))
+    } else {
+        value(p)
+    }
+}
+
+/// Parse a parenthesized or atomic value: `book`, `(expr)`.
+fn value(p: &mut Parser) -> SelectorResult<Selector> {
+    match p.eat() {
+        Some(Token::LeftParen) => {
+            let expr = expr(p)?;
+            if !p.eat_if(Token::RightParen) {
+                return Err(SelectorError::UnbalancedParens);
+            }
+            Ok(expr)
+        }
+        Some(Token::Star) => Ok(Selector::Wildcard),
+        Some(Token::Ident(id)) => {
+            let lower = id.to_lowercase();
+            if let Ok(kind) = EntryType::from_str(&lower) {
+                Ok(Selector::Entry(kind))
+            } else {
+                Err(SelectorError::UnknownEntryType(lower))
+            }
+        }
+        _ => Err(SelectorError::MissingValue),
+    }
+}
+
+/// Parse an identifier.
+fn ident(p: &mut Parser) -> Option<String> {
+    p.eat_map(|token| match token {
+        Token::Ident(id) => Some(id.into()),
+        _ => None,
+    })
+}
+
+/// A token-based parser.
+#[derive(Debug)]
+struct Parser<'s> {
     tokens: Tokens<'s>,
-    peeked: Option<Token<'s>>,
-    groups: Vec<Group>,
-    pos: Pos,
 }
 
 impl<'s> Parser<'s> {
     /// Create a new parser for the source string.
-    pub fn new(src: &'s str) -> Self {
-        Self {
-            tokens: Tokens::new(src),
-            peeked: None,
-            groups: vec![],
-            pos: Pos::ZERO,
-        }
-    }
-
-    /// Continues parsing in a group.
-    ///
-    /// When the end delimiter of the group is reached, all subsequent calls to
-    /// `eat()` and `peek()` return `None`. Parsing can only continue with
-    /// a matching call to `end_group`.
-    ///
-    /// # Panics
-    /// This panics if the next token does not start the given group.
-    pub fn start_group(&mut self, group: Group) {
-        match group {
-            Group::Paren => self.eat_assert(Token::LeftParen),
-            Group::Bracket => self.eat_assert(Token::LeftBracket),
-        }
-        self.groups.push(group);
-    }
-
-    /// Ends the parsing of a group and returns the span of the whole group.
-    ///
-    /// # Panics
-    /// This panics if no group was started.
-    pub fn end_group(&mut self) {
-        // Check that we are indeed at the end of the group.
-        debug_assert_eq!(self.peek(), None, "unfinished group");
-
-        let group = self.groups.pop().expect("no started group");
-        let end = match group {
-            Group::Paren => Some(Token::RightParen),
-            Group::Bracket => Some(Token::RightBracket),
-        };
-
-        if let Some(token) = end {
-            // This `peek()` can't be used directly because it hides the end of
-            // group token. To circumvent this, we drop down to `self.peeked`.
-            self.peek();
-            if self.peeked == Some(token) {
-                self.bump();
-            }
-        }
-    }
-
-    /// Execute `f` and return the result alongside the span of everything `f`
-    /// ate.
-    pub fn span<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> Spanned<T> {
-        let start = self.pos;
-        f(self).span_with(start .. self.pos)
+    fn new(src: &'s str) -> Self {
+        Self { tokens: Tokens::new(src) }
     }
 
     /// Consume the next token.
-    pub fn eat(&mut self) -> Option<Token<'s>> {
-        self.peek()?;
-        self.bump()
+    fn eat(&mut self) -> Option<Token<'s>> {
+        self.tokens.next()
+    }
+
+    /// Consume the next token if it is the given one.
+    fn eat_if(&mut self, t: Token) -> bool {
+        let matches = self.peek() == Some(t);
+        if matches {
+            self.eat();
+        }
+        matches
     }
 
     /// Consume the next token if the closure maps it a to `Some`-variant.
-    pub fn eat_map<T>(&mut self, f: impl FnOnce(Token<'s>) -> Option<T>) -> Option<T> {
-        let token = self.peek()?;
-        let out = f(token);
-        if out.is_some() {
-            self.bump();
+    fn eat_map<T>(&mut self, f: impl FnOnce(Token<'s>) -> Option<T>) -> Option<T> {
+        let mapped = f(self.peek()?);
+        if mapped.is_some() {
+            self.eat();
         }
-        out
-    }
-
-    /// Consume the next token, debug-asserting that it is the given one.
-    pub fn eat_assert(&mut self, t: Token) {
-        let next = self.eat();
-        debug_assert_eq!(next, Some(t));
+        mapped
     }
 
     /// Peek at the next token without consuming it.
-    pub fn peek(&mut self) -> Option<Token<'s>> {
-        let token = match self.peeked {
-            Some(token) => token,
-            None => {
-                let token = self.tokens.next()?;
-                self.peeked = Some(token);
-                token
-            }
-        };
-
-        let group = match token {
-            Token::RightParen => Group::Paren,
-            Token::RightBracket => Group::Bracket,
-            _ => return Some(token),
-        };
-
-        if self.groups.contains(&group) {
-            None
-        } else {
-            Some(token)
-        }
+    fn peek(&mut self) -> Option<Token<'s>> {
+        self.tokens.clone().next()
     }
 
     /// The position in the string at which the last token ends and next token
     /// will start.
-    pub fn pos(&self) -> Pos {
-        self.pos
+    fn index(&self) -> usize {
+        self.tokens.index
     }
 
     /// Jump to a position in the source string.
-    pub fn jump(&mut self, pos: Pos) {
-        self.tokens.jump(pos);
-        self.bump();
-    }
-
-    /// The full source string up to the current index.
-    pub fn eaten(&self) -> &'s str {
-        self.tokens.scanner().get(.. self.pos.to_usize())
-    }
-
-    /// The remaining source string after the current index.
-    pub fn rest(&self) -> &'s str {
-        self.tokens.scanner().get(self.pos.to_usize() ..)
-    }
-
-    /// Set the position to the tokenizer's position and take the peeked token.
-    fn bump(&mut self) -> Option<Token<'s>> {
-        self.pos = self.tokens.pos();
-        let token = self.peeked;
-        self.peeked = None;
-        token
+    fn jump(&mut self, index: usize) {
+        self.tokens.index = index;
     }
 }
 
-impl Debug for Parser<'_> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "Parser({}|{})", self.eaten(), self.rest())
+/// An iterator over the tokens of a string of source code.
+#[derive(Debug, Clone)]
+struct Tokens<'s> {
+    src: &'s str,
+    index: usize,
+}
+
+/// A minimal semantic entity of source code.
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum Token<'s> {
+    /// A left bracket starting an attribute list: `[`.
+    LeftBracket,
+    /// A right bracket ending an attribute list: `]`.
+    RightBracket,
+    /// A left parenthesis in a option list: `(`.
+    LeftParen,
+    /// A right parenthesis in a option list: `)`.
+    RightParen,
+
+    /// A star replacing a type: `*`.
+    Star,
+    /// A colon in a binding: `:`.
+    Colon,
+    /// A comma in an attribute list: `,`.
+    Comma,
+    /// A pipe in a option list: `|`.
+    Pipe,
+    /// An ampersand in a option list: `&`.
+    Ampersand,
+    /// A chevron in a ancestrage chain: `>`.
+    Chevron,
+    /// A exclamation mark in a negation: `!`.
+    ExclamationMark,
+
+    /// An identifier in a function header: `Periodical`.
+    Ident(&'s str),
+
+    /// Things that are not valid in the context they appeared in.
+    Invalid,
+}
+
+impl<'s> Tokens<'s> {
+    /// Create a new token iterator with the given mode.
+    fn new(src: &'s str) -> Self {
+        Self { src, index: 0 }
+    }
+
+    /// Eat the next char.
+    fn eat(&mut self) -> Option<char> {
+        let next = self.src[self.index ..].chars().next()?;
+        self.index += next.len_utf8();
+        Some(next)
     }
 }
 
-/// A group, confined by optional start and end delimiters.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Group {
-    /// A parenthesized group: `(...)`.
-    Paren,
-    /// A bracketed group: `[...]`.
-    Bracket,
+impl<'s> Iterator for Tokens<'s> {
+    type Item = Token<'s>;
+
+    /// Parse the next token in the source code.
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut start = self.index;
+        let mut c = self.eat()?;
+
+        while c.is_whitespace() {
+            start = self.index;
+            c = self.eat()?;
+        }
+
+        Some(match c {
+            // Brackets.
+            '[' => Token::LeftBracket,
+            ']' => Token::RightBracket,
+            '(' => Token::LeftParen,
+            ')' => Token::RightParen,
+
+            // List seperators.
+            ',' => Token::Comma,
+            '&' => Token::Ampersand,
+            '|' => Token::Pipe,
+
+            // Misc.
+            '*' => Token::Star,
+            ':' => Token::Colon,
+            '>' => Token::Chevron,
+            '!' => Token::ExclamationMark,
+
+            // Identifiers.
+            c if is_id_start(c) => {
+                let mut end = self.index;
+                while let Some(next) = self.eat() {
+                    if !is_id_continue(next) {
+                        self.index = end;
+                        break;
+                    }
+                    end = self.index;
+                }
+                Token::Ident(&self.src[start .. end])
+            }
+
+            _ => Token::Invalid,
+        })
+    }
+}
+
+fn is_id_start(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '-'
+}
+
+fn is_id_continue(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '-'
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Debug;
+
+    use super::super::Selector;
+    use super::*;
+
+    use Token::{
+        Ampersand as A, ExclamationMark, Ident as Id, LeftBracket as LB, LeftParen as L,
+        Pipe, RightBracket as RB, RightParen as R, *,
+    };
+
+    fn check<T>(src: &str, exp: T, found: T)
+    where
+        T: Debug + PartialEq,
+    {
+        if exp != found {
+            println!("source:   {:#?}", src);
+            println!("expected: {:#?}", exp);
+            println!("found:    {:#?}", found);
+            panic!("test failed");
+        }
+    }
+
+    #[test]
+    fn test_tokenize() {
+        macro_rules! t {
+            ($src:expr => $($token:expr),*) => {
+                let exp = vec![$($token),*];
+                let found = Tokens::new($src).collect::<Vec<_>>();
+                check($src, exp, found);
+            }
+        }
+
+        t!("Article > Book"         => Id("Article"), Chevron, Id("Book"));
+        t!("g5:(Blog | Misc)"       => Id("g5"), Colon, L, Id("Blog"), Pipe, Id("Misc"), R);
+        t!("anthology[editor,date]" => Id("anthology"), LB, Id("editor"), Comma, Id("date"), RB);
+        t!("alpha:!* > (a & b)"     => Id("alpha"), Colon, ExclamationMark, Star, Chevron,
+                                       LeftParen, Id("a"), A, Id("b"), R);
+    }
+
+    #[test]
+    fn test_parse() {
+        macro_rules! t {
+            ($src:expr => $exp:expr) => {
+                check($src, $exp, Selector::parse($src).unwrap());
+            };
+        }
+
+        t!("*[title]"                     => select!(*["title"]));
+        t!("* > i:*[url]"                 => select!(* > ("i":(*["url"]))));
+        t!("* > i:!Blog"                  => select!(* > ("i":(!Blog))));
+        t!("a:Misc"                       => select!("a":Misc));
+        t!("bread:!!blog"                 => select!("bread":(!(!Blog))));
+        t!("anthology[title, author]"     => select!(Anthology["title", "author"]));
+        t!("article > proceedings"        => select!(Article > Proceedings));
+        t!("artwork | audio > exhibition" => select!((Artwork | Audio) > Exhibition));
+
+        t!("article > (book & (repository | anthology > blog) & web[url, title])"
+            => select!(Article > (Book & ((Repository | Anthology) > Blog) & (Web["url", "title"]))));
+
+        t!("a:(book | anthology) > b:((repository > web) | blog)"
+            => select!(("a":(Book | Anthology)) > ("b":((Repository > Web) | Blog))));
+
+        t!("a:!audio > ((blog[author] & web) | (video > web))"
+            => select!(("a":(!Audio)) > (((Blog["author"]) & Web) | (Video > Web))));
+    }
+
+    #[test]
+    fn test_parse_errors() {
+        assert_eq!(parse("()"), Err(SelectorError::MissingValue));
+        assert_eq!(parse("book[*]"), Err(SelectorError::MalformedAttribute));
+        assert_eq!(parse("book[date url]"), Err(SelectorError::MissingComma));
+        assert_eq!(parse("(book | blog"), Err(SelectorError::UnbalancedParens));
+        assert_eq!(parse("a"), Err(SelectorError::UnknownEntryType("a".into())));
+    }
 }

@@ -2,21 +2,24 @@
 //! in the 17th edition of the Chicago Manual of Style.
 
 pub mod author_date;
-pub mod bibliography;
+mod bibliography;
 pub mod notes;
-
-use super::{format_range, push_comma_quote_aware, DisplayString, Formatting};
-use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
-use crate::selectors::{Bind, Id, Neg, Wc};
-use crate::types::EntryType::*;
-use crate::types::{Date, FormattableString, NumOrStr, Person, PersonRole, Title};
-use crate::{attrs, sel, Entry};
 
 use isolang::Language;
 
+use super::{
+    format_range, omit_initial_articles, push_comma_quote_aware, DisplayString,
+    Formatting,
+};
+use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
+use crate::types::{
+    Date, EntryType::*, FmtOptionExt, FmtString, NumOrStr, Person, PersonRole, Title,
+};
+use crate::Entry;
+
 /// Determines the mode of the bibliography and citation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Mode {
+pub(crate) enum Mode {
     /// Use references in footnotes in addition to a detailed bibliography.
     /// See chap. 14 of the CMoS.
     NotesAndBibliography,
@@ -25,9 +28,13 @@ pub enum Mode {
     AuthorDate,
 }
 
-/// Configure when to print access dates. Also see Chicago 14.12.
+/// Configures when to print access dates in the Chicago styles.
+///
+/// # Reference
+/// See the 17th edition of the Chicago Manual of Style, Chapter 14, Section 12,
+/// for more details.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum AccessDateConfig {
+pub enum ChicagoAccessDateVisibility {
     /// Never print access dates.
     Never,
     /// Print if no other date was found.
@@ -42,91 +49,99 @@ pub enum AccessDateConfig {
     Always,
 }
 
-impl AccessDateConfig {
+impl ChicagoAccessDateVisibility {
     /// Will determine, given the value of `self` and a [`Entry`], if an access
     /// date should be provided.
-    pub fn needs_date(&self, entry: &Entry) -> bool {
+    pub(crate) fn needs_date(&self, entry: &Entry) -> bool {
         match self {
-            AccessDateConfig::Never => false,
-            AccessDateConfig::NoDate => entry.any_date().is_none(),
-            AccessDateConfig::InherentlyOnline => {
-                sel!(alt
-                    Id(Web),
-                    sel!(sel!(alt Id(Misc), Id(Web)) => Id(Web)),
-                )
-                .matches(entry)
-                    || entry.any_date().is_none()
+            ChicagoAccessDateVisibility::Never => false,
+            ChicagoAccessDateVisibility::NoDate => entry.date_any().is_none(),
+            ChicagoAccessDateVisibility::InherentlyOnline => {
+                select!(Web | ((Misc | Web) > Web)).matches(entry)
+                    || entry.date_any().is_none()
             }
-            AccessDateConfig::NotFormallyPublished => {
-                !is_formally_published(entry) || entry.any_date().is_none()
+            ChicagoAccessDateVisibility::NotFormallyPublished => {
+                !is_formally_published(entry) || entry.date_any().is_none()
             }
-            AccessDateConfig::Always => true,
+            ChicagoAccessDateVisibility::Always => true,
         }
     }
 }
 
+impl Default for ChicagoAccessDateVisibility {
+    fn default() -> Self {
+        Self::NotFormallyPublished
+    }
+}
+
 fn is_authoritative(entry: &Entry) -> bool {
-    sel!(alt
-        Id(Book),
-        Id(Proceedings),
-        attrs!(Id(Periodical), "volume"),
-        attrs!(Id(Periodical), "issue"),
-        Id(Patent),
-        Id(Thesis),
-        Id(Report),
-        Id(Reference),
-        sel!(Wc() => Id(Conference)),
-        sel!(Wc() => Id(Book)),
-        sel!(Wc() => Id(Proceedings)),
-        sel!(Wc() => attrs!(Id(Periodical), "volume")),
-        sel!(Wc() => attrs!(Id(Periodical), "issue")),
-        sel!(Id(Article) => Id(Anthology)),
-        Id(Case),
-        Id(Legislation),
+    select!(
+        Book |
+        Proceedings |
+        (Periodical["volume"]) |
+        (Periodical["issue"]) |
+        Patent |
+        Thesis |
+        Report |
+        Reference |
+        (* > Conference) |
+        (* > Book) |
+        (* > Proceedings) |
+        (* > (Periodical["volume"])) |
+        (* > (Periodical["issue"])) |
+        (Article > Anthology) |
+        Case |
+        Legislation
     )
     .matches(entry)
 }
 
 fn is_formally_published(entry: &Entry) -> bool {
-    sel!(alt
-        Id(Book),
-        Id(Proceedings),
-        Id(Periodical),
-        Id(Patent),
-        Id(Case),
-        Id(Legislation),
-        Id(Newspaper),
-        sel!(Neg(Id(Manuscript)) => attrs!(Wc(), "publisher")),
-        sel!(Wc() => Id(Book)),
-        sel!(Wc() => Id(Proceedings)),
-        sel!(Wc() => Id(Periodical)),
-        sel!(Id(Article) => Id(Newspaper)),
-        sel!(sel!(alt Id(Article), Id(Anthos)) => Id(Anthology)),
+    select!(
+        Book |
+        Proceedings |
+        Periodical |
+        Patent |
+        Case |
+        Legislation |
+        Newspaper |
+        ((!Manuscript) > (*["publisher"])) |
+        (* > Book) |
+        (* > Proceedings) |
+        (* > Periodical) |
+        (Article > Newspaper) |
+        ((Article | Anthos) > Anthology)
     )
     .matches(entry)
 }
 
-/// Settings that all Chicago styles need.
-pub struct CommonChicagoConfig {
+/// Common configuration options for the Chicago styles.
+#[derive(Clone, Debug)]
+pub struct ChicagoConfig {
     /// If there is greater or equal to this number of authors, they will be
     /// abbreviated using et. al. after the first name.
     pub et_al_limit: Option<usize>,
     /// When to print URL access dates.
-    pub url_access_date: AccessDateConfig,
-    tc_formatter: TitleCase,
-    sc_formatter: SentenceCase,
+    pub url_access_date: ChicagoAccessDateVisibility,
+    title_case: TitleCase,
+    sentence_case: SentenceCase,
 }
 
-impl CommonChicagoConfig {
-    /// Create a new [`CommonChicagoConfig`].
-    pub fn new() -> Self {
-        let tc_formatter = TitleCase::new();
+impl Default for ChicagoConfig {
+    fn default() -> Self {
         Self {
-            tc_formatter,
-            sc_formatter: SentenceCase::new(),
+            title_case: TitleCase::new(),
+            sentence_case: SentenceCase::new(),
             et_al_limit: Some(4),
-            url_access_date: AccessDateConfig::NotFormallyPublished,
+            url_access_date: ChicagoAccessDateVisibility::default(),
         }
+    }
+}
+
+impl ChicagoConfig {
+    /// Create a new chicago config.
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -137,8 +152,8 @@ pub enum AuthorRole {
     Normal,
     /// This person was responsible for the collection and editing of the work.
     Editor,
-    /// The work consists of several smaller
-    /// items which were compiled by the creator.
+    /// The work consists of several smaller items which were compiled by the
+    /// creator.
     Compiler,
     /// This person translated the work from another language.
     Translator,
@@ -149,39 +164,39 @@ pub enum AuthorRole {
 }
 
 /// Get the creator of an entry.
-pub fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
+pub(crate) fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     let mut add = AuthorRole::Normal;
-    let authors = if let Some(authors) = entry.authors_fallible() {
+
+    let authors = if let Some(authors) = entry.authors() {
         authors.to_vec()
     } else if let Some(eds) = entry.editors() {
         add = AuthorRole::Editor;
         eds.to_vec()
     } else if entry.entry_type == Video {
-        let tv_series =
-            sel!(attrs!(Id(Video), "issue", "volume") => Bind("p", Id(Video)));
+        let tv_series = select!((Video["issue", "volume"]) > ("p":Video));
         if let Some(mut bindings) = tv_series.apply(entry) {
-            let mut affs = entry.affiliated_filtered(PersonRole::Director);
-            affs.extend(entry.affiliated_filtered(PersonRole::Writer));
+            let mut affs = entry.affiliated_with_role(PersonRole::Director);
+            affs.extend(entry.affiliated_with_role(PersonRole::Writer));
             if !affs.is_empty() {
                 affs
             } else {
                 let parent = bindings.remove("p").unwrap();
                 add = AuthorRole::ExecutiveProducer;
-                parent.affiliated_filtered(PersonRole::ExecutiveProducer)
+                parent.affiliated_with_role(PersonRole::ExecutiveProducer)
             }
         } else {
-            let dir = entry.affiliated_filtered(PersonRole::Director);
+            let dir = entry.affiliated_with_role(PersonRole::Director);
             if !dir.is_empty() {
                 add = AuthorRole::Director;
                 dir
             } else {
                 add = AuthorRole::ExecutiveProducer;
-                entry.affiliated_filtered(PersonRole::ExecutiveProducer)
+                entry.affiliated_with_role(PersonRole::ExecutiveProducer)
             }
         }
     } else {
-        let compilers = entry.affiliated_filtered(PersonRole::Compiler);
-        let translators = entry.affiliated_filtered(PersonRole::Translator);
+        let compilers = entry.affiliated_with_role(PersonRole::Compiler);
+        let translators = entry.affiliated_with_role(PersonRole::Translator);
         if !compilers.is_empty() {
             add = AuthorRole::Compiler;
             compilers
@@ -248,11 +263,11 @@ pub(super) fn and_list(
 fn get_title(
     entry: &Entry,
     short: bool,
-    common: &CommonChicagoConfig,
+    common: &ChicagoConfig,
     comma: char,
 ) -> DisplayString {
-    let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-        .bound_element(entry, "p");
+    let mv_title =
+        select!((Book["volume"]) > ("p":((Book | Anthology)["title"]))).bound(entry, "p");
 
     let mut res = DisplayString::new();
     if let Some(parent) = mv_title {
@@ -262,15 +277,15 @@ fn get_title(
     }
 
     if !short && mv_title.is_none() {
-        let chapter = sel!(Id(Chapter) => Bind("p", attrs!(Wc(), "title")))
-            .bound_element(entry, "p");
+        let chapter = select!(Chapter > ("p":(*["title"]))).bound(entry, "p");
 
-        let edited_book = sel!(alt
-            sel!(Wc() => Bind("p", attrs!(sel!(alt Id(Book), Id(Proceedings)), "editor"))),
-            sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
-            sel!(Id(Article) => Bind("p", Id(Proceedings))),
-            sel!(attrs!(Id(Entry), "author") => Bind("p", Id(Reference))),
-        ).bound_element(entry, "p");
+        let edited_book = select!(
+            (* > ("p":((Book | Proceedings)["editor"]))) |
+            ((Anthos | Entry) > ("p":(Anthology | Reference))) |
+            (Article > ("p":Proceedings)) |
+            ((Entry["author"]) > ("p":Reference))
+        )
+        .bound(entry, "p");
 
         if let Some(parent) = edited_book.or(chapter) {
             push_comma_quote_aware(&mut res.value, comma, true);
@@ -292,7 +307,7 @@ fn get_title(
             }
             res += get_chunk_title(parent, false, true, common);
 
-            if parent.authors_fallible().is_none() {
+            if parent.authors().is_none() {
                 if let Some(eds) = parent.editors() {
                     let ed_names =
                         eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
@@ -307,18 +322,15 @@ fn get_title(
             }
         }
 
-        let web_parent = sel!(alt
-            sel!(Id(Web) => Bind("p", Wc())),
-            sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
-        )
-        .bound_element(entry, "p");
+        let web_parent =
+            select!((Web > ("p":*)) | ((Misc | Web) > ("p":Web))).bound(entry, "p");
 
         if web_parent.and_then(|p| p.title()).is_some() {
             push_comma_quote_aware(&mut res.value, comma, true);
             res += &get_chunk_title(web_parent.unwrap(), false, false, common).value;
         }
 
-        let blog_parent = sel!(Wc() => Bind("p", Id(Blog))).bound_element(entry, "p");
+        let blog_parent = select!(* > ("p":Blog)).bound(entry, "p");
 
         if let Some(parent) = blog_parent {
             let titles = get_title(parent, false, common, comma);
@@ -328,8 +340,7 @@ fn get_title(
 
             res += titles;
         } else if entry.entry_type == Blog {
-            let title_parent =
-                sel!(Wc() => Bind("p", attrs!(Wc(), "title"))).bound_element(entry, "p");
+            let title_parent = select!(* > ("p":(*["title"]))).bound(entry, "p");
             if let Some(parent) = title_parent {
                 let titles = get_title(parent, false, common, comma);
                 push_comma_quote_aware(&mut res.value, comma, true);
@@ -345,11 +356,11 @@ pub(super) fn get_chunk_title(
     entry: &Entry,
     short: bool,
     mut fmt: bool,
-    common: &CommonChicagoConfig,
+    common: &ChicagoConfig,
 ) -> DisplayString {
     let mut res = DisplayString::new();
 
-    if entry.title() == Some("Wikipedia") || entry.entry_type == Repository {
+    if entry.title().value() == Some("Wikipedia") || entry.entry_type == Repository {
         fmt = false;
     }
     let sc = fmt && self_contained(entry);
@@ -363,23 +374,22 @@ pub(super) fn get_chunk_title(
     let np = entry.entry_type == Newspaper;
 
     if short {
-        if let Some(title) = entry.title_raw().map(|t| shorthand(t)) {
-            let title = title.format(Some(&common.tc_formatter), None);
+        if let Some(title) = entry.title().map(|t| shorthand(t)) {
             res += &if entry.entry_type == Entry {
                 title.value
             } else {
-                title.title_case
+                title.format_title_case(&common.title_case)
             };
         }
     } else {
-        if let Some(title) = entry.title_fmt(Some(&common.tc_formatter), None) {
-            let title = title.value;
+        if let Some(title) = entry.title() {
+            let tc = title.canonical.format_title_case(&common.title_case);
             res += &if entry.entry_type == Entry {
-                title.value
+                title.canonical.value.clone()
             } else if entry.entry_type == Case {
-                title.title_case.replace("V.", "v.")
+                tc.replace("V.", "v.")
             } else {
-                title.title_case
+                tc
             };
         }
     }
@@ -396,15 +406,16 @@ pub(super) fn get_chunk_title(
 
     if !short {
         if let Some(translation) = entry
-            .title_fmt(None, Some(&common.sc_formatter))
-            .and_then(|f| f.translated)
+            .title()
+            .and_then(|title| title.translated.as_ref())
+            .map(|transl| transl.format_sentence_case(&common.sentence_case))
         {
             if !res.is_empty() {
                 res.push(' ');
             }
 
             res.push('[');
-            res += &translation.sentence_case;
+            res += &translation;
             res.push(']');
         }
     }
@@ -442,44 +453,28 @@ fn self_contained(entry: &Entry) -> bool {
     );
 
     sc || (!matches!(entry.entry_type, Web)
-        && sel!(alt
-            attrs!(Wc(), "publisher"),
-            sel!(Wc() => Neg(Wc())),
+        && select!(
+            (*["publisher"]) |
+            (* > (!*))
         )
         .matches(entry))
 }
 
-fn omit_initial_articles(s: &str) -> String {
-    let parts = s.split(' ').collect::<Vec<_>>();
-    if parts.len() < 2 {
-        return s.to_string();
-    }
-
-    if ["a", "an", "the"].contains(&parts.first().unwrap().to_lowercase().as_ref()) {
-        (&parts[1 ..]).join(" ")
-    } else {
-        s.to_string()
-    }
-}
-
-fn shorthand(title: &Title) -> FormattableString {
+fn shorthand(title: &Title) -> FmtString {
     if let Some(sh) = title.shorthand.as_ref() {
         sh.clone()
     } else {
-        FormattableString {
-            value: omit_initial_articles(&title.value.value),
-            title_case: title
-                .value
-                .title_case
-                .as_ref()
-                .map(|tc| omit_initial_articles(tc)),
-            sentence_case: title
-                .value
-                .sentence_case
-                .as_ref()
-                .map(|tc| omit_initial_articles(tc)),
-            verbatim: title.value.verbatim,
+        let mut fmt = FmtString::new(omit_initial_articles(&title.canonical.value))
+            .verbatim(title.canonical.verbatim);
+
+        if let Some(tc) = title.canonical.title_case.as_ref() {
+            fmt = fmt.title_case(omit_initial_articles(tc))
         }
+        if let Some(sc) = title.canonical.sentence_case.as_ref() {
+            fmt = fmt.sentence_case(omit_initial_articles(sc))
+        }
+
+        fmt
     }
 }
 
@@ -488,15 +483,11 @@ fn web_creator(
     invert_first: bool,
     et_al_limit: Option<usize>,
 ) -> Option<String> {
-    let web_thing = sel!(alt
-        Id(Web),
-        sel!(sel!(alt Id(Misc), Id(Web)) => Bind("p", Id(Web))),
-    )
-    .apply(entry);
+    let web_thing = select!(Web | ((Misc | Web) > ("p": Web))).apply(entry);
     web_thing.map(|wt| {
         if let Some(org) = entry.organization() {
             org.into()
-        } else if wt.get("p").and_then(|e| e.authors_fallible()).is_some() {
+        } else if wt.get("p").and_then(|e| e.authors()).is_some() {
             let authors =
                 get_creators(wt.get("p").unwrap()).0.into_iter().enumerate().map(
                     |(i, p)| {
@@ -546,19 +537,19 @@ fn format_date(date: &Date, mode: DateMode) -> String {
 
 fn get_info_element(
     mut entry: &Entry,
-    common: &CommonChicagoConfig,
+    common: &ChicagoConfig,
     capitals: bool,
 ) -> DisplayString {
-    let series = sel!(alt
-        attrs!(Id(Video), "volume-total"),
-        attrs!(Id(Audio), "volume-total"),
-        sel!(Id(Video) => Id(Video)),
-        sel!(Id(Audio) => Id(Audio)),
+    let series = select!(
+        (Video["volume-total"])
+            | (Audio["volume-total"])
+            | (Video > Video)
+            | (Audio > Audio)
     )
     .matches(entry);
 
     let prepend = if let Some(lang) = entry.language() {
-        if entry.title_raw().and_then(|t| t.translated.as_ref()).is_none() {
+        if entry.title().and_then(|t| t.translated.as_ref()).is_none() {
             let mut lingo = if capitals { "[In " } else { "[in " }.to_string();
             lingo += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
             if capitals {
@@ -575,45 +566,43 @@ fn get_info_element(
 
     let mut res = vec![];
 
-    let journal = sel!(
-        sel!(alt Id(Article), Id(Entry)) => Bind("p", sel!(alt Id(Periodical), Id(Newspaper)))
-    ).bound_element(entry, "p");
+    let journal = select!(
+        (Article | Entry) > ("p":(Periodical | Newspaper))
+    )
+    .bound(entry, "p");
 
-    let newspaper = sel!(Wc() => Bind("p", Id(Newspaper))).bound_element(entry, "p");
+    let newspaper = select!(* > ("p":Newspaper)).bound(entry, "p");
 
-    let mv_title = sel!(attrs!(Id(Book), "volume") => Bind("p", attrs!(sel!(alt Id(Book), Id(Anthology)), "title")))
-        .bound_element(entry, "p");
+    let mv_title =
+        select!((Book["volume"]) > ("p":((Book | Anthology)["title"]))).bound(entry, "p");
 
     let orig_entry = entry;
     if let Some(mv_p) = mv_title {
         entry = mv_p;
     }
 
-    let affs = sel!(alt
-        Bind("tl", attrs!(Wc(), "affiliated")),
-        sel!(Wc() => Bind("tl", attrs!(Wc(), "affiliated"))),
-    )
-    .bound_element(entry, "tl");
+    let affs = select!(("tl":(*["affiliated"])) | (* > ("tl":(*["affiliated"]))))
+        .bound(entry, "tl");
 
-    let ed_match = sel!(alt
-        Bind("ed", attrs!(Wc(), "editor")),
-        sel!(Wc() => Bind("ed", attrs!(Wc(), "editor"))),
+    let ed_match = select!(
+        ("ed":(*["editor"])) |
+        (* > ("ed":(*["editor"])))
     )
-    .bound_element(entry, "ed");
+    .bound(entry, "ed");
     let eds = ed_match.map(|e| e.editors().unwrap());
 
     let translators = affs.and_then(|e| {
-        let ts = e.affiliated_filtered(PersonRole::Translator);
+        let ts = e.affiliated_with_role(PersonRole::Translator);
         if ts.is_empty() { None } else { Some(ts) }
     });
 
     let compilers = affs.and_then(|e| {
-        let ts = e.affiliated_filtered(PersonRole::Compiler);
+        let ts = e.affiliated_with_role(PersonRole::Compiler);
         if ts.is_empty() { None } else { Some(ts) }
     });
 
     if let Some(trans) = translators {
-        if orig_entry.authors_fallible().is_some() || orig_entry.editors().is_some() {
+        if orig_entry.authors().is_some() || orig_entry.editors().is_some() {
             let trans_names = trans.into_iter().map(|p| p.given_first(false));
 
             let mut local =
@@ -625,14 +614,15 @@ fn get_info_element(
     }
 
     if let Some(eds) = eds {
-        let edited_book = sel!(alt
-            sel!(Wc() => Bind("p", attrs!(sel!(alt Id(Book), Id(Proceedings)), "editor"))),
-            sel!(sel!(alt Id(Anthos), Id(Entry)) => Bind("p", sel!(alt Id(Anthology), Id(Reference)))),
-            sel!(Id(Article) => Bind("p", Id(Proceedings))),
-            sel!(attrs!(Id(Entry), "author") => Bind("p", Id(Reference))),
-        ).bound_element(entry, "p");
+        let edited_book = select!(
+            (* > ("p":((Book | Proceedings)["editor"]))) |
+            ((Anthos | Entry) > ("p":(Anthology | Reference))) |
+            (Article > ("p":Proceedings)) |
+            ((Entry["author"]) > ("p":Reference))
+        )
+        .bound(entry, "p");
 
-        if orig_entry.authors_fallible().is_some() && ed_match != edited_book {
+        if orig_entry.authors().is_some() && ed_match != edited_book {
             let ed_names =
                 eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
@@ -661,7 +651,9 @@ fn get_info_element(
                     local.push(' ');
                 }
 
-                local += &format!("({})", location);
+                local.push('(');
+                local += &location.value;
+                local.push(')');
             }
         }
 
@@ -714,7 +706,7 @@ fn get_info_element(
     }
 
     if let Some(comp) = compilers {
-        if (orig_entry.authors_fallible().is_some() || orig_entry.entry_type == Reference)
+        if (orig_entry.authors().is_some() || orig_entry.entry_type == Reference)
             || orig_entry.editors().is_some()
         {
             let comp_names =
@@ -763,7 +755,7 @@ fn get_info_element(
             }
         }
 
-        if let Some(&vtotal) = orig_entry.total_volumes() {
+        if let Some(&vtotal) = orig_entry.volume_total() {
             if vtotal > 1 {
                 if series {
                     res.push(format!("{} seasons", vtotal).into())
@@ -785,10 +777,8 @@ fn get_info_element(
         if mv_title.is_some() {
             let mut title = DisplayString::new();
             title.start_format(Formatting::Italic);
-            if let Some(own_title) =
-                orig_entry.title_fmt(Some(&common.tc_formatter), None)
-            {
-                title += &own_title.value.title_case;
+            if let Some(own_title) = orig_entry.title() {
+                title += &own_title.canonical.format_title_case(&common.title_case);
             }
             if let Some(eds) = orig_entry.editors() {
                 push_comma_quote_aware(&mut title.value, ',', true);
@@ -814,11 +804,12 @@ fn get_info_element(
 
     // Series titles: Chicago 14.123
     if mv_title.is_none() {
-        let spec = sel!(alt
-            sel!(Wc() => sel!(Id(Anthology) => Bind("p", attrs!(Id(Anthology), "title")))),
-            sel!(Wc() => sel!(Id(Book) => Bind("p", attrs!(Id(Book), "title")))),
-            sel!(Id(Book) => Bind("p", attrs!(Wc(), "title"))),
+        let spec = select!(
+            (* > (Anthology > ("p":(Anthology["title"]))))
+                | (* > (Book > ("p":(Book["title"]))))
+                | (Book > ("p":(*["title"])))
         );
+
         if let Some(mut bindings) = spec.apply(orig_entry) {
             let par_anth = bindings.remove("p").unwrap();
             let mut title = get_chunk_title(par_anth, false, false, common).value.into();
@@ -899,20 +890,12 @@ fn get_info_element(
 }
 
 fn entry_date(entry: &Entry, force_year: bool) -> String {
-    if let Some(date) = entry.any_date() {
+    if let Some(date) = entry.date_any() {
         let mode = if force_year {
             DateMode::Year
         } else {
-            let journal = sel!(
-                sel!(alt Id(Article), Id(Entry)) => Id(Periodical)
-            )
-            .matches(entry);
-            let conf = sel!(alt
-                sel!(Wc() => Id(Conference)),
-                Id(Conference),
-                Id(Exhibition),
-            )
-            .matches(entry);
+            let journal = select!((Article | Entry) > Periodical).matches(entry);
+            let conf = select!((* > Conference) | Conference | Exhibition).matches(entry);
 
             let mut mode = match (journal, is_authoritative(entry)) {
                 (true, _) => DateMode::Month,
@@ -930,7 +913,7 @@ fn entry_date(entry: &Entry, force_year: bool) -> String {
         format_date(date, mode)
     } else if force_year
         || (matches!(&entry.entry_type, Book | Anthology)
-            && entry.any_url().and_then(|url| url.visit_date.as_ref()).is_none())
+            && entry.url_any().and_then(|url| url.visit_date.as_ref()).is_none())
     {
         "n.d.".to_string()
     } else {

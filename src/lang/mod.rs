@@ -1,15 +1,11 @@
 //! Language-dependant string transformations.
 
-use super::types::{FormattableString, FormattedString, FormattedTitle, Title};
-use usize;
-
 pub(crate) mod en;
 
-/// Structs implementing the `CaseTransformer` trait offer a method to
-/// convert a string slice to a well-defined upper-/lowercase scheme.
-pub trait CaseTransformer {
+/// Convert a string to a well-defined lower/uppercase scheme.
+pub trait Case {
     /// Apply the case transformation to the argument.
-    fn apply(&self, title: &str) -> String;
+    fn apply(&self, string: &str) -> String;
 }
 
 /// Rules for the title case transformation.
@@ -61,7 +57,7 @@ impl TitleCase {
     }
 }
 
-impl CaseTransformer for TitleCase {
+impl Case for TitleCase {
     /// Put the `title` argument into title case (every word starts with a capital
     /// letter, except for some prepositions...) as specified by `&self`.
     fn apply(&self, title: &str) -> String {
@@ -244,7 +240,7 @@ impl SentenceCase {
     }
 }
 
-impl CaseTransformer for SentenceCase {
+impl Case for SentenceCase {
     /// Put the `title` argument into sentence case (capitalize only after
     /// sentence ends or at the start, as well as (if the whitelist is used)
     /// select exceptions).
@@ -416,67 +412,9 @@ impl CaseTransformer for SentenceCase {
     }
 }
 
-impl FormattableString {
-    /// Apply title and sentence case formatting, if the formatters are provided
-    /// and the user did not override.
-    pub fn format(
-        self,
-        title: Option<&dyn CaseTransformer>,
-        sentence: Option<&dyn CaseTransformer>,
-    ) -> FormattedString {
-        let (sentence_case, title_case) = if self.verbatim {
-            (
-                self.sentence_case.as_ref().unwrap_or(&self.value).clone(),
-                self.title_case.as_ref().unwrap_or(&self.value).clone(),
-            )
-        } else {
-            (
-                self.sentence_case.clone().unwrap_or_else(|| {
-                    if let Some(tf) = sentence {
-                        tf.apply(&self.value)
-                    } else {
-                        self.value.clone()
-                    }
-                }),
-                self.title_case.clone().unwrap_or_else(|| {
-                    if let Some(tf) = title {
-                        tf.apply(&self.value)
-                    } else {
-                        self.value.clone()
-                    }
-                }),
-            )
-        };
-
-        let fstr = FormattedString {
-            sentence_case,
-            title_case,
-            value: self.value.clone(),
-        };
-
-        fstr
-    }
-}
-
-impl Title {
-    /// Apply title and sentence case formatting, if the formatters are provided
-    /// and the user did not override.
-    pub fn format(
-        self,
-        title: Option<&dyn CaseTransformer>,
-        sentence: Option<&dyn CaseTransformer>,
-    ) -> FormattedTitle {
-        FormattedTitle {
-            value: self.value.format(title, sentence),
-            shorthand: self.shorthand.map(|s| s.format(title, sentence)),
-            translated: self.translated.map(|s| s.format(title, sentence)),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{CaseTransformer, SentenceCase, TitleCase};
+    use super::{Case, SentenceCase, TitleCase};
 
     #[test]
     fn title_case_last_word() {
