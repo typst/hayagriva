@@ -401,7 +401,7 @@ mod tests {
 
         for entry in &entries {
             let citation = Citation::new(&entry, None);
-            println!("{:#}", db.citation(&mut chicago, &[citation]));
+            println!("{:#}", db.citation(&mut chicago, &[citation]).display);
         }
     }
 

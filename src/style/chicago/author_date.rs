@@ -6,8 +6,8 @@ use super::{
 };
 use crate::style::{
     alph_designator, author_title_ord_custom, BibliographyOrdering, BibliographyStyle,
-    Brackets, Citation, CitationStyle, Database,
-    DisplayReference, DisplayString, Record,
+    Brackets, Citation, CitationStyle, Database, DisplayCitation, DisplayReference,
+    DisplayString, Record,
 };
 use crate::types::EntryType::*;
 use crate::types::Person;
@@ -84,7 +84,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
         &mut self,
         db: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString {
+    ) -> DisplayCitation {
         let mut items: Vec<DisplayString> = vec![];
         for atomic in parts {
             let entry = atomic.entry;
@@ -229,7 +229,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
             items.push(s);
         }
 
-        DisplayString::join(&items, "; ")
+        DisplayCitation::new(DisplayString::join(&items, "; "), false)
     }
 
     fn brackets(&self) -> Brackets {
@@ -331,7 +331,7 @@ mod tests {
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Haug 2018"
         );
     }
@@ -349,7 +349,7 @@ mod tests {
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Kinsky 2018a; Kinsky 2018b; Hinsky 2018; Kinsky 2018c; Kinsky 2019a; Kinsky 2019b"
         );
     }
@@ -363,7 +363,7 @@ mod tests {
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "J. Doe 1967; R. Doe 2011"
         );
     }
@@ -377,7 +377,7 @@ mod tests {
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Doe, John. 1967; Doe, Janet. 2011"
         );
     }
@@ -404,7 +404,7 @@ mod tests {
         formatter.et_al_limit = 3;
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Mädje and Haug 2020; Poquelin et al. 1648"
         );
     }
@@ -435,7 +435,7 @@ mod tests {
         formatter.et_al_limit = 3;
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Poquelin, M. Béjart, et al. 1648; Poquelin, A. Béjart, et al. 1662"
         );
     }
@@ -449,7 +449,7 @@ mod tests {
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Third International Report on Reporting 1999"
         );
     }
@@ -462,7 +462,7 @@ mod tests {
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
         assert_eq!(
-            database.citation(&mut formatter, &citations).value,
+            database.citation(&mut formatter, &citations).display.value,
             "Doe, n.d."
         );
     }

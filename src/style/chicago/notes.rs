@@ -7,9 +7,9 @@ use super::{
 };
 use crate::style::{
     abbreviate_publisher, author_title_ord_custom, delegate_titled_entry, format_range,
-    push_comma_quote_aware, BibliographyOrdering, BibliographyStyle, Brackets,
-    Citation, CitationStyle, Database, DisplayReference,
-    DisplayString, Formatting, Record,
+    push_comma_quote_aware, BibliographyOrdering, BibliographyStyle, Brackets, Citation,
+    CitationStyle, Database, DisplayCitation, DisplayReference, DisplayString,
+    Formatting, Record,
 };
 use crate::types::{EntryType::*, FmtOptionExt};
 use crate::Entry;
@@ -607,13 +607,13 @@ impl<'a> CitationStyle<'a> for ChicagoNotes<'a> {
         &mut self,
         _: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString {
+    ) -> DisplayCitation {
         let mut items = vec![];
         for &c in parts {
             items.push(self.get_note(c))
         }
 
-        DisplayString::join(&items, "\n")
+        DisplayCitation::new(DisplayString::join(&items, "\n"), true)
     }
 
     fn brackets(&self) -> Brackets {

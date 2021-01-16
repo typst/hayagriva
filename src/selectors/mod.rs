@@ -1,6 +1,28 @@
 //! Filter bibliographies by structural selection.
 
 /// Construct a [`Selector`].
+///
+/// Selectors can be used to filter bibliographies or to differentiate between
+/// [`entries`](Entry) when implementing a custom [`CitationStyle`][CitStyle] or
+/// [`BibliographyStyle`][BibStlye]. An [introduction to selectors][intro] is
+/// available in the Git repository. This macro accepts expressions very similar
+/// to the user-facing macros as parsed by [`Selector::parse`].
+///
+/// There are three main differences:
+/// - Binding names and attributes have to be strings and thus wrapped in double
+///   quotes
+/// - Type names are case sensitive and have to start with a capital letter
+///   since they are just variants of [`EntryType`][EType]
+/// - Any non-atomic selector (`*` or an [`EntryType`][EType] variant are
+///   atomic) in other constructions like ancestrage selectors or bindings must
+///   be in parentheses since they have to parse as a single token tree for
+///   correct expansion. If you get an error message along the lines of having
+///   too much recursion, you likely forgot some parentheses.
+///
+/// [intro]: https://github.com/typst/hayagriva/blob/main/docs/selectors.md
+/// [CitStyle]: crate::style::CitationStyle
+/// [BibStlye]: crate::style::BibliographyStyle
+/// [EType]: crate::types::EntryType
 #[macro_export]
 macro_rules! select {
     (($($tts:tt)*)) => {

@@ -288,6 +288,7 @@ fn main() {
                                 v.kind(),
                                 database
                                     .citation(&mut style, &[Citation::new(entry, None)])
+                                    .display
                             );
                         }
                     }
@@ -365,9 +366,9 @@ fn main() {
 
             for r in &lines {
                 if matches.is_present("no-fmt") {
-                    println!("{:#}", r);
+                    println!("{:#}", r.display);
                 } else {
-                    println!("{}", r)
+                    println!("{}", r.display)
                 }
             }
         }

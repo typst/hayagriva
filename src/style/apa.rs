@@ -184,7 +184,7 @@ impl Apa {
     pub fn new() -> Self {
         Self {
             formatter: SentenceCase::default(),
-            sort: BibliographyOrdering::None,
+            sort: BibliographyOrdering::ByInsertionOrder,
         }
     }
 

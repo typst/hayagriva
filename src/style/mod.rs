@@ -86,11 +86,19 @@ impl<'a> Citation<'a> {
 /// Contains the [`DisplayString`] for a citation and indicates its recommended
 /// placement within a document.
 #[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DisplayCitation {
     /// The formatted citation.
     pub display: DisplayString,
     /// Whether this citation is, in fact, a footnote.
     pub is_footnote: bool,
+}
+
+impl DisplayCitation {
+    /// Create a new [`DisplayCitation`]
+    pub fn new(display: DisplayString, is_footnote: bool) -> Self {
+        Self { display, is_footnote }
+    }
 }
 
 /// Contains the [`DisplayString`] for a bibliography reference as well as
@@ -107,7 +115,8 @@ pub struct DisplayReference<'a> {
 }
 
 impl<'a> DisplayReference<'a> {
-    fn new(
+    /// Create a new reference for display purposes.
+    pub fn new(
         entry: &'a Entry,
         prefix: Option<DisplayString>,
         display: DisplayString,
@@ -156,7 +165,11 @@ impl<'a> Database<'a> {
     /// malformed (e.g. if you cite two entries with the same author and year,
     /// but pushed only one of them, Chicago Author-Date will format them as
     /// "2020" and "2020A" instead of "2020A" and "2020B").
-    pub fn citation<S>(&mut self, style: &mut S, parts: &[Citation<'a>]) -> DisplayString
+    pub fn citation<S>(
+        &mut self,
+        style: &mut S,
+        parts: &[Citation<'a>],
+    ) -> DisplayCitation
     where
         S: CitationStyle<'a> + ?Sized,
     {
@@ -201,7 +214,7 @@ pub trait CitationStyle<'a> {
         &mut self,
         db: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString;
+    ) -> DisplayCitation;
 
     /// Indicates which brackets to wrap citations in if brackets are desired.
     fn brackets(&self) -> Brackets;
@@ -270,19 +283,26 @@ pub enum BibliographyOrdering {
     ByPrefix,
     /// Order items by their authors, then titles, and finally dates.
     ByAuthor,
-    /// Do not order. Bibliography will be in insertion order of the database.
-    None,
+    /// Do not reorder. Bibliography will be in insertion order of the database.
+    ByInsertionOrder,
 }
 
 /// Citations that just consist of entry keys.
 pub struct Keys {}
+
+impl Keys {
+    /// Create a new instance of this [`CitationStyle`].
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 impl<'a> CitationStyle<'a> for Keys {
     fn citation(
         &mut self,
         _: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString {
+    ) -> DisplayCitation {
         let mut items = vec![];
         for atomic in parts {
             let mut res = DisplayString::new();
@@ -299,7 +319,7 @@ impl<'a> CitationStyle<'a> for Keys {
             items.push(res)
         }
 
-        DisplayString::join(&items, ", ")
+        DisplayCitation::new(DisplayString::join(&items, ", "), false)
     }
 
     fn brackets(&self) -> Brackets {
@@ -328,7 +348,7 @@ impl<'a> CitationStyle<'a> for Numerical {
         &mut self,
         db: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString {
+    ) -> DisplayCitation {
         let mut ids = vec![];
         let mut sorted = db.records.clone().into_iter().collect::<Vec<_>>();
         sorted.sort_by(|(_, v), (_, v2)| author_title_ord(v.entry, v2.entry));
@@ -416,7 +436,7 @@ impl<'a> CitationStyle<'a> for Numerical {
             .collect::<Vec<_>>()
             .join("; ");
 
-        format!("[{}]", re).into()
+        DisplayCitation::new(format!("[{}]", re).into(), false)
     }
 
     fn brackets(&self) -> Brackets {
@@ -888,7 +908,7 @@ pub struct Alphanumerical {
 }
 
 impl Alphanumerical {
-    /// Create a new `Alphabetical`.
+    /// Create a new instance of this [`CitationStyle`].
     pub fn new() -> Self {
         Self { letters: 3 }
     }
@@ -947,7 +967,7 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
         &mut self,
         db: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString {
+    ) -> DisplayCitation {
         let mut items = vec![];
         for atomic in parts {
             let mut entry = atomic.entry;
@@ -991,7 +1011,7 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
             items.push(res);
         }
 
-        items.join("; ").into()
+        DisplayCitation::new(items.join("; ").into(), false)
     }
 
     fn brackets(&self) -> Brackets {
@@ -1011,7 +1031,7 @@ pub struct AuthorTitle {
 }
 
 impl AuthorTitle {
-    /// Create a new `Alphabetical`.
+    /// Create a new instance of this [`CitationStyle`].
     pub fn new() -> Self {
         Self { config: ChicagoConfig::new() }
     }
@@ -1046,7 +1066,7 @@ impl<'a> CitationStyle<'a> for AuthorTitle {
         &mut self,
         _: &mut Database<'a>,
         parts: &[Citation<'a>],
-    ) -> DisplayString {
+    ) -> DisplayCitation {
         let mut items = vec![];
         for atomic in parts {
             let entry = delegate_titled_entry(atomic.entry);
@@ -1071,7 +1091,7 @@ impl<'a> CitationStyle<'a> for AuthorTitle {
             items.push(res);
         }
 
-        DisplayString::join(&items, "; ")
+        DisplayCitation::new(DisplayString::join(&items, "; "), false)
     }
 
     fn brackets(&self) -> Brackets {
