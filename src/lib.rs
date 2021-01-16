@@ -97,8 +97,8 @@ impl Entry {
     }
 
     /// Get the entry's [`EntryType`].
-    pub fn kind(&self) -> &EntryType {
-        &self.entry_type
+    pub fn kind(&self) -> EntryType {
+        self.entry_type
     }
 
     /// Get the unconverted value of a certain field.
