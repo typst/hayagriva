@@ -5,8 +5,8 @@ use std::vec;
 use isolang::Language;
 
 use super::{
-    alph_designator, author_title_ord_custom, format_range, name_list_straight,
-    push_comma_quote_aware, BibliographyOrdering, BibliographyStyle, Database,
+    alph_designator, format_range, name_list_straight, push_comma_quote_aware,
+    sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::{en, SentenceCase, TitleCase};
@@ -28,8 +28,6 @@ pub struct Ieee {
     sentence_case: SentenceCase,
     title_case: TitleCase,
     et_al_threshold: Option<u32>,
-    /// Indicates the desired ordering of items.
-    pub sort: BibliographyOrdering,
 }
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
@@ -55,7 +53,6 @@ impl Ieee {
             sentence_case: SentenceCase::default(),
             title_case,
             et_al_threshold: Some(6),
-            sort: BibliographyOrdering::ByPrefix,
         }
     }
 
@@ -911,34 +908,25 @@ fn format_date(date: &Date, disamb: Option<usize>) -> String {
 }
 
 impl<'a> BibliographyStyle<'a> for Ieee {
-    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+    fn bibliography(
+        &self,
+        db: &Database<'a>,
+        ordering: BibliographyOrdering,
+    ) -> Vec<DisplayReference<'a>> {
         let mut items = vec![];
 
         for record in db.records() {
             items.push(self.get_single_record(record));
         }
 
-        match self.sort {
-            BibliographyOrdering::ByPrefix => {
-                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
-            }
-            BibliographyOrdering::ByAuthor => {
-                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
-                    author_title_ord_custom(
-                        a_ref.entry,
-                        b_ref.entry,
-                        Some(a_auths),
-                        Some(b_auths),
-                    )
-                });
-            }
-            _ => {}
-        }
-
-        items.into_iter().map(|(a, _)| a).collect()
+        sorted_bibliography(items, ordering)
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
         self.get_single_record(record).0
+    }
+
+    fn ordering(&self) -> BibliographyOrdering {
+        BibliographyOrdering::ByPrefix
     }
 }

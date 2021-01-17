@@ -312,8 +312,7 @@ fn main() {
                 database.push(entry);
             }
 
-            let rows = database.bibliography(&*style);
-
+            let rows = database.bibliography(&*style, None);
             for row in rows {
                 if matches.is_present("no-fmt") {
                     println!("{:#}", row.display);

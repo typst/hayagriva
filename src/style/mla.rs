@@ -1,8 +1,8 @@
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{
-    abbreviate_publisher, alph_designator, author_title_ord_custom, format_range,
-    offset_format_range, BibliographyOrdering, BibliographyStyle, Database,
+    abbreviate_publisher, alph_designator, format_range, offset_format_range,
+    sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::{en, TitleCase};
@@ -22,8 +22,6 @@ pub struct Mla {
     /// Forces all dates to be printed if true. Otherwise,
     /// only the most top-level date field will be printed.
     pub always_print_date: bool,
-    /// How to sort the bibliography.
-    pub sort: BibliographyOrdering,
 }
 
 struct ContainerInfo {
@@ -183,7 +181,6 @@ impl Mla {
             title_case,
             always_use_location: false,
             always_print_date: false,
-            sort: BibliographyOrdering::ByAuthor,
         }
     }
 
@@ -792,7 +789,11 @@ impl Mla {
 }
 
 impl<'a> BibliographyStyle<'a> for Mla {
-    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+    fn bibliography(
+        &self,
+        db: &Database<'a>,
+        ordering: BibliographyOrdering,
+    ) -> Vec<DisplayReference<'a>> {
         let mut items = vec![];
 
         for i in 0 .. db.records.len() {
@@ -805,27 +806,14 @@ impl<'a> BibliographyStyle<'a> for Mla {
             items.push(self.get_single_record(record, last_record))
         }
 
-        match self.sort {
-            BibliographyOrdering::ByPrefix => {
-                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
-            }
-            BibliographyOrdering::ByAuthor => {
-                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
-                    author_title_ord_custom(
-                        a_ref.entry,
-                        b_ref.entry,
-                        Some(a_auths),
-                        Some(b_auths),
-                    )
-                });
-            }
-            _ => {}
-        }
-
-        items.into_iter().map(|(a, _)| a).collect()
+        sorted_bibliography(items, ordering)
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
         self.get_single_record(record, None).0
+    }
+
+    fn ordering(&self) -> BibliographyOrdering {
+        BibliographyOrdering::ByAuthor
     }
 }

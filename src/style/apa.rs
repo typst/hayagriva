@@ -1,6 +1,6 @@
 use super::{
-    alph_designator, author_title_ord_custom, delegate_titled_entry, format_range,
-    name_list, name_list_straight, BibliographyOrdering, BibliographyStyle, Database,
+    alph_designator, delegate_titled_entry, format_range, name_list, name_list_straight,
+    sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::en::{get_month_name, get_ordinal};
@@ -22,8 +22,6 @@ use crate::Entry;
 #[derive(Clone, Debug)]
 pub struct Apa {
     formatter: SentenceCase,
-    /// Toggles sorting the bibliography.
-    pub sort: BibliographyOrdering,
 }
 
 #[derive(Clone, Debug)]
@@ -182,10 +180,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
 impl Apa {
     /// Creates a new bibliography generator.
     pub fn new() -> Self {
-        Self {
-            formatter: SentenceCase::default(),
-            sort: BibliographyOrdering::ByInsertionOrder,
-        }
+        Self { formatter: SentenceCase::default() }
     }
 
     fn get_author(&self, entry: &Entry) -> (String, Vec<Person>) {
@@ -1090,35 +1085,26 @@ impl Apa {
 }
 
 impl<'a> BibliographyStyle<'a> for Apa {
-    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+    fn bibliography(
+        &self,
+        db: &Database<'a>,
+        ordering: BibliographyOrdering,
+    ) -> Vec<DisplayReference<'a>> {
         let mut items = vec![];
 
         for record in db.records() {
             items.push(self.get_single_record(record));
         }
 
-        match self.sort {
-            BibliographyOrdering::ByPrefix => {
-                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
-            }
-            BibliographyOrdering::ByAuthor => {
-                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
-                    author_title_ord_custom(
-                        a_ref.entry,
-                        b_ref.entry,
-                        Some(a_auths),
-                        Some(b_auths),
-                    )
-                });
-            }
-            _ => {}
-        }
-
-        items.into_iter().map(|(a, _)| a).collect()
+        sorted_bibliography(items, ordering)
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
         self.get_single_record(record).0
+    }
+
+    fn ordering(&self) -> BibliographyOrdering {
+        BibliographyOrdering::ByInsertionOrder
     }
 }
 

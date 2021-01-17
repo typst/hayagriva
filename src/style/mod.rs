@@ -157,8 +157,7 @@ impl<'a> Database<'a> {
     /// Cite entries and format them with the given style.
     ///
     /// The `parts` are the individual cited entries in a composite citation
-    /// like "[1 p. 5, 2]". If you want to cite only one entry, you might want
-    /// to use `std::iter::once`.
+    /// like "[1 p. 5, 2]".
     ///
     /// If you cite an entry that has not yet been pushed, it is pushed for you
     /// automatically. However, some more complex citation elements may become
@@ -182,17 +181,25 @@ impl<'a> Database<'a> {
 
     /// Format a bibliography of all cited entries with the given style.
     ///
-    /// Returns the entry along with their styled reference.
-    pub fn bibliography<S>(&self, style: &S) -> Vec<DisplayReference<'a>>
+    /// The bibliography is ordered as specified by the `ordering`. If it is
+    /// `None`, the style's [default ordering](BibliographyStyle::ordering) is
+    /// applied.
+    ///
+    /// Returns the entries along with their styled references.
+    pub fn bibliography<S>(
+        &self,
+        style: &S,
+        ordering: Option<BibliographyOrdering>,
+    ) -> Vec<DisplayReference<'a>>
     where
         S: BibliographyStyle<'a> + ?Sized,
     {
-        style.bibliography(self)
+        style.bibliography(self, ordering.unwrap_or(style.ordering()))
     }
 
     /// Format a single entry for a bibliography with the given style.
     ///
-    /// Returns the entry along with their styled reference if it is present in
+    /// Returns the entry along with its styled reference if it is present in
     /// the database, otherwise the return value will be `None`.
     pub fn reference<S>(&self, style: &S, key: &str) -> Option<DisplayReference<'a>>
     where
@@ -216,21 +223,29 @@ pub trait CitationStyle<'a> {
         parts: &[Citation<'a>],
     ) -> DisplayCitation;
 
-    /// Indicates which brackets to wrap citations in if brackets are desired.
+    /// Indicates the default brackets used by this style to wrap citations.
     fn brackets(&self) -> Brackets;
 
-    /// Indicates whether citations should normally be wrapped in brackets.
+    /// Indicates whether citations should normally be wrapped in brackets in
+    /// this style.
     fn wrapped(&self) -> bool;
 }
 
 /// Provides a function to create bibliographies.
 pub trait BibliographyStyle<'a> {
+    /// Formats all records in a [`Database`] as a bibliography. This function
+    /// is best used through [`Database::bibliography`].
+    fn bibliography(
+        &self,
+        db: &Database<'a>,
+        ordering: BibliographyOrdering,
+    ) -> Vec<DisplayReference<'a>>;
+
     /// Formats a single reference from a [`Record`] as a bibliography.
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a>;
 
-    /// Formats all records in a [`Database`] as a bibliography. This function is best
-    /// used through [`Database::bibliography`].
-    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>>;
+    /// Indicates the default ordering for this style.
+    fn ordering(&self) -> BibliographyOrdering;
 }
 
 /// Describes the bracket preference of a citation style.
@@ -841,6 +856,29 @@ fn omit_initial_articles(s: &str) -> String {
     } else {
         s.to_string()
     }
+}
+
+fn sorted_bibliography(
+    mut items: Vec<(DisplayReference, Vec<Person>)>,
+    ordering: BibliographyOrdering,
+) -> Vec<DisplayReference> {
+    match ordering {
+        BibliographyOrdering::ByPrefix => {
+            items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
+        }
+        BibliographyOrdering::ByAuthor => {
+            items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
+                author_title_ord_custom(
+                    a_ref.entry,
+                    b_ref.entry,
+                    Some(a_auths),
+                    Some(b_auths),
+                )
+            });
+        }
+        _ => {}
+    }
+    items.into_iter().map(|(a, _)| a).collect()
 }
 
 fn author_title_ord(item: &Entry, other: &Entry) -> Ordering {

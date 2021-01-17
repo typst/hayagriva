@@ -351,7 +351,7 @@ mod tests {
             db.push(entry);
         }
 
-        for reference in db.bibliography(&apa) {
+        for reference in db.bibliography(&apa, None) {
             println!("{:#}", reference.display);
         }
     }
@@ -367,7 +367,7 @@ mod tests {
             db.push(entry);
         }
 
-        for reference in db.bibliography(&ieee) {
+        for reference in db.bibliography(&ieee, None) {
             println!("{:#}", reference.display);
         }
     }
@@ -383,7 +383,7 @@ mod tests {
             db.push(entry);
         }
 
-        for reference in db.bibliography(&mla) {
+        for reference in db.bibliography(&mla, None) {
             println!("{:#}", reference.display);
         }
     }
@@ -416,7 +416,7 @@ mod tests {
             db.push(entry);
         }
 
-        for reference in db.bibliography(&chicago) {
+        for reference in db.bibliography(&chicago, None) {
             println!("{:#}", reference.display);
         }
     }

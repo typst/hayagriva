@@ -6,8 +6,8 @@ use super::{
     ChicagoConfig, DateMode, Mode,
 };
 use crate::style::{
-    abbreviate_publisher, author_title_ord_custom, delegate_titled_entry, format_range,
-    push_comma_quote_aware, BibliographyOrdering, BibliographyStyle, Brackets, Citation,
+    abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
+    sorted_bibliography, BibliographyOrdering, BibliographyStyle, Brackets, Citation,
     CitationStyle, Database, DisplayCitation, DisplayReference, DisplayString,
     Formatting, Record,
 };
@@ -81,8 +81,6 @@ pub struct ChicagoNotes<'a> {
     pub style: ChicagoNoteStyle,
     /// Properties shared with the bibliography.
     common: ChicagoConfig,
-    /// How the bibliography should be sorted.
-    pub sort_bibliography: BibliographyOrdering,
 }
 
 impl<'a> Default for ChicagoNotes<'a> {
@@ -102,7 +100,6 @@ impl<'a> ChicagoNotes<'a> {
             style: ChicagoNoteStyle::default(),
             bib_format: Bibliography::new(Mode::NotesAndBibliography, common.clone()),
             common,
-            sort_bibliography: BibliographyOrdering::ByAuthor,
         }
     }
 
@@ -626,7 +623,11 @@ impl<'a> CitationStyle<'a> for ChicagoNotes<'a> {
 }
 
 impl<'a> BibliographyStyle<'a> for ChicagoNotes<'a> {
-    fn bibliography(&self, db: &Database<'a>) -> Vec<DisplayReference<'a>> {
+    fn bibliography(
+        &self,
+        db: &Database<'a>,
+        ordering: BibliographyOrdering,
+    ) -> Vec<DisplayReference<'a>> {
         let mut items = vec![];
 
         for record in db.records() {
@@ -641,24 +642,7 @@ impl<'a> BibliographyStyle<'a> for ChicagoNotes<'a> {
             ))
         }
 
-        match self.sort_bibliography {
-            BibliographyOrdering::ByPrefix => {
-                items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
-            }
-            BibliographyOrdering::ByAuthor => {
-                items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
-                    author_title_ord_custom(
-                        a_ref.entry,
-                        b_ref.entry,
-                        Some(a_auths),
-                        Some(b_auths),
-                    )
-                });
-            }
-            _ => {}
-        }
-
-        items.into_iter().map(|(a, _)| a).collect()
+        sorted_bibliography(items, ordering)
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
@@ -668,5 +652,9 @@ impl<'a> BibliographyStyle<'a> for ChicagoNotes<'a> {
             entry: record.entry,
             prefix: record.prefix.clone().map(Into::into),
         }
+    }
+
+    fn ordering(&self) -> BibliographyOrdering {
+        BibliographyOrdering::ByAuthor
     }
 }
