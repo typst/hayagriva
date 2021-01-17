@@ -222,7 +222,7 @@ impl Bibliography {
         };
 
         if !date.is_empty() && !res.is_empty() {
-            if !journal {
+            if !journal || published_entry.is_some() {
                 res.push(',');
             }
             res.push(' ');
@@ -270,7 +270,7 @@ impl Bibliography {
         res
     }
 
-    /// Format a citation as a note.
+    /// Format a reference.
     pub fn format(
         &self,
         mut entry: &Entry,

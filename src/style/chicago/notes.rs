@@ -61,6 +61,8 @@ impl Default for ChicagoNoteStyle {
 /// Bibliography:
 /// - Tolkien, J. R. R. _The Lord of the Rings._ Vol. 1. _The Fellowship of the
 ///   Ring._ London: Allen & Unwin, 1954.
+/// - Darnton, Robert. “What Is the History of Books.” _Dædalus_ 111, no. 3. MIT
+///   Press, June 1982: 65–83.
 ///
 /// # Reference
 /// See the 17th edition of the Chicago Manual of Style, Chapter 14, for details
@@ -68,8 +70,9 @@ impl Default for ChicagoNoteStyle {
 ///
 /// If you're unsure on which Chicago style to use, the manual generally
 /// recommends [_Notes and Bibliography_](ChicagoNotes) for the humanities and
-/// social sciences whereas [_Author Date_](super::author_date::ChicagoAuthorDate) is recommended
-/// for natural sciences, mathematics, and engineering.
+/// social sciences whereas [_Author
+/// Date_](super::author_date::ChicagoAuthorDate) is recommended for natural
+/// sciences, mathematics, and engineering.
 ///
 /// [Author]: ChicagoNoteStyle::Author
 /// [Short]: ChicagoNoteStyle::Short

@@ -1,3 +1,4 @@
+use en::get_ordinal;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{
@@ -11,6 +12,18 @@ use crate::Entry;
 
 /// Bibliographies following MLA guidance.
 ///
+/// # Examples
+/// - Habermas, Jürgen. _Reason and the Rationalization of Society._ Translated
+///   by Thomas McCarthy, Reprint ed., vol. 1, Beacon P, 1985. _The Theory of
+///   Communicative Action._
+/// - Moore, Edward F. “Gedanken-Experiments on Sequential Machines.” _Automata
+///   Studies,_ edited by Shannon, C. E., and McCarthy, J., vol. 34, NBS, Apr.
+///   1956. Annals of Mathematics Studies.
+/// - “Authoritative.” _Cambridge Dictionary,_
+///   https://dictionary.cambridge.org/dictionary/english/authoritative.
+///   Accessed 29 Nov. 2020.
+///
+/// # Reference
 /// See the 8th edition of the MLA Handbook for details on how the Modern
 /// Language Association advises you to format citations and bibliographies
 /// (_Works Cited_ lists).
@@ -527,8 +540,15 @@ impl Mla {
             // Version
             if let Some(edition) = entry.edition() {
                 match edition {
-                    NumOrStr::Str(i) => container.version = i.replace("revised", "rev."),
-                    NumOrStr::Number(i) => container.version = format!("{} ed.", i),
+                    NumOrStr::Str(i) => {
+                        container.version = i
+                            .replace("revised", "rev.")
+                            .replace("edition", "ed.")
+                            .replace("Edition", "ed.")
+                    }
+                    NumOrStr::Number(i) => {
+                        container.version = format!("{} ed.", get_ordinal(*i))
+                    }
                 }
             } else if let Some(serial_number) = entry.serial_number() {
                 container.version = serial_number.to_string();

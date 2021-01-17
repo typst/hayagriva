@@ -4,6 +4,142 @@
 //!
 //! The crate is intended to assist scholarly writing and reference management
 //! and can be used both through a CLI and an API.
+//!
+//! Below, there is an example of how to parse a YAML database and get a Modern
+//! Language Association-style citation.
+//!
+//! ```rust
+//! // Parse a bibliography
+//! use hayagriva::io::from_yaml_str;
+//!
+//! let yaml = r#"
+//! crazy-rich:
+//!     type: Book
+//!     title: Crazy Rich Asians
+//!     author: Kwan, Kevin
+//!     date: 2014
+//!     publisher: Anchor Books
+//!     location: New York, NY, US
+//! "#;
+//!
+//! let bib = from_yaml_str(yaml).unwrap();
+//! assert_eq!(bib[0].date().unwrap().year, 2014);
+//!
+//! // Format the reference
+//! use hayagriva::style::Database;
+//! use hayagriva::style::Mla;
+//!
+//! let db = Database::new_with_entries(bib.iter());
+//! let mut mla = Mla::new();
+//! let reference = db.bibliography(&mut mla, None);
+//! assert_eq!(reference[0].display.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
+//! // Information about the italicisation is available in `reference.display.formatting`
+//! ```
+//!
+//! Formatting for in-text citations is available through implementors of the
+//! [`style::CitationStyle`] trait whereas bibliographies can be created by
+//! [`style::BibliographyStyle`]. Both traits are used through a
+//! [`style::Database`] which provides methods to format its records as
+//! bibliographies and citations using references to implementors to these
+//! traits.
+//!
+//! If the default features are enabled, Hayagriva supports BibTeX and BibLaTeX
+//! bibliographies. You can then use [`io::from_biblatex_str`] to parse such
+//! bibliographies.
+//!
+//! Should you need more manual control, the library's native `Entry` struct
+//! also offers an implementation of the `From<biblatex::Entry>`-Trait. You will
+//! need to depend on the [biblatex](https://docs.rs/biblatex/latest/biblatex/)
+//! crate to obtain its Entry. Therefore you could also use your BibLaTeX
+//! content like this:
+//!
+//! ```ignore
+//! use hayagriva::Entry;
+//! let converted: Entry = your_biblatex_entry.into();
+//! ```
+//!
+//! If you do not need BibLaTeX compatibility, you can use Hayagriva without the
+//! default features by writing this in your `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! hayagriva = { version = "0.1", default-features = false }
+//! ```
+//!
+//! Hayagriva uses a custom selector language that enables you to filter
+//! bibliographies by type of media. For more information about selectors, refer
+//! to the [selectors.md
+//! file](https://github.com/typst/hayagriva/blob/main/docs/selectors.md). While
+//! you can parse user-defined selectors using the function `Selector::parse`,
+//! you may instead want to use the selector macro to avoid the run time cost of
+//! parsing a selector when working with constant selectors.
+//!
+//! The macro `select!` in the crate's root enables you to write selectors in a
+//! syntax very close to the parsed selectors. There are three notable
+//! differences:
+//!
+//! - Type names are case sensitive and have to start with a capital letter
+//!   since they are just variants of `types::EntryType`
+//! - Binding variables and required attributes are strings and therefore have
+//!   to be surrounded by double quotes
+//! - Any non-atomic selector (`*` or an `EntryType` variant are atomic) in
+//!   other constructions like ancestrage selectors or bindings must be in
+//!   parentheses since they have to parse as a single token tree for correct
+//!   expansion. If you get an error message along the lines of having too much
+//!   recursion, you likely forgot some parentheses.
+//!
+//! Consider these examples of selectors in both notations:
+//!
+//! ```rust
+//! use hayagriva::select;
+//! use hayagriva::Selector;
+//!
+//! // finds an article that is parented by a conference proceedings volume
+//! assert_eq!(Selector::parse("article > proceedings").unwrap(), select!(Article > Proceedings));
+//!
+//! // matches either a video or audio item or an artwork
+//! assert_eq!(Selector::parse("video | audio | artwork").unwrap(), select!(Video | Audio | Artwork));
+//!
+//! // matches anything that is parented by both a blog and a newspaper
+//! assert_eq!(Selector::parse("* > (blog | newspaper)").unwrap(), select!(* > (Blog | Newspaper)));
+//!
+//! // matches anything with a URL or a parent with a URL and binds the entry with the attribute to the variable `i`.
+//! // Note that expressions like i:*[url] do not need parentheses in the parsed selector, but they do in the macro!
+//! assert_eq!(Selector::parse("i:*[url] | (* > i:*[url])").unwrap(), select!(("i":(*["url"])) | (* > ("i":(*["url"])))));
+//! ```
+//!
+//! There are two ways to check if a selector matches an entry:
+//!
+//! ```rust
+//! use hayagriva::select;
+//! use hayagriva::io::from_yaml_str;
+//!
+//! let yaml = r#"
+//! quantized-vortex:
+//!     type: Article
+//!     author: Gross, E. P.
+//!     title: Structure of a Quantized Vortex in Boson Systems
+//!     date: 1961-05
+//!     page-range: 454-477
+//!     doi: 10.1007/BF02731494
+//!     parent:
+//!         issue: 3
+//!         volume: 20
+//!         title: Il Nuovo Cimento
+//! "#;
+//!
+//! let entries = from_yaml_str(yaml).unwrap();
+//!
+//! let journal = select!(Article > ("journal":Periodical));
+//! journal.matches(&entries[0]); // Returns a `bool`
+//! journal.apply(&entries[0]); // Returns an `Option<HashMap<String, &Entry>>` that is `Some(...)` if the selector matched
+//! ```
+//!
+//! Therefore you should use [`Selector::matches`] if you just want to know if an item
+//! matches a selector and [`Selector::apply`] to continue to work with the data from
+//! parents of a matching entry. Keep in mind that the latter function will
+//! return `Some` even if no sub-entry was bound / if the hash map is empty.
+
 
 #![warn(missing_docs)]
 

@@ -21,13 +21,22 @@ enum Uniqueness {
 
 /// Citations and bibliographies following the Chicago _Author Date_ style.
 ///
+/// # Examples
+/// - Angell, I. O., and H. J. Godwin. 1977. “On Truncatable Primes.” _Math.
+///   Comp._ 31, 265–267. https://doi.org/10.1090/S0025-5718-1977-0427213-2.
+/// - Donne, John. 1995. _The Variorum Edition of the Poetry of John Donne._
+///   Edited by Gary A. Stringer. vol. 6. _The "Anniversaries" and the "Epicedes
+///   and Obsequies",_ edited by Gary A. Stringer and Ted-Larry Pebworth.
+///   Bloomington: Indiana University Press.
+///
+/// # Reference
 /// See the 17th edition of the Chicago Manual of Style, Chapter 15, for details
 /// on how Chicago advises you to format citations and bibliographies.
 ///
 /// If you're unsure on which Chicago style to use, the manual generally
-/// recommends [_Notes and Bibliography_](super::notes::ChicagoNotes) for the humanities and
-/// social sciences whereas [_Author Date_](ChicagoAuthorDate) is recommended
-/// for natural sciences, mathematics, and engineering.
+/// recommends [_Notes and Bibliography_](super::notes::ChicagoNotes) for the
+/// humanities and social sciences whereas [_Author Date_](ChicagoAuthorDate) is
+/// recommended for natural sciences, mathematics, and engineering.
 pub struct ChicagoAuthorDate {
     /// Common config options for all chicago styles.
     /// Primarily important for works without titles.

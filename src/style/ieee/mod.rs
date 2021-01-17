@@ -15,6 +15,16 @@ use crate::Entry;
 
 /// Citations and bibliographies following IEEE guidance.
 ///
+/// # Examples
+/// - S. Mohan, C. Thirumalai, and G. Srivastava, “Effective heart disease
+///   prediction using hybrid machine learning techniques,” _IEEE Access,_ vol.
+///   7, Jun. 19, 2019, doi: 10.1109/ACCESS.2019.
+/// - R. Roundy, “Report on practices related to demand forecasting for
+///   semiconductor products,” Cornell University Operations Research and
+///   Industrial Engineering, Jul. 2001. Accessed: Jan. 7, 2021. \[Online\].
+///   Available: https://hdl.handle.net/1813/9174
+///
+/// # Reference
 /// See the following documents for details on how the Institute of Electrical
 /// and Electronics Engineers advises you to format citations and
 /// bibliographies:
@@ -34,13 +44,13 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
     let section = select!((Chapter | Scene | Web) > ("p":*));
     let anthology = select!(Anthos > ("p": Anthology));
     let entry_spec = select!(Entry > ("p":(Reference | Repository)));
-    let proceedings = select!(* > ("p":(Conference | Proceedings)));
+    let proceedings = select!(* > ("p":(Conference | Proceedings | Periodical)));
 
     section
         .apply(entry)
+        .or_else(|| proceedings.apply(entry))
         .or_else(|| anthology.apply(entry))
         .or_else(|| entry_spec.apply(entry))
-        .or_else(|| proceedings.apply(entry))
         .and_then(|mut bindings| bindings.remove("p"))
 }
 
@@ -320,6 +330,7 @@ impl Ieee {
             select!((Article | Book | Anthos) > ("p": Repository)).apply(entry);
         let web_parented = select!(* > ("p":(Blog | Web))).apply(entry);
 
+        println!("e: {}, c: {}", entry.entry_type, canonical.entry_type);
         match (entry.entry_type, canonical.entry_type) {
             (_, Conference) | (_, Proceedings) => {
                 if canonical.entry_type == Proceedings {

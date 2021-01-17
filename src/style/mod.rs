@@ -138,6 +138,19 @@ impl<'a> Database<'a> {
         Self { records: LinkedHashMap::new() }
     }
 
+    /// Create a new database from a collection of entries.
+    ///
+    /// A word of caution on entries that are added here but not cited
+    /// can be found in [`Self::push`]. All items included here will appear
+    /// in the bibliography.
+    pub fn new_with_entries(entries: impl IntoIterator<Item = &'a Entry>) -> Self {
+        let mut res = Self::new();
+        for entry in entries {
+            res.push(entry);
+        }
+        res
+    }
+
     /// Push an entry into the database, making it part of the resulting
     /// bibliography.
     ///
