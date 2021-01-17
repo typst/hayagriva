@@ -1,5 +1,5 @@
-use std::fs::{read_to_string, OpenOptions};
-use std::io::{ErrorKind as IoErrorKind, Write};
+use std::fs::read_to_string;
+use std::io::ErrorKind as IoErrorKind;
 use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
@@ -8,8 +8,8 @@ use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
 use strum::{EnumVariantNames, VariantNames};
 
 use hayagriva::style::{
-    Apa, AuthorTitle, BibliographyStyle, ChicagoAuthorDate, ChicagoNotes, Citation,
-    CitationStyle as UsableCitationStyle, Database, Ieee, Mla,
+    Apa, AuthorTitle, BibliographyStyle as UsableBibliographyStyle, ChicagoAuthorDate,
+    ChicagoNotes, Citation, CitationStyle as UsableCitationStyle, Database, Ieee, Mla,
 };
 use hayagriva::Selector;
 use hayagriva::{
@@ -44,7 +44,7 @@ impl FromStr for Format {
 
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
-pub enum Style {
+pub enum BibliographyStyle {
     Chicago,
     ChicagoAuthorDate,
     Mla,
@@ -52,16 +52,18 @@ pub enum Style {
     Ieee,
 }
 
-impl FromStr for Style {
+impl FromStr for BibliographyStyle {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, &'static str> {
         match s.to_ascii_lowercase().as_ref() {
-            "chicago" | "chicago-bibliography" => Ok(Style::Chicago),
-            "chicago-author-date" | "author-date" => Ok(Style::ChicagoAuthorDate),
-            "mla" => Ok(Style::Mla),
-            "apa" => Ok(Style::Apa),
-            "ieee" => Ok(Style::Ieee),
+            "chicago" | "chicago-bibliography" => Ok(BibliographyStyle::Chicago),
+            "chicago-author-date" | "author-date" => {
+                Ok(BibliographyStyle::ChicagoAuthorDate)
+            }
+            "mla" => Ok(BibliographyStyle::Mla),
+            "apa" => Ok(BibliographyStyle::Apa),
+            "ieee" => Ok(BibliographyStyle::Ieee),
             _ => Err("unknown style"),
         }
     }
@@ -83,9 +85,11 @@ impl FromStr for CitationStyle {
     fn from_str(s: &str) -> Result<Self, &'static str> {
         match s.to_ascii_lowercase().as_ref() {
             "author-date" | "author-year" => Ok(CitationStyle::AuthorDate),
-            "note" | "chicago-note" | "chicago" => Ok(CitationStyle::ChicagoNote),
-            "alphabetic" | "alpha" | "alphabetical" => Ok(CitationStyle::Alphanumerical),
+            "chicago-note" | "note" | "chicago" => Ok(CitationStyle::ChicagoNote),
+            "alphanumerical" | "alphanumeric" | "alphabetical" | "alphabetic"
+            | "alpha" => Ok(CitationStyle::Alphanumerical),
             "author-title" => Ok(CitationStyle::AuthorTitle),
+            "numerical" | "numeric" => Ok(CitationStyle::Numerical),
             _ => Err("unknown style"),
         }
     }
@@ -97,61 +101,57 @@ fn main() {
         .version(crate_version!())
         .author("The Typst Project Developers <hi@typst.app>")
         .setting(AppSettings::VersionlessSubcommands)
-        .about("Output appropriate references and citations for your YAML-encoded bibliography database. Query the database for various source types with selectors.")
+        .about("Format references and citations for your YAML-encoded or BibLaTeX bibliography files and query bibliographies using selectors.")
         .arg(
-            Arg::with_name("INPUT").help("Sets the bibliography to use").required(true).index(1)
+            Arg::with_name("INPUT")
+                .help("Sets the bibliography file to use")
+                .required(true)
+                .index(1)
         ).arg(
             Arg::with_name("format")
                 .long("format")
-                .short("f")
                 .help("What input file format to expect")
                 .possible_values(&Format::VARIANTS)
                 .case_insensitive(true)
-                .takes_value(true),
+                .takes_value(true)
+                .global(true),
         ).arg(
             Arg::with_name("selector")
                 .long("select")
-                .help("Filter your bibliography using selectors")
+                .help("Filter the bibliography using selectors")
                 .takes_value(true)
+                .global(true)
         )
         .arg(
             Arg::with_name("key")
                 .long("key")
                 .short("k")
-                .help("Filter the database using a comma-separated list of keys")
+                .help("Filter the bibliography using a comma-separated list of keys")
                 .takes_value(true)
+                .global(true)
+        )
+        .arg(
+            Arg::with_name("show-keys")
+                .long("show-keys")
+                .help("Show the keys of all filtered entries")
+                .global(true)
+        )
+        .arg(
+            Arg::with_name("show-bound")
+                .long("show-bound")
+                .help("Show the bound entries of your selector for each key")
+                .global(true)
         )
         .arg(
             Arg::with_name("no-fmt")
                 .long("no-fmt")
-                .help("Suppress the formatting of the output with ANSI / VT100 character sequences")
+                .short("n")
+                .help("Suppress the formatting of output with ANSI / VT100 character sequences")
+                .global(true)
         )
         .subcommand(
-            SubCommand::with_name("reference")
-                .about("Create references for your Bibliography / Works Cited listing")
-                .arg(
-                    Arg::with_name("style")
-                        .long("style")
-                        .short("s")
-                        .help("Set the referencing style")
-                        .possible_values(&Style::VARIANTS)
-                        .case_insensitive(true)
-                        .takes_value(true)
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("keys")
-                .about("Show the selected keys and, optionally, the parents bound by your selector")
-                .arg(
-                    Arg::with_name("bindings")
-                        .long("show-bound")
-                        .short("b")
-                        .help("Show the parents that were bound by your selector")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("citation")
-                .about("Get pointers to your sources for use in your text")
+            SubCommand::with_name("cite")
+                .about("Format citations for all filtered entries")
                 .arg(
                     Arg::with_name("style")
                         .long("style")
@@ -162,9 +162,9 @@ fn main() {
                         .takes_value(true)
                 )
                 .arg(
-                    Arg::with_name("supplement")
-                        .long("supplement")
-                        .help("Specify some information for the citation, e.g. \"p. 6\", in a comma-seperated list.")
+                    Arg::with_name("supplements")
+                        .long("supplements")
+                        .help("Specify additional information for the citations, e.g. \"p. 6,p. 4\", in a comma-seperated list.")
                         .takes_value(true)
                 )
                 .arg(
@@ -174,25 +174,22 @@ fn main() {
                         .help("Combine all keys into one citation (ignored for Chicago Notes)")
                 )
                 .arg(
-                    Arg::with_name("no-prepopulate")
-                        .long("no-prepopulate")
-                        .help("Whether the database should be prepared with all selected entries or be built as we go")
+                    Arg::with_name("unpredictive")
+                        .long("unpredictive")
+                        .help("Do not prepare the database with all selected entries, but build it as we go")
                 )
         )
         .subcommand(
-            SubCommand::with_name("dump")
-                .about("Get a bibliography file with your selected entries. This can also be used to convert a BibTeX file to the YAML database format.")
+            SubCommand::with_name("reference")
+                .about("Format a bibliography of all filtered entries")
                 .arg(
-                    Arg::with_name("output")
-                        .long("output")
-                        .short("o")
-                        .help("Save the file at a path instead of writing to the terminal")
+                    Arg::with_name("style")
+                        .long("style")
+                        .short("s")
+                        .help("Set the referencing style")
+                        .possible_values(&BibliographyStyle::VARIANTS)
+                        .case_insensitive(true)
                         .takes_value(true)
-                )
-                .arg(
-                    Arg::with_name("force")
-                        .long("force")
-                        .help("Override the output file if it already exists")
                 )
         )
         .get_matches();
@@ -224,14 +221,14 @@ fn main() {
                     exit(5);
                 } else if let Some(os) = e.raw_os_error() {
                     eprintln!(
-                        "Error when reading the bibliography file \"{}\": {}",
+                        "Error while reading the bibliography file \"{}\": {}",
                         input.display(),
                         os
                     );
                     exit(6);
                 } else {
                     eprintln!(
-                        "Error when reading the bibliography file \"{}\".",
+                        "Error while reading the bibliography file \"{}\".",
                         input.display()
                     );
                     exit(6);
@@ -248,6 +245,14 @@ fn main() {
 
     let bib_len = bibliography.len();
 
+    let selector = matches.value_of("selector").map(|src| match Selector::parse(src) {
+        Ok(selector) => selector,
+        Err(err) => {
+            eprintln!("Error while parsing selector: {}", err);
+            exit(7);
+        }
+    });
+
     let bibliography = if let Some(keys) = matches.value_of("key") {
         let mut res = vec![];
         for key in keys.split(',') {
@@ -256,55 +261,55 @@ fn main() {
             }
         }
         res
-    } else if let Some(selector) = matches.value_of("selector") {
-        let selector = Selector::parse(selector).expect("Invalid selector");
+    } else if let Some(selector) = &selector {
         bibliography.into_iter().filter(|e| selector.matches(e)).collect()
     } else {
         bibliography
     };
 
-    match matches.subcommand() {
-        ("keys", Some(sub_matches)) => {
-            println!(
-                "Selected {} of {} entries in the bibliography\n",
-                bibliography.len(),
-                bib_len
-            );
+    if matches.is_present("show-keys") || matches.is_present("show-bound") {
+        println!(
+            "Selected {} of {} entries in the bibliography\n",
+            bibliography.len(),
+            bib_len
+        );
 
-            for entry in &bibliography {
-                println!("{}", entry.key());
-                if sub_matches.is_present("bindings") {
-                    if let Some(selector) = matches.value_of("selector") {
-                        let selector =
-                            Selector::parse(selector).expect("Invalid selector");
+        for entry in &bibliography {
+            println!("{}", entry.key());
+            if matches.is_present("show-bound") {
+                if let Some(selector) = &selector {
+                    let mut style = ChicagoNotes::default();
+                    let mut database = Database::new();
 
-                        let mut style = ChicagoNotes::default();
-                        let mut database = Database::new();
-
-                        for (k, v) in selector.apply(entry).unwrap() {
-                            println!(
-                                "\t{} => [{}] {}",
-                                k,
-                                v.kind(),
-                                database
-                                    .citation(&mut style, &[Citation::new(entry, None)])
-                                    .display
-                            );
-                        }
+                    for (k, v) in selector.apply(entry).unwrap() {
+                        println!(
+                            "\t{} => [{}] {}",
+                            k,
+                            v.kind(),
+                            database
+                                .citation(&mut style, &[Citation::new(entry, None)])
+                                .display
+                        );
                     }
                 }
             }
         }
+        exit(0);
+    }
+
+    match matches.subcommand() {
         ("reference", Some(sub_matches)) => {
-            let style: Box<dyn BibliographyStyle> =
-                match value_t!(sub_matches, "style", Style)
-                    .unwrap_or_else(|_| Style::ChicagoAuthorDate)
+            let style: Box<dyn UsableBibliographyStyle> =
+                match value_t!(sub_matches, "style", BibliographyStyle)
+                    .unwrap_or_else(|_| BibliographyStyle::ChicagoAuthorDate)
                 {
-                    Style::Chicago => Box::new(ChicagoNotes::default()),
-                    Style::ChicagoAuthorDate => Box::new(ChicagoAuthorDate::default()),
-                    Style::Apa => Box::new(Apa::new()),
-                    Style::Ieee => Box::new(Ieee::new()),
-                    Style::Mla => Box::new(Mla::new()),
+                    BibliographyStyle::Chicago => Box::new(ChicagoNotes::default()),
+                    BibliographyStyle::ChicagoAuthorDate => {
+                        Box::new(ChicagoAuthorDate::default())
+                    }
+                    BibliographyStyle::Apa => Box::new(Apa::new()),
+                    BibliographyStyle::Ieee => Box::new(Ieee::new()),
+                    BibliographyStyle::Mla => Box::new(Mla::new()),
                 };
 
             let mut database = Database::new();
@@ -321,26 +326,26 @@ fn main() {
                 }
             }
         }
-        ("citation", Some(sub_matches)) => {
+        ("cite", Some(sub_matches)) => {
             let style = value_t!(sub_matches, "style", CitationStyle)
                 .unwrap_or_else(|_| CitationStyle::AuthorDate);
+
             let supplements = sub_matches
-                .value_of("supplement")
-                .map(|sup| sup.split(',').collect::<Vec<_>>())
-                .unwrap_or_default();
+                .value_of("supplements")
+                .into_iter()
+                .flat_map(|sup| sup.split(','))
+                .map(Some)
+                .chain(std::iter::repeat(None));
+
             let citations = bibliography
                 .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    let supp = supplements.get(i).cloned();
-                    Citation::new(e, supp)
-                })
+                .zip(supplements)
+                .map(|(e, s)| Citation::new(e, s))
                 .collect::<Vec<_>>();
-            let combined = sub_matches.is_present("combined");
 
             let mut database = Database::new();
 
-            if !sub_matches.is_present("no-prepopulate") {
+            if !sub_matches.is_present("unpredictive") {
                 for entry in &bibliography {
                     database.push(entry);
                 }
@@ -354,7 +359,7 @@ fn main() {
                 CitationStyle::Numerical => Box::new(Numerical::new()),
             };
 
-            let lines = if combined {
+            let lines = if sub_matches.is_present("combined") {
                 vec![database.citation(style.as_mut(), &citations)]
             } else {
                 citations
@@ -371,46 +376,9 @@ fn main() {
                 }
             }
         }
-        ("dump", Some(sub_matches)) => {
-            let bib = io::to_yaml_str(&bibliography).unwrap();
-            if let Some(path) = sub_matches.value_of("output") {
-                let options = if sub_matches.is_present("force") {
-                    OpenOptions::new().write(true).create(true).truncate(true).open(path)
-                } else {
-                    OpenOptions::new().write(true).create_new(true).open(path)
-                };
-
-                if let Err(e) = options {
-                    if e.kind() == IoErrorKind::AlreadyExists {
-                        eprintln!(
-                            "The file already exists. If you want to override its contents, add the `--force` flag."
-                        );
-                        exit(2);
-                    } else if e.kind() == IoErrorKind::PermissionDenied {
-                        eprintln!(
-                            "The permission to create the file \"{}\" was denied.",
-                            path
-                        );
-                        exit(3);
-                    } else if let Some(os) = e.raw_os_error() {
-                        eprintln!("Error when creating the file \"{}\": {}", path, os);
-                        exit(4);
-                    } else {
-                        eprintln!("Error when creating the file \"{}\".", path);
-                        exit(4);
-                    }
-                } else if let Ok(mut file) = options {
-                    file.write_all(bib.as_bytes()).unwrap();
-                }
-            } else {
-                println!("{}", bib);
-            }
-        }
         _ => {
-            eprintln!(
-                "Unknown subcommand. Try the switch `--help` to see a listing of all possible sub-commands."
-            );
-            exit(1);
+            let bib = io::to_yaml_str(&bibliography).unwrap();
+            println!("{}", bib);
         }
     }
 }

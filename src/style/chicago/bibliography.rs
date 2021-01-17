@@ -304,14 +304,12 @@ impl Bibliography {
             String::new()
         };
 
-        if !no_author {
-            if !ad_date.is_empty() {
-                if res.last() != Some('.') {
-                    res.push('.');
-                }
-                res.push(' ');
-                res += &ad_date;
+        if !no_author && !ad_date.is_empty() {
+            if res.last() != Some('.') {
+                res.push('.');
             }
+            res.push(' ');
+            res += &ad_date;
         }
 
         let dictionary = select!(Entry > ("p": Reference)).bound(entry, "p");

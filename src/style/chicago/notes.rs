@@ -80,11 +80,11 @@ impl Default for ChicagoNoteStyle {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChicagoNotes<'a> {
     cited: Vec<&'a Entry>,
-    bib_format: Bibliography,
     /// Which form of notes to produce.
     pub style: ChicagoNoteStyle,
     /// Properties shared with the bibliography.
     common: ChicagoConfig,
+    bib_format: Bibliography,
 }
 
 impl<'a> Default for ChicagoNotes<'a> {
@@ -102,8 +102,8 @@ impl<'a> ChicagoNotes<'a> {
         Self {
             cited: vec![],
             style: ChicagoNoteStyle::default(),
-            bib_format: Bibliography::new(Mode::NotesAndBibliography, common.clone()),
             common,
+            bib_format: Bibliography::new(Mode::NotesAndBibliography, common.clone()),
         }
     }
 

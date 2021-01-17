@@ -123,23 +123,25 @@ pub struct ChicagoConfig {
     pub et_al_limit: Option<usize>,
     /// When to print URL access dates.
     pub url_access_date: ChicagoAccessDateVisibility,
-    title_case: TitleCase,
-    sentence_case: SentenceCase,
+    /// The title case configuration.
+    pub title_case: TitleCase,
+    /// The sentence case configuration.
+    pub sentence_case: SentenceCase,
 }
 
 impl Default for ChicagoConfig {
     fn default() -> Self {
         Self {
-            title_case: TitleCase::new(),
-            sentence_case: SentenceCase::new(),
             et_al_limit: Some(4),
             url_access_date: ChicagoAccessDateVisibility::default(),
+            title_case: TitleCase::new(),
+            sentence_case: SentenceCase::new(),
         }
     }
 }
 
 impl ChicagoConfig {
-    /// Create a new chicago config.
+    /// Create a new chicago config with default options.
     pub fn new() -> Self {
         Self::default()
     }

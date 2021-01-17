@@ -129,7 +129,7 @@ quantized-vortex:
 "#;
 
 let entries = from_yaml_str(yaml).unwrap();
-let journal = select!(Article["date"] > ("journal":Periodical));
+let journal = select!((Article["date"]) > ("journal":Periodical));
 assert!(journal.matches(&entries[0]));
 ```
 
@@ -239,7 +239,6 @@ If you are working with BibTeX, you can use your `.bib` file with Hayagriva just
 like you would use a `.yml` file. If you want to convert your `.bib` file to a
 `.yml` file, you can run this, which will save the conversion result in the
 current working directory as `converted.yml`:
-
 ```bash
 hayagriva literature.bib dump -o converted.yml
 ```

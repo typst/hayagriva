@@ -28,14 +28,22 @@ use crate::Entry;
 /// Language Association advises you to format citations and bibliographies
 /// (_Works Cited_ lists).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Mla {
-    title_case: TitleCase,
     /// Forces location element to appear whenever given.
     /// Otherwise, location will only appear for physical items.
     pub always_use_location: bool,
     /// Forces all dates to be printed if true. Otherwise,
     /// only the most top-level date field will be printed.
     pub always_print_date: bool,
+    /// Title case configuration.
+    pub title_case: TitleCase,
+}
+
+impl Default for Mla {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

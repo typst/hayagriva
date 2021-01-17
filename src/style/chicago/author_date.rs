@@ -215,7 +215,6 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                     pos
                 };
 
-
                 let designator = alph_designator(num);
 
                 if space {

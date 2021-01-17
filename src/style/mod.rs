@@ -301,7 +301,8 @@ pub enum BibliographyOrdering {
 }
 
 /// Citations that just consist of entry keys.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Keys {}
 
 impl Keys {
@@ -346,15 +347,37 @@ impl<'a> CitationStyle<'a> for Keys {
 }
 
 /// Output IEEE-style numerical reference markers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Numerical {
     used_numbers: Vec<usize>,
+    /// Order of the numeric references.
+    ordering: NumericalOrdering,
 }
 
 impl Numerical {
     /// Creates a new instance.
-    pub fn new() -> Self {
-        Self { used_numbers: vec![] }
+    pub fn new(ordering: NumericalOrdering) -> Self {
+        Self { used_numbers: vec![], ordering }
+    }
+}
+
+/// Specify the order in which numbers are verteilt.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum NumericalOrdering {
+    /// Numbers will be ordered by entries authors, then titles, and finally
+    /// dates.
+    ///
+    /// Note that this only works if all entries were pushed into the database
+    /// before you cite anything.
+    ByAuthor,
+    /// Numbers will be in insertion order of the database.
+    ByInsertionOrder,
+}
+
+impl Default for NumericalOrdering {
+    fn default() -> Self {
+        Self::ByInsertionOrder
     }
 }
 
@@ -365,40 +388,61 @@ impl<'a> CitationStyle<'a> for Numerical {
         parts: &[Citation<'a>],
     ) -> DisplayCitation {
         let mut ids = vec![];
-        let mut sorted = db.records.clone().into_iter().collect::<Vec<_>>();
-        sorted.sort_by(|(_, v), (_, v2)| author_title_ord(v.entry, v2.entry));
-        db.records = sorted.into_iter().collect();
+        if self.ordering == NumericalOrdering::ByAuthor {
+            let mut sorted = db.records.clone().into_iter().collect::<Vec<_>>();
+            sorted.sort_by(|(_, v), (_, v2)| author_title_ord(v.entry, v2.entry));
 
-        for atomic in parts {
-            let index = db
-                .records()
-                .position(|r| r.entry == atomic.entry)
-                .expect("database record for entry has to exist at this point");
+            for atomic in parts {
+                let index = sorted
+                    .iter()
+                    .position(|(_, r)| r.entry == atomic.entry)
+                    .expect("database record for entry has to exist at this point");
 
-            let number = if let Some(prefix) = db
-                .records
-                .get(atomic.entry.key())
-                .unwrap()
-                .prefix
-                .as_ref()
-                .and_then(|p| p.parse().ok())
-            {
-                prefix
-            } else {
-                let mut counter = index;
+                let number = if let Some(prefix) = db
+                    .records
+                    .get(atomic.entry.key())
+                    .unwrap()
+                    .prefix
+                    .as_ref()
+                    .and_then(|p| p.parse().ok())
+                {
+                    prefix
+                } else {
+                    let mut counter = index;
 
-                if self.used_numbers.contains(&counter) {
-                    counter = 0;
-                }
+                    if self.used_numbers.contains(&counter) {
+                        counter = 0;
+                    }
 
-                while self.used_numbers.contains(&counter) {
-                    counter += 1;
-                }
-                self.used_numbers.push(counter);
+                    while self.used_numbers.contains(&counter) {
+                        counter += 1;
+                    }
+                    self.used_numbers.push(counter);
 
-                counter + 1
-            };
-            ids.push((number, atomic.supplement));
+                    db.records.get_mut(atomic.entry.key()).unwrap().prefix = Some((counter + 1).to_string());
+                    counter + 1
+                };
+                ids.push((number, atomic.supplement));
+            }
+        } else {
+            for atomic in parts {
+                let number = if let Some(prefix) = db
+                    .records
+                    .get(atomic.entry.key())
+                    .unwrap()
+                    .prefix
+                    .as_ref()
+                    .and_then(|p| p.parse().ok())
+                {
+                    prefix
+                } else {
+                    self.used_numbers.push(0);
+                    let n = self.used_numbers.len();
+                    db.records.get_mut(atomic.entry.key()).unwrap().prefix = Some(n.to_string());
+                    n
+                };
+                ids.push((number, atomic.supplement));
+            }
         }
 
         ids.sort_by(|(a, _), (b, _)| a.cmp(&b));
@@ -450,7 +494,7 @@ impl<'a> CitationStyle<'a> for Numerical {
             .collect::<Vec<_>>()
             .join("; ");
 
-        DisplayCitation::new(format!("[{}]", re).into(), false)
+        DisplayCitation::new(format!("{}", re).into(), false)
     }
 
     fn brackets(&self) -> Brackets {
@@ -939,16 +983,24 @@ fn author_title_ord_custom(
 /// Citations following a simple alphanumerical style.
 ///
 /// Corresponds to LaTeX's `alphabetical` style.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Alphanumerical {
-    /// How many letters to allow to describe an entry.
-    pub letters: usize,
+    letters: usize,
+}
+
+impl Default for Alphanumerical {
+    fn default() -> Self {
+        Self::new(3)
+    }
 }
 
 impl Alphanumerical {
     /// Create a new instance of this [`CitationStyle`].
-    pub fn new() -> Self {
-        Self { letters: 3 }
+    ///
+    /// The value of `letters` defined how many letters are allowed to describe
+    /// an entry.
+    pub fn new(letters: usize) -> Self {
+        Self { letters }
     }
 
     fn creators(&self, entry: &Entry) -> String {
@@ -1061,17 +1113,17 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
 }
 
 /// Citations following a Chicago-like author-title format.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AuthorTitle {
     /// This citation style uses code from Chicago, therefore the settings are
     /// contined within this struct.
-    pub config: ChicagoConfig,
+    config: ChicagoConfig,
 }
 
 impl AuthorTitle {
     /// Create a new instance of this [`CitationStyle`].
-    pub fn new() -> Self {
-        Self { config: ChicagoConfig::new() }
+    pub fn new(config: ChicagoConfig) -> Self {
+        Self { config }
     }
 
     fn creator_list(&self, entry: &Entry) -> String {

@@ -111,7 +111,7 @@ quantized-vortex:
 "#;
 
 let entries = from_yaml_str(yaml).unwrap();
-let journal = select!(Article["date"] > ("journal":Periodical));
+let journal = select!((Article["date"]) > ("journal":Periodical));
 assert!(journal.matches(&entries[0]));
 ```
 
