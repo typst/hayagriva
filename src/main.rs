@@ -373,7 +373,7 @@ fn main() {
             }
         }
         ("dump", Some(sub_matches)) => {
-            let bib = io::to_yaml_str(bibliography).unwrap();
+            let bib = io::to_yaml_str(&bibliography).unwrap();
             if let Some(path) = sub_matches.value_of("output") {
                 let options = if sub_matches.is_present("force") {
                     OpenOptions::new().write(true).create(true).truncate(true).open(path)

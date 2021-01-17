@@ -500,7 +500,7 @@ impl From<NumOrStr> for String {
 }
 
 /// A date that can be as coarse as a year and as fine-grained as a day.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Date {
     /// The year (1 B.C.E. is represented as 0 and so forth).
     pub year: i32,

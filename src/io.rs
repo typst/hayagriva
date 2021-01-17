@@ -729,94 +729,100 @@ fn entry_from_yaml(
     Ok(entry)
 }
 
-impl Into<Yaml> for Date {
-    fn into(self) -> Yaml {
-        let s = match (self.month.is_some(), self.day.is_some()) {
+impl From<Date> for Yaml {
+    fn from(date: Date) -> Self {
+        let s = match (date.month.is_some(), date.day.is_some()) {
             (true, true) => format!(
                 "{:04}-{:02}-{:02}",
-                self.year,
-                self.month.unwrap() + 1,
-                self.day.unwrap() + 1
+                date.year,
+                date.month.unwrap() + 1,
+                date.day.unwrap() + 1,
             ),
-            (true, false) => format!("{:04}-{:02}", self.year, self.month.unwrap() + 1),
-            (false, _) => return Yaml::Integer(self.year as i64),
+            (true, false) => format!("{:04}-{:02}", date.year, date.month.unwrap() + 1),
+            (false, _) => return Yaml::Integer(date.year as i64),
         };
 
         Yaml::String(s)
     }
 }
 
-impl Into<Yaml> for Duration {
-    fn into(self) -> Yaml {
-        if self.days == 0 {
-            if self.hours == 0 {
-                if self.milliseconds == 0.0 {
-                    Yaml::String(format!("{:02}:{:02}", self.minutes, self.seconds))
+impl From<Duration> for Yaml {
+    fn from(d: Duration) -> Self {
+        if d.days == 0 {
+            if d.hours == 0 {
+                if d.milliseconds == 0.0 {
+                    Yaml::String(format!("{:02}:{:02}", d.minutes, d.seconds))
                 } else {
                     Yaml::String(format!(
                         "{:02}:{:02},{:03}",
-                        self.minutes, self.seconds, self.milliseconds
+                        d.minutes, d.seconds, d.milliseconds
                     ))
                 }
             } else {
                 Yaml::String(format!(
                     "{:02}:{:02}:{:02},{:03}",
-                    self.hours, self.minutes, self.seconds, self.milliseconds
+                    d.hours, d.minutes, d.seconds, d.milliseconds
                 ))
             }
         } else {
-            if self.milliseconds == 0.0 {
+            if d.milliseconds == 0.0 {
                 Yaml::String(format!(
                     "{}:{:02}:{:02}:{:02}",
-                    self.days, self.hours, self.minutes, self.seconds
+                    d.days, d.hours, d.minutes, d.seconds
                 ))
             } else {
                 Yaml::String(format!(
                     "{}:{:02}:{:02}:{:02},{:03}",
-                    self.days, self.hours, self.minutes, self.seconds, self.milliseconds
+                    d.days, d.hours, d.minutes, d.seconds, d.milliseconds
                 ))
             }
         }
     }
 }
 
-impl Into<Yaml> for EntryType {
-    fn into(self) -> Yaml {
-        Yaml::String(self.to_string())
+impl From<EntryType> for Yaml {
+    fn from(entry_type: EntryType) -> Self {
+        Yaml::String(entry_type.to_string())
     }
 }
 
-impl Into<Yaml> for FmtString {
-    fn into(self) -> Yaml {
-        if !self.verbatim && self.title_case.is_none() && self.sentence_case.is_none() {
-            Yaml::String(self.value)
+impl From<&FmtString> for Yaml {
+    fn from(fmt: &FmtString) -> Self {
+        if !fmt.verbatim && fmt.title_case.is_none() && fmt.sentence_case.is_none() {
+            Yaml::String(fmt.value.clone())
         } else {
             let mut hm = LinkedHashMap::new();
 
-            let bt_equal = if let Some(sentence) = self.sentence_case.as_ref() {
-                self.title_case.is_none()
-                    && &SentenceCase::new().apply(&self.value) == sentence
+            let bt_equal = if let Some(sentence) = fmt.sentence_case.as_ref() {
+                fmt.title_case.is_none()
+                    && &SentenceCase::new().apply(&fmt.value) == sentence
             } else {
                 false
             };
 
-            let same = self.title_case.as_ref().map_or(true, |case| case == &self.value)
-                && self.sentence_case.as_ref().map_or(true, |case| case == &self.value);
+            let same = fmt.title_case.as_ref().map_or(true, |case| case == &fmt.value)
+                && fmt.sentence_case.as_ref().map_or(true, |case| case == &fmt.value);
 
-            hm.insert(Yaml::String("value".into()), Yaml::String(self.value));
+            hm.insert(
+                Yaml::String("value".into()),
+                Yaml::String(fmt.value.clone()),
+            );
 
-            if (self.verbatim || same) && !bt_equal {
+            if (fmt.verbatim || same) && !bt_equal {
                 hm.insert(Yaml::String("verbatim".into()), Yaml::Boolean(true));
             }
 
             if !same && !bt_equal {
-                if let Some(title) = self.title_case {
-                    hm.insert(Yaml::String("title-case".into()), Yaml::String(title));
+                if let Some(title) = &fmt.title_case {
+                    hm.insert(
+                        Yaml::String("title-case".into()),
+                        Yaml::String(title.clone()),
+                    );
                 }
-                if let Some(sentence) = self.sentence_case {
+                if let Some(sentence) = &fmt.sentence_case {
                     hm.insert(
                         Yaml::String("sentence-case".into()),
-                        Yaml::String(sentence),
+                        Yaml::String(sentence.clone()),
                     );
                 }
             }
@@ -830,45 +836,51 @@ impl Into<Yaml> for FmtString {
     }
 }
 
-impl Into<Yaml> for NumOrStr {
-    fn into(self) -> Yaml {
-        match self {
-            NumOrStr::Number(i) => Yaml::Integer(i),
-            NumOrStr::Str(s) => Yaml::String(s),
+impl From<&NumOrStr> for Yaml {
+    fn from(num_or_str: &NumOrStr) -> Self {
+        match num_or_str {
+            NumOrStr::Number(i) => Yaml::Integer(*i),
+            NumOrStr::Str(s) => Yaml::String(s.clone()),
         }
     }
 }
 
-impl Into<Yaml> for Person {
-    fn into(self) -> Yaml {
-        if let Some(alias) = self.alias {
+impl From<&Person> for Yaml {
+    fn from(person: &Person) -> Self {
+        if let Some(alias) = &person.alias {
             let mut hm = LinkedHashMap::new();
 
-            hm.insert(Yaml::String("name".into()), Yaml::String(self.name));
-            if let Some(given_name) = self.given_name {
-                hm.insert(Yaml::String("given-name".into()), Yaml::String(given_name));
+            hm.insert(
+                Yaml::String("name".into()),
+                Yaml::String(person.name.clone()),
+            );
+            if let Some(given_name) = &person.given_name {
+                hm.insert(
+                    Yaml::String("given-name".into()),
+                    Yaml::String(given_name.clone()),
+                );
             }
-            if let Some(prefix) = self.prefix {
-                hm.insert(Yaml::String("prefix".into()), Yaml::String(prefix));
+            if let Some(prefix) = &person.prefix {
+                hm.insert(Yaml::String("prefix".into()), Yaml::String(prefix.clone()));
             }
-            if let Some(suffix) = self.suffix {
-                hm.insert(Yaml::String("suffix".into()), Yaml::String(suffix));
+            if let Some(suffix) = &person.suffix {
+                hm.insert(Yaml::String("suffix".into()), Yaml::String(suffix.clone()));
             }
-            hm.insert(Yaml::String("alias".into()), Yaml::String(alias));
+            hm.insert(Yaml::String("alias".into()), Yaml::String(alias.clone()));
 
             Yaml::Hash(hm)
         } else {
-            let mut res = if let Some(prefix) = self.prefix {
-                format!("{} {}", prefix, self.name)
+            let mut res = if let Some(prefix) = &person.prefix {
+                format!("{} {}", prefix, person.name)
             } else {
-                self.name
+                person.name.clone()
             };
 
-            if let Some(gn) = self.given_name {
+            if let Some(gn) = &person.given_name {
                 res += ", ";
                 res += &gn;
 
-                if let Some(suffix) = self.suffix {
+                if let Some(suffix) = &person.suffix {
                     res += ", ";
                     res += &suffix;
                 }
@@ -879,34 +891,34 @@ impl Into<Yaml> for Person {
     }
 }
 
-impl Into<Yaml> for PersonRole {
-    fn into(self) -> Yaml {
-        Yaml::String(self.to_string())
+impl From<&PersonRole> for Yaml {
+    fn from(role: &PersonRole) -> Self {
+        Yaml::String(role.to_string())
     }
 }
 
-impl Into<Yaml> for QualifiedUrl {
-    fn into(self) -> Yaml {
-        if let Some(date) = self.visit_date {
+impl From<&QualifiedUrl> for Yaml {
+    fn from(url: &QualifiedUrl) -> Self {
+        if let Some(date) = url.visit_date {
             let mut hm = LinkedHashMap::new();
             hm.insert(
                 Yaml::String("value".into()),
-                Yaml::String(self.value.to_string()),
+                Yaml::String(url.value.to_string()),
             );
             hm.insert(Yaml::String("date".into()), date.into());
             Yaml::Hash(hm)
         } else {
-            Yaml::String(self.value.to_string())
+            Yaml::String(url.value.to_string())
         }
     }
 }
 
-impl Into<Yaml> for Title {
-    fn into(self) -> Yaml {
-        if self.translated.is_none() && self.shorthand.is_none() {
-            self.canonical.into()
+impl From<&Title> for Yaml {
+    fn from(title: &Title) -> Self {
+        if title.translated.is_none() && title.shorthand.is_none() {
+            (&title.canonical).into()
         } else {
-            let mut map = match self.canonical.into() {
+            let mut map = match (&title.canonical).into() {
                 Yaml::Hash(map) => map,
                 Yaml::String(s) => {
                     let mut map = LinkedHashMap::new();
@@ -916,11 +928,11 @@ impl Into<Yaml> for Title {
                 _ => unreachable!(),
             };
 
-            if let Some(translated) = self.translated {
+            if let Some(translated) = &title.translated {
                 map.insert(Yaml::String("translation".into()), translated.into());
             }
 
-            if let Some(shorthand) = self.shorthand {
+            if let Some(shorthand) = &title.shorthand {
                 map.insert(Yaml::String("shorthand".into()), shorthand.into());
             }
 
@@ -937,11 +949,11 @@ fn range_into_yaml(range: &std::ops::Range<i64>) -> Yaml {
     }
 }
 
-fn affiliated_into_yaml(affiliated: (Vec<Person>, PersonRole)) -> Yaml {
-    let persons = Yaml::Array(affiliated.0.into_iter().map(|p| p.into()).collect());
+fn affiliated_into_yaml(affiliated: &(Vec<Person>, PersonRole)) -> Yaml {
+    let persons = Yaml::Array(affiliated.0.iter().map(Into::into).collect());
     let mut hm = LinkedHashMap::new();
     hm.insert(Yaml::String("names".into()), persons);
-    hm.insert(Yaml::String("role".into()), affiliated.1.into());
+    hm.insert(Yaml::String("role".into()), (&affiliated.1).into());
     Yaml::Hash(hm)
 }
 
@@ -963,52 +975,50 @@ fn time_range_into_yaml(range: std::ops::Range<Duration>) -> Yaml {
     }
 }
 
-fn language_into_yaml(lang: LanguageIdentifier) -> Yaml {
+fn language_into_yaml(lang: &LanguageIdentifier) -> Yaml {
     Yaml::String(lang.to_string())
 }
 
-fn persons_into_yaml(pers: Vec<Person>) -> Yaml {
-    let mut persons: Vec<_> = pers.into_iter().map(|p| p.into()).collect();
+fn persons_into_yaml(pers: &[Person]) -> Yaml {
+    let mut persons: Vec<_> = pers.iter().map(Into::into).collect();
     match persons.len() {
         1 => persons.pop().unwrap(),
         _ => Yaml::Array(persons),
     }
 }
 
-fn affiliateds_into_yaml(pers: Vec<(Vec<Person>, PersonRole)>) -> Yaml {
-    let mut persons: Vec<_> = pers.into_iter().map(|p| affiliated_into_yaml(p)).collect();
+fn affiliateds_into_yaml(pers: &[(Vec<Person>, PersonRole)]) -> Yaml {
+    let mut persons: Vec<_> = pers.iter().map(|p| affiliated_into_yaml(p)).collect();
     match persons.len() {
         1 => persons.pop().unwrap(),
         _ => Yaml::Array(persons),
     }
 }
 
-impl Into<Yaml> for Entry {
-    fn into(self) -> Yaml {
+impl From<&Entry> for Yaml {
+    fn from(entry: &Entry) -> Self {
         let mut hm = LinkedHashMap::new();
-        hm.insert(Yaml::String("type".into()), self.kind().clone().into());
+        hm.insert(Yaml::String("type".into()), entry.kind().into());
 
-        for (s, item) in self.content {
+        for (s, item) in &entry.content {
             let content = match item {
                 Value::Title(i) => i.into(),
                 Value::FmtString(i) => i.into(),
-                Value::Text(i) => Yaml::String(i),
-                Value::Integer(i) => Yaml::Integer(i),
-                Value::Date(i) => i.into(),
+                Value::Text(i) => Yaml::String(i.clone()),
+                Value::Integer(i) => Yaml::Integer(*i),
+                Value::Date(i) => (*i).into(),
                 Value::Persons(i) => persons_into_yaml(i),
                 Value::PersonsWithRoles(i) => affiliateds_into_yaml(i),
                 Value::IntegerOrText(i) => i.into(),
-                Value::Range(i) => range_into_yaml(&i),
-                Value::Duration(i) => i.into(),
-                Value::TimeRange(i) => time_range_into_yaml(i),
+                Value::Range(i) => range_into_yaml(i),
+                Value::Duration(i) => (*i).into(),
+                Value::TimeRange(i) => time_range_into_yaml(i.clone()),
                 Value::Url(i) => i.into(),
                 Value::Language(i) => language_into_yaml(i),
-                Value::Entries(i) => {
-                    Yaml::Array(i.into_iter().map(|e| e.into()).collect())
-                }
+                Value::Entries(i) => Yaml::Array(i.into_iter().map(Into::into).collect()),
             };
 
-            hm.insert(Yaml::String(s), content);
+            hm.insert(Yaml::String(s.clone()), content);
         }
 
         Yaml::Hash(hm)
@@ -1016,7 +1026,7 @@ impl Into<Yaml> for Entry {
 }
 
 /// Serialize a bibliography into the YAML format.
-pub fn to_yaml(entries: impl IntoIterator<Item = Entry>) -> Yaml {
+pub fn to_yaml<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> Yaml {
     let mut items = LinkedHashMap::new();
     for entry in entries {
         items.insert(Yaml::String(entry.key().into()), entry.into());
@@ -1025,7 +1035,9 @@ pub fn to_yaml(entries: impl IntoIterator<Item = Entry>) -> Yaml {
 }
 
 /// Serialize a bibliography into a YAML string.
-pub fn to_yaml_str(entries: impl IntoIterator<Item = Entry>) -> Option<String> {
+///
+/// This can fail if the underlying YAML implementation fails.
+pub fn to_yaml_str<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> Option<String> {
     let mut out_str = String::new();
     let mut emitter = YamlEmitter::new(&mut out_str);
     emitter.dump(&to_yaml(entries)).ok()?;
@@ -1041,7 +1053,7 @@ mod tests {
     fn person_initials() {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
-        let yaml = to_yaml_str(entries.clone()).unwrap();
+        let yaml = to_yaml_str(&entries).unwrap();
         let reconstructed = from_yaml_str(&yaml).unwrap();
         assert_eq!(entries.len(), reconstructed.len());
 
