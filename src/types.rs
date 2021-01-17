@@ -130,7 +130,7 @@ impl Entry {
         }
 
         if let Some(alias) = &authors[user_index].alias {
-            return if alias.chars().next() == Some('@') {
+            return if alias.starts_with('@') {
                 Some(alias.clone())
             } else {
                 Some(format!("@{}", alias))
@@ -272,7 +272,7 @@ impl Person {
             return Err(PersonError::TooManyParts);
         }
 
-        let parts: Vec<&str> = parts.into_iter().map(|s| s.trim()).collect();
+        let parts: Vec<&str> = parts.iter().map(|s| s.trim()).collect();
 
         let last_pre = parts[0];
         let given_name = if parts.len() > 1 {
@@ -889,7 +889,7 @@ impl Duration {
 
         let mut hours = hours.unwrap_or_else(|| {
             let res = minutes / 60;
-            minutes = minutes % 60;
+            minutes %= 60;
             res
         });
 
@@ -899,7 +899,7 @@ impl Duration {
 
         let days = days.unwrap_or_else(|| {
             let res = hours / 24;
-            hours = hours % 24;
+            hours %= 24;
             res
         });
 
@@ -922,7 +922,7 @@ impl Duration {
         let end = caps
             .name("e")
             .map(|e| Self::from_str(e.as_str()))
-            .unwrap_or_else(|| Ok(start.clone()))?;
+            .unwrap_or_else(|| Ok(start))?;
 
         Ok(start .. end)
     }
@@ -1042,9 +1042,9 @@ mod tests {
 
     #[test]
     fn person_initials() {
-        let p = Person::from_strings(&vec!["Dissmer", "Courtney Deliah"]).unwrap();
+        let p = Person::from_strings(&["Dissmer", "Courtney Deliah"]).unwrap();
         assert_eq!("C. D.", p.initials(Some(".")).unwrap());
-        let p = Person::from_strings(&vec!["Günther", "Hans-Joseph"]).unwrap();
+        let p = Person::from_strings(&["Günther", "Hans-Joseph"]).unwrap();
         assert_eq!("H-J", p.initials(None).unwrap());
     }
 }

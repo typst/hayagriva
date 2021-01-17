@@ -79,17 +79,16 @@ impl Default for ChicagoNoteStyle {
 /// [Full]: ChicagoNoteStyle::Full
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChicagoNotes<'a> {
-    cited: Vec<&'a Entry>,
+    /// Properties shared with the bibliography.
+    pub config: ChicagoConfig,
     /// Which form of notes to produce.
     pub style: ChicagoNoteStyle,
-    /// Properties shared with the bibliography.
-    common: ChicagoConfig,
-    bib_format: Bibliography,
+    cited: Vec<&'a Entry>,
 }
 
 impl<'a> Default for ChicagoNotes<'a> {
     fn default() -> Self {
-        Self::new(ChicagoConfig::default())
+        Self::new()
     }
 }
 
@@ -98,12 +97,11 @@ impl<'a> ChicagoNotes<'a> {
     ///
     /// You can use [the default trait implementation](Self::default) to
     /// initialize with the standard configuaration.
-    pub fn new(common: ChicagoConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            cited: vec![],
+            config: ChicagoConfig::default(),
             style: ChicagoNoteStyle::default(),
-            common,
-            bib_format: Bibliography::new(Mode::NotesAndBibliography, common.clone()),
+            cited: vec![],
         }
     }
 
@@ -145,17 +143,15 @@ impl<'a> ChicagoNotes<'a> {
                         } else {
                             name
                         }
+                    } else if let Some(pseud) = p.alias {
+                        format!("{} [{}]", pseud, name)
                     } else {
-                        if let Some(pseud) = p.alias {
-                            format!("{} [{}]", pseud, name)
-                        } else {
-                            name
-                        }
+                        name
                     }
                 })
                 .collect::<Vec<_>>()
         };
-        let mut res = and_list(authors, false, self.common.et_al_limit);
+        let mut res = and_list(authors, false, self.config.et_al_limit);
 
         if !short {
             let add = match add {
@@ -172,7 +168,7 @@ impl<'a> ChicagoNotes<'a> {
             };
 
             if !add.is_empty() {
-                if !res.is_empty() && res.chars().last() != Some(',') {
+                if !res.is_empty() && !res.ends_with(',') {
                     res.push(',');
                 }
 
@@ -251,7 +247,7 @@ impl<'a> ChicagoNotes<'a> {
                 res += org;
             }
 
-            let conf_name = get_chunk_title(conf, false, false, &self.common).value;
+            let conf_name = get_chunk_title(conf, false, false, &self.config).value;
             if !conf_name.is_empty() {
                 res += ", ";
                 res += &conf_name;
@@ -280,9 +276,9 @@ impl<'a> ChicagoNotes<'a> {
                 if entry.entry_type == Reference && entry.volume().is_none() {
                     entry.authors().map(|a| {
                         and_list(
-                            a.into_iter().map(|p| p.given_first(false)),
+                            a.iter().map(|p| p.given_first(false)),
                             false,
-                            self.common.et_al_limit,
+                            self.config.et_al_limit,
                         )
                     })
                 } else {
@@ -295,7 +291,7 @@ impl<'a> ChicagoNotes<'a> {
                 res += ": ";
             }
             res += &publisher;
-        } else if let Some(creator) = web_creator(entry, false, self.common.et_al_limit) {
+        } else if let Some(creator) = web_creator(entry, false, self.config.et_al_limit) {
             if !res.is_empty() && !creator.is_empty() {
                 res += ", ";
             }
@@ -352,7 +348,7 @@ impl<'a> ChicagoNotes<'a> {
     }
 
     /// Format a citation as a note given an entry.
-    pub fn get_note(&mut self, citation: Citation<'a>) -> DisplayString {
+    fn get_note(&mut self, citation: Citation<'a>) -> DisplayString {
         let mut entry = citation.entry;
         let short = self.style == ChicagoNoteStyle::Short
             || self.style == ChicagoNoteStyle::Author
@@ -384,7 +380,7 @@ impl<'a> ChicagoNotes<'a> {
         let database = select!(Entry > ("p": Repository)).bound(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
-            let title = get_title(dictionary, short, &self.common, ',');
+            let title = get_title(dictionary, short, &self.config, ',');
             if !res.is_empty() && !title.is_empty() {
                 if res.last() != Some(',') {
                     res.push(',');
@@ -398,7 +394,7 @@ impl<'a> ChicagoNotes<'a> {
                 && self.cited.last() == Some(&entry)))
             || no_author
         {
-            let mut title = get_title(entry, short, &self.common, ',');
+            let mut title = get_title(entry, short, &self.config, ',');
             if (entry.entry_type == Case || entry.entry_type == Legislation) && !short {
                 title.clear_formatting();
             }
@@ -418,9 +414,9 @@ impl<'a> ChicagoNotes<'a> {
 
         if !short {
             let add = if no_author && dictionary.is_some() {
-                get_info_element(dictionary.unwrap(), &self.common, false)
+                get_info_element(dictionary.unwrap(), &self.config, false)
             } else {
-                get_info_element(entry, &self.common, false)
+                get_info_element(entry, &self.config, false)
             };
             if !add.is_empty() {
                 push_comma_quote_aware(&mut res.value, ',', true);
@@ -455,7 +451,7 @@ impl<'a> ChicagoNotes<'a> {
                 colon = true;
             }
         } else if database.is_some() {
-            let title = get_chunk_title(entry, true, false, &self.common).value;
+            let title = get_chunk_title(entry, true, false, &self.config).value;
             let db_entry = if title.is_empty() {
                 entry.serial_number().unwrap_or_default().into()
             } else {
@@ -470,7 +466,7 @@ impl<'a> ChicagoNotes<'a> {
         if no_author && dictionary.is_some() && entry.authors().is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
-            res += get_chunk_title(entry, false, true, &self.common);
+            res += get_chunk_title(entry, false, true, &self.config);
         }
 
         if let Some(supplement) = citation.supplement {
@@ -521,7 +517,7 @@ impl<'a> ChicagoNotes<'a> {
             } else if let Some(qurl) = entry.url_any() {
                 let mut res = DisplayString::new();
                 if let Some(date) = qurl.visit_date.as_ref() {
-                    if database.is_none() && self.common.url_access_date.needs_date(entry)
+                    if database.is_none() && self.config.url_access_date.needs_date(entry)
                     {
                         res +=
                             &format!("accessed {}, ", format_date(date, DateMode::Day));
@@ -542,12 +538,12 @@ impl<'a> ChicagoNotes<'a> {
                 }
             } else if database.is_some() {
                 let mut brack_content =
-                    get_chunk_title(entry, false, false, &self.common);
+                    get_chunk_title(entry, false, false, &self.config);
                 if let Some(sn) = entry.serial_number() {
                     push_comma_quote_aware(&mut brack_content.value, ',', true);
                     brack_content += sn;
                 }
-                if self.common.url_access_date.needs_date(entry) {
+                if self.config.url_access_date.needs_date(entry) {
                     if let Some(date) =
                         entry.url_any().and_then(|u| u.visit_date.as_ref())
                     {
@@ -565,10 +561,8 @@ impl<'a> ChicagoNotes<'a> {
                     res += brack_content;
                     res += ").";
                 }
-            } else {
-                if !url.is_empty() {
-                    push_comma_quote_aware(&mut res.value, ',', false);
-                }
+            } else if !url.is_empty() {
+                push_comma_quote_aware(&mut res.value, ',', false);
             }
 
             if !url.is_empty() && !res.is_empty() {
@@ -632,10 +626,11 @@ impl<'a> BibliographyStyle<'a> for ChicagoNotes<'a> {
         db: &Database<'a>,
         ordering: BibliographyOrdering,
     ) -> Vec<DisplayReference<'a>> {
+        let bib_format = Bibliography::new(Mode::NotesAndBibliography, self.config);
         let mut items = vec![];
 
         for record in db.records() {
-            let (bib, al) = self.bib_format.format(record.entry, record.disambiguation);
+            let (bib, al) = bib_format.format(record.entry, record.disambiguation);
             items.push((
                 DisplayReference {
                     display: bib,
@@ -650,7 +645,8 @@ impl<'a> BibliographyStyle<'a> for ChicagoNotes<'a> {
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
-        let (bib, _) = self.bib_format.format(record.entry, record.disambiguation);
+        let bib_format = Bibliography::new(Mode::NotesAndBibliography, self.config);
+        let (bib, _) = bib_format.format(record.entry, record.disambiguation);
         DisplayReference {
             display: bib,
             entry: record.entry,

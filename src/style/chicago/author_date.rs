@@ -4,11 +4,7 @@ use super::{
     and_list_opt, bibliography::Bibliography, get_chunk_title, get_creators, web_creator,
     ChicagoConfig, Mode,
 };
-use crate::style::{
-    alph_designator, sorted_bibliography, BibliographyOrdering, BibliographyStyle,
-    Brackets, Citation, CitationStyle, Database, DisplayCitation, DisplayReference,
-    DisplayString, Record,
-};
+use crate::style::{BibliographyOrdering, BibliographyStyle, Brackets, Citation, CitationStyle, Database, DisplayCitation, DisplayReference, DisplayString, Record, alph_designator, delegate_titled_entry, sorted_bibliography};
 use crate::types::EntryType::*;
 use crate::types::Person;
 
@@ -22,6 +18,11 @@ enum Uniqueness {
 /// Citations and bibliographies following the Chicago _Author Date_ style.
 ///
 /// # Examples
+/// Citations:
+/// - Angell 1997
+/// - Davidson and McKenna 2010
+///
+/// Bibliography:
 /// - Angell, I. O., and H. J. Godwin. 1977. “On Truncatable Primes.” _Math.
 ///   Comp._ 31, 265–267. https://doi.org/10.1090/S0025-5718-1977-0427213-2.
 /// - Donne, John. 1995. _The Variorum Edition of the Poetry of John Donne._
@@ -38,28 +39,27 @@ enum Uniqueness {
 /// humanities and social sciences whereas [_Author Date_](ChicagoAuthorDate) is
 /// recommended for natural sciences, mathematics, and engineering.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ChicagoAuthorDate {
     /// Common config options for all chicago styles.
     /// Primarily important for works without titles.
-    pub common: ChicagoConfig,
+    pub config: ChicagoConfig,
     /// Number of authors (equal or greater) for which the author
     /// list is truncated.
     pub et_al_limit: u8,
-    bib_format: Bibliography,
 }
 
 impl Default for ChicagoAuthorDate {
     fn default() -> Self {
-        Self::new(ChicagoConfig::default())
+        Self::new()
     }
 }
 
 impl ChicagoAuthorDate {
     /// Create a new author year citation formatter.
-    pub fn new(common: ChicagoConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            bib_format: Bibliography::new(Mode::AuthorDate, common.clone()),
-            common,
+            config: ChicagoConfig::new(),
             et_al_limit: 4,
         }
     }
@@ -94,7 +94,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
     ) -> DisplayCitation {
         let mut items: Vec<DisplayString> = vec![];
         for atomic in parts {
-            let entry = atomic.entry;
+            let entry = delegate_titled_entry(atomic.entry);
 
             let authors = get_creators(entry).0;
 
@@ -103,7 +103,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 .records()
                 .filter(|&r| {
                     r.entry.date_any().map(|d| d.year) == date.map(|d| d.year)
-                        && get_creators(r.entry).0 == authors
+                        && get_creators(r.entry).0 == authors && !authors.is_empty()
                 })
                 .collect::<Vec<_>>();
 
@@ -156,17 +156,15 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 let mut list =
                     and_list_opt(names, false, Some(self.et_al_limit.into()), et_al_auth);
 
-                if last_full {
-                    if list.chars().last() != Some('.') {
-                        list.push('.');
-                    }
+                if last_full && !list.ends_with('.') {
+                    list.push('.');
                 }
 
                 list.into()
             } else if entry.title().is_some() {
-                get_chunk_title(entry, true, true, &self.common)
+                get_chunk_title(entry, true, true, &self.config)
             } else if let Some(creator) =
-                web_creator(entry, false, self.common.et_al_limit)
+                web_creator(entry, false, self.config.et_al_limit)
             {
                 creator.into()
             } else if matches!(
@@ -179,7 +177,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                     DisplayString::new()
                 }
             } else if let Some(np) = select!(* > ("p":Newspaper)).bound(entry, "p") {
-                get_chunk_title(np, true, true, &self.common)
+                get_chunk_title(np, true, true, &self.config)
             } else {
                 DisplayString::new()
             };
@@ -225,7 +223,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
             }
 
             if let Some(supplement) = atomic.supplement {
-                if supplement.chars().last() != Some(';') {
+                if !supplement.ends_with(';') {
                     s += ", ";
                 }
 
@@ -253,10 +251,11 @@ impl<'a> BibliographyStyle<'a> for ChicagoAuthorDate {
         db: &Database<'a>,
         ordering: BibliographyOrdering,
     ) -> Vec<DisplayReference<'a>> {
+        let bib_format = Bibliography::new(Mode::AuthorDate, self.config);
         let mut items = vec![];
 
         for record in db.records() {
-            let (bib, al) = self.bib_format.format(record.entry, record.disambiguation);
+            let (bib, al) = bib_format.format(record.entry, record.disambiguation);
             items.push((
                 DisplayReference {
                     display: bib,
@@ -271,7 +270,8 @@ impl<'a> BibliographyStyle<'a> for ChicagoAuthorDate {
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
-        let (bib, _) = self.bib_format.format(record.entry, record.disambiguation);
+        let bib_format = Bibliography::new(Mode::AuthorDate, self.config);
+        let (bib, _) = bib_format.format(record.entry, record.disambiguation);
         DisplayReference {
             display: bib,
             entry: record.entry,

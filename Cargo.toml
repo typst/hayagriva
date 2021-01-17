@@ -7,8 +7,8 @@ license = "MIT OR Apache-2.0"
 description = "Work with references: Literature database management, storage, and citation formatting"
 repository = "https://github.com/typst/hayagriva"
 readme = "README.md"
-categories = ["database", "template-engine", "value-formatting"]
-keywords = ["bibtex", "bibliography", "citation", "reference", "literature"]
+categories = ["template-engine", "value-formatting", "command-line-utilities"]
+keywords = ["bibliography", "citation", "reference", "bibtex", "literature"]
 
 [features]
 default = ["biblatex"]

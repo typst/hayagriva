@@ -9,7 +9,8 @@ pub trait Case {
 }
 
 /// Rules for the title case transformation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TitleCase {
     /// Always capitalize after a full stop, question or exclamation mark, and
     /// colon even if the punctuation is followed by a word on the
@@ -192,7 +193,7 @@ impl Case for TitleCase {
         }
 
         // Deplete iterator
-        while let Some(c) = iter.next() {
+        for c in iter {
             res.push_str(&c.to_lowercase().to_string());
         }
 
@@ -201,7 +202,8 @@ impl Case for TitleCase {
 }
 
 /// Rules for the sentence case transformation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SentenceCase {
     /// Capitalize words that contain caps
     /// in a non-start position (e. g. `fahrCard`).
@@ -404,7 +406,7 @@ impl Case for SentenceCase {
         }
 
         // Deplete iterator
-        while let Some(c) = iter.next() {
+        for c in iter {
             res.push_str(&c.to_lowercase().to_string());
         }
 

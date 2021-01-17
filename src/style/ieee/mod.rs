@@ -36,10 +36,15 @@ use crate::Entry;
 /// [ref-guide]: https://ieeeauthorcenter.ieee.org/wp-content/uploads/IEEE-Reference-Guide.pdf
 /// [how-to]: https://ieee-dataport.org/sites/default/files/analysis/27/IEEE%20Citation%20Guidelines.pdf
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Ieee {
-    sentence_case: SentenceCase,
-    title_case: TitleCase,
-    et_al_threshold: Option<u32>,
+    /// The sentence case configuration. Used for paper titles etc.
+    pub sentence_case: SentenceCase,
+    /// The title case configuration. Used for journal titles etc.
+    pub title_case: TitleCase,
+    /// How many authors have to be there for their list to be abbreviated with
+    /// "et al."
+    pub et_al_threshold: Option<u32>,
 }
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
@@ -56,9 +61,8 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
         .and_then(|mut bindings| bindings.remove("p"))
 }
 
-impl Ieee {
-    /// Creates a new IEEE bibliography generator.
-    pub fn new() -> Self {
+impl Default for Ieee {
+    fn default() -> Self {
         let mut title_case = TitleCase::default();
         title_case.always_capitalize_min_len = Some(4);
         Self {
@@ -66,6 +70,13 @@ impl Ieee {
             title_case,
             et_al_threshold: Some(6),
         }
+    }
+}
+
+impl Ieee {
+    /// Creates a new IEEE bibliography generator.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     fn and_list(&self, names: Vec<String>) -> String {
@@ -162,7 +173,7 @@ impl Ieee {
             Some(names)
         } else if let Some(authors) = entry.authors().or_else(|| canonical.authors()) {
             let list = name_list_straight(&authors);
-            pers_refs.extend(authors.into_iter().cloned());
+            pers_refs.extend(authors.iter().cloned());
             Some(list)
         } else {
             None
@@ -190,7 +201,7 @@ impl Ieee {
             } else {
                 String::new()
             };
-            pers_refs.extend(eds.into_iter().cloned());
+            pers_refs.extend(eds.iter().cloned());
             res
         } else {
             String::new()
@@ -308,12 +319,10 @@ impl Ieee {
             }
 
             res.commit_formats();
-        } else {
-            if let Some(title) = entry.title() {
-                res += "“";
-                res += &title.canonical.format_sentence_case(&self.sentence_case);
-                res += ",”";
-            }
+        } else if let Some(title) = entry.title() {
+            res += "“";
+            res += &title.canonical.format_sentence_case(&self.sentence_case);
+            res += ",”";
         }
 
         res
@@ -419,10 +428,8 @@ impl Ieee {
                     if let Some(pages) = entry.page_range() {
                         res.push(format_range("p.", "pp.", &pages));
                     }
-                } else {
-                    if let Some(date) = date {
-                        res.push(format!("({})", date));
-                    }
+                } else if let Some(date) = date {
+                    res.push(format!("({})", date));
                 }
             }
             (_, Repository) => {
@@ -762,9 +769,9 @@ impl Ieee {
             .map(|s| s.unwrap())
             .collect::<Vec<_>>();
 
-        let chapter = secs.get(0).map(|c| c.clone());
+        let chapter = secs.get(0).copied();
         let section = if secs.len() > 1 {
-            secs.last().map(|c| c.clone())
+            secs.last().copied()
         } else {
             None
         };

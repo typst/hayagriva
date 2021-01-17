@@ -27,9 +27,11 @@ use crate::Entry;
 /// bibliographies.
 ///
 /// [apa]: https://apastyle.apa.org/style-grammar-guidelines/references
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Apa {
-    formatter: SentenceCase,
+    /// The configuration for sentence case formatting.
+    pub sentence_case: SentenceCase,
 }
 
 #[derive(Clone, Debug)]
@@ -188,7 +190,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
 impl Apa {
     /// Creates a new bibliography generator.
     pub fn new() -> Self {
-        Self { formatter: SentenceCase::default() }
+        Self::default()
     }
 
     fn get_author(&self, entry: &Entry) -> (String, Vec<Person>) {
@@ -254,7 +256,7 @@ impl Apa {
             Some(names)
         } else if let Some(authors) = entry.authors() {
             let list = name_list(&authors);
-            pers_refs.extend(authors.into_iter().cloned());
+            pers_refs.extend(authors.iter().cloned());
             Some(list)
         } else {
             None
@@ -298,7 +300,7 @@ impl Apa {
             } else {
                 String::new()
             };
-            pers_refs.extend(eds.into_iter().cloned());
+            pers_refs.extend(eds.iter().cloned());
             res
         } else {
             String::new()
@@ -310,7 +312,7 @@ impl Apa {
             let affs = entry
                 .affiliated_persons()
                 .unwrap_or_default()
-                .into_iter()
+                .iter()
                 .filter(|(_, role)| {
                     [
                         PersonRole::Foreword,
@@ -471,7 +473,7 @@ impl Apa {
             select!(Book | Report | Reference | Anthology | Proceedings).matches(entry);
 
         if let Some(title) = entry.title() {
-            let sent_cased = title.canonical.format_sentence_case(&self.formatter);
+            let sent_cased = title.canonical.format_sentence_case(&self.sentence_case);
             let multivol_spec = select!(
                 ((Book | Proceedings | Anthology)["volume"])
                 > ("p":(Book | Proceedings | Anthology))
@@ -499,7 +501,7 @@ impl Apa {
                         .title()
                         .unwrap()
                         .canonical
-                        .format_sentence_case(&self.formatter),
+                        .format_sentence_case(&self.sentence_case),
                     format_range("Vol.", "Vols.", &vols),
                 ));
                 new += res;
@@ -597,7 +599,7 @@ impl Apa {
             let dirs = entry
                 .affiliated_persons()
                 .unwrap_or_default()
-                .into_iter()
+                .iter()
                 .filter(|(_, role)| role == &PersonRole::Director)
                 .map(|(v, _)| v)
                 .flatten()
@@ -702,7 +704,7 @@ impl Apa {
             SourceType::PeriodicalItem(parent) => {
                 let mut comma = if let Some(title) = parent.title() {
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.formatter);
+                    res += &title.canonical.format_sentence_case(&self.sentence_case);
                     res.commit_formats();
                     true
                 } else {
@@ -761,7 +763,7 @@ impl Apa {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.formatter);
+                    res += &title.canonical.format_sentence_case(&self.sentence_case);
                     res.commit_formats();
                     comma = true;
 
@@ -823,7 +825,7 @@ impl Apa {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.formatter);
+                    res += &title.canonical.format_sentence_case(&self.sentence_case);
                     res.commit_formats();
                     comma = false;
 
@@ -932,7 +934,7 @@ impl Apa {
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {
                         res.start_format(Formatting::Italic);
-                        res += &title.format_sentence_case(&self.formatter);
+                        res += &title.format_sentence_case(&self.sentence_case);
                         res.commit_formats();
                     }
                 }
@@ -940,7 +942,7 @@ impl Apa {
             SourceType::NewsItem(parent) => {
                 let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
                     res.start_format(Formatting::Italic);
-                    res += &title.format_sentence_case(&self.formatter);
+                    res += &title.format_sentence_case(&self.sentence_case);
                     res.commit_formats();
                     true
                 } else {
@@ -957,7 +959,7 @@ impl Apa {
             }
             SourceType::ConferenceTalk(parent) => {
                 let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
-                    res += &title.format_sentence_case(&self.formatter);
+                    res += &title.format_sentence_case(&self.sentence_case);
                     true
                 } else {
                     false
@@ -1126,9 +1128,9 @@ mod tests {
     #[test]
     fn name_list() {
         let p = vec![
-            Person::from_strings(&vec!["van de Graf", "Judith"]),
-            Person::from_strings(&vec!["Günther", "Hans-Joseph"]),
-            Person::from_strings(&vec!["Mädje", "Laurenz Elias"]),
+            Person::from_strings(&["van de Graf", "Judith"]),
+            Person::from_strings(&["Günther", "Hans-Joseph"]),
+            Person::from_strings(&["Mädje", "Laurenz Elias"]),
         ]
         .into_iter()
         .map(|e| e.unwrap())

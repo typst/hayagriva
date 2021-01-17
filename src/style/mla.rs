@@ -17,8 +17,7 @@ use crate::Entry;
 ///   by Thomas McCarthy, Reprint ed., vol. 1, Beacon P, 1985. _The Theory of
 ///   Communicative Action._
 /// - Moore, Edward F. “Gedanken-Experiments on Sequential Machines.” _Automata
-///   Studies,_ edited by Shannon, C. E., and McCarthy, J., vol. 34, NBS, Apr.
-///   1956. Annals of Mathematics Studies.
+///   Studies,_ edited by Shannon, C. E., and McCarthy, J., vol. 34, NBS, Apr. 1956. Annals of Mathematics Studies.
 /// - “Authoritative.” _Cambridge Dictionary,_
 ///   https://dictionary.cambridge.org/dictionary/english/authoritative.
 ///   Accessed 29 Nov. 2020.
@@ -136,10 +135,8 @@ impl ContainerInfo {
             }
         }
         res += &self.optionals;
-        if !res.is_empty() {
-            if res.last() != Some('.') {
-                res.push('.');
-            }
+        if !res.is_empty() && res.last() != Some('.') {
+            res.push('.');
         }
 
         if res.len() < 4
@@ -313,7 +310,7 @@ impl Mla {
             (String::new(), false)
         };
         res += &if let Some(authors) = entry.authors() {
-            contribs.extend(authors.into_iter().cloned());
+            contribs.extend(authors.iter().cloned());
             if !previous && entry.entry_type == Tweet {
                 self.and_list(self.name_list(authors, Some(entry)), true)
             } else if !previous {
@@ -364,7 +361,7 @@ impl Mla {
                 if desc.is_empty() || persons.is_empty() {
                     continue;
                 }
-                contribs.extend(persons.into_iter().cloned());
+                contribs.extend(persons.iter().cloned());
 
                 if !res.is_empty() {
                     res += ", ";
@@ -384,7 +381,7 @@ impl Mla {
             } else {
                 String::new()
             };
-            contribs.extend(eds.into_iter().cloned());
+            contribs.extend(eds.iter().cloned());
 
             res += ", editor";
             if plural {
@@ -396,7 +393,7 @@ impl Mla {
             String::new()
         };
 
-        if !res.is_empty() && res.chars().last() != Some('.') {
+        if !res.is_empty() && !res.ends_with('.') {
             res.push('.');
         }
         (res, contribs)

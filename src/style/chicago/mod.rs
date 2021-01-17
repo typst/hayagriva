@@ -116,7 +116,7 @@ fn is_formally_published(entry: &Entry) -> bool {
 }
 
 /// Common configuration options for the Chicago styles.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChicagoConfig {
     /// If there is greater or equal to this number of authors, they will be
     /// abbreviated using et. al. after the first name.
@@ -312,7 +312,7 @@ fn get_title(
             if parent.authors().is_none() {
                 if let Some(eds) = parent.editors() {
                     let ed_names =
-                        eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
+                        eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
                     let mut local =
                         if ed_names.len() > 1 { "eds. " } else { "ed. " }.to_string();
@@ -383,17 +383,15 @@ pub(super) fn get_chunk_title(
                 title.format_title_case(&common.title_case)
             };
         }
-    } else {
-        if let Some(title) = entry.title() {
-            let tc = title.canonical.format_title_case(&common.title_case);
-            res += &if entry.entry_type == Entry {
-                title.canonical.value.clone()
-            } else if entry.entry_type == Case {
-                tc.replace("V.", "v.")
-            } else {
-                tc
-            };
-        }
+    } else if let Some(title) = entry.title() {
+        let tc = title.canonical.format_title_case(&common.title_case);
+        res += &if entry.entry_type == Entry {
+            title.canonical.value.clone()
+        } else if entry.entry_type == Case {
+            tc.replace("V.", "v.")
+        } else {
+            tc
+        };
     }
 
     if np {
@@ -626,13 +624,11 @@ fn get_info_element(
 
         if orig_entry.authors().is_some() && ed_match != edited_book {
             let ed_names =
-                eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
+                eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
             let mut local = if capitals && ed_match != Some(orig_entry) {
                 "Edited by "
-            } else {
-                if ed_names.len() > 1 { "eds. " } else { "ed. " }
-            }
+            } else if ed_names.len() > 1 { "eds. " } else { "ed. " }
             .to_string();
 
             local += &and_list(ed_names, false, common.et_al_limit);
@@ -716,9 +712,7 @@ fn get_info_element(
 
             let mut local = if capitals {
                 "Compiled by "
-            } else {
-                if comp_names.len() > 1 { "comps. " } else { "comp. " }
-            }
+            } else if comp_names.len() > 1 { "comps. " } else { "comp. " }
             .to_string();
 
             local += &and_list(comp_names, false, common.et_al_limit);
@@ -786,13 +780,11 @@ fn get_info_element(
                 push_comma_quote_aware(&mut title.value, ',', true);
                 title.commit_formats();
                 let ed_names =
-                    eds.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
+                    eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
                 let mut local = if capitals {
                     "edited by "
-                } else {
-                    if ed_names.len() > 1 { "eds. " } else { "ed. " }
-                }
+                } else if ed_names.len() > 1 { "eds. " } else { "ed. " }
                 .to_string();
 
                 local += &and_list(ed_names, false, common.et_al_limit);

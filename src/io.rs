@@ -386,8 +386,7 @@ fn affiliated_from_yaml(
             })
         })?;
 
-    let role = PersonRole::from_str(&role.to_lowercase())
-        .unwrap_or_else(|_| PersonRole::Unknown(role));
+    let role = PersonRole::from_str(&role.to_lowercase()).unwrap_or(PersonRole::Unknown(role));
 
     Ok((persons, role))
 }
@@ -764,18 +763,16 @@ impl From<Duration> for Yaml {
                     d.hours, d.minutes, d.seconds, d.milliseconds
                 ))
             }
+        } else if d.milliseconds == 0.0 {
+            Yaml::String(format!(
+                "{}:{:02}:{:02}:{:02}",
+                d.days, d.hours, d.minutes, d.seconds
+            ))
         } else {
-            if d.milliseconds == 0.0 {
-                Yaml::String(format!(
-                    "{}:{:02}:{:02}:{:02}",
-                    d.days, d.hours, d.minutes, d.seconds
-                ))
-            } else {
-                Yaml::String(format!(
-                    "{}:{:02}:{:02}:{:02},{:03}",
-                    d.days, d.hours, d.minutes, d.seconds, d.milliseconds
-                ))
-            }
+            Yaml::String(format!(
+                "{}:{:02}:{:02}:{:02},{:03}",
+                d.days, d.hours, d.minutes, d.seconds, d.milliseconds
+            ))
         }
     }
 }
@@ -1015,7 +1012,7 @@ impl From<&Entry> for Yaml {
                 Value::TimeRange(i) => time_range_into_yaml(i.clone()),
                 Value::Url(i) => i.into(),
                 Value::Language(i) => language_into_yaml(i),
-                Value::Entries(i) => Yaml::Array(i.into_iter().map(Into::into).collect()),
+                Value::Entries(i) => Yaml::Array(i.iter().map(Into::into).collect()),
             };
 
             hm.insert(Yaml::String(s.clone()), content);

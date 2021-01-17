@@ -224,27 +224,25 @@ impl From<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Introduction));
         }
 
-        if let Some(title) = entry.title().map(|a| Title::new(a)) {
+        if let Some(title) = entry.title().map(Title::new) {
             item.set_title(title);
         }
 
         // NOTE: Ignoring subtitle and titleaddon for now
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(title) = entry.main_title().map(|a| Title::new(a)) {
+            if let Some(title) = entry.main_title().map(Title::new) {
                 parent.set_title(title);
             }
         }
 
         if let Some(parent) = book(&mut item, parent) {
             if entry.entry_type == tex::EntryType::Article {
-                if let Some(title) = entry.journal_title().map(|a| Title::new(a)) {
+                if let Some(title) = entry.journal_title().map(Title::new) {
                     parent.set_title(title);
                 }
-            } else {
-                if let Some(title) = entry.book_title().map(|a| Title::new(a)) {
-                    parent.set_title(title);
-                }
+            } else if let Some(title) = entry.book_title().map(Title::new) {
+                parent.set_title(title);
             }
         }
 
@@ -253,25 +251,22 @@ impl From<&tex::Entry> for Entry {
             tex::EntryType::Proceedings
                 | tex::EntryType::MvProceedings
                 | tex::EntryType::InProceedings
-        ) {
-            if entry.event_date().is_some()
+        ) && (entry.event_date().is_some()
                 || entry.eventtitle().is_some()
-                || entry.venue().is_some()
-            {
-                let mut conference = Entry::new(&entry.key, EntryType::Conference);
+                || entry.venue().is_some()) {
+            let mut conference = Entry::new(&entry.key, EntryType::Conference);
 
-                if let Some(event_date) = entry.event_date().map(|d| d.into()) {
-                    conference.set_date(event_date);
-                }
-                if let Some(title) = entry.eventtitle().map(|a| Title::new(a)) {
-                    conference.set_title(title);
-                }
-                if let Some(venue) = entry.venue().map(|d| d.into()) {
-                    conference.set_location(venue);
-                }
-
-                item.add_parent(conference);
+            if let Some(event_date) = entry.event_date().map(|d| d.into()) {
+                conference.set_date(event_date);
             }
+            if let Some(title) = entry.eventtitle().map(Title::new) {
+                conference.set_title(title);
+            }
+            if let Some(venue) = entry.venue().map(|d| d.into()) {
+                conference.set_location(venue);
+            }
+
+            item.add_parent(conference);
         }
 
         if let Some(date) = entry.date().map(|d| d.into()) {
@@ -297,7 +292,7 @@ impl From<&tex::Entry> for Entry {
                     item.set_issue(issue);
                 }
             }
-            if let Some(ititle) = entry.issue_title().map(|a| Title::new(a)) {
+            if let Some(ititle) = entry.issue_title().map(Title::new) {
                 if let Some(parent) = book(&mut item, parent) {
                     parent.set_title(ititle);
                 } else {

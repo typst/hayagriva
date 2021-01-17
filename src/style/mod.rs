@@ -301,6 +301,8 @@ pub enum BibliographyOrdering {
 }
 
 /// Citations that just consist of entry keys.
+///
+/// The entry with the key "lit" would yield the result **lit**.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Keys {}
@@ -347,17 +349,19 @@ impl<'a> CitationStyle<'a> for Keys {
 }
 
 /// Output IEEE-style numerical reference markers.
+///
+/// An example would be 1 or 3-7; 9.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Numerical {
     used_numbers: Vec<usize>,
     /// Order of the numeric references.
-    ordering: NumericalOrdering,
+    pub ordering: NumericalOrdering,
 }
 
 impl Numerical {
     /// Creates a new instance.
-    pub fn new(ordering: NumericalOrdering) -> Self {
-        Self { used_numbers: vec![], ordering }
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -494,7 +498,7 @@ impl<'a> CitationStyle<'a> for Numerical {
             .collect::<Vec<_>>()
             .join("; ");
 
-        DisplayCitation::new(format!("{}", re).into(), false)
+        DisplayCitation::new(re.into(), false)
     }
 
     fn brackets(&self) -> Brackets {
@@ -691,7 +695,7 @@ impl DisplayString {
             let min = item.0.start;
             let max = item.0.end;
 
-            start_end.push((opt.clone(), min, false));
+            start_end.push((opt, min, false));
             start_end.push((opt, max, true));
         }
 
@@ -820,14 +824,12 @@ fn push_comma_quote_aware(s: &mut String, comma: char, space: bool) {
     let cur_len = s.len();
     if cur_len > 3 && s.is_char_boundary(cur_len - 3) && &s[cur_len - 3 ..] == "”" {
         s.truncate(cur_len - 3);
-        if s.chars().last() != Some(comma) {
+        if !s.ends_with(comma) {
             s.push(comma);
-            s.push_str("”");
+            s.push('”');
         }
-    } else if !s.is_empty() {
-        if s.chars().last() != Some(comma) {
-            s.push(comma);
-        }
+    } else if !s.is_empty() && !s.ends_with(comma) {
+        s.push(comma);
     }
 
     if space && !s.is_empty() {
@@ -982,25 +984,25 @@ fn author_title_ord_custom(
 
 /// Citations following a simple alphanumerical style.
 ///
+/// For example, the output could be Rass97 or MKG+21. \
 /// Corresponds to LaTeX's `alphabetical` style.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Alphanumerical {
-    letters: usize,
+    /// Defines how many letters are allowed to describe an entry.
+    pub letters: usize,
 }
 
 impl Default for Alphanumerical {
     fn default() -> Self {
-        Self::new(3)
+        Self::new()
     }
 }
 
 impl Alphanumerical {
     /// Create a new instance of this [`CitationStyle`].
-    ///
-    /// The value of `letters` defined how many letters are allowed to describe
-    /// an entry.
-    pub fn new(letters: usize) -> Self {
-        Self { letters }
+    pub fn new() -> Self {
+        Self { letters: 3 }
     }
 
     fn creators(&self, entry: &Entry) -> String {
@@ -1071,7 +1073,7 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
                 res += year;
             }
 
-            if !db.records.get(atomic.entry.key()).unwrap().disambiguation.is_none() {
+            if db.records.get(atomic.entry.key()).unwrap().disambiguation.is_some() {
                 if let Some(num) =
                     db.records.get(atomic.entry.key()).unwrap().disambiguation
                 {
@@ -1113,17 +1115,20 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
 }
 
 /// Citations following a Chicago-like author-title format.
+///
+/// Results could look like this: Prokopov, “It Is Fast or It Is Wrong”.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AuthorTitle {
     /// This citation style uses code from Chicago, therefore the settings are
     /// contined within this struct.
-    config: ChicagoConfig,
+    pub config: ChicagoConfig,
 }
 
 impl AuthorTitle {
     /// Create a new instance of this [`CitationStyle`].
-    pub fn new(config: ChicagoConfig) -> Self {
-        Self { config }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     fn creator_list(&self, entry: &Entry) -> String {

@@ -319,7 +319,7 @@ impl Entry {
         self.date().or_else(|| {
             self.parents()
                 .into_iter()
-                .flat_map(|v| v)
+                .flatten()
                 .filter_map(|p| p.date_any())
                 .next()
         })
@@ -343,8 +343,7 @@ impl Entry {
     /// Get and parse the `page-total` field, falling back on `page-range` if
     /// not specified.
     pub fn page_total(&self) -> Option<i64> {
-        self.get("page-total")
-            .map(|ft| ft.clone())
+        self.get("page-total").cloned()
             .or_else(|| self.page_range().map(|r| Value::from(r.end - r.start)))
             .map(|item| i64::try_from(item).unwrap())
     }
@@ -355,8 +354,7 @@ impl Entry {
     /// Get and parse the `runtime` field, falling back on `time-range` if not
     /// specified.
     pub fn runtime(&self) -> Option<Duration> {
-        self.get("runtime")
-            .map(|ft| ft.clone())
+        self.get("runtime").cloned()
             .or_else(|| self.time_range().map(|r| Value::from(r.end - r.start)))
             .map(|item| Duration::try_from(item).unwrap())
     }
@@ -369,7 +367,7 @@ impl Entry {
         self.url().or_else(|| {
             self.parents()
                 .into_iter()
-                .flat_map(|v| v)
+                .flatten()
                 .filter_map(|p| p.url_any())
                 .next()
         })
@@ -394,7 +392,7 @@ impl Entry {
     pub(crate) fn affiliated_with_role(&self, role: PersonRole) -> Vec<Person> {
         self.affiliated_persons()
             .into_iter()
-            .flat_map(|affiliated| affiliated)
+            .flatten()
             .filter_map(|(persons, r)| if r == &role { Some(persons) } else { None })
             .flatten()
             .cloned()

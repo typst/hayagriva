@@ -19,15 +19,15 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Bibliography {
     /// Properties shared with the bibliography.
-    pub common: ChicagoConfig,
+    pub config: ChicagoConfig,
     /// Selects the bibliography mode.
     pub mode: Mode,
 }
 
 impl Bibliography {
     /// Create a new Bibliography.
-    pub fn new(mode: Mode, common: ChicagoConfig) -> Self {
-        Self { common, mode }
+    pub fn new(mode: Mode, config: ChicagoConfig) -> Self {
+        Self { config, mode }
     }
 
     fn get_author(&self, entry: &Entry) -> String {
@@ -49,15 +49,13 @@ impl Bibliography {
                 } else {
                     name
                 }
+            } else if let Some(pseud) = p.alias {
+                format!("{} [{}]", pseud, name)
             } else {
-                if let Some(pseud) = p.alias {
-                    format!("{} [{}]", pseud, name)
-                } else {
-                    name
-                }
+                name
             }
         });
-        let mut res = and_list(authors, true, self.common.et_al_limit);
+        let mut res = and_list(authors, true, self.config.et_al_limit);
 
         let add = match add {
             AuthorRole::Editor if count > 1 => "eds.",
@@ -73,7 +71,7 @@ impl Bibliography {
         };
 
         if !add.is_empty() {
-            if !res.is_empty() && res.chars().last() != Some(',') {
+            if !res.is_empty() && !res.ends_with(',') {
                 res.push(',');
             }
 
@@ -82,7 +80,7 @@ impl Bibliography {
         }
 
         if res.is_empty() {
-            if let Some(creator) = web_creator(entry, true, self.common.et_al_limit) {
+            if let Some(creator) = web_creator(entry, true, self.config.et_al_limit) {
                 res += &creator;
             } else if self.mode == Mode::AuthorDate
                 && matches!(
@@ -91,7 +89,7 @@ impl Bibliography {
                 )
             {
                 if let Some(org) = entry.organization() {
-                    res += org.into()
+                    res += org
                 }
             }
         }
@@ -108,7 +106,7 @@ impl Bibliography {
         };
 
         let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
-        if !conference.is_some() {
+        if conference.is_none() {
             if let Some(loc) = entry
                 .location()
                 .or_else(|| published_entry.and_then(|e| e.location()))
@@ -160,7 +158,7 @@ impl Bibliography {
         } else if entry.entry_type == Artwork {
             // Intentionally empty: We do the publisher stuff later
         } else if let Some(conf) = conference {
-            let conf_name = get_chunk_title(conf, false, false, &self.common).value;
+            let conf_name = get_chunk_title(conf, false, false, &self.config).value;
             if !conf_name.is_empty() {
                 res += "Conference Presentation at ";
                 res += &conf_name;
@@ -196,9 +194,9 @@ impl Bibliography {
                 if entry.entry_type == Reference && entry.volume().is_none() {
                     entry.authors().map(|a| {
                         and_list(
-                            a.into_iter().map(|p| p.given_first(false)),
+                            a.iter().map(|p| p.given_first(false)),
                             false,
-                            self.common.et_al_limit,
+                            self.config.et_al_limit,
                         )
                     })
                 } else {
@@ -291,7 +289,7 @@ impl Bibliography {
         let no_author = res.is_empty();
 
         let ad_date = if self.mode == Mode::AuthorDate {
-            let designator = num.map(|pos| alph_designator(pos));
+            let designator = num.map(alph_designator);
             let mut date = String::new();
 
             date += &entry_date(entry, true);
@@ -316,7 +314,7 @@ impl Bibliography {
         let database = select!(Entry > ("p": Repository)).bound(entry, "p");
         if (no_author && dictionary.is_some()) || database.is_some() {
             let dictionary = dictionary.or(database).unwrap();
-            let title = get_title(dictionary, false, &self.common, '.');
+            let title = get_title(dictionary, false, &self.config, '.');
             if !res.is_empty() && !title.is_empty() {
                 if res.last() != Some(',') {
                     res.push(',');
@@ -326,7 +324,7 @@ impl Bibliography {
             }
             res += title;
         } else {
-            let mut title = get_title(entry, false, &self.common, '.');
+            let mut title = get_title(entry, false, &self.config, '.');
             if entry.entry_type == Case || entry.entry_type == Legislation {
                 title.clear_formatting();
             }
@@ -340,14 +338,12 @@ impl Bibliography {
             res += title;
         }
 
-        if no_author {
-            if !ad_date.is_empty() {
-                if res.last() != Some('.') {
-                    res.push('.');
-                }
-                res.push(' ');
-                res += &ad_date;
+        if no_author && !ad_date.is_empty() {
+            if res.last() != Some('.') {
+                res.push('.');
             }
+            res.push(' ');
+            res += &ad_date;
         }
 
         let mut colon = false;
@@ -355,7 +351,7 @@ impl Bibliography {
             select!((Article | Entry) > (Periodical | Newspaper)).matches(entry);
 
         let dict = if no_author { dictionary.unwrap_or(entry) } else { entry };
-        let mut add = get_info_element(dict, &self.common, true);
+        let mut add = get_info_element(dict, &self.config, true);
 
         add.value = add
             .value
@@ -387,7 +383,7 @@ impl Bibliography {
         if no_author && dictionary.is_some() && entry.authors().is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
-            res += get_chunk_title(entry, false, true, &self.common);
+            res += get_chunk_title(entry, false, true, &self.config);
         }
 
         if let Some(pr) = entry.page_range() {
@@ -426,7 +422,7 @@ impl Bibliography {
         } else if let Some(qurl) = entry.url_any() {
             let mut res = DisplayString::new();
             if let Some(date) = qurl.visit_date.as_ref() {
-                if database.is_none() && self.common.url_access_date.needs_date(entry) {
+                if database.is_none() && self.config.url_access_date.needs_date(entry) {
                     res += &format!("accessed {}, ", format_date(date, DateMode::Day));
                 }
             }
@@ -444,12 +440,12 @@ impl Bibliography {
                 res.push('.');
             }
         } else if database.is_some() {
-            let mut brack_content = get_chunk_title(entry, false, false, &self.common);
+            let mut brack_content = get_chunk_title(entry, false, false, &self.config);
             if let Some(sn) = entry.serial_number() {
                 push_comma_quote_aware(&mut brack_content.value, ',', true);
                 brack_content += sn;
             }
-            if self.common.url_access_date.needs_date(entry) {
+            if self.config.url_access_date.needs_date(entry) {
                 if let Some(date) = entry.url_any().and_then(|u| u.visit_date.as_ref()) {
                     push_comma_quote_aware(&mut brack_content.value, ';', true);
                     brack_content +=
@@ -465,10 +461,8 @@ impl Bibliography {
                 res += brack_content;
                 res += ").";
             }
-        } else {
-            if !url.is_empty() {
-                push_comma_quote_aware(&mut res.value, ',', false);
-            }
+        } else if !url.is_empty() {
+            push_comma_quote_aware(&mut res.value, ',', false);
         }
 
         if !url.is_empty() && !res.is_empty() {

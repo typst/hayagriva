@@ -206,7 +206,7 @@ impl Selector {
     ) -> Option<(HashMap<String, &'s Entry>, Vec<&'s Entry>)> {
         match self {
             Self::Wildcard => {
-                if entries.len() > 0 {
+                if !entries.is_empty() {
                     Some((HashMap::new(), entries.iter().collect()))
                 } else {
                     None
@@ -219,7 +219,7 @@ impl Selector {
                 .next(),
 
             Self::Neg(expr) => {
-                if let Some(_) = expr.apply_any(entries) {
+                if expr.apply_any(entries).is_some() {
                     None
                 } else {
                     Some((HashMap::new(), vec![]))
@@ -228,7 +228,7 @@ impl Selector {
 
             Self::Binding(binding, expr) => {
                 expr.apply_any(entries).map(|(mut bound, es)| {
-                    if es.len() >= 1 {
+                    if !es.is_empty() {
                         bound.insert(binding.to_string(), es.get(0).unwrap());
                     }
                     (bound, vec![])
@@ -237,7 +237,7 @@ impl Selector {
 
             Self::Attr(expr, attributes) => {
                 expr.apply_any(entries).and_then(|(bound, es)| {
-                    if es.len() > 0 {
+                    if !es.is_empty() {
                         if es.iter().any(|e| {
                             attributes.iter().all(|arg| e.get(arg.as_ref()).is_some())
                         }) {
