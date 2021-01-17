@@ -13,7 +13,9 @@ use crate::lang::{en, SentenceCase, TitleCase};
 use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
-/// Citations and bibliographies following IEEE guidance.
+/// Bibliographies following IEEE guidance.
+///
+/// The IEEE style is best paired with [`Numerical`](super::Numerical) citations.
 ///
 /// # Examples
 /// - S. Mohan, C. Thirumalai, and G. Srivastava, “Effective heart disease
@@ -33,7 +35,7 @@ use crate::Entry;
 ///
 /// [ref-guide]: https://ieeeauthorcenter.ieee.org/wp-content/uploads/IEEE-Reference-Guide.pdf
 /// [how-to]: https://ieee-dataport.org/sites/default/files/analysis/27/IEEE%20Citation%20Guidelines.pdf
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ieee {
     sentence_case: SentenceCase,
     title_case: TitleCase,

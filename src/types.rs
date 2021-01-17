@@ -476,7 +476,7 @@ impl PartialOrd for Person {
 }
 
 /// A value that could be either a number or a string.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NumOrStr {
     /// It's a number!
     Number(i64),
@@ -500,7 +500,7 @@ impl From<NumOrStr> for String {
 }
 
 /// A date that can be as coarse as a year and as fine-grained as a day.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Date {
     /// The year (1 B.C.E. is represented as 0 and so forth).
     pub year: i32,
@@ -615,7 +615,7 @@ impl Date {
 
 /// A string with a value and possibly user-defined overrides for various
 /// formattings.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FmtString {
     /// Canonical string value.
     pub value: String,
@@ -733,7 +733,7 @@ impl From<String> for FmtString {
 
 /// A collection of formattable strings consisting of a title, a translated
 /// title, and a shorthand.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Title {
     /// Canonical title.
     pub canonical: FmtString,
@@ -787,7 +787,7 @@ impl<'a> FmtOptionExt<'a> for Option<&'a Title> {
 }
 
 /// An URL, possibly with a last visited date.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QualifiedUrl {
     /// The [Url].
     pub value: Url,

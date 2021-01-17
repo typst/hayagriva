@@ -27,7 +27,7 @@ use crate::Entry;
 /// bibliographies.
 ///
 /// [apa]: https://apastyle.apa.org/style-grammar-guidelines/references
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Apa {
     formatter: SentenceCase,
 }

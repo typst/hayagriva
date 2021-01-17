@@ -10,7 +10,6 @@ pub use chicago::author_date::ChicagoAuthorDate;
 pub use chicago::notes::{ChicagoNoteStyle, ChicagoNotes};
 pub use chicago::{ChicagoAccessDateVisibility, ChicagoConfig};
 pub use ieee::Ieee;
-use linked_hash_map::LinkedHashMap;
 pub use mla::Mla;
 
 use std::fmt::{self, Debug, Display, Formatter, Write};
@@ -18,6 +17,7 @@ use std::ops::{Add, AddAssign};
 use std::{cmp::Ordering, convert::Into};
 
 use isolang::Language;
+use linked_hash_map::LinkedHashMap;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::types::Person;
@@ -25,6 +25,7 @@ use super::Entry;
 
 /// A database record that contains some style-set supplementary info.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Record<'a> {
     /// The entry the record is associated with.
     pub entry: &'a Entry,
@@ -34,35 +35,17 @@ pub struct Record<'a> {
     ///
     /// Often turns up as `0` becomes `a` and so forth.
     pub disambiguation: Option<usize>,
-    /// Indicates whether the entry's prefix
-    /// and disambiguation can still be changed.
-    pub pristine: bool,
 }
 
 impl<'a> Record<'a> {
-    /// Create a new database record with a prefix and a disambiguation option.
-    pub fn new(
-        entry: &'a Entry,
-        prefix: Option<String>,
-        disambiguation: Option<usize>,
-    ) -> Self {
-        Self {
-            entry,
-            prefix,
-            disambiguation,
-            pristine: true,
-        }
-    }
-
     /// Create a new database record from an entry.
     ///
     /// Will default to `None` for the `prefix` and `disambiguation` fields.
-    pub fn from_entry(entry: &'a Entry) -> Self {
+    pub(crate) fn from_entry(entry: &'a Entry) -> Self {
         Self {
             entry,
             prefix: None,
             disambiguation: None,
-            pristine: true,
         }
     }
 }
@@ -85,8 +68,8 @@ impl<'a> Citation<'a> {
 
 /// Contains the [`DisplayString`] for a citation and indicates its recommended
 /// placement within a document.
-#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DisplayCitation {
     /// The formatted citation.
     pub display: DisplayString,
@@ -104,6 +87,7 @@ impl DisplayCitation {
 /// Contains the [`DisplayString`] for a bibliography reference as well as
 /// the prefix nececcitated by any previously used citation styles and a
 /// reference to the matching [`Entry`].
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct DisplayReference<'a> {
     /// The cited entry.
@@ -126,6 +110,7 @@ impl<'a> DisplayReference<'a> {
 }
 
 /// A database of citation entries.
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Database<'a> {
     /// Records in order of insertion. Citation style might change their content.
@@ -143,7 +128,7 @@ impl<'a> Database<'a> {
     /// A word of caution on entries that are added here but not cited
     /// can be found in [`Self::push`]. All items included here will appear
     /// in the bibliography.
-    pub fn new_with_entries(entries: impl IntoIterator<Item = &'a Entry>) -> Self {
+    pub fn from_entries(entries: impl IntoIterator<Item = &'a Entry>) -> Self {
         let mut res = Self::new();
         for entry in entries {
             res.push(entry);
@@ -254,7 +239,7 @@ pub trait BibliographyStyle<'a> {
         ordering: BibliographyOrdering,
     ) -> Vec<DisplayReference<'a>>;
 
-    /// Formats a single reference from a [`Record`] as a bibliography.
+    /// Formats a single [`Record`] as a reference.
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a>;
 
     /// Indicates the default ordering for this style.
@@ -316,6 +301,7 @@ pub enum BibliographyOrdering {
 }
 
 /// Citations that just consist of entry keys.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Keys {}
 
 impl Keys {
@@ -360,6 +346,7 @@ impl<'a> CitationStyle<'a> for Keys {
 }
 
 /// Output IEEE-style numerical reference markers.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Numerical {
     used_numbers: Vec<usize>,
 }
@@ -411,7 +398,6 @@ impl<'a> CitationStyle<'a> for Numerical {
 
                 counter + 1
             };
-            db.records.get_mut(atomic.entry.key()).unwrap().pristine = false;
             ids.push((number, atomic.supplement));
         }
 
@@ -953,6 +939,7 @@ fn author_title_ord_custom(
 /// Citations following a simple alphanumerical style.
 ///
 /// Corresponds to LaTeX's `alphabetical` style.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Alphanumerical {
     /// How many letters to allow to describe an entry.
     pub letters: usize,
@@ -1032,7 +1019,7 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
                 res += year;
             }
 
-            if !db.records.get(atomic.entry.key()).unwrap().pristine {
+            if !db.records.get(atomic.entry.key()).unwrap().disambiguation.is_none() {
                 if let Some(num) =
                     db.records.get(atomic.entry.key()).unwrap().disambiguation
                 {
@@ -1056,7 +1043,6 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
             }
 
             let record = db.records.get_mut(atomic.entry.key()).unwrap();
-            record.pristine = false;
             record.prefix = Some(res.clone());
 
             items.push(res);
@@ -1075,6 +1061,7 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
 }
 
 /// Citations following a Chicago-like author-title format.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AuthorTitle {
     /// This citation style uses code from Chicago, therefore the settings are
     /// contined within this struct.

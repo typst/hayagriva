@@ -181,13 +181,13 @@ pub fn from_yaml(yaml: Yaml) -> Result<Vec<Entry>, YamlBibliographyError> {
 /// Parse a bibliography from a BibLaTeX source string.
 #[cfg(feature = "biblatex")]
 pub fn from_biblatex_str(biblatex: &str) -> Option<Vec<Entry>> {
-    Bibliography::parse(biblatex).map(from_biblatex)
+    Bibliography::parse(biblatex).map(|b| from_biblatex(&b))
 }
 
 /// Parse a bibliography from a BibLaTeX [`Bibliography`].
 #[cfg(feature = "biblatex")]
-pub fn from_biblatex(bibliography: Bibliography) -> Vec<Entry> {
-    bibliography.into_iter().map(Into::into).collect()
+pub fn from_biblatex(bibliography: &Bibliography) -> Vec<Entry> {
+    bibliography.iter().map(Into::into).collect()
 }
 
 fn yaml_hash_map_with_string_keys(

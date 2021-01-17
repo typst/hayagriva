@@ -77,6 +77,7 @@ impl Default for ChicagoNoteStyle {
 /// [Author]: ChicagoNoteStyle::Author
 /// [Short]: ChicagoNoteStyle::Short
 /// [Full]: ChicagoNoteStyle::Full
+#[derive(Clone, Debug, PartialEq)]
 pub struct ChicagoNotes<'a> {
     cited: Vec<&'a Entry>,
     bib_format: Bibliography,

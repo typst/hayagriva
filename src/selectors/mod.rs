@@ -19,6 +19,26 @@
 ///   correct expansion. If you get an error message along the lines of having
 ///   too much recursion, you likely forgot some parentheses.
 ///
+/// This example illustrates some of the differences:
+///
+/// ```rust
+/// use hayagriva::select;
+/// use hayagriva::Selector;
+///
+/// // finds an article that is parented by a conference proceedings volume
+/// assert_eq!(Selector::parse("article > proceedings").unwrap(), select!(Article > Proceedings));
+///
+/// // matches either a video or audio item or an artwork
+/// assert_eq!(Selector::parse("video | audio | artwork").unwrap(), select!(Video | Audio | Artwork));
+///
+/// // matches anything that is parented by both a blog and a newspaper
+/// assert_eq!(Selector::parse("* > (blog | newspaper)").unwrap(), select!(* > (Blog | Newspaper)));
+///
+/// // matches anything with a URL or a parent with a URL and binds the entry with the attribute to the variable `i`.
+/// // Note that expressions like i:*[url] do not need parentheses in the parsed selector, but they do in the macro!
+/// assert_eq!(Selector::parse("i:*[url] | (* > i:*[url])").unwrap(), select!(("i":(*["url"])) | (* > ("i":(*["url"])))));
+/// ```
+///
 /// [intro]: https://github.com/typst/hayagriva/blob/main/docs/selectors.md
 /// [CitStyle]: crate::style::CitationStyle
 /// [BibStlye]: crate::style::BibliographyStyle

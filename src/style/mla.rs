@@ -27,6 +27,7 @@ use crate::Entry;
 /// See the 8th edition of the MLA Handbook for details on how the Modern
 /// Language Association advises you to format citations and bibliographies
 /// (_Works Cited_ lists).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mla {
     title_case: TitleCase,
     /// Forces location element to appear whenever given.
@@ -37,6 +38,7 @@ pub struct Mla {
     pub always_print_date: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct ContainerInfo {
     title: DisplayString,
     contributors: String,

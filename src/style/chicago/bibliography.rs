@@ -16,6 +16,7 @@ use crate::Entry;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// The struct doing the formatting.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Bibliography {
     /// Properties shared with the bibliography.
     pub common: ChicagoConfig,

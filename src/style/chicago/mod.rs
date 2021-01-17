@@ -33,7 +33,7 @@ pub(crate) enum Mode {
 /// # Reference
 /// See the 17th edition of the Chicago Manual of Style, Chapter 14, Section 12,
 /// for more details.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ChicagoAccessDateVisibility {
     /// Never print access dates.
     Never,
@@ -116,7 +116,7 @@ fn is_formally_published(entry: &Entry) -> bool {
 }
 
 /// Common configuration options for the Chicago styles.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChicagoConfig {
     /// If there is greater or equal to this number of authors, they will be
     /// abbreviated using et. al. after the first name.

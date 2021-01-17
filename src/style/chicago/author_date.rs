@@ -37,6 +37,7 @@ enum Uniqueness {
 /// recommends [_Notes and Bibliography_](super::notes::ChicagoNotes) for the
 /// humanities and social sciences whereas [_Author Date_](ChicagoAuthorDate) is
 /// recommended for natural sciences, mathematics, and engineering.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChicagoAuthorDate {
     /// Common config options for all chicago styles.
     /// Primarily important for works without titles.
