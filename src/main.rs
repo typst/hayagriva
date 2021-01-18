@@ -178,6 +178,16 @@ fn main() {
                         .long("unpredictive")
                         .help("Do not prepare the database with all selected entries, but build it as we go")
                 )
+                .arg(
+                    Arg::with_name("no-brackets")
+                        .long("no-brackets")
+                        .help("Print the citation without brackets.")
+                )
+                .arg(
+                    Arg::with_name("force-brackets")
+                        .long("force-brackets")
+                        .help("Print the citation with brackets, no matter the style.")
+                )
         )
         .subcommand(
             SubCommand::with_name("reference")
@@ -368,11 +378,19 @@ fn main() {
                     .collect()
             };
 
-            for r in &lines {
-                if matches.is_present("no-fmt") {
-                    println!("{:#}", r.display);
+            for r in lines {
+                let ds = if sub_matches.is_present("no-brackets") {
+                    r.display
+                } else if sub_matches.is_present("force-brackets") {
+                    r.display.with_forced_brackets(&*style)
                 } else {
-                    println!("{}", r.display)
+                    r.display.with_default_brackets(&*style)
+                };
+
+                if matches.is_present("no-fmt") {
+                    println!("{:#}", ds);
+                } else {
+                    println!("{}", ds)
                 }
             }
         }

@@ -622,7 +622,7 @@ impl DisplayString {
     /// the citation style [typically uses brackets](CitationStyle::wrapped).
     pub fn with_default_brackets<'a, S>(self, style: &S) -> Self
     where
-        S: CitationStyle<'a>,
+        S: CitationStyle<'a> + ?Sized,
     {
         if style.wrapped() {
             style.brackets().wrap(self)
@@ -636,7 +636,7 @@ impl DisplayString {
     /// the citation style [typically uses brackets](CitationStyle::wrapped).
     pub fn with_forced_brackets<'a, S>(self, style: &S) -> Self
     where
-        S: CitationStyle<'a>,
+        S: CitationStyle<'a> + ?Sized,
     {
         style.brackets().wrap(self)
     }

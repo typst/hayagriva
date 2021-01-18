@@ -1,6 +1,9 @@
 # Hayagriva
 
 [![Build status](https://github.com/typst/hayagriva/workflows/Continuous%20integration/badge.svg)](https://github.com/typst/hayagriva/actions)
+[![Current crates.io release](https://img.shields.io/crates/v/hayagriva)](https://crates.io/crates/hayagriva)
+[![Documentation](https://img.shields.io/badge/docs.rs-hayagriva-66c2a5?labelColor=555555&logoColor=white&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxwYXRoIGZpbGw9IiNmNWY1ZjUiIGQ9Ik00ODguNiAyNTAuMkwzOTIgMjE0VjEwNS41YzAtMTUtOS4zLTI4LjQtMjMuNC0zMy43bC0xMDAtMzcuNWMtOC4xLTMuMS0xNy4xLTMuMS0yNS4zIDBsLTEwMCAzNy41Yy0xNC4xIDUuMy0yMy40IDE4LjctMjMuNCAzMy43VjIxNGwtOTYuNiAzNi4yQzkuMyAyNTUuNSAwIDI2OC45IDAgMjgzLjlWMzk0YzAgMTMuNiA3LjcgMjYuMSAxOS45IDMyLjJsMTAwIDUwYzEwLjEgNS4xIDIyLjEgNS4xIDMyLjIgMGwxMDMuOS01MiAxMDMuOSA1MmMxMC4xIDUuMSAyMi4xIDUuMSAzMi4yIDBsMTAwLTUwYzEyLjItNi4xIDE5LjktMTguNiAxOS45LTMyLjJWMjgzLjljMC0xNS05LjMtMjguNC0yMy40LTMzLjd6TTM1OCAyMTQuOGwtODUgMzEuOXYtNjguMmw4NS0zN3Y3My4zek0xNTQgMTA0LjFsMTAyLTM4LjIgMTAyIDM4LjJ2LjZsLTEwMiA0MS40LTEwMi00MS40di0uNnptODQgMjkxLjFsLTg1IDQyLjV2LTc5LjFsODUtMzguOHY3NS40em0wLTExMmwtMTAyIDQxLjQtMTAyLTQxLjR2LS42bDEwMi0zOC4yIDEwMiAzOC4ydi42em0yNDAgMTEybC04NSA0Mi41di03OS4xbDg1LTM4Ljh2NzUuNHptMC0xMTJsLTEwMiA0MS40LTEwMi00MS40di0uNmwxMDItMzguMiAxMDIgMzguMnYuNnoiPjwvcGF0aD48L3N2Zz4K)](https://docs.rs/hayagriva/)
+
 
 Rusty bibliography management.
 
@@ -193,26 +196,25 @@ following to use the style of the American Psychological Association instead:
 hayagriva literature.yml reference --style apa
 ```
 
-Available values for the `--style` argument@ can be viewed by calling
+Available values for the `--style` argument can be viewed by calling
 `hayagriva help reference`.
 
 If you now need an in-text citation to the second article in the above file, you
 can call:
 ```bash
-hayagriva literature.yml --key feminism citation
+hayagriva literature.yml cite --key feminism
 ```
 
-The `--key` argument precedes the sub-command (e. g. `citation`, `reference`)
-and takes a comma-separated list of keys (or a single one). The sub-command will
-then only work on the specified keys. Just like the `reference` sub-command, the
-`citation` command also allows for the `--style` argument. Its possible values
-can be viewed with `hayagriva help citation`. It will default to the _Author Date_
-style.
+The `--key` takes a comma-separated list of keys (or a single one). The
+sub-command will then only work on the specified keys. Just like the `reference`
+sub-command, the `cite` command also allows the `--style` argument. Its possible
+values can be viewed with `hayagriva help cite`. It will default to the _Author
+Date_ style.
 
 Instead of the `--key` argument, you can also use `--select` to provide a custom
 [Hayagriva selector.](https://github.com/typst/hayagriva/blob/main/docs/selectors.md)
-For example, you could run the following to only reference entries that have a URL
-or DOI at the top level:
+For example, you could run the following to only reference entries that have a
+URL or DOI at the top level:
 ```bash
 hayagriva literature.yml --select "*[url] | *[doi]" reference
 ```
@@ -228,23 +230,22 @@ volume field to `a`, regardless of if it occurred at the top level or in the
 first parent: `a:*[volume] | * > a:[volume]`. You can then use the command below
 to show which sub-entry the selector bound as `a` for each match:
 ```bash
-hayagriva literature.yml --select "a:*[volume] | * > a:[volume]" keys --show-bound
+hayagriva literature.yml --select "a:*[volume] | * > a:[volume]" --show-bound
 ```
 
-The `keys` sub-command enumerates all keys that match the selector / key
-conditions that you specified or all keys in the bibliography if there are none.
-The `--show-bound` flag then shows the selector bindings for each match.
+The `--show-bound` flag shows all keys matching the selector or key filter and
+details which sub-entries of each entry were bound by the selector. If, instead,
+you only want to obtain a list of matching keys, use the `--keys` flag.
 
 If you are working with BibTeX, you can use your `.bib` file with Hayagriva just
 like you would use a `.yml` file. If you want to convert your `.bib` file to a
-`.yml` file, you can run this, which will save the conversion result in the
-current working directory as `converted.yml`:
+`.yml` file, you can the CLI without any additional arguments. It will then
+show the YAML-formatted bibliography with key and selector filters applied on
+standard output. If you therefore want to convert your `.bib` file and save the
+result somewhere, you can just use `>`:
 ```bash
-hayagriva literature.bib dump -o converted.yml
+hayagriva literature.bib > converted.yml
 ```
-
-The converted file will instead be printed to the terminal if you omit the `-o`
-argument.
 
 ## Contributing
 
