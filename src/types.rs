@@ -1,10 +1,13 @@
 //! Base types for the bibliography items and their content.
 
-use std::cmp::{Ordering, PartialOrd};
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 use std::ops::Range;
 use std::ops::{Add, Sub};
+use std::{
+    cmp::{Ordering, PartialOrd},
+    str::FromStr,
+};
 
 use chrono::{Datelike, NaiveDate};
 use lazy_static::lazy_static;
@@ -521,9 +524,11 @@ pub enum DateError {
     MonthOutOfBounds,
 }
 
-impl Date {
+impl FromStr for Date {
+    type Err = DateError;
+
     /// Parse a date from a string.
-    pub fn from_str(source: &str) -> Result<Self, DateError> {
+    fn from_str(source: &str) -> Result<Self, Self::Err> {
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
 
@@ -556,7 +561,9 @@ impl Date {
             Err(DateError::UnknownFormat)
         }
     }
+}
 
+impl Date {
     /// Get a date from an integer.
     pub fn from_year(year: i32) -> Self {
         Self { year, month: None, day: None }
@@ -835,39 +842,11 @@ pub enum DurationError {
     TooLarge,
 }
 
-impl Duration {
-    fn as_ms(&self) -> f64 {
-        self.milliseconds
-            + self.seconds as f64 * 1000.0
-            + self.minutes as f64 * 6000.0
-            + self.hours as f64 * 36000.0
-            + self.days as f64 * 864000.0
-    }
-
-    fn from_ms(mut ms: f64) -> Self {
-        let days = (ms / 864000.0) as u32;
-        ms -= days as f64 * 864000.0;
-
-        let hours = (ms / 36000.0) as u32;
-        ms -= hours as f64 * 36000.0;
-
-        let minutes = (ms / 6000.0) as u32;
-        ms -= minutes as f64 * 6000.0;
-
-        let seconds = (ms / 1000.0) as u8;
-        ms -= seconds as f64 * 1000.0;
-
-        Self {
-            days,
-            hours,
-            minutes,
-            seconds,
-            milliseconds: ms,
-        }
-    }
+impl FromStr for Duration {
+    type Err = DurationError;
 
     /// Tries to create a duration from a string.
-    pub fn from_str(source: &str) -> Result<Self, DurationError> {
+    fn from_str(source: &str) -> Result<Self, Self::Err> {
         let capt = DURATION_REGEX
             .captures(source.trim())
             .ok_or(DurationError::Malformed)?;
@@ -910,6 +889,38 @@ impl Duration {
             seconds,
             milliseconds: ms.unwrap_or(0.0),
         })
+    }
+}
+
+impl Duration {
+    fn as_ms(&self) -> f64 {
+        self.milliseconds
+            + self.seconds as f64 * 1000.0
+            + self.minutes as f64 * 6000.0
+            + self.hours as f64 * 36000.0
+            + self.days as f64 * 864000.0
+    }
+
+    fn from_ms(mut ms: f64) -> Self {
+        let days = (ms / 864000.0) as u32;
+        ms -= days as f64 * 864000.0;
+
+        let hours = (ms / 36000.0) as u32;
+        ms -= hours as f64 * 36000.0;
+
+        let minutes = (ms / 6000.0) as u32;
+        ms -= minutes as f64 * 6000.0;
+
+        let seconds = (ms / 1000.0) as u8;
+        ms -= seconds as f64 * 1000.0;
+
+        Self {
+            days,
+            hours,
+            minutes,
+            seconds,
+            milliseconds: ms,
+        }
     }
 
     /// Tries to get a duration range from a string.

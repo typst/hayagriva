@@ -4,7 +4,11 @@ use super::{
     and_list_opt, bibliography::Bibliography, get_chunk_title, get_creators, web_creator,
     ChicagoConfig, Mode,
 };
-use crate::style::{BibliographyOrdering, BibliographyStyle, Brackets, Citation, CitationStyle, Database, DisplayCitation, DisplayReference, DisplayString, Record, alph_designator, delegate_titled_entry, sorted_bibliography};
+use crate::style::{
+    alph_designator, delegate_titled_entry, sorted_bibliography, BibliographyOrdering,
+    BibliographyStyle, Brackets, Citation, CitationStyle, Database, DisplayCitation,
+    DisplayReference, DisplayString, Record,
+};
 use crate::types::EntryType::*;
 use crate::types::Person;
 
@@ -103,7 +107,8 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 .records()
                 .filter(|&r| {
                     r.entry.date_any().map(|d| d.year) == date.map(|d| d.year)
-                        && get_creators(r.entry).0 == authors && !authors.is_empty()
+                        && get_creators(r.entry).0 == authors
+                        && !authors.is_empty()
                 })
                 .collect::<Vec<_>>();
 

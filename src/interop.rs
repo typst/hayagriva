@@ -252,8 +252,9 @@ impl From<&tex::Entry> for Entry {
                 | tex::EntryType::MvProceedings
                 | tex::EntryType::InProceedings
         ) && (entry.event_date().is_some()
-                || entry.eventtitle().is_some()
-                || entry.venue().is_some()) {
+            || entry.eventtitle().is_some()
+            || entry.venue().is_some())
+        {
             let mut conference = Entry::new(&entry.key, EntryType::Conference);
 
             if let Some(event_date) = entry.event_date().map(|d| d.into()) {

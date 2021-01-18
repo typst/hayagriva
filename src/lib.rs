@@ -343,7 +343,8 @@ impl Entry {
     /// Get and parse the `page-total` field, falling back on `page-range` if
     /// not specified.
     pub fn page_total(&self) -> Option<i64> {
-        self.get("page-total").cloned()
+        self.get("page-total")
+            .cloned()
             .or_else(|| self.page_range().map(|r| Value::from(r.end - r.start)))
             .map(|item| i64::try_from(item).unwrap())
     }
@@ -354,7 +355,8 @@ impl Entry {
     /// Get and parse the `runtime` field, falling back on `time-range` if not
     /// specified.
     pub fn runtime(&self) -> Option<Duration> {
-        self.get("runtime").cloned()
+        self.get("runtime")
+            .cloned()
             .or_else(|| self.time_range().map(|r| Value::from(r.end - r.start)))
             .map(|item| Duration::try_from(item).unwrap())
     }

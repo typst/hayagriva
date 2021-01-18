@@ -623,12 +623,15 @@ fn get_info_element(
         .bound(entry, "p");
 
         if orig_entry.authors().is_some() && ed_match != edited_book {
-            let ed_names =
-                eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
+            let ed_names = eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
             let mut local = if capitals && ed_match != Some(orig_entry) {
                 "Edited by "
-            } else if ed_names.len() > 1 { "eds. " } else { "ed. " }
+            } else if ed_names.len() > 1 {
+                "eds. "
+            } else {
+                "ed. "
+            }
             .to_string();
 
             local += &and_list(ed_names, false, common.et_al_limit);
@@ -712,7 +715,11 @@ fn get_info_element(
 
             let mut local = if capitals {
                 "Compiled by "
-            } else if comp_names.len() > 1 { "comps. " } else { "comp. " }
+            } else if comp_names.len() > 1 {
+                "comps. "
+            } else {
+                "comp. "
+            }
             .to_string();
 
             local += &and_list(comp_names, false, common.et_al_limit);
@@ -784,7 +791,11 @@ fn get_info_element(
 
                 let mut local = if capitals {
                     "edited by "
-                } else if ed_names.len() > 1 { "eds. " } else { "ed. " }
+                } else if ed_names.len() > 1 {
+                    "eds. "
+                } else {
+                    "ed. "
+                }
                 .to_string();
 
                 local += &and_list(ed_names, false, common.et_al_limit);

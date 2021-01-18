@@ -63,8 +63,10 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
 
 impl Default for Ieee {
     fn default() -> Self {
-        let mut title_case = TitleCase::default();
-        title_case.always_capitalize_min_len = Some(4);
+        let title_case = TitleCase {
+            always_capitalize_min_len: Some(4),
+            ..TitleCase::default()
+        };
         Self {
             sentence_case: SentenceCase::default(),
             title_case,
@@ -770,11 +772,7 @@ impl Ieee {
             .collect::<Vec<_>>();
 
         let chapter = secs.get(0).copied();
-        let section = if secs.len() > 1 {
-            secs.last().copied()
-        } else {
-            None
-        };
+        let section = if secs.len() > 1 { secs.last().copied() } else { None };
 
         let url = self.show_url(entry);
 

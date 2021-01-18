@@ -110,7 +110,7 @@ impl<'a> DisplayReference<'a> {
 }
 
 /// A database of citation entries.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Database<'a> {
     /// Records in order of insertion. Citation style might change their content.
@@ -120,7 +120,7 @@ pub struct Database<'a> {
 impl<'a> Database<'a> {
     /// Create a new citation database.
     pub fn new() -> Self {
-        Self { records: LinkedHashMap::new() }
+        Self::default()
     }
 
     /// Create a new database from a collection of entries.
@@ -192,7 +192,7 @@ impl<'a> Database<'a> {
     where
         S: BibliographyStyle<'a> + ?Sized,
     {
-        style.bibliography(self, ordering.unwrap_or(style.ordering()))
+        style.bibliography(self, ordering.unwrap_or_else(|| style.ordering()))
     }
 
     /// Format a single entry for a bibliography with the given style.
@@ -423,7 +423,8 @@ impl<'a> CitationStyle<'a> for Numerical {
                     }
                     self.used_numbers.push(counter);
 
-                    db.records.get_mut(atomic.entry.key()).unwrap().prefix = Some((counter + 1).to_string());
+                    db.records.get_mut(atomic.entry.key()).unwrap().prefix =
+                        Some((counter + 1).to_string());
                     counter + 1
                 };
                 ids.push((number, atomic.supplement));
@@ -442,7 +443,8 @@ impl<'a> CitationStyle<'a> for Numerical {
                 } else {
                     self.used_numbers.push(0);
                     let n = self.used_numbers.len();
-                    db.records.get_mut(atomic.entry.key()).unwrap().prefix = Some(n.to_string());
+                    db.records.get_mut(atomic.entry.key()).unwrap().prefix =
+                        Some(n.to_string());
                     n
                 };
                 ids.push((number, atomic.supplement));
@@ -573,14 +575,20 @@ pub struct DisplayString {
     pending: Option<(std::ops::RangeFrom<usize>, Formatting)>,
 }
 
-impl DisplayString {
-    /// Constructs an empty display string.
-    pub fn new() -> Self {
+impl Default for DisplayString {
+    fn default() -> Self {
         Self {
             value: String::new(),
             formatting: vec![],
             pending: None,
         }
+    }
+}
+
+impl DisplayString {
+    /// Constructs an empty display string.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Create a display string from a string.

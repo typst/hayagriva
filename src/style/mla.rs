@@ -407,14 +407,10 @@ impl Mla {
             if let Some(mut bindings) = select!(Chapter > ("a":*)).apply(entry) {
                 let temp = bindings.remove("a").unwrap();
 
-                if ["preface", "introduction", "foreword", "afterword"]
-                    .iter()
-                    .position(|&x| {
-                        Some(x.into())
-                            == entry.title().map(|x| x.canonical.value.to_lowercase())
-                    })
-                    .is_some()
-                {
+                if ["preface", "introduction", "foreword", "afterword"].iter().any(|&x| {
+                    Some(x.into())
+                        == entry.title().map(|x| x.canonical.value.to_lowercase())
+                }) {
                     res += &entry
                         .title()
                         .unwrap()
@@ -769,10 +765,9 @@ impl Mla {
             .get_parent_container_infos(entry, entry, disambiguation, false, false)
             .0
             .into_iter()
-            .map(|p| p.into_display_string())
-            .collect::<Vec<_>>();
+            .map(|p| p.into_display_string());
         let mut res = DisplayString::new();
-        for (i, d) in ds.into_iter().enumerate() {
+        for (i, d) in ds.enumerate() {
             if i != 0 {
                 res.push(' ');
             }

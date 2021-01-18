@@ -596,27 +596,25 @@ impl Apa {
         } else if entry.entry_type == Audio {
             TitleSpec::Audio
         } else if entry.entry_type == Video {
-            let dirs = entry
+            if entry
                 .affiliated_persons()
                 .unwrap_or_default()
                 .iter()
                 .filter(|(_, role)| role == &PersonRole::Director)
                 .map(|(v, _)| v)
                 .flatten()
-                .collect::<Vec<&Person>>();
-            if !dirs.is_empty()
+                .next()
+                .is_none()
                 && entry.volume_total().is_none()
                 && entry.parents().is_none()
             {
                 TitleSpec::Film
             } else {
                 let is_online_vid = if let Some(url) = entry.url() {
-                    match url.value.host_str().unwrap_or("").to_lowercase().as_ref() {
-                        "youtube.com" => true,
-                        "dailymotion.com" => true,
-                        "vimeo.com" => true,
-                        _ => false,
-                    }
+                    matches!(
+                        url.value.host_str().unwrap_or("").to_lowercase().as_ref(),
+                        "youtube.com" | "dailymotion.com" | "vimeo.com"
+                    )
                 } else {
                     false
                 };

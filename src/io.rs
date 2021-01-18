@@ -386,7 +386,8 @@ fn affiliated_from_yaml(
             })
         })?;
 
-    let role = PersonRole::from_str(&role.to_lowercase()).unwrap_or(PersonRole::Unknown(role));
+    let role =
+        PersonRole::from_str(&role.to_lowercase()).unwrap_or(PersonRole::Unknown(role));
 
     Ok((persons, role))
 }
