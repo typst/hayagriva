@@ -181,7 +181,7 @@ pub fn from_yaml(yaml: Yaml) -> Result<Vec<Entry>, YamlBibliographyError> {
 /// Parse a bibliography from a BibLaTeX source string.
 #[cfg(feature = "biblatex")]
 pub fn from_biblatex_str(biblatex: &str) -> Option<Vec<Entry>> {
-    Bibliography::parse(biblatex).map(|b| from_biblatex(&b))
+    Bibliography::parse(biblatex).map(|b| from_biblatex(&b)).ok()
 }
 
 /// Parse a bibliography from a BibLaTeX [`Bibliography`].

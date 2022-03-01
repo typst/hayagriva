@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
 
-use clap::{crate_version, value_t, App, AppSettings, Arg, SubCommand};
+use clap::{crate_version, Arg, Command};
 use strum::{EnumVariantNames, VariantNames};
 
 use hayagriva::style::{
@@ -97,108 +97,107 @@ impl FromStr for CitationStyle {
 
 /// Main function of the Hayagriva CLI.
 fn main() {
-    let matches = App::new("Hayagriva CLI")
+    let matches = Command::new("Hayagriva CLI")
         .version(crate_version!())
         .author("The Typst Project Developers <hi@typst.app>")
-        .setting(AppSettings::VersionlessSubcommands)
         .about("Format references and citations for your YAML-encoded or BibLaTeX bibliography files and query bibliographies using selectors.")
         .arg(
-            Arg::with_name("INPUT")
+            Arg::new("INPUT")
                 .help("Sets the bibliography file to use")
                 .required(true)
                 .index(1)
         ).arg(
-            Arg::with_name("format")
+            Arg::new("format")
                 .long("format")
                 .help("What input file format to expect")
-                .possible_values(&Format::VARIANTS)
-                .case_insensitive(true)
+                .possible_values(Format::VARIANTS)
+                .ignore_case(true)
                 .takes_value(true)
                 .global(true),
         ).arg(
-            Arg::with_name("selector")
+            Arg::new("selector")
                 .long("select")
                 .help("Filter the bibliography using selectors")
                 .takes_value(true)
                 .global(true)
         )
         .arg(
-            Arg::with_name("key")
+            Arg::new("key")
                 .long("key")
-                .short("k")
+                .short('k')
                 .help("Filter the bibliography using a comma-separated list of keys")
                 .takes_value(true)
                 .global(true)
         )
         .arg(
-            Arg::with_name("show-keys")
+            Arg::new("show-keys")
                 .long("show-keys")
                 .help("Show the keys of all filtered entries")
                 .global(true)
         )
         .arg(
-            Arg::with_name("show-bound")
+            Arg::new("show-bound")
                 .long("show-bound")
                 .help("Show the bound entries of your selector for each key")
                 .global(true)
         )
         .arg(
-            Arg::with_name("no-fmt")
+            Arg::new("no-fmt")
                 .long("no-fmt")
-                .short("n")
+                .short('n')
                 .help("Suppress the formatting of output with ANSI / VT100 character sequences")
                 .global(true)
         )
         .subcommand(
-            SubCommand::with_name("cite")
+            Command::new("cite")
                 .about("Format citations for all filtered entries")
                 .arg(
-                    Arg::with_name("style")
+                    Arg::new("style")
                         .long("style")
-                        .short("s")
+                        .short('s')
                         .help("Set the citation style")
-                        .possible_values(&CitationStyle::VARIANTS)
-                        .case_insensitive(true)
+                        .possible_values(CitationStyle::VARIANTS)
+                        .ignore_case(true)
                         .takes_value(true)
                 )
                 .arg(
-                    Arg::with_name("supplements")
+                    Arg::new("supplements")
                         .long("supplements")
                         .help("Specify additional information for the citations, e.g. \"p. 6,p. 4\", in a comma-seperated list.")
                         .takes_value(true)
                 )
                 .arg(
-                    Arg::with_name("combined")
+                    Arg::new("combined")
                         .long("combined")
-                        .short("c")
+                        .short('c')
                         .help("Combine all keys into one citation (ignored for Chicago Notes)")
                 )
                 .arg(
-                    Arg::with_name("unpredictive")
+                    Arg::new("unpredictive")
                         .long("unpredictive")
                         .help("Do not prepare the database with all selected entries, but build it as we go")
                 )
                 .arg(
-                    Arg::with_name("no-brackets")
+                    Arg::new("no-brackets")
                         .long("no-brackets")
                         .help("Print the citation without brackets.")
                 )
                 .arg(
-                    Arg::with_name("force-brackets")
+                    Arg::new("force-brackets")
                         .long("force-brackets")
                         .help("Print the citation with brackets, no matter the style.")
                 )
         )
         .subcommand(
-            SubCommand::with_name("reference")
+            Command::new("reference")
                 .about("Format a bibliography of all filtered entries")
                 .arg(
-                    Arg::with_name("style")
+                    Arg::new("style")
                         .long("style")
-                        .short("s")
+                        .short('s')
                         .help("Set the referencing style")
-                        .possible_values(&BibliographyStyle::VARIANTS)
-                        .case_insensitive(true)
+                        .possible_values(BibliographyStyle::VARIANTS)
+                        .ignore_case(true)
                         .takes_value(true)
                 )
         )
@@ -206,7 +205,7 @@ fn main() {
 
     let input = Path::new(matches.value_of("INPUT").unwrap());
 
-    let format = value_t!(matches, "format", Format).unwrap_or_else(|_| {
+    let format = matches.value_of_t("format").unwrap_or_else(|_| {
         #[allow(unused_mut)]
         let mut format = Format::Yaml;
 
@@ -308,19 +307,19 @@ fn main() {
     }
 
     match matches.subcommand() {
-        ("reference", Some(sub_matches)) => {
-            let style: Box<dyn UsableBibliographyStyle> =
-                match value_t!(sub_matches, "style", BibliographyStyle)
-                    .unwrap_or_else(|_| BibliographyStyle::ChicagoAuthorDate)
-                {
-                    BibliographyStyle::Chicago => Box::new(ChicagoNotes::default()),
-                    BibliographyStyle::ChicagoAuthorDate => {
-                        Box::new(ChicagoAuthorDate::default())
-                    }
-                    BibliographyStyle::Apa => Box::new(Apa::new()),
-                    BibliographyStyle::Ieee => Box::new(Ieee::new()),
-                    BibliographyStyle::Mla => Box::new(Mla::new()),
-                };
+        Some(("reference", sub_matches)) => {
+            let style: Box<dyn UsableBibliographyStyle> = match sub_matches
+                .value_of_t("style")
+                .unwrap_or_else(|_| BibliographyStyle::ChicagoAuthorDate)
+            {
+                BibliographyStyle::Chicago => Box::new(ChicagoNotes::default()),
+                BibliographyStyle::ChicagoAuthorDate => {
+                    Box::new(ChicagoAuthorDate::default())
+                }
+                BibliographyStyle::Apa => Box::new(Apa::new()),
+                BibliographyStyle::Ieee => Box::new(Ieee::new()),
+                BibliographyStyle::Mla => Box::new(Mla::new()),
+            };
 
             let mut database = Database::new();
             for entry in &bibliography {
@@ -336,8 +335,9 @@ fn main() {
                 }
             }
         }
-        ("cite", Some(sub_matches)) => {
-            let style = value_t!(sub_matches, "style", CitationStyle)
+        Some(("cite", sub_matches)) => {
+            let style = sub_matches
+                .value_of_t("style")
                 .unwrap_or_else(|_| CitationStyle::AuthorDate);
 
             let supplements = sub_matches

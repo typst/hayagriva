@@ -343,7 +343,6 @@ impl Ieee {
             select!((Article | Book | Anthos) > ("p": Repository)).apply(entry);
         let web_parented = select!(* > ("p":(Blog | Web))).apply(entry);
 
-        println!("e: {}, c: {}", entry.entry_type, canonical.entry_type);
         match (entry.entry_type, canonical.entry_type) {
             (_, Conference) | (_, Proceedings) => {
                 if canonical.entry_type == Proceedings {
