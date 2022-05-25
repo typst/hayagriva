@@ -1,7 +1,11 @@
 //! Provides conversion methods for BibLaTeX.
 
+use std::convert::TryFrom;
+
 use biblatex as tex;
-use tex::{Chunk, ChunksExt, DateValue, Edition, EditorType};
+use tex::{
+    Chunk, ChunksExt, DateValue, Edition, EditorType, RetrievalError, Spanned, TypeError,
+};
 use url::Url;
 
 use super::types::{
@@ -62,14 +66,14 @@ impl From<tex::Date> for Date {
     }
 }
 
-impl From<&[Chunk]> for FmtString {
-    fn from(chunks: &[Chunk]) -> Self {
+impl From<&[Spanned<Chunk>]> for FmtString {
+    fn from(chunks: &[Spanned<Chunk>]) -> Self {
         Self::new(chunks.format_verbatim()).sentence_case(chunks.format_sentence())
     }
 }
 
-impl From<&[Chunk]> for NumOrStr {
-    fn from(chunks: &[Chunk]) -> Self {
+impl From<&[Spanned<Chunk>]> for NumOrStr {
+    fn from(chunks: &[Spanned<Chunk>]) -> Self {
         let verb = chunks.format_verbatim();
         match verb.parse() {
             Ok(i) => NumOrStr::Number(i),
@@ -122,9 +126,23 @@ fn mv(item: &mut Entry, parent: bool, mv_parent: bool) -> Option<&mut Entry> {
     }
 }
 
-impl From<&tex::Entry> for Entry {
-    fn from(entry: &tex::Entry) -> Self {
-        let mv_attributes = entry.main_title().is_some() && entry.volume().is_some();
+fn map_res<T>(result: Result<T, RetrievalError>) -> Result<Option<T>, TypeError> {
+    match result {
+        Ok(x) => Ok(Some(x)),
+        Err(e) => match e {
+            RetrievalError::Missing(_) => Ok(None),
+            RetrievalError::TypeError(t) => Err(t),
+        },
+    }
+}
+
+impl TryFrom<&tex::Entry> for Entry {
+    type Error = TypeError;
+
+    fn try_from(entry: &tex::Entry) -> Result<Self, Self::Error> {
+        let mv_attributes =
+            !matches!(entry.main_title(), Err(RetrievalError::Missing(_)))
+                && !matches!(entry.volume(), Err(RetrievalError::Missing(_)));
         let (mut item, parent, mv_parent) = tex_kinds!(entry, mv_attributes, [
             { tex::EntryType::Article, EntryType::Article, Some(EntryType::Periodical), false },
             { tex::EntryType::Book, EntryType::Book, None, true },
@@ -162,13 +180,13 @@ impl From<&tex::Entry> for Entry {
             { tex::EntryType::Unknown(_), EntryType::Misc, None, false },
         ]);
 
-        if let Some(a) = entry.author().map(|a| a.iter().map(Into::into).collect()) {
+        if let Ok(a) = entry.author().map(|a| a.iter().map(Into::into).collect()) {
             item.set_authors(a);
         }
 
         let mut eds: Vec<Person> = vec![];
         let mut collaborators = vec![];
-        for (editors, role) in entry.editors() {
+        for (editors, role) in entry.editors()? {
             let ptype = ed_role(role);
             match ptype {
                 None => eds.extend(editors.iter().map(Into::into)),
@@ -185,63 +203,76 @@ impl From<&tex::Entry> for Entry {
             item.set_affiliated_persons(collaborators);
         }
 
-        if let Some(a) = entry.holder().map(|a| a.iter().map(Into::into).collect()) {
+        if let Some(a) =
+            map_res(entry.holder())?.map(|a| a.iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Holder));
         }
 
         if let Some(parent) = book(&mut item, parent) {
             if let Some(a) =
-                entry.book_author().map(|a| a.iter().map(Into::into).collect())
+                map_res(entry.book_author())?.map(|a| a.iter().map(Into::into).collect())
             {
                 parent.set_authors(a);
             }
         }
 
-        if let Some(a) = entry.annotator().map(|a| a.iter().map(Into::into).collect()) {
+        if let Some(a) =
+            map_res(entry.annotator())?.map(|a| a.iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Annotator));
         }
 
-        if let Some(a) = entry.commentator().map(|a| a.iter().map(Into::into).collect()) {
+        if let Some(a) =
+            map_res(entry.commentator())?.map(|a| a.iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Commentator));
         }
 
-        if let Some(a) = entry.translator().map(|a| a.iter().map(Into::into).collect()) {
+        if let Some(a) =
+            map_res(entry.translator())?.map(|a| a.iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
         // TODO: entry.orig_language into item.set_language()
 
-        if let Some(a) = entry.afterword().map(|a| a.iter().map(Into::into).collect()) {
+        if let Some(a) =
+            map_res(entry.afterword())?.map(|a| a.iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Afterword));
         }
 
-        if let Some(a) = entry.foreword().map(|a| a.iter().map(Into::into).collect()) {
+        if let Some(a) =
+            map_res(entry.foreword())?.map(|a| a.iter().map(Into::into).collect())
+        {
             item.add_affiliated_persons((a, PersonRole::Foreword));
         }
 
-        if let Some(a) = entry.introduction().map(|a| a.iter().map(Into::into).collect())
+        if let Some(a) =
+            map_res(entry.introduction())?.map(|a| a.iter().map(Into::into).collect())
         {
             item.add_affiliated_persons((a, PersonRole::Introduction));
         }
 
-        if let Some(title) = entry.title().map(Title::new) {
+        if let Some(title) = map_res(entry.title())?.map(Title::new) {
             item.set_title(title);
         }
 
         // NOTE: Ignoring subtitle and titleaddon for now
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(title) = entry.main_title().map(Title::new) {
+            if let Some(title) = map_res(entry.main_title())?.map(Title::new) {
                 parent.set_title(title);
             }
         }
 
         if let Some(parent) = book(&mut item, parent) {
             if entry.entry_type == tex::EntryType::Article {
-                if let Some(title) = entry.journal_title().map(Title::new) {
+                if let Some(title) = map_res(entry.journal_title())?.map(Title::new) {
                     parent.set_title(title);
                 }
-            } else if let Some(title) = entry.book_title().map(Title::new) {
+            } else if let Some(title) = map_res(entry.book_title())?.map(Title::new) {
                 parent.set_title(title);
             }
         }
@@ -251,30 +282,30 @@ impl From<&tex::Entry> for Entry {
             tex::EntryType::Proceedings
                 | tex::EntryType::MvProceedings
                 | tex::EntryType::InProceedings
-        ) && (entry.event_date().is_some()
-            || entry.eventtitle().is_some()
-            || entry.venue().is_some())
+        ) && (map_res(entry.event_date())?.is_some()
+            || map_res(entry.eventtitle())?.is_some()
+            || map_res(entry.venue())?.is_some())
         {
             let mut conference = Entry::new(&entry.key, EntryType::Conference);
 
-            if let Some(event_date) = entry.event_date().map(|d| d.into()) {
+            if let Some(event_date) = map_res(entry.event_date())?.map(|d| d.into()) {
                 conference.set_date(event_date);
             }
-            if let Some(title) = entry.eventtitle().map(Title::new) {
+            if let Some(title) = map_res(entry.eventtitle())?.map(Title::new) {
                 conference.set_title(title);
             }
-            if let Some(venue) = entry.venue().map(|d| d.into()) {
+            if let Some(venue) = map_res(entry.venue())?.map(|d| d.into()) {
                 conference.set_location(venue);
             }
 
             item.add_parent(conference);
         }
 
-        if let Some(date) = entry.date().map(|d| d.into()) {
+        if let Some(date) = map_res(entry.date())?.map(|d| d.into()) {
             item.set_date(date);
         }
 
-        if let Some(edition) = entry.edition().map(|d| (&d).into()) {
+        if let Some(edition) = map_res(entry.edition())?.map(|d| (&d).into()) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_edition(edition);
             } else {
@@ -286,14 +317,14 @@ impl From<&tex::Entry> for Entry {
             entry.entry_type,
             tex::EntryType::Article | tex::EntryType::Proceedings
         ) {
-            if let Some(issue) = entry.issue().map(|d| d.into()) {
+            if let Some(issue) = map_res(entry.issue())?.map(|d| d.into()) {
                 if let Some(parent) = book(&mut item, parent) {
                     parent.set_issue(issue);
                 } else {
                     item.set_issue(issue);
                 }
             }
-            if let Some(ititle) = entry.issue_title().map(Title::new) {
+            if let Some(ititle) = map_res(entry.issue_title())?.map(Title::new) {
                 if let Some(parent) = book(&mut item, parent) {
                     parent.set_title(ititle);
                 } else {
@@ -302,7 +333,7 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(number) = entry.number().map(|d| d.into()) {
+        if let Some(number) = map_res(entry.number())?.map(|d| d.into()) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_issue(number);
             } else {
@@ -310,7 +341,7 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(volume) = entry.volume() {
+        if let Some(volume) = map_res(entry.volume())? {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_volume(volume .. volume);
             } else {
@@ -319,39 +350,42 @@ impl From<&tex::Entry> for Entry {
         }
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(volumes) = entry.volumes() {
+            if let Some(volumes) = map_res(entry.volumes())? {
                 parent.set_volume_total(volumes);
             }
         }
 
-        if let Some(version) = entry.version() {
+        if let Some(version) = map_res(entry.version())? {
             item.set_serial_number(version.format_verbatim());
         }
 
-        if let Some(doi) = entry.doi() {
+        if let Some(doi) = map_res(entry.doi())? {
             item.set_doi(doi);
         }
 
-        if let Some(isbn) = entry.isbn() {
+        if let Some(isbn) = map_res(entry.isbn())? {
             item.set_isbn(isbn.format_verbatim());
         }
 
-        if let Some(issn) = entry.issn() {
+        if let Some(issn) = map_res(entry.issn())? {
             item.set_issn(issn.format_verbatim());
         }
 
-        if let Some(sn) = entry.isan().or_else(|| entry.ismn()).or_else(|| entry.iswc()) {
+        if let Some(sn) = map_res(entry.isan())?
+            .or_else(|| entry.ismn().ok())
+            .or_else(|| entry.iswc().ok())
+        {
             if item.serial_number().is_none() {
                 item.set_serial_number(sn.format_verbatim());
             }
         }
 
-        if let Some(url) = entry.url().and_then(|s| Url::parse(&s).ok()) {
-            let date = entry.url_date().map(|d| d.into());
+        if let Some(url) = map_res(entry.url())?.and_then(|s| Url::parse(&s).ok()) {
+            let date = map_res(entry.url_date())?.map(|d| d.into());
             item.set_url(QualifiedUrl { value: url, visit_date: date });
         }
 
-        if let Some(location) = entry.location().map(|d| d.into()) {
+        if let Some(location) = map_res(entry.location())?.map(|d| d.into()) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_location(location);
             } else {
@@ -359,7 +393,7 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(publisher) = entry.publisher().map(|d| {
+        if let Some(publisher) = map_res(entry.publisher())?.map(|d| {
             let mut format = FmtString::new_empty(false, true, false);
             let comma = FmtString {
                 value: ", ".into(),
@@ -382,7 +416,7 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(organization) = entry.organization().map(|d| {
+        if let Some(organization) = map_res(entry.organization())?.map(|d| {
             let mut format = String::new();
             let comma = ", ";
             for (i, item) in d.iter().enumerate() {
@@ -399,7 +433,7 @@ impl From<&tex::Entry> for Entry {
                 item.set_organization(organization);
             }
         } else if let Some(organization) =
-            entry.institution().map(|d| d.format_verbatim())
+            map_res(entry.institution())?.map(|d| d.format_verbatim())
         {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_organization(organization);
@@ -408,7 +442,7 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(note) = entry.how_published().map(|d| d.format_verbatim()) {
+        if let Some(note) = map_res(entry.how_published())?.map(|d| d.format_verbatim()) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_note(note);
             } else {
@@ -416,12 +450,12 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(pages) = entry.pages().and_then(|p| p.get(0).cloned()) {
+        if let Some(pages) = map_res(entry.pages())?.and_then(|p| p.get(0).cloned()) {
             item.set_page_range((pages.start as i64) .. (pages.end as i64));
         }
 
         if let Some(ptotal) =
-            entry.page_total().and_then(|c| c.format_verbatim().parse().ok())
+            map_res(entry.page_total())?.and_then(|c| c.format_verbatim().parse().ok())
         {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_page_total(ptotal);
@@ -430,9 +464,8 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(note) = entry
-            .annotation()
-            .or_else(|| entry.addendum())
+        if let Some(note) = map_res(entry.annotation())?
+            .or_else(|| entry.addendum().ok())
             .map(|d| d.format_verbatim())
         {
             if item.note().is_none() {
@@ -440,7 +473,7 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(series) = entry.series() {
+        if let Some(series) = map_res(entry.series())? {
             let title = Title::new(series);
             let mut new = Entry::new(&entry.key, item.entry_type);
             new.set_title(title);
@@ -455,7 +488,9 @@ impl From<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(chapter) = entry.chapter().or_else(|| entry.part()) {
+        if let Some(chapter) =
+            map_res(entry.chapter())?.or_else(|| map_res(entry.part()).ok().flatten())
+        {
             let mut new = Entry::new(&entry.key, EntryType::Chapter);
             new.set_title(Title::new(chapter));
             let temp = item;
@@ -463,6 +498,6 @@ impl From<&tex::Entry> for Entry {
             item = new;
         }
 
-        item
+        Ok(item)
     }
 }
