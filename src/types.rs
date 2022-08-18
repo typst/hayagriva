@@ -1049,7 +1049,8 @@ impl_try_from_value!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {
-    use super::Person;
+    use std::str::FromStr as _;
+    use super::{Person, Date};
 
     #[test]
     fn person_initials() {
@@ -1057,5 +1058,15 @@ mod tests {
         assert_eq!("C. D.", p.initials(Some(".")).unwrap());
         let p = Person::from_strings(&["Günther", "Hans-Joseph"]).unwrap();
         assert_eq!("H-J", p.initials(None).unwrap());
+    }
+
+    #[test]
+    fn date_from_str() {
+        assert_eq!(Date { year: 1994, month: None, day: None }, Date::from_str("1994").unwrap());
+        assert_eq!(Date { year: 1994, month: Some(8), day: None }, Date::from_str("1994-09").unwrap());
+        assert_eq!(Date { year: 1994, month: Some(8), day: Some(12) }, Date::from_str("1994-09-13").unwrap());
+
+        // This seems like a weird artifact of the current implementation
+        assert_eq!(Date { year: 1994, month: None, day: None }, Date::from_str("19  94").unwrap());
     }
 }
