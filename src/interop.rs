@@ -3,6 +3,7 @@
 use std::convert::TryFrom;
 
 use biblatex as tex;
+use chrono::Timelike as _;
 use tex::{
     Chunk, ChunksExt, DateValue, Edition, EditorType, RetrievalError, Spanned, TypeError,
 };
@@ -58,10 +59,32 @@ impl From<&tex::Person> for Person {
 impl From<tex::Date> for Date {
     fn from(date: tex::Date) -> Self {
         match date.value {
-            DateValue::At(x) | DateValue::After(x) | DateValue::Before(x) => {
-                Date { year: x.year, month: x.month, day: x.day }
+            DateValue::At(x)
+            | DateValue::After(x)
+            | DateValue::Before(x)
+            | DateValue::Between(_, x) => {
+                let (hour, minute, second, nanosecond) = x
+                    .time
+                    .map(|time| {
+                        (
+                            Some(time.hour() as _),
+                            Some(time.minute() as _),
+                            Some(time.second() as _),
+                            Some(time.nanosecond()),
+                        )
+                    })
+                    .unwrap_or_default();
+                Self {
+                year: x.year,
+                month: x.month,
+                day: x.day,
+                    hour,
+                    minute,
+                    second,
+                    nanosecond,
+                offset: None,
+                }
             }
-            DateValue::Between(_, x) => Self { year: x.year, month: x.month, day: x.day },
         }
     }
 }

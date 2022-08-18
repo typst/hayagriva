@@ -9,7 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use chrono::{Datelike, NaiveDate};
+use chrono::FixedOffset;
 use lazy_static::lazy_static;
 use regex::Regex;
 use strum::{Display, EnumString};
@@ -511,6 +511,18 @@ pub struct Date {
     pub month: Option<u8>,
     /// The optional day (0-30).
     pub day: Option<u8>,
+
+    /// The optional hour (0-23)
+    pub hour: Option<u8>,
+    /// The optional minute (0-59),
+    pub minute: Option<u8>,
+    /// The optional second (0-60),
+    pub second: Option<u8>,
+    /// The optional nanosecond (0-999 999 999),
+    pub nanosecond: Option<u32>,
+
+    /// The optional timezone offset
+    pub offset: Option<FixedOffset>,
 }
 
 /// This error can occur when trying to get a date from a string.
@@ -522,6 +534,9 @@ pub enum DateError {
     /// The month is out of bounds.
     #[error("month not in interval 1-12")]
     MonthOutOfBounds,
+    /// The offset is out of bounds.
+    #[error("offset not in interval -24:00 -- 24:00")]
+    OffsetOutOfBounds,
 }
 
 impl FromStr for Date {
@@ -529,24 +544,56 @@ impl FromStr for Date {
 
     /// Parse a date from a string.
     fn from_str(source: &str) -> Result<Self, Self::Err> {
-        use chrono::format::{self, Parsed, Item, Fixed,  ParseErrorKind};
+        use chrono::format::{self, Fixed, Item, ParseErrorKind, Parsed};
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
 
         let mut parsed = Parsed::new();
-        match format::parse(&mut parsed, &source, std::iter::once(Item::Fixed(Fixed::RFC3339))) {
+        match format::parse(
+            &mut parsed,
+            &source,
+            std::iter::once(Item::Fixed(Fixed::RFC3339)),
+        ) {
             Ok(()) => (),
             Err(error) if error.kind() == ParseErrorKind::TooShort => (),
             Err(_) => todo!(),
         };
 
-        let Parsed {year, month, day, ..} = parsed;
+        let Parsed {
+            year,
+            month,
+            day,
+            hour_div_12,
+            hour_mod_12,
+            minute,
+            second,
+            nanosecond,
+            offset,
+            ..
+        } = parsed;
         let year = year.ok_or(DateError::UnknownFormat)?;
         let month = month.map(|month| (month - 1) as _);
         let day = day.map(|day| (day - 1) as _);
+        let hour = hour_div_12
+            .zip(hour_mod_12)
+            .map(|(div_12, mod_12)| (div_12 * 12 + mod_12) as _);
+        let minute = minute.map(|minute| minute as _);
+        let second = second.map(|second| second as _);
+        let offset = offset
+            .map(|offset| {
+                FixedOffset::east_opt(offset).ok_or(DateError::OffsetOutOfBounds)
+            })
+            .transpose()?;
         
         Ok(Date {
-            year, month, day
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanosecond,
+            offset,
         })
     }
 }
@@ -554,7 +601,16 @@ impl FromStr for Date {
 impl Date {
     /// Get a date from an integer.
     pub fn from_year(year: i32) -> Self {
-        Self { year, month: None, day: None }
+        Self {
+            year,
+            month: None,
+            day: None,
+            hour: None,
+            minute: None,
+            second: None,
+            nanosecond: None,
+            offset: None,
+        }
     }
 
     /// Returns the year as a human-readable gregorian year.
@@ -1038,6 +1094,8 @@ impl_try_from_value!(Entries, Vec<Entry>, [Entry]);
 #[cfg(test)]
 mod tests {
     use std::str::FromStr as _;
+    use chrono::FixedOffset;
+
     use super::{Person, Date};
 
     #[test]
@@ -1050,11 +1108,152 @@ mod tests {
 
     #[test]
     fn date_from_str() {
-        assert_eq!(Date { year: 1994, month: None, day: None }, Date::from_str("1994").unwrap());
-        assert_eq!(Date { year: 1994, month: Some(8), day: None }, Date::from_str("1994-09").unwrap());
-        assert_eq!(Date { year: 1994, month: Some(8), day: Some(12) }, Date::from_str("1994-09-13").unwrap());
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: None,
+                day: None,
+                hour: None,
+                minute: None,
+                second: None,
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("1994").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: None,
+                hour: None,
+                minute: None,
+                second: None,
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("1994-09").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: None,
+                minute: None,
+                second: None,
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("1994-09-13").unwrap()
+        );
+
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: None,
+                second: None,
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("1994-09-13T16").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: Some(53),
+                second: None,
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("1994-09-13T16:53").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: Some(53),
+                second: Some(4),
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("1994-09-13T16:53:04").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: Some(53),
+                second: Some(4),
+                nanosecond: Some(123456789),
+                offset: None
+            },
+            Date::from_str("1994-09-13T16:53:04.123456789").unwrap()
+        );
+
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: Some(53),
+                second: Some(4),
+                nanosecond: Some(123456789),
+                offset: Some(FixedOffset::east(0))
+            },
+            Date::from_str("1994-09-13T16:53:04.123456789Z").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: Some(53),
+                second: Some(4),
+                nanosecond: Some(123456789),
+                offset: Some(FixedOffset::west((8 * 60 + 15) * 60))
+            },
+            Date::from_str("1994-09-13T16:53:04.123456789-08:15").unwrap()
+        );
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: Some(8),
+                day: Some(12),
+                hour: Some(16),
+                minute: Some(53),
+                second: Some(4),
+                nanosecond: Some(123456789),
+                offset: Some(FixedOffset::east((3 * 60 + 41) * 60))
+            },
+            Date::from_str("1994-09-13T16:53:04.123456789+03:41").unwrap()
+        );
 
         // This seems like a weird artifact of the current implementation
-        assert_eq!(Date { year: 1994, month: None, day: None }, Date::from_str("19  94").unwrap());
+        assert_eq!(
+            Date {
+                year: 1994,
+                month: None,
+                day: None,
+                hour: None,
+                minute: None,
+                second: None,
+                nanosecond: None,
+                offset: None
+            },
+            Date::from_str("19  94").unwrap()
+        );
     }
 }
