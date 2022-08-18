@@ -529,37 +529,25 @@ impl FromStr for Date {
 
     /// Parse a date from a string.
     fn from_str(source: &str) -> Result<Self, Self::Err> {
+        use chrono::format::{self, Parsed, Item, Fixed,  ParseErrorKind};
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
 
-        let full_date = source.parse::<NaiveDate>();
+        let mut parsed = Parsed::new();
+        match format::parse(&mut parsed, &source, std::iter::once(Item::Fixed(Fixed::RFC3339))) {
+            Ok(()) => (),
+            Err(error) if error.kind() == ParseErrorKind::TooShort => (),
+            Err(_) => todo!(),
+        };
 
-        if let Ok(ndate) = full_date {
-            Ok(Self {
-                year: ndate.year(),
-                month: Some(ndate.month0() as u8),
-                day: Some(ndate.day0() as u8),
-            })
-        } else if let Some(captures) = MONTH_REGEX.captures(&source) {
-            let month = (captures.name("m").unwrap()).as_str().parse::<u8>().unwrap() - 1;
-            if month > 11 {
-                Err(DateError::MonthOutOfBounds)
-            } else {
-                Ok(Self {
-                    year: (captures.name("y").unwrap()).as_str().parse().unwrap(),
-                    month: Some(month),
-                    day: None,
-                })
-            }
-        } else if let Some(captures) = YEAR_REGEX.captures(&source) {
-            Ok(Self {
-                year: (captures.name("y").unwrap()).as_str().parse().unwrap(),
-                month: None,
-                day: None,
-            })
-        } else {
-            Err(DateError::UnknownFormat)
-        }
+        let Parsed {year, month, day, ..} = parsed;
+        let year = year.ok_or(DateError::UnknownFormat)?;
+        let month = month.map(|month| (month - 1) as _);
+        let day = day.map(|day| (day - 1) as _);
+        
+        Ok(Date {
+            year, month, day
+        })
     }
 }
 
