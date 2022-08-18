@@ -399,3 +399,9 @@ barb:
     publisher: MVG
     location: München
     language: de-DE
+
+cat:
+    type: Article
+    title: The Cathedral and the Bazaar
+    author: Raymond, Eric Steven
+    date: 2002-08-02T09:02:14.123456789Z

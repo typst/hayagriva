@@ -630,6 +630,7 @@ mod tests {
             "swedish",
             "latex-users",
             "barb",
+            "cat"
         ]);
     }
 

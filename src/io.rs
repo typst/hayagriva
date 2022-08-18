@@ -771,18 +771,7 @@ fn entry_from_yaml(
 
 impl From<Date> for Yaml {
     fn from(date: Date) -> Self {
-        let s = match (date.month.is_some(), date.day.is_some()) {
-            (true, true) => format!(
-                "{:04}-{:02}-{:02}",
-                date.year,
-                date.month.unwrap() + 1,
-                date.day.unwrap() + 1,
-            ),
-            (true, false) => format!("{:04}-{:02}", date.year, date.month.unwrap() + 1),
-            (false, _) => return Yaml::Integer(date.year as i64),
-        };
-
-        Yaml::String(s)
+        Yaml::String(date.to_string())
     }
 }
 

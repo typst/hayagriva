@@ -539,6 +539,58 @@ pub enum DateError {
     OffsetOutOfBounds,
 }
 
+impl Display for Date {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Date {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanosecond,
+            offset,
+        } = self;
+        write!(f, "{year:04}")?;
+
+        if let Some(month) = month {
+            let month = month + 1;
+            write!(f, "-{month:02}")?;
+        } else {
+            return Ok(());
+        }
+
+        if let Some(day) = day {
+            let day = day + 1;
+            write!(f, "-{day:02}")?;
+        } else {
+            return Ok(());
+        }
+
+        if let Some(hour) = hour {
+            write!(f, "T{hour:02}")?;
+        } else {
+            return Ok(());
+        }
+
+        if let Some(minute) = minute {
+            write!(f, ":{minute:02}")?;
+            if let Some(second) = second {
+                write!(f, ":{second:02}")?;
+                if let Some(nanosecond) = nanosecond {
+                    write!(f, ".{nanosecond:09}")?;
+                }
+            }
+        }
+
+        if let Some(offset) = offset {
+            write!(f, "{offset}")?;
+        }
+
+        Ok(())
+    }
+}
+
 impl FromStr for Date {
     type Err = DateError;
 
@@ -1093,10 +1145,9 @@ impl_try_from_value!(Entries, Vec<Entry>, [Entry]);
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr as _;
+    use super::{Date, Person};
     use chrono::FixedOffset;
-
-    use super::{Person, Date};
+    use std::str::FromStr as _;
 
     #[test]
     fn person_initials() {
