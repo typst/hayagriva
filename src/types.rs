@@ -537,6 +537,16 @@ pub enum DateError {
     /// The offset is out of bounds.
     #[error("offset not in interval -24:00 -- 24:00")]
     OffsetOutOfBounds,
+
+    /// An error from the underlying chrono implementation
+    #[error("{0}")]
+    Chrono(chrono::ParseError)
+}
+
+impl From<chrono::ParseError> for DateError {
+    fn from(inner: chrono::ParseError) -> Self {
+        Self::Chrono(inner)
+    }
 }
 
 impl Display for Date {
@@ -600,17 +610,6 @@ impl FromStr for Date {
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
 
-        let mut parsed = Parsed::new();
-        match format::parse(
-            &mut parsed,
-            &source,
-            std::iter::once(Item::Fixed(Fixed::RFC3339)),
-        ) {
-            Ok(()) => (),
-            Err(error) if error.kind() == ParseErrorKind::TooShort => (),
-            Err(_) => todo!(),
-        };
-
         let Parsed {
             year,
             month,
@@ -622,7 +621,25 @@ impl FromStr for Date {
             nanosecond,
             offset,
             ..
-        } = parsed;
+        } = {
+            let mut parsed = Parsed::new();
+            format::parse(
+                &mut parsed,
+                &source,
+                std::iter::once(Item::Fixed(Fixed::RFC3339)),
+            )
+            .or_else(|error| {
+                if error.kind() == ParseErrorKind::TooShort {
+                    // chrono's RFC3339 format expects a full datetime with offset, but we don't require that much precision.
+                    // Therefore, we ignore this specific error here
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            })?;
+            parsed
+        };
+
         let year = year.ok_or(DateError::UnknownFormat)?;
         let month = month.map(|month| (month - 1) as _);
         let day = day.map(|day| (day - 1) as _);
@@ -1159,6 +1176,7 @@ mod tests {
 
     #[test]
     fn date_from_str() {
+        // Happy cases
         assert_eq!(
             Date {
                 year: 1994,
@@ -1292,6 +1310,9 @@ mod tests {
             Date::from_str("1994-09-13T16:53:04.123456789+03:41").unwrap()
         );
 
+        // Error cases
+        assert!(Date::from_str("test").is_err());
+
         // This seems like a weird artifact of the current implementation
         assert_eq!(
             Date {
@@ -1306,5 +1327,7 @@ mod tests {
             },
             Date::from_str("19  94").unwrap()
         );
+        assert!(Date::from_str("1994-").is_ok());
+        assert!(Date::from_str("1994-15").is_ok());
     }
 }
