@@ -75,14 +75,14 @@ impl From<tex::Date> for Date {
                     })
                     .unwrap_or_default();
                 Self {
-                year: x.year,
-                month: x.month,
-                day: x.day,
+                    year: x.year,
+                    month: x.month,
+                    day: x.day,
                     hour,
                     minute,
                     second,
                     nanosecond,
-                offset: None,
+                    offset: None,
                 }
             }
         }
