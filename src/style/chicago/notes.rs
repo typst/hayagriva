@@ -352,7 +352,7 @@ impl<'a> ChicagoNotes<'a> {
         let mut entry = citation.entry;
         let short = self.style == ChicagoNoteStyle::Short
             || self.style == ChicagoNoteStyle::Author
-            || (matches!(self.style, ChicagoNoteStyle::Automatic{ ibid: _ })
+            || (matches!(self.style, ChicagoNoteStyle::Automatic { ibid: _ })
                 && self.cited.contains(&entry));
 
         entry = delegate_titled_entry(entry);
@@ -390,7 +390,7 @@ impl<'a> ChicagoNotes<'a> {
             }
             res += title;
         } else if !(self.style == ChicagoNoteStyle::Author
-            || (matches!(self.style, ChicagoNoteStyle::Automatic{ ibid: _ })
+            || (matches!(self.style, ChicagoNoteStyle::Automatic { ibid: _ })
                 && self.cited.last() == Some(&entry)))
             || no_author
         {

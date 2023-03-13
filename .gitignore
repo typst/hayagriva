@@ -9,3 +9,6 @@
 /main/target
 Cargo.lock
 **/*.rs.bk
+
+# macOS
+.DS_Store

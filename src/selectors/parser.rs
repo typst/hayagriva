@@ -227,7 +227,7 @@ impl<'s> Tokens<'s> {
 
     /// Eat the next char.
     fn eat(&mut self) -> Option<char> {
-        let next = self.src[self.index ..].chars().next()?;
+        let next = self.src[self.index..].chars().next()?;
         self.index += next.len_utf8();
         Some(next)
     }
@@ -274,7 +274,7 @@ impl<'s> Iterator for Tokens<'s> {
                     }
                     end = self.index;
                 }
-                Token::Ident(&self.src[start .. end])
+                Token::Ident(&self.src[start..end])
             }
 
             _ => Token::Invalid,

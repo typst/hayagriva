@@ -569,11 +569,9 @@ impl Ieee {
                     res.push(format_range("vol.", "vols.", &vols));
                 }
 
-
                 if let Some(iss) = canonical.issue() {
                     res.push(format!("no. {}", iss));
                 }
-
 
                 if self.show_url(entry) {
                     if let Some(date) = date {
@@ -832,10 +830,10 @@ impl Ieee {
         let cur_len = res.len();
         if cur_len > 4
             && res.value.is_char_boundary(cur_len - 4)
-            && &res.value[cur_len - 4 ..] == ",”"
+            && &res.value[cur_len - 4..] == ",”"
         {
             if addons.is_empty() {
-                res.value = (&res.value[.. cur_len - 4]).into();
+                res.value = (&res.value[..cur_len - 4]).into();
                 res.value += "”";
             } else {
                 res.push(' ');

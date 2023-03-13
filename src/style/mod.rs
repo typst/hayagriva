@@ -42,11 +42,7 @@ impl<'a> Record<'a> {
     ///
     /// Will default to `None` for the `prefix` and `disambiguation` fields.
     pub(crate) fn from_entry(entry: &'a Entry) -> Self {
-        Self {
-            entry,
-            prefix: None,
-            disambiguation: None,
-        }
+        Self { entry, prefix: None, disambiguation: None }
     }
 }
 
@@ -477,7 +473,7 @@ impl<'a> CitationStyle<'a> for Numerical {
                     res_elems.push(CiteElement::Single((number, supplement)));
                 }
                 _ => {
-                    res_elems.push(CiteElement::Range(number .. number));
+                    res_elems.push(CiteElement::Range(number..number));
                 }
             }
         }
@@ -561,7 +557,7 @@ fn offset_format_range(
     r: (std::ops::Range<usize>, Formatting),
     o: usize,
 ) -> (std::ops::Range<usize>, Formatting) {
-    ((r.0.start + o) .. (r.0.end + o), r.1)
+    ((r.0.start + o)..(r.0.end + o), r.1)
 }
 
 /// A printable string with a list of formatting modifications.
@@ -651,12 +647,12 @@ impl DisplayString {
 
     pub(crate) fn start_format(&mut self, f: Formatting) {
         debug_assert!(self.pending.is_none());
-        self.pending = Some((self.len() .., f));
+        self.pending = Some((self.len().., f));
     }
 
     pub(crate) fn commit_formats(&mut self) {
         if let Some((range, fmt)) = self.pending.take() {
-            self.formatting.push((range.start .. self.len(), fmt))
+            self.formatting.push((range.start..self.len(), fmt))
         }
     }
 
@@ -713,7 +709,7 @@ impl DisplayString {
         let mut pointer = self.len();
 
         for (f, index, end) in &start_end {
-            res = (&self.value[*index .. pointer]).to_string() + &res;
+            res = (&self.value[*index..pointer]).to_string() + &res;
             pointer = *index;
 
             let code = if *end {
@@ -727,7 +723,7 @@ impl DisplayString {
             };
             res = format!("\x1b[{}m", code) + &res;
         }
-        res = (&self.value[0 .. pointer]).to_string() + &res;
+        res = (&self.value[0..pointer]).to_string() + &res;
 
         res
     }
@@ -830,7 +826,7 @@ impl From<&str> for DisplayString {
 
 fn push_comma_quote_aware(s: &mut String, comma: char, space: bool) {
     let cur_len = s.len();
-    if cur_len > 3 && s.is_char_boundary(cur_len - 3) && &s[cur_len - 3 ..] == "”" {
+    if cur_len > 3 && s.is_char_boundary(cur_len - 3) && &s[cur_len - 3..] == "”" {
         s.truncate(cur_len - 3);
         if !s.ends_with(comma) {
             s.push(comma);
@@ -905,7 +901,7 @@ fn omit_initial_articles(s: &str) -> String {
     }
 
     if ["a", "an", "the"].contains(&parts.first().unwrap().to_lowercase().as_ref()) {
-        (&parts[1 ..]).join(" ")
+        (&parts[1..]).join(" ")
     } else {
         s.to_string()
     }

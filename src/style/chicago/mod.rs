@@ -593,12 +593,20 @@ fn get_info_element(
 
     let translators = affs.and_then(|e| {
         let ts = e.affiliated_with_role(PersonRole::Translator);
-        if ts.is_empty() { None } else { Some(ts) }
+        if ts.is_empty() {
+            None
+        } else {
+            Some(ts)
+        }
     });
 
     let compilers = affs.and_then(|e| {
         let ts = e.affiliated_with_role(PersonRole::Compiler);
-        if ts.is_empty() { None } else { Some(ts) }
+        if ts.is_empty() {
+            None
+        } else {
+            Some(ts)
+        }
     });
 
     if let Some(trans) = translators {
@@ -823,11 +831,7 @@ fn get_info_element(
                 Some(match issue {
                     NumOrStr::Str(s) => (s.clone(), None),
                     NumOrStr::Number(i) => (
-                        if series {
-                            format!("ep. {}", i)
-                        } else {
-                            format!("no. {}", i)
-                        },
+                        if series { format!("ep. {}", i) } else { format!("no. {}", i) },
                         Some(*i),
                     ),
                 })

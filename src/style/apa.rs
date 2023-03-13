@@ -156,20 +156,20 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
     let translator = if translator.is_empty() {
         None
     } else {
-        Some(format!(
-            "{}, Trans.",
-            ampersand_list(name_list_straight(&translator))
-        ))
+        Some(format!("{}, Trans.", ampersand_list(name_list_straight(&translator))))
     };
 
     let estr = if let Some(ed) = ed {
         if is_tv_show {
             Some(format!("Season {}", ed))
         } else {
-            Some(format!("{} ed.", match ed {
-                NumOrStr::Number(e) => get_ordinal(*e),
-                NumOrStr::Str(s) => s.to_string(),
-            }))
+            Some(format!(
+                "{} ed.",
+                match ed {
+                    NumOrStr::Number(e) => get_ordinal(*e),
+                    NumOrStr::Str(s) => s.to_string(),
+                }
+            ))
         }
     } else {
         None
@@ -341,7 +341,7 @@ impl Apa {
 
             al += &details[0];
 
-            for e in &details[1 ..] {
+            for e in &details[1..] {
                 al += "; ";
                 al += e;
             }
@@ -486,7 +486,7 @@ impl Apa {
             }
             if entry.entry_type == Tweet {
                 let words = &title.canonical.value.split_whitespace().collect::<Vec<_>>();
-                res += &words[.. (if words.len() >= 20 { 20 } else { words.len() })]
+                res += &words[..(if words.len() >= 20 { 20 } else { words.len() })]
                     .join(" ");
             } else {
                 res += &sent_cased;

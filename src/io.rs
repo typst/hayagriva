@@ -234,13 +234,15 @@ fn yaml_hash_map_with_string_keys(
     map: LinkedHashMap<Yaml, Yaml>,
 ) -> LinkedHashMap<String, Yaml> {
     map.into_iter()
-        .filter_map(|(k, v)| {
-            if let Some(k) = k.into_string() {
-                Some((k, v))
-            } else {
-                None
-            }
-        })
+        .filter_map(
+            |(k, v)| {
+                if let Some(k) = k.into_string() {
+                    Some((k, v))
+                } else {
+                    None
+                }
+            },
+        )
         .collect()
 }
 
@@ -354,19 +356,15 @@ fn person_from_yaml(
             given_name: values.pop().unwrap(),
         })
     } else if let Some(s) = item.into_string() {
-        Ok(
-            Person::from_strings(&s.split(',').collect::<Vec<&str>>()).map_err(|e| {
-                YamlBibliographyError::new_data_type_src_error(
-                    key,
-                    field_name,
-                    YamlDataTypeError::Person(e),
-                )
-            })?,
-        )
+        Ok(Person::from_strings(&s.split(',').collect::<Vec<&str>>()).map_err(|e| {
+            YamlBibliographyError::new_data_type_src_error(
+                key,
+                field_name,
+                YamlDataTypeError::Person(e),
+            )
+        })?)
     } else {
-        Err(YamlBibliographyError::new_data_type_error(
-            key, field_name, "person",
-        ))
+        Err(YamlBibliographyError::new_data_type_error(key, field_name, "person"))
     }
 }
 
@@ -575,7 +573,7 @@ fn entry_from_yaml(
                 })?)
             }
             "volume" | "page-range" => Value::Range(match yaml {
-                Yaml::Integer(value) => (value .. value),
+                Yaml::Integer(value) => value..value,
                 Yaml::String(value) => parse_range(&value).ok_or_else(|| {
                     YamlBibliographyError::new_data_type_src_error(
                         &key,
@@ -841,10 +839,7 @@ impl From<&FmtString> for Yaml {
             let same = fmt.title_case.as_ref().map_or(true, |case| case == &fmt.value)
                 && fmt.sentence_case.as_ref().map_or(true, |case| case == &fmt.value);
 
-            hm.insert(
-                Yaml::String("value".into()),
-                Yaml::String(fmt.value.clone()),
-            );
+            hm.insert(Yaml::String("value".into()), Yaml::String(fmt.value.clone()));
 
             if (fmt.verbatim || same) && !bt_equal {
                 hm.insert(Yaml::String("verbatim".into()), Yaml::Boolean(true));
@@ -888,10 +883,7 @@ impl From<&Person> for Yaml {
         if let Some(alias) = &person.alias {
             let mut hm = LinkedHashMap::new();
 
-            hm.insert(
-                Yaml::String("name".into()),
-                Yaml::String(person.name.clone()),
-            );
+            hm.insert(Yaml::String("name".into()), Yaml::String(person.name.clone()));
             if let Some(given_name) = &person.given_name {
                 hm.insert(
                     Yaml::String("given-name".into()),
@@ -939,10 +931,7 @@ impl From<&QualifiedUrl> for Yaml {
     fn from(url: &QualifiedUrl) -> Self {
         if let Some(date) = url.visit_date {
             let mut hm = LinkedHashMap::new();
-            hm.insert(
-                Yaml::String("value".into()),
-                Yaml::String(url.value.to_string()),
-            );
+            hm.insert(Yaml::String("value".into()), Yaml::String(url.value.to_string()));
             hm.insert(Yaml::String("date".into()), date.into());
             Yaml::Hash(hm)
         } else {
@@ -997,16 +986,9 @@ fn affiliated_into_yaml(affiliated: &(Vec<Person>, PersonRole)) -> Yaml {
 
 fn time_range_into_yaml(range: std::ops::Range<Duration>) -> Yaml {
     if range.start != range.end {
-        let start = if let Yaml::String(s) = range.start.into() {
-            s
-        } else {
-            unreachable!()
-        };
-        let end = if let Yaml::String(s) = range.end.into() {
-            s
-        } else {
-            unreachable!()
-        };
+        let start =
+            if let Yaml::String(s) = range.start.into() { s } else { unreachable!() };
+        let end = if let Yaml::String(s) = range.end.into() { s } else { unreachable!() };
         Yaml::String(format!("{}-{}", start, end))
     } else {
         range.start.into()

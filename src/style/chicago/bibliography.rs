@@ -38,11 +38,8 @@ impl Bibliography {
 
         let count = authors.len();
         let authors = authors.into_iter().enumerate().map(|(i, p)| {
-            let name = if i == 0 {
-                p.name_first(false, true)
-            } else {
-                p.given_first(false)
-            };
+            let name =
+                if i == 0 { p.name_first(false, true) } else { p.given_first(false) };
             if entry.entry_type == Tweet {
                 if let Some(pseud) = entry.twitter_handle(i) {
                     format!("{} ({})", name, pseud)
@@ -99,11 +96,8 @@ impl Bibliography {
 
     fn get_publication_info(&self, entry: &Entry) -> String {
         let conference = select!(* > ("p":Conference)).bound(entry, "p");
-        let mut res = if entry.entry_type == Thesis {
-            "Thesis".to_string()
-        } else {
-            String::new()
-        };
+        let mut res =
+            if entry.entry_type == Thesis { "Thesis".to_string() } else { String::new() };
 
         let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if conference.is_none() {

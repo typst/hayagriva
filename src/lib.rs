@@ -407,11 +407,13 @@ impl Entry {
     /// Adds a parent to the currrent entry. The parent
     /// list will be created if there is none.
     pub(crate) fn add_parent(&mut self, entry: Entry) {
-        if let Some(parents) = self
-            .content
-            .get_mut("parent")
-            .and_then(|f| if let Value::Entries(e) = f { Some(e) } else { None })
-        {
+        if let Some(parents) = self.content.get_mut("parent").and_then(|f| {
+            if let Value::Entries(e) = f {
+                Some(e)
+            } else {
+                None
+            }
+        }) {
             parents.push(entry);
         } else {
             self.set_parents(vec![entry]);
@@ -542,10 +544,7 @@ mod tests {
     fn test_entry_set() {
         let mut entry = Entry::new("key", EntryType::Misc);
         let err = entry.set("author", Value::Integer(1)).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "type `integer` is not allowed in field `author`",
-        )
+        assert_eq!(err.to_string(), "type `integer` is not allowed in field `author`",)
     }
 
     macro_rules! select_all {
@@ -585,52 +584,61 @@ mod tests {
         let entries = from_yaml_str(&contents).unwrap();
 
         select_all!("article > proceedings", entries, ["zygos"]);
-        select_all!("article > (periodical | newspaper)", entries, [
-            "omarova-libra",
-            "kinetics",
-            "house",
-            "swedish",
-        ]);
-        select_all!("(chapter | anthos) > (anthology | book)", entries, [
-            "harry", "gedanken"
-        ]);
-        select_all!("*[url]", entries, [
-            "omarova-libra",
-            "science-e-issue",
-            "oiseau",
-            "georgia",
-            "really-habitable",
-            "electronic-music",
-            "mattermost",
-            "worth",
-            "wrong",
-            "un-hdr",
-            "audio-descriptions",
-            "camb",
-            "logician",
-            "dns-encryption",
-            "overleaf",
-            "editors",
-        ]);
-        select_all!("!(*[url] | (* > *[url]))", entries, [
-            "zygos",
-            "harry",
-            "terminator-2",
-            "interior",
-            "wire",
-            "kinetics",
-            "house",
-            "plaque",
-            "renaissance",
-            "gedanken",
-            "donne",
-            "roe-wade",
-            "foia",
-            "drill",
-            "swedish",
-            "latex-users",
-            "barb",
-        ]);
+        select_all!(
+            "article > (periodical | newspaper)",
+            entries,
+            ["omarova-libra", "kinetics", "house", "swedish",]
+        );
+        select_all!(
+            "(chapter | anthos) > (anthology | book)",
+            entries,
+            ["harry", "gedanken"]
+        );
+        select_all!(
+            "*[url]",
+            entries,
+            [
+                "omarova-libra",
+                "science-e-issue",
+                "oiseau",
+                "georgia",
+                "really-habitable",
+                "electronic-music",
+                "mattermost",
+                "worth",
+                "wrong",
+                "un-hdr",
+                "audio-descriptions",
+                "camb",
+                "logician",
+                "dns-encryption",
+                "overleaf",
+                "editors",
+            ]
+        );
+        select_all!(
+            "!(*[url] | (* > *[url]))",
+            entries,
+            [
+                "zygos",
+                "harry",
+                "terminator-2",
+                "interior",
+                "wire",
+                "kinetics",
+                "house",
+                "plaque",
+                "renaissance",
+                "gedanken",
+                "donne",
+                "roe-wade",
+                "foia",
+                "drill",
+                "swedish",
+                "latex-users",
+                "barb",
+            ]
+        );
     }
 
     #[test]

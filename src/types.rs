@@ -278,17 +278,10 @@ impl Person {
         let parts: Vec<&str> = parts.iter().map(|s| s.trim()).collect();
 
         let last_pre = parts[0];
-        let given_name = if parts.len() > 1 {
-            Some(parts.last().unwrap().to_string())
-        } else {
-            None
-        };
+        let given_name =
+            if parts.len() > 1 { Some(parts.last().unwrap().to_string()) } else { None };
 
-        let suffix = if parts.len() > 2 {
-            Some(parts[1].to_string())
-        } else {
-            None
-        };
+        let suffix = if parts.len() > 2 { Some(parts[1].to_string()) } else { None };
 
         let mut word_start = true;
         let mut last_lower_case_end: i32 = -1;
@@ -337,13 +330,7 @@ impl Person {
             name = name.trim_start().to_string();
         }
 
-        Ok(Person {
-            name,
-            given_name,
-            prefix,
-            suffix,
-            alias: None,
-        })
+        Ok(Person { name, given_name, prefix, suffix, alias: None })
     }
 
     /// Formats the given name into initials.
@@ -423,7 +410,6 @@ impl Person {
                 res += prefix;
             }
         }
-
 
         if let Some(suffix) = &self.suffix {
             res += ", ";
@@ -652,18 +638,12 @@ impl FmtString {
 
     /// Set the title case override.
     pub fn title_case(self, title_case: impl Into<String>) -> Self {
-        Self {
-            title_case: Some(title_case.into()),
-            ..self
-        }
+        Self { title_case: Some(title_case.into()), ..self }
     }
 
     /// Set the sentence case override.
     pub fn sentence_case(self, sentence_case: impl Into<String>) -> Self {
-        Self {
-            sentence_case: Some(sentence_case.into()),
-            ..self
-        }
+        Self { sentence_case: Some(sentence_case.into()), ..self }
     }
 
     /// Format this formattable string in title case.
@@ -762,18 +742,12 @@ impl Title {
 
     /// Set a shorthand version.
     pub fn shorthand(self, shorthand: impl Into<FmtString>) -> Self {
-        Self {
-            shorthand: Some(shorthand.into()),
-            ..self
-        }
+        Self { shorthand: Some(shorthand.into()), ..self }
     }
 
     /// Set a translated version.
     pub fn translated(self, translated: impl Into<FmtString>) -> Self {
-        Self {
-            translated: Some(translated.into()),
-            ..self
-        }
+        Self { translated: Some(translated.into()), ..self }
     }
 }
 
@@ -812,7 +786,7 @@ pub(crate) fn parse_range(source: &str) -> Option<Range<i64>> {
             .map(|v| str::parse(v.as_str()).expect("Only queried for digits"))
             .unwrap_or(start);
 
-        start .. end
+        start..end
     })
 }
 
@@ -914,13 +888,7 @@ impl Duration {
         let seconds = (ms / 1000.0) as u8;
         ms -= seconds as f64 * 1000.0;
 
-        Self {
-            days,
-            hours,
-            minutes,
-            seconds,
-            milliseconds: ms,
-        }
+        Self { days, hours, minutes, seconds, milliseconds: ms }
     }
 
     /// Tries to get a duration range from a string.
@@ -935,7 +903,7 @@ impl Duration {
             .map(|e| Self::from_str(e.as_str()))
             .unwrap_or_else(|| Ok(start))?;
 
-        Ok(start .. end)
+        Ok(start..end)
     }
 }
 

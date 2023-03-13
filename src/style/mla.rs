@@ -141,13 +141,13 @@ impl ContainerInfo {
 
         if res.len() < 4
             || !res.value.is_char_boundary(4)
-            || !(&res.value[.. 4] == "http" || &res.value[.. 4] == "doi:")
+            || !(&res.value[..4] == "http" || &res.value[..4] == "doi:")
         {
             if let Some(gc) = res.value.graphemes(true).next() {
                 let len = gc.len();
                 let new = gc.to_uppercase();
                 let diff = new.len() - len;
-                res.value = new + &res.value[len ..];
+                res.value = new + &res.value[len..];
                 res.formatting = res
                     .formatting
                     .into_iter()
@@ -257,9 +257,13 @@ impl Mla {
             .authors()
             .map(|a| a.to_vec())
             .or_else(|| {
-                entry
-                    .affiliated_persons()
-                    .and_then(|a| if a.len() == 1 { Some(a[0].0.clone()) } else { None })
+                entry.affiliated_persons().and_then(|a| {
+                    if a.len() == 1 {
+                        Some(a[0].0.clone())
+                    } else {
+                        None
+                    }
+                })
             })
             .or_else(|| entry.editors().map(|a| a.to_vec()))
     }
@@ -818,7 +822,7 @@ impl<'a> BibliographyStyle<'a> for Mla {
     ) -> Vec<DisplayReference<'a>> {
         let mut items = vec![];
 
-        for i in 0 .. db.records.len() {
+        for i in 0..db.records.len() {
             let record = db.records().nth(i).unwrap();
             let last_record = if let Some(prev) = i.checked_sub(1) {
                 db.records().nth(prev)

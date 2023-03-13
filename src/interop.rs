@@ -42,7 +42,11 @@ macro_rules! tex_kinds {
 impl From<&tex::Person> for Person {
     fn from(person: &tex::Person) -> Self {
         fn optional(part: &str) -> Option<String> {
-            if !part.is_empty() { Some(part.to_string()) } else { None }
+            if !part.is_empty() {
+                Some(part.to_string())
+            } else {
+                None
+            }
         }
 
         Self {
@@ -343,9 +347,9 @@ impl TryFrom<&tex::Entry> for Entry {
 
         if let Some(volume) = map_res(entry.volume())? {
             if let Some(parent) = book(&mut item, parent) {
-                parent.set_volume(volume .. volume);
+                parent.set_volume(volume..volume);
             } else {
-                item.set_volume(volume .. volume);
+                item.set_volume(volume..volume);
             }
         }
 
@@ -451,7 +455,7 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(pages) = map_res(entry.pages())?.and_then(|p| p.get(0).cloned()) {
-            item.set_page_range((pages.start as i64) .. (pages.end as i64));
+            item.set_page_range((pages.start as i64)..(pages.end as i64));
         }
 
         if let Some(ptotal) =

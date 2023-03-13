@@ -124,7 +124,7 @@ impl Case for TitleCase {
         }
 
         let mut word_length = vec![];
-        for i in 0 .. word_indices.len() {
+        for i in 0..word_indices.len() {
             let index = word_indices[i].0;
             let len = if let Some((_, re_start, _)) = word_indices.get(i + 1) {
                 re_start - index
@@ -134,7 +134,7 @@ impl Case for TitleCase {
 
             let retain = has_lowercase
                 && self.keep_all_uppercase_words
-                && title[index .. index + len]
+                && title[index..index + len]
                     .chars()
                     .all(|c| c.is_uppercase() || !c.is_alphanumeric());
 
@@ -178,7 +178,7 @@ impl Case for TitleCase {
                 res.push_str(&c.to_uppercase().to_string());
             } else {
                 // Collect word to check it against the database
-                let word = &title[index .. index + len].to_lowercase();
+                let word = &title[index..index + len].to_lowercase();
 
                 if self.use_exception_dictionary
                     && en::NEVER_CAPITALIZE.binary_search(&word.as_str()).is_ok()
@@ -319,7 +319,7 @@ impl Case for SentenceCase {
         }
 
         let mut word_length = vec![];
-        for i in 0 .. word_indices.len() {
+        for i in 0..word_indices.len() {
             let index = word_indices[i].0;
             let len = if let Some((_, resume_start, _, _)) = word_indices.get(i + 1) {
                 resume_start - index
@@ -329,12 +329,12 @@ impl Case for SentenceCase {
 
             let situation = if len <= 1 {
                 CaseSituation::Normal
-            } else if title[index .. index + len]
+            } else if title[index..index + len]
                 .chars()
                 .all(|c| c.is_uppercase() || !c.is_alphanumeric())
             {
                 CaseSituation::AllUppercase
-            } else if title[index + 1 .. index + len].chars().any(|c| c.is_uppercase()) {
+            } else if title[index + 1..index + len].chars().any(|c| c.is_uppercase()) {
                 CaseSituation::HasNonFirstUppercase
             } else {
                 CaseSituation::Normal
@@ -387,7 +387,7 @@ impl Case for SentenceCase {
                 res.push(c);
             } else {
                 // Collect word to check it against the database
-                let word = &title[index .. index + len];
+                let word = &title[index..index + len];
                 let uppercase = word.chars().any(|c| c.is_uppercase());
 
                 if self.use_exception_dictionary
@@ -433,10 +433,7 @@ mod tests {
         assert_eq!("She Ain’t Be Getting on My Nerves", title);
 
         let title = props.apply("We don’t bank on the Pope’s decisions being sensible");
-        assert_eq!(
-            "We Don’t Bank on the Pope’s Decisions Being Sensible",
-            title
-        );
+        assert_eq!("We Don’t Bank on the Pope’s Decisions Being Sensible", title);
     }
 
     #[test]
@@ -457,10 +454,7 @@ mod tests {
         let props = TitleCase::new();
 
         let title = props.apply("Around a table: the reason why we just could not care");
-        assert_eq!(
-            "Around a Table: The Reason Why We Just Could Not Care",
-            title
-        );
+        assert_eq!("Around a Table: The Reason Why We Just Could Not Care", title);
     }
 
     #[test]
@@ -502,10 +496,7 @@ mod tests {
 
         let title =
             props.apply("Comparative study of Self-reporting students' performance");
-        assert_eq!(
-            "Comparative Study of Self-Reporting Students' Performance",
-            title
-        );
+        assert_eq!("Comparative Study of Self-Reporting Students' Performance", title);
     }
 
     #[test]
@@ -527,10 +518,7 @@ mod tests {
         assert_eq!("She AIN’T be getting on my nerves", title);
 
         let title = props.apply("We don’t bank on the Pope’s decisions being sensible");
-        assert_eq!(
-            "We don’t bank on the pope’s decisions being sensible",
-            title
-        );
+        assert_eq!("We don’t bank on the pope’s decisions being sensible", title);
     }
 
     #[test]
