@@ -140,8 +140,10 @@ impl<'a> Database<'a> {
     /// with same author and year, but cite only one of them, Chicago
     /// Author-Date will format this one as "2020A" instead of "2020").
     pub fn push(&mut self, entry: &'a Entry) {
-        let record = Record::from_entry(entry);
-        self.records.insert(record.entry.key(), record);
+        if !self.records.contains_key(entry.key()) {
+            let record = Record::from_entry(entry);
+            self.records.insert(record.entry.key(), record);
+        }
     }
 
     fn records(&self) -> linked_hash_map::Values<&'a str, Record<'a>> {
