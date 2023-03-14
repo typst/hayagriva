@@ -24,7 +24,7 @@ use crate::Entry;
 /// - R. Roundy, “Report on practices related to demand forecasting for
 ///   semiconductor products,” Cornell University Operations Research and
 ///   Industrial Engineering, Jul. 2001. Accessed: Jan. 7, 2021. \[Online\].
-///   Available: https://hdl.handle.net/1813/9174
+///   Available: <https://hdl.handle.net/1813/9174>
 ///
 /// # Reference
 /// See the following documents for details on how the Institute of Electrical

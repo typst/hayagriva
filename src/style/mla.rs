@@ -19,7 +19,7 @@ use crate::Entry;
 /// - Moore, Edward F. “Gedanken-Experiments on Sequential Machines.” _Automata
 ///   Studies,_ edited by Shannon, C. E., and McCarthy, J., vol. 34, NBS, Apr. 1956. Annals of Mathematics Studies.
 /// - “Authoritative.” _Cambridge Dictionary,_
-///   https://dictionary.cambridge.org/dictionary/english/authoritative.
+///   <https://dictionary.cambridge.org/dictionary/english/authoritative>.
 ///   Accessed 29 Nov. 2020.
 ///
 /// # Reference

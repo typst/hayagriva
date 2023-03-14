@@ -13,7 +13,7 @@ use crate::Entry;
 /// # Examples
 /// - Henrich, J., Heine, S. J., & Norenzayan, A. (2010, June 15). The weirdest
 ///   people in the world? _Behavioral and brain sciences,_ 33(2-3), 61–83.
-///   https://doi.org/10.1017/S0140525X0999152X
+///   <https://doi.org/10.1017/S0140525X0999152X>
 /// - Gluck, M. A., Mercado, E., & Myers, C. E. (2020). _Learning and memory_
 ///   (4th ed.).
 /// - Davidson, A. (Director), & McKenna, C. (Writer). (2010, November 18).

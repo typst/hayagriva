@@ -28,7 +28,7 @@ enum Uniqueness {
 ///
 /// Bibliography:
 /// - Angell, I. O., and H. J. Godwin. 1977. “On Truncatable Primes.” _Math.
-///   Comp._ 31, 265–267. https://doi.org/10.1090/S0025-5718-1977-0427213-2.
+///   Comp._ 31, 265–267. <https://doi.org/10.1090/S0025-5718-1977-0427213-2>.
 /// - Donne, John. 1995. _The Variorum Edition of the Poetry of John Donne._
 ///   Edited by Gary A. Stringer. vol. 6. _The "Anniversaries" and the "Epicedes
 ///   and Obsequies",_ edited by Gary A. Stringer and Ted-Larry Pebworth.

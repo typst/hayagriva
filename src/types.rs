@@ -256,7 +256,7 @@ pub enum PersonError {
 
 impl Person {
     /// This function expects a list of strings with its length between one and
-    /// three. The first part will be interpreted as the <prefix> <Name>, the
+    /// three. The first part will be interpreted as the `<prefix> <Name>`, the
     /// second part as the given name and the third part as the suffix.
     ///
     /// The prefix and name are seperated just like in BiBTeX, as described
