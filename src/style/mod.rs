@@ -544,14 +544,14 @@ fn name_list_straight(persons: &[Person]) -> Vec<String> {
 }
 
 /// Formatting modifiers for strings.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Formatting {
     /// **Bold print**
     Bold,
-    /// _italic print_
+    /// _Italic print_
     Italic,
-    /// Do not hyphenate, e.g. for URLs.
-    NoHyphenation,
+    /// Should link to the given URL.
+    Link(String),
 }
 
 /// Will move a format range's indicies by `o`.
@@ -694,8 +694,8 @@ impl DisplayString {
         let mut start_end = vec![];
 
         for item in &self.formatting {
-            let opt = item.1;
-            if opt == Formatting::NoHyphenation {
+            let opt = &item.1;
+            if matches!(opt, Formatting::Link(_)) {
                 continue;
             }
             let min = item.0.start;
@@ -720,7 +720,7 @@ impl DisplayString {
                 match f {
                     Formatting::Bold => "1",
                     Formatting::Italic => "3",
-                    Formatting::NoHyphenation => unreachable!(),
+                    Formatting::Link(_) => unreachable!(),
                 }
             };
             res = format!("\x1b[{}m", code) + &res;

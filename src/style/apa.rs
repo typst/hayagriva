@@ -401,7 +401,7 @@ impl Apa {
                                 "Retrieved {}, from ",
                                 date.display_year()
                             ));
-                            res.start_format(Formatting::NoHyphenation);
+                            res.start_format(Formatting::Link(uv.into()));
                             res += uv;
                             res.commit_formats();
                             res
@@ -412,7 +412,7 @@ impl Apa {
                                 get_month_name(month).unwrap(),
                                 date.display_year(),
                             ));
-                            res.start_format(Formatting::NoHyphenation);
+                            res.start_format(Formatting::Link(uv.into()));
                             res += uv;
                             res.commit_formats();
                             res
@@ -424,7 +424,7 @@ impl Apa {
                                 day,
                                 date.display_year(),
                             ));
-                            res.start_format(Formatting::NoHyphenation);
+                            res.start_format(Formatting::Link(uv.into()));
                             res += uv;
                             res.commit_formats();
                             res.push(')');
@@ -433,14 +433,14 @@ impl Apa {
                     }
                 } else {
                     let mut res = DisplayString::new();
-                    res.start_format(Formatting::NoHyphenation);
+                    res.start_format(Formatting::Link(uv.into()));
                     res += uv;
                     res.commit_formats();
                     res
                 }
             } else {
                 let mut res = DisplayString::new();
-                res.start_format(Formatting::NoHyphenation);
+                res.start_format(Formatting::Link(uv.into()));
                 res += uv;
                 res.commit_formats();
                 res
@@ -1003,8 +1003,9 @@ impl Apa {
                 res.push(' ');
             }
 
-            res.start_format(Formatting::NoHyphenation);
-            res += &format!("https://doi.org/{}", doi);
+            let link = format!("https://doi.org/{}", doi);
+            res.start_format(Formatting::Link(link.clone()));
+            res += &link;
             res.commit_formats();
         } else {
             let reference_entry = select!(Reference > Entry);

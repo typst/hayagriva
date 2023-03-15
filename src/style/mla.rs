@@ -640,7 +640,7 @@ impl Mla {
             // Location: May also produce a supplemental item.
             if let Some(doi) = entry.doi() {
                 let mut dstr = DisplayString::new();
-                dstr.start_format(Formatting::NoHyphenation);
+                dstr.start_format(Formatting::Link(format!("https://doi.org/{}", doi)));
                 dstr += &format!("doi:{}", doi);
                 dstr.commit_formats();
                 location.push(dstr);
@@ -657,7 +657,7 @@ impl Mla {
                     ));
                 }
                 let mut dstr = DisplayString::new();
-                dstr.start_format(Formatting::NoHyphenation);
+                dstr.start_format(Formatting::Link(qurl.value.to_string()));
                 dstr += qurl.value.as_str();
                 dstr.commit_formats();
 
@@ -730,20 +730,21 @@ impl Mla {
                     if !lc.location.is_empty() {
                         lc.location += ", ";
                     }
-                    lc.location.start_format(Formatting::NoHyphenation);
+                    lc.location.start_format(Formatting::Link(qurl.value.to_string()));
                     lc.location += qurl.value.as_str();
                     lc.location.commit_formats();
                     has_url = true;
                 }
             } else if let Some(doi) = entry.doi() {
                 let mut nc = ContainerInfo::new();
-                nc.location.start_format(Formatting::NoHyphenation);
+                nc.location
+                    .start_format(Formatting::Link(format!("https://doi.org/{}", doi)));
                 nc.location += &format!("doi:{}", doi);
                 nc.location.commit_formats();
                 containers.push(nc);
             } else if let Some(qurl) = entry.url_any() {
                 let mut nc = ContainerInfo::new();
-                nc.location.start_format(Formatting::NoHyphenation);
+                nc.location.start_format(Formatting::Link(qurl.value.to_string()));
                 nc.location += qurl.value.as_str();
                 nc.location.commit_formats();
                 let vdate = qurl.visit_date.is_some() && select!(Blog | Web | Misc | (!(*["date"])) | (* > (Blog | Web | Misc))).matches(entry);

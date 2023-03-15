@@ -870,11 +870,11 @@ impl Ieee {
                     }
 
                     res += ". Available: ";
-                    res.start_format(Formatting::NoHyphenation);
+                    res.start_format(Formatting::Link(url.value.to_string()));
                     res += url.value.as_str();
                     res.commit_formats();
                 } else {
-                    res.start_format(Formatting::NoHyphenation);
+                    res.start_format(Formatting::Link(url.value.to_string()));
                     res += url.value.as_str();
                     res.commit_formats();
 

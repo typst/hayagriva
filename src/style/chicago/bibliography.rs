@@ -409,8 +409,9 @@ impl Bibliography {
 
         let url = if let Some(doi) = entry.doi() {
             let mut res = DisplayString::new();
-            res.start_format(Formatting::NoHyphenation);
-            res += &format!("https://doi.org/{}", doi);
+            let link = format!("https://doi.org/{}", doi);
+            res.start_format(Formatting::Link(link.clone()));
+            res += &link;
             res.commit_formats();
             res
         } else if let Some(qurl) = entry.url_any() {
@@ -421,7 +422,7 @@ impl Bibliography {
                 }
             }
 
-            res.start_format(Formatting::NoHyphenation);
+            res.start_format(Formatting::Link(qurl.value.to_string()));
             res += qurl.value.as_str();
             res.commit_formats();
             res
