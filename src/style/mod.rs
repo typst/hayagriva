@@ -292,6 +292,8 @@ impl Brackets {
 pub enum BibliographyOrdering {
     /// Order items by the alphanumerical order of their prefixes.
     ByPrefix,
+    /// Order items by the numeric order of their prefixes.
+    ByNumericPrefix,
     /// Order items by their authors, then titles, and finally dates.
     ByAuthor,
     /// Do not reorder. Bibliography will be in insertion order of the database.
@@ -915,10 +917,21 @@ fn sorted_bibliography(
 ) -> Vec<DisplayReference> {
     match ordering {
         BibliographyOrdering::ByPrefix => {
-            items.sort_unstable_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
+            items.sort_by(|(a, _), (b, _)| a.prefix.cmp(&b.prefix));
         }
+        BibliographyOrdering::ByNumericPrefix => items.sort_by_key(|(reference, _)| {
+            reference.prefix.as_ref().and_then(|prefix| {
+                prefix
+                    .value
+                    .chars()
+                    .filter(|c| c.is_numeric())
+                    .collect::<String>()
+                    .parse::<i64>()
+                    .ok()
+            })
+        }),
         BibliographyOrdering::ByAuthor => {
-            items.sort_unstable_by(|(a_ref, a_auths), (b_ref, b_auths)| {
+            items.sort_by(|(a_ref, a_auths), (b_ref, b_auths)| {
                 author_title_ord_custom(
                     a_ref.entry,
                     b_ref.entry,

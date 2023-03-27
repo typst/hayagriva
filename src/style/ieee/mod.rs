@@ -942,6 +942,6 @@ impl<'a> BibliographyStyle<'a> for Ieee {
     }
 
     fn ordering(&self) -> BibliographyOrdering {
-        BibliographyOrdering::ByPrefix
+        BibliographyOrdering::ByNumericPrefix
     }
 }
