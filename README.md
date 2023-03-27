@@ -43,7 +43,7 @@ to install and use Hayagriva on your terminal.
 Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
-hayagriva = "0.1"
+hayagriva = "0.2"
 ```
 
 Below, there is an example of how to parse a YAML database and get a Modern
@@ -100,7 +100,7 @@ default features by writing this in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hayagriva = { version = "0.1", default-features = false }
+hayagriva = { version = "0.2", default-features = false }
 ```
 
 ### Selectors
