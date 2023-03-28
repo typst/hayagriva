@@ -1113,7 +1113,7 @@ impl<'a> BibliographyStyle<'a> for Apa {
     }
 
     fn ordering(&self) -> BibliographyOrdering {
-        BibliographyOrdering::ByInsertionOrder
+        BibliographyOrdering::ByAuthor
     }
 }
 
