@@ -43,7 +43,7 @@ to install and use Hayagriva on your terminal.
 Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
-hayagriva = "0.2"
+hayagriva = "0.3"
 ```
 
 Below, there is an example of how to parse a YAML database and get a Modern
