@@ -327,6 +327,15 @@ impl Case for SentenceCase {
                 title.len() - index
             };
 
+            let mut index_next = index + 1;
+
+            while index_next < index + len
+                && index_next < title.len()
+                && !title.is_char_boundary(index_next)
+            {
+                index_next += 1;
+            }
+
             let situation = if len <= 1 {
                 CaseSituation::Normal
             } else if title[index..index + len]
@@ -334,7 +343,7 @@ impl Case for SentenceCase {
                 .all(|c| c.is_uppercase() || !c.is_alphanumeric())
             {
                 CaseSituation::AllUppercase
-            } else if title[index + 1..index + len].chars().any(|c| c.is_uppercase()) {
+            } else if title[index_next..index + len].chars().any(|c| c.is_uppercase()) {
                 CaseSituation::HasNonFirstUppercase
             } else {
                 CaseSituation::Normal

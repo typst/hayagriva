@@ -4,7 +4,8 @@ use std::convert::TryFrom;
 
 use biblatex as tex;
 use tex::{
-    Chunk, ChunksExt, DateValue, Edition, EditorType, RetrievalError, Spanned, TypeError,
+    Chunk, ChunksExt, DateValue, EditorType, PermissiveType, RetrievalError, Spanned,
+    TypeError,
 };
 use url::Url;
 
@@ -86,11 +87,11 @@ impl From<&[Spanned<Chunk>]> for NumOrStr {
     }
 }
 
-impl From<&Edition> for NumOrStr {
-    fn from(edition: &Edition) -> Self {
+impl From<&PermissiveType<i64>> for NumOrStr {
+    fn from(edition: &PermissiveType<i64>) -> Self {
         match edition {
-            Edition::Int(i) => Self::Number(*i),
-            Edition::Chunks(c) => Self::Str(c.format_sentence()),
+            PermissiveType::Typed(i) => Self::Number(*i),
+            PermissiveType::Chunks(c) => Self::Str(c.format_sentence()),
         }
     }
 }
@@ -292,7 +293,13 @@ impl TryFrom<&tex::Entry> for Entry {
         {
             let mut conference = Entry::new(&entry.key, EntryType::Conference);
 
-            if let Some(event_date) = map_res(entry.event_date())?.map(|d| d.into()) {
+            if let Some(event_date) = map_res(entry.event_date())?
+                .and_then(|d| match d {
+                    PermissiveType::Typed(d) => Some(d),
+                    PermissiveType::Chunks(_) => None,
+                })
+                .map(|d| d.into())
+            {
                 conference.set_date(event_date);
             }
             if let Some(title) = map_res(entry.eventtitle())?.map(Title::new) {
@@ -305,7 +312,13 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_parent(conference);
         }
 
-        if let Some(date) = map_res(entry.date())?.map(|d| d.into()) {
+        if let Some(date) = map_res(entry.date())?
+            .and_then(|d| match d {
+                PermissiveType::Typed(d) => Some(d),
+                PermissiveType::Chunks(_) => None,
+            })
+            .map(|d| d.into())
+        {
             item.set_date(date);
         }
 
@@ -345,7 +358,7 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(volume) = map_res(entry.volume())? {
+        if let Some(PermissiveType::Typed(volume)) = map_res(entry.volume())? {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_volume(volume..volume);
             } else {
@@ -385,7 +398,12 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(url) = map_res(entry.url())?.and_then(|s| Url::parse(&s).ok()) {
-            let date = map_res(entry.url_date())?.map(|d| d.into());
+            let date = map_res(entry.url_date())?
+                .and_then(|d| match d {
+                    PermissiveType::Typed(d) => Some(d),
+                    PermissiveType::Chunks(_) => None,
+                })
+                .map(|d| d.into());
             item.set_url(QualifiedUrl { value: url, visit_date: date });
         }
 
@@ -454,7 +472,13 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(pages) = map_res(entry.pages())?.and_then(|p| p.get(0).cloned()) {
+        if let Some(pages) = map_res(entry.pages())?
+            .and_then(|pages| match pages {
+                PermissiveType::Typed(p) => Some(p),
+                PermissiveType::Chunks(_) => None,
+            })
+            .and_then(|p| p.get(0).cloned())
+        {
             item.set_page_range((pages.start as i64)..(pages.end as i64));
         }
 
