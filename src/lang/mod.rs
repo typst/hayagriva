@@ -194,7 +194,12 @@ impl Case for TitleCase {
 
         // Deplete iterator
         for c in iter {
-            res.push_str(&c.to_lowercase().to_string());
+            if last_retain  {
+                res.push_str(&c.to_string());
+            }
+            else {            
+                res.push_str(&c.to_lowercase().to_string());
+            }        
         }
 
         res
