@@ -45,6 +45,8 @@ pub struct Ieee {
     /// How many authors have to be there for their list to be abbreviated with
     /// "et al."
     pub et_al_threshold: Option<u32>,
+    /// Whether to use abbreviations for journal titles
+    pub abbreviate_journals: bool,
 }
 
 fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
@@ -71,6 +73,7 @@ impl Default for Ieee {
             sentence_case: SentenceCase::default(),
             title_case,
             et_al_threshold: Some(6),
+            abbreviate_journals: true,
         }
     }
 }
@@ -244,7 +247,11 @@ impl Ieee {
 
             if let Some(title) = canon_title {
                 let title_case = title.canonical.format_title_case(&self.title_case);
-                let ct = abbreviations::abbreviate_journal(&title_case);
+                let ct = if self.abbreviate_journals {
+                    abbreviations::abbreviate_journal(&title_case)
+                } else {
+                    title_case.to_string()
+                };
 
                 if canonical.entry_type == Conference {
                     res += "Presented at ";
@@ -582,7 +589,11 @@ impl Ieee {
             (_, Thesis) => {
                 res.push("Thesis".to_string());
                 if let Some(org) = canonical.organization() {
-                    res.push(abbreviations::abbreviate_journal(&org));
+                    res.push(if self.abbreviate_journals {
+                        abbreviations::abbreviate_journal(&org)
+                    } else {
+                        org.to_string()
+                    });
 
                     if let Some(location) = canonical.location() {
                         res.push(location.value.clone());
