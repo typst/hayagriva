@@ -1118,6 +1118,11 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
             let record = db.records.get_mut(atomic.entry.key()).unwrap();
             record.prefix = Some(res.clone());
 
+            if let Some(supplement) = atomic.supplement {
+                res += ", ";
+                res += supplement;
+            }
+
             items.push(res);
         }
 
@@ -1200,6 +1205,11 @@ impl<'a> CitationStyle<'a> for AuthorTitle {
                 res += "(";
                 res += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
                 res += ")";
+            }
+
+            if let Some(supplement) = atomic.supplement {
+                push_comma_quote_aware(&mut res.value, ',', true);
+                res += supplement;
             }
 
             items.push(res);
