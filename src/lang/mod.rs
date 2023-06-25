@@ -22,9 +22,9 @@ pub struct TitleCase {
     /// Always capitalize a word matching or exceeding a certain length, even
     /// if it is on the capitalization blacklist.
     pub always_capitalize_min_len: Option<usize>,
-    /// Treat the hyphen as a word seperator, i. e. capitalize in hyphenated
+    /// Treat the hyphen as a word separator, i. e. capitalize in hyphenated
     /// expressions.
-    pub hyphen_word_seperator: bool,
+    pub hyphen_word_separator: bool,
     /// Do not touch all-uppercase words like "USA" if the title contains
     /// lower-case characters at all.
     pub keep_all_uppercase_words: bool,
@@ -42,7 +42,7 @@ impl Default for TitleCase {
             always_capitalize_after_punctuation: true,
             always_capitalize_last_word: true,
             always_capitalize_min_len: None,
-            hyphen_word_seperator: true,
+            hyphen_word_separator: true,
             keep_all_uppercase_words: true,
             use_exception_dictionary: true,
             trim_start: true,
@@ -97,7 +97,7 @@ impl Case for TitleCase {
             if c == '.' || c == ':' || c == '?' || c == '!' {
                 priority_override = self.always_capitalize_after_punctuation;
             } else if c == '('
-                || c == '-' && self.hyphen_word_seperator
+                || c == '-' && self.hyphen_word_separator
                 || c == '['
                 || c == '{'
                 || c == ','

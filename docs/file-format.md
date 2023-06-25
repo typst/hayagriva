@@ -374,7 +374,7 @@ Needs a keyword with one of the following values:
 - `scene`. A part of a show or another type of performed media, typically all taking place in the same location (default parent: `video`).
 - `artwork`. A form of artistic/creative expression (default parent: `exhibition`).
 - `patent`. A technical document deposited at a government agency that describes an invention to legally limit the rights of reproduction to the inventors.
-- `case`. Reference to a legal case that was or is to be heared at a court of law.
+- `case`. Reference to a legal case that was or is to be heard at a court of law.
 - `newspaper`. The issue of a newspaper that was published on a given day.
 - `legislation`. Legal document or draft thereof that is, is to be, or was to be enacted into binding law (default parent: `anthology`).
 - `manuscript`. Written document that is submitted as a candidate for publication.
