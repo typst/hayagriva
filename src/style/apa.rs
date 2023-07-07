@@ -421,7 +421,7 @@ impl Apa {
                             let mut res = DisplayString::from_string(format!(
                                 "(Retrieved {} {}, {}, from ",
                                 get_month_name(month).unwrap(),
-                                day,
+                                day + 1,
                                 date.display_year(),
                             ));
                             res.start_format(Formatting::Link(uv.into()));
@@ -1119,9 +1119,15 @@ impl<'a> BibliographyStyle<'a> for Apa {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use url::Url;
+
     use super::Apa;
+    use crate::types::Date;
     use crate::types::EntryType;
     use crate::types::Person;
+    use crate::types::QualifiedUrl;
     use crate::Entry;
 
     #[test]
@@ -1141,6 +1147,21 @@ mod tests {
         assert_eq!(
             "van de Graf, J., Günther, H.-J., & Mädje, L. E.",
             apa.get_author(&entry).0
+        );
+    }
+
+    #[test]
+    fn retrieved_date() {
+        let mut entry = Entry::new("test", EntryType::Article);
+        entry.set_url(QualifiedUrl {
+            value: Url::parse("https://example.net").unwrap(),
+            visit_date: Some(Date::from_str("2023-03-1").unwrap()),
+        });
+
+        let apa = Apa::new();
+        assert_eq!(
+            "(Retrieved March 1, 2023, from https://example.net/)",
+            apa.get_retrieval_date(&entry, true).unwrap().value
         );
     }
 }
