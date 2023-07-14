@@ -365,11 +365,11 @@ impl Numerical {
     }
 }
 
-/// Specify the order in which numbers are verteilt.
+/// Specify the order in which numbers are assigned.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum NumericalOrdering {
-    /// Numbers will be ordered by entries authors, then titles, and finally
+    /// Numbers will be ordered by entries' authors, then titles, and finally
     /// dates.
     ///
     /// Note that this only works if all entries were pushed into the database
