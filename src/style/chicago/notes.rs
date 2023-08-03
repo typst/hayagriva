@@ -96,7 +96,7 @@ impl<'a> ChicagoNotes<'a> {
     /// Create the struct using a configuration struct.
     ///
     /// You can use [the default trait implementation](Self::default) to
-    /// initialize with the standard configuaration.
+    /// initialize with the standard configuration.
     pub fn new() -> Self {
         Self {
             config: ChicagoConfig::default(),

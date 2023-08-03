@@ -163,7 +163,7 @@ fn main() {
                 .arg(
                     Arg::new("supplements")
                         .long("supplements")
-                        .help("Specify additional information for the citations, e.g. \"p. 6,p. 4\", in a comma-seperated list.")
+                        .help("Specify additional information for the citations, e.g. \"p. 6,p. 4\", in a comma-separated list.")
                         .takes_value(true)
                 )
                 .arg(

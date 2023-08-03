@@ -68,7 +68,7 @@ pub enum EntryType {
     /// A technical document deposited at a government agency that describes an
     /// invention to legally limit the rights of reproduction to the inventors.
     Patent,
-    /// Reference to a legal case that was or is to be heared at a court of law.
+    /// Reference to a legal case that was or is to be heard at a court of law.
     Case,
     /// The issue of a newspaper that was published on a given day.
     Newspaper,
@@ -259,7 +259,7 @@ impl Person {
     /// three. The first part will be interpreted as the `<prefix> <Name>`, the
     /// second part as the given name and the third part as the suffix.
     ///
-    /// The prefix and name are seperated just like in BiBTeX, as described
+    /// The prefix and name are separated just like in BiBTeX, as described
     /// [Nicolas Markey describes in "Tame the BeaST"][taming], p. 24. The gist
     /// is that the given name will start at the first word with a capital
     /// letter, if there are any such words.
@@ -567,7 +567,7 @@ impl Date {
     ///
     /// ## Arguments
     /// - `secular`   Switches between "BC" and "BCE"
-    /// - `periods`   Determines wheter to use punctuation in the abbreviations
+    /// - `periods`   Determines whether to use punctuation in the abbreviations
     /// - `designate_positive`    Show a denomination for positive years
     /// - `ad_prefix` Use the "AD" designation for positive years in a prefix
     ///               position. Will be ignored if `designate_positive` is negative.
@@ -607,7 +607,7 @@ impl Date {
 }
 
 /// A string with a value and possibly user-defined overrides for various
-/// formattings.
+/// formatting.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FmtString {
     /// Canonical string value.

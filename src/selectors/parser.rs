@@ -253,7 +253,7 @@ impl<'s> Iterator for Tokens<'s> {
             '(' => Token::LeftParen,
             ')' => Token::RightParen,
 
-            // List seperators.
+            // List separators.
             ',' => Token::Comma,
             '&' => Token::Ampersand,
             '|' => Token::Pipe,

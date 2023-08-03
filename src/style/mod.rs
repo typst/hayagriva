@@ -556,7 +556,7 @@ pub enum Formatting {
     Link(String),
 }
 
-/// Will move a format range's indicies by `o`.
+/// Will move a format range's indices by `o`.
 fn offset_format_range(
     r: (std::ops::Range<usize>, Formatting),
     o: usize,
@@ -677,7 +677,7 @@ impl DisplayString {
         }
     }
 
-    /// Joins a number of display strings with a seperator in-between.
+    /// Joins a number of display strings with a separator in-between.
     pub fn join(items: &[Self], joiner: &str) -> Self {
         let mut res = DisplayString::new();
         for (i, e) in items.iter().enumerate() {
@@ -1145,7 +1145,7 @@ impl<'a> CitationStyle<'a> for Alphanumerical {
 #[non_exhaustive]
 pub struct AuthorTitle {
     /// This citation style uses code from Chicago, therefore the settings are
-    /// contined within this struct.
+    /// contained within this struct.
     pub config: ChicagoConfig,
 }
 

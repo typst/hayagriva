@@ -55,7 +55,7 @@ pub enum YamlBibliographyError {
         /// Expected data type.
         expected: String,
     },
-    /// An error occured when trying to parse the data in an entry field
+    /// An error occurred when trying to parse the data in an entry field
     /// to a given type.
     #[error("error when parsing data for field `{field}` in entry `{key}` ({source})")]
     DataType {
@@ -182,7 +182,7 @@ pub fn from_yaml(yaml: Yaml) -> Result<Vec<Entry>, YamlBibliographyError> {
 #[cfg(feature = "biblatex")]
 #[derive(Clone, Debug)]
 pub enum BibLaTeXError {
-    /// An error occured when parsing a BibLaTeX file.
+    /// An error occurred when parsing a BibLaTeX file.
     Parse(biblatex::ParseError),
     /// One of the BibLaTeX fields was malformed for its type.
     Type(biblatex::TypeError),
