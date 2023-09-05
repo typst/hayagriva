@@ -686,39 +686,34 @@ impl DisplayString {
         let mut start_end = vec![];
 
         for item in &self.formatting {
-            let opt = &item.1;
-            if matches!(opt, Formatting::Link(_)) {
+            let fmt = &item.1;
+            if matches!(fmt, Formatting::Link(_)) {
                 continue;
             }
-            let min = item.0.start;
-            let max = item.0.end;
 
-            start_end.push((opt, min, false));
-            start_end.push((opt, max, true));
+            start_end.push((fmt, item.0.start, false));
+            start_end.push((fmt, item.0.end, true));
         }
 
-        start_end.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+        start_end.sort_by(|a, b| a.1.cmp(&b.1));
 
         let mut res = String::new();
-        let mut pointer = self.len();
+        let mut pointer = 0;
 
-        for (f, index, end) in &start_end {
-            res = self.value[*index..pointer].to_string() + &res;
-            pointer = *index;
+        for &(fmt, index, end) in &start_end {
+            res.push_str(&self.value[pointer..index]);
+            pointer = index;
 
-            let code = if *end {
-                "0"
-            } else {
-                match f {
-                    Formatting::Bold => "1",
-                    Formatting::Italic => "3",
-                    Formatting::Link(_) => unreachable!(),
-                }
+            let code = match fmt {
+                _ if end => '0',
+                Formatting::Bold => '1',
+                Formatting::Italic => '3',
+                Formatting::Link(_) => unreachable!(),
             };
-            res = format!("\x1b[{}m", code) + &res;
+            write!(res, "\x1b[{code}m").unwrap();
         }
-        res = self.value[0..pointer].to_string() + &res;
 
+        res.push_str(&self.value[pointer..]);
         res
     }
 }
