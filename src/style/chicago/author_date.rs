@@ -65,7 +65,7 @@ impl ChicagoAuthorDate {
         Self { config: ChicagoConfig::new(), et_al_limit: 4 }
     }
 
-    fn uniqueness<'a>(author: &Person, db: &Database<'a>) -> Uniqueness {
+    fn uniqueness(author: &Person, db: &Database) -> Uniqueness {
         let total_authors: HashSet<_> = db
             .records()
             .flat_map(|e| get_creators(e.entry).0)
@@ -313,7 +313,7 @@ mod tests {
 
     #[allow(non_snake_case)]
     fn Cs(entries: &[Entry]) -> (Vec<Citation>, Database) {
-        let cv = entries.iter().map(|e| C(e)).collect();
+        let cv = entries.iter().map(C).collect();
 
         let mut db = Database::new();
 
@@ -399,8 +399,7 @@ mod tests {
                 1648,
             ),
         ];
-        let mut formatter = ChicagoAuthorDate::default();
-        formatter.et_al_limit = 3;
+        let mut formatter = ChicagoAuthorDate { et_al_limit: 3, ..Default::default() };
         let (citations, mut database) = Cs(&es);
         assert_eq!(
             database.citation(&mut formatter, &citations).display.value,
@@ -430,8 +429,7 @@ mod tests {
                 1662,
             ),
         ];
-        let mut formatter = ChicagoAuthorDate::default();
-        formatter.et_al_limit = 3;
+        let mut formatter = ChicagoAuthorDate { et_al_limit: 3, ..Default::default() };
         let (citations, mut database) = Cs(&es);
         assert_eq!(
             database.citation(&mut formatter, &citations).display.value,

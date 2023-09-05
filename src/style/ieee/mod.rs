@@ -177,7 +177,7 @@ impl Ieee {
         let authors = if let Some(names) = names {
             Some(names)
         } else if let Some(authors) = entry.authors().or_else(|| canonical.authors()) {
-            let list = name_list_straight(&authors);
+            let list = name_list_straight(authors);
             pers_refs.extend(authors.iter().cloned());
             Some(list)
         } else {
@@ -200,7 +200,7 @@ impl Ieee {
             let res = if !eds.is_empty() {
                 format!(
                     "{}, {}",
-                    self.and_list(name_list_straight(&eds)),
+                    self.and_list(name_list_straight(eds)),
                     if eds.len() == 1 { "Ed." } else { "Eds." }
                 )
             } else {
@@ -354,7 +354,7 @@ impl Ieee {
             (_, Conference) | (_, Proceedings) => {
                 if canonical.entry_type == Proceedings {
                     if let Some(eds) = canonical.editors() {
-                        let mut al = self.and_list(name_list_straight(&eds));
+                        let mut al = self.and_list(name_list_straight(eds));
                         if eds.len() > 1 {
                             al += ", Eds."
                         } else {
@@ -364,7 +364,7 @@ impl Ieee {
                     }
 
                     if let Some(vols) = entry.volume().or_else(|| canonical.volume()) {
-                        res.push(format_range("vol.", "vols.", &vols));
+                        res.push(format_range("vol.", "vols.", vols));
                     }
 
                     if let Some(ed) = canonical.edition() {
@@ -395,7 +395,7 @@ impl Ieee {
                     }
                 } else {
                     if let Some(pages) = entry.page_range() {
-                        res.push(format_range("p.", "pp.", &pages));
+                        res.push(format_range("p.", "pp.", pages));
                     }
 
                     if let Some(doi) = entry.doi() {
@@ -434,7 +434,7 @@ impl Ieee {
                     }
 
                     if let Some(pages) = entry.page_range() {
-                        res.push(format_range("p.", "pp.", &pages));
+                        res.push(format_range("p.", "pp.", pages));
                     }
                 } else if let Some(date) = date {
                     res.push(format!("({})", date));
@@ -521,7 +521,7 @@ impl Ieee {
             }
             (_, Periodical) => {
                 if let Some(vols) = canonical.volume() {
-                    res.push(format_range("vol.", "vols.", &vols));
+                    res.push(format_range("vol.", "vols.", vols));
                 }
 
                 if let Some(iss) = canonical.issue() {
@@ -529,7 +529,7 @@ impl Ieee {
                 }
 
                 let pages = if let Some(pages) = entry.page_range() {
-                    res.push(format_range("p.", "pp.", &pages));
+                    res.push(format_range("p.", "pp.", pages));
                     true
                 } else {
                     false
@@ -573,7 +573,7 @@ impl Ieee {
                 }
 
                 if let Some(vols) = canonical.volume().or_else(|| entry.volume()) {
-                    res.push(format_range("vol.", "vols.", &vols));
+                    res.push(format_range("vol.", "vols.", vols));
                 }
 
                 if let Some(iss) = canonical.issue() {
@@ -590,7 +590,7 @@ impl Ieee {
                 res.push("Thesis".to_string());
                 if let Some(org) = canonical.organization() {
                     res.push(if self.abbreviate_journals {
-                        abbreviations::abbreviate_journal(&org)
+                        abbreviations::abbreviate_journal(org)
                     } else {
                         org.to_string()
                     });
@@ -679,7 +679,7 @@ impl Ieee {
                     entry.authors().unwrap_or_default().get(0),
                     entry.editors().or_else(|| canonical.editors()),
                 ) {
-                    let mut al = self.and_list(name_list_straight(&eds));
+                    let mut al = self.and_list(name_list_straight(eds));
                     if eds.len() > 1 {
                         al += ", Eds."
                     } else {
@@ -689,7 +689,7 @@ impl Ieee {
                 }
 
                 if let Some(vols) = entry.volume().or_else(|| canonical.volume()) {
-                    res.push(format_range("vol.", "vols.", &vols));
+                    res.push(format_range("vol.", "vols.", vols));
                 }
 
                 if let Some(ed) = canonical.edition() {
@@ -712,7 +712,7 @@ impl Ieee {
                         publ += ": ";
                     }
 
-                    publ += &publisher;
+                    publ += publisher;
 
                     if let Some(lang) = entry.language().or_else(|| canonical.language())
                     {
@@ -739,7 +739,7 @@ impl Ieee {
                 }
 
                 if let Some(pages) = entry.page_range() {
-                    res.push(format_range("p.", "pp.", &pages));
+                    res.push(format_range("p.", "pp.", pages));
                 }
             }
         }
@@ -759,7 +759,7 @@ impl Ieee {
                 sn_stack.push(sn);
             }
             if let Some(p) = parent {
-                entry = &p;
+                entry = p;
                 parent = entry.parents().and_then(|v| v.first());
             } else {
                 break;
@@ -774,12 +774,11 @@ impl Ieee {
 
         let secs = sn_stack
             .into_iter()
-            .map(|s| str::parse::<u32>(&s))
-            .filter(|s| s.is_ok())
-            .map(|s| s.unwrap())
-            .collect::<Vec<_>>();
+            .map(str::parse)
+            .filter_map(Result::ok)
+            .collect::<Vec<u32>>();
 
-        let chapter = secs.get(0).copied();
+        let chapter = secs.first().copied();
         let section = if secs.len() > 1 { secs.last().copied() } else { None };
 
         let url = self.show_url(entry);
@@ -819,7 +818,7 @@ impl Ieee {
                     res += ". ";
                 }
                 res.push('(');
-                res += &format_date(&date, record.disambiguation);
+                res += &format_date(date, record.disambiguation);
                 res.push(')');
             }
         }
@@ -871,7 +870,7 @@ impl Ieee {
 
                 if canonical.entry_type != Web && canonical.entry_type != Blog {
                     if let Some(date) = &url.visit_date {
-                        res += &format!("Accessed: {}. ", format_date(&date, None));
+                        res += &format!("Accessed: {}. ", format_date(date, None));
                     }
 
                     if canonical.entry_type == Video {
@@ -890,7 +889,7 @@ impl Ieee {
                     res.commit_formats();
 
                     if let Some(date) = &url.visit_date {
-                        res += &format!(" (accessed: {}).", format_date(&date, None));
+                        res += &format!(" (accessed: {}).", format_date(date, None));
                     }
                 }
             }

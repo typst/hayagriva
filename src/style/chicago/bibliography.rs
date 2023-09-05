@@ -350,7 +350,6 @@ impl Bibliography {
         add.value = add
             .value
             .graphemes(true)
-            .into_iter()
             .enumerate()
             .map(|(i, e)| if i == 0 { e.to_uppercase() } else { e.into() })
             .collect::<Vec<_>>()

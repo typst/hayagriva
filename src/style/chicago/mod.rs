@@ -376,7 +376,7 @@ pub(super) fn get_chunk_title(
     let np = entry.entry_type == Newspaper;
 
     if short {
-        if let Some(title) = entry.title().map(|t| shorthand(t)) {
+        if let Some(title) = entry.title().map(shorthand) {
             res += &if entry.entry_type == Entry {
                 title.value
             } else {
@@ -827,17 +827,13 @@ fn get_info_element(
             let par_anth = bindings.remove("p").unwrap();
             let mut title = get_chunk_title(par_anth, false, false, common).value.into();
 
-            let issue = if let Some(issue) = par_anth.issue() {
-                Some(match issue {
-                    NumOrStr::Str(s) => (s.clone(), None),
-                    NumOrStr::Number(i) => (
-                        if series { format!("ep. {}", i) } else { format!("no. {}", i) },
-                        Some(*i),
-                    ),
-                })
-            } else {
-                None
-            };
+            let issue = par_anth.issue().map(|issue| match issue {
+                NumOrStr::Str(s) => (s.clone(), None),
+                NumOrStr::Number(i) => (
+                    if series { format!("ep. {}", i) } else { format!("no. {}", i) },
+                    Some(*i),
+                ),
+            });
 
             let volume = par_anth.volume().map(|v| {
                 let val = if v.start == v.end { Some(v.start) } else { None };

@@ -234,15 +234,7 @@ fn yaml_hash_map_with_string_keys(
     map: LinkedHashMap<Yaml, Yaml>,
 ) -> LinkedHashMap<String, Yaml> {
     map.into_iter()
-        .filter_map(
-            |(k, v)| {
-                if let Some(k) = k.into_string() {
-                    Some((k, v))
-                } else {
-                    None
-                }
-            },
-        )
+        .filter_map(|(k, v)| k.into_string().map(|k| (k, v)))
         .collect()
 }
 
@@ -391,34 +383,34 @@ fn affiliated_from_yaml(
     field_name: &str,
 ) -> Result<(Vec<Person>, PersonRole), YamlBibliographyError> {
     let mut map = yaml_hash_map_with_string_keys(item.into_hash().ok_or_else(|| {
-        YamlBibliographyError::new_data_type_error(&key, &field_name, "affiliated person")
+        YamlBibliographyError::new_data_type_error(key, field_name, "affiliated person")
     })?);
 
     let persons = map
         .remove("names")
         .ok_or_else(|| {
             YamlBibliographyError::new_data_type_src_error(
-                &key,
-                &field_name,
+                key,
+                field_name,
                 YamlDataTypeError::MissingRequiredField,
             )
         })
-        .and_then(|value| persons_from_yaml(value, &key, &field_name))?;
+        .and_then(|value| persons_from_yaml(value, key, field_name))?;
 
     let role = map
         .remove("role")
         .ok_or_else(|| {
             YamlBibliographyError::new_data_type_src_error(
-                &key,
-                &field_name,
+                key,
+                field_name,
                 YamlDataTypeError::MissingRequiredField,
             )
         })
         .and_then(|t| {
             t.into_string().ok_or_else(|| {
                 YamlBibliographyError::new_data_type_src_error(
-                    &key,
-                    &field_name,
+                    key,
+                    field_name,
                     YamlDataTypeError::MismatchedPrimitive,
                 )
             })
@@ -549,7 +541,7 @@ fn entry_from_yaml(
             }),
             "issue" | "edition" => {
                 let as_int = yaml.as_i64();
-                let as_str = if as_int == None { yaml.into_string() } else { None };
+                let as_str = if as_int.is_none() { yaml.into_string() } else { None };
 
                 if let Some(i) = as_int {
                     Value::IntegerOrText(NumOrStr::Number(i))
@@ -908,11 +900,11 @@ impl From<&Person> for Yaml {
 
             if let Some(gn) = &person.given_name {
                 res += ", ";
-                res += &gn;
+                res += gn;
 
                 if let Some(suffix) = &person.suffix {
                     res += ", ";
-                    res += &suffix;
+                    res += suffix;
                 }
             }
 
@@ -1008,7 +1000,7 @@ fn persons_into_yaml(pers: &[Person]) -> Yaml {
 }
 
 fn affiliateds_into_yaml(pers: &[(Vec<Person>, PersonRole)]) -> Yaml {
-    let mut persons: Vec<_> = pers.iter().map(|p| affiliated_into_yaml(p)).collect();
+    let mut persons: Vec<_> = pers.iter().map(affiliated_into_yaml).collect();
     match persons.len() {
         1 => persons.pop().unwrap(),
         _ => Yaml::Array(persons),

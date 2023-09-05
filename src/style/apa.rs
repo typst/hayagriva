@@ -141,9 +141,9 @@ fn ampersand_list(names: Vec<String>) -> String {
 fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
     let vstr = if let Some(vols) = entry.volume() {
         if is_tv_show {
-            Some(format_range("Episode", "Episodes", &vols))
+            Some(format_range("Episode", "Episodes", vols))
         } else {
-            Some(format_range("Vol.", "Vols.", &vols))
+            Some(format_range("Vol.", "Vols.", vols))
         }
     } else {
         None
@@ -255,7 +255,7 @@ impl Apa {
         let authors = if let Some(names) = names {
             Some(names)
         } else if let Some(authors) = entry.authors() {
-            let list = name_list(&authors);
+            let list = name_list(authors);
             pers_refs.extend(authors.iter().cloned());
             Some(list)
         } else {
@@ -294,7 +294,7 @@ impl Apa {
             let res = if !eds.is_empty() {
                 format!(
                     "{} ({})",
-                    ampersand_list(name_list(&eds)),
+                    ampersand_list(name_list(eds)),
                     if eds.len() == 1 { "Ed." } else { "Eds." }
                 )
             } else {
@@ -323,8 +323,7 @@ impl Apa {
                     ]
                     .contains(role)
                 })
-                .map(|(v, _)| v)
-                .flatten()
+                .flat_map(|(v, _)| v)
                 .cloned()
                 .collect::<Vec<Person>>();
 
@@ -502,7 +501,7 @@ impl Apa {
                         .unwrap()
                         .canonical
                         .format_sentence_case(&self.sentence_case),
-                    format_range("Vol.", "Vols.", &vols),
+                    format_range("Vol.", "Vols.", vols),
                 ));
                 new += res;
                 res = new;
@@ -527,7 +526,7 @@ impl Apa {
                 && !entry.authors().unwrap_or_default().is_empty()
             {
                 let editors = entry.editors().unwrap();
-                let amp_list = ampersand_list(name_list_straight(&editors));
+                let amp_list = ampersand_list(name_list_straight(editors));
                 if editors.len() == 1 {
                     items.push(format!("{}, Ed.", amp_list));
                 } else if editors.len() > 1 {
@@ -601,8 +600,7 @@ impl Apa {
                 .unwrap_or_default()
                 .iter()
                 .filter(|(_, role)| role == &PersonRole::Director)
-                .map(|(v, _)| v)
-                .flatten()
+                .flat_map(|(v, _)| v)
                 .next()
                 .is_none()
                 && entry.volume_total().is_none()
@@ -715,7 +713,7 @@ impl Apa {
                     }
 
                     if let Some(volume) = parent.volume() {
-                        res += &format_range("", "", &volume);
+                        res += &format_range("", "", volume);
                     }
 
                     if let Some(issue) = parent.issue() {
@@ -733,13 +731,13 @@ impl Apa {
                         res += "Article ";
                         res += sn;
                     } else if let Some(pages) = entry.page_range() {
-                        res += &format_range("", "", &pages);
+                        res += &format_range("", "", pages);
                     }
                 }
             }
             SourceType::CollectionItem(parent) => {
                 let mut comma = if let Some(eds) = parent.editors() {
-                    let names = name_list(&eds);
+                    let names = name_list(eds);
                     match names.len() {
                         0 => false,
                         1 => {
@@ -952,7 +950,7 @@ impl Apa {
                         res += ", ";
                     }
 
-                    res += &format_range("", "", &pps);
+                    res += &format_range("", "", pps);
                 }
             }
             SourceType::ConferenceTalk(parent) => {

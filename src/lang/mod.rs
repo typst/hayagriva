@@ -143,7 +143,7 @@ impl Case for TitleCase {
 
         let word_indices: Vec<(usize, bool, usize, bool)> = word_indices
             .into_iter()
-            .zip(word_length.into_iter())
+            .zip(word_length)
             .map(|((ind, _, prio), (len, retain))| (ind, prio, len, retain))
             .collect();
 
@@ -194,12 +194,11 @@ impl Case for TitleCase {
 
         // Deplete iterator
         for c in iter {
-            if last_retain  {
+            if last_retain {
                 res.push_str(&c.to_string());
-            }
-            else {            
+            } else {
                 res.push_str(&c.to_lowercase().to_string());
-            }        
+            }
         }
 
         res
@@ -359,7 +358,7 @@ impl Case for SentenceCase {
 
         let word_indices: Vec<(usize, bool, bool, usize, CaseSituation)> = word_indices
             .into_iter()
-            .zip(word_length.into_iter())
+            .zip(word_length)
             .map(|((ind, _, upper, no_tf), (len, situation))| {
                 (ind, upper, no_tf, len, situation)
             })

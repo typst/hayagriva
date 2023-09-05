@@ -6,7 +6,7 @@ use crate::types::EntryType;
 /// Parse a selector.
 pub fn parse(src: &str) -> SelectorResult<Selector> {
     let mut p = Parser::new(src);
-    Ok(expr(&mut p)?)
+    expr(&mut p)
 }
 
 /// Parse an expression, with optional ancestrage relation.

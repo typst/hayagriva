@@ -297,8 +297,8 @@ impl Mla {
             && entry.editors().is_none()
             && select!(Chapter | Scene).matches(entry)
         {
-            if let Some(p) = entry.parents().and_then(|ps| ps.get(0)) {
-                entry = &p;
+            if let Some(p) = entry.parents().and_then(|ps| ps.first()) {
+                entry = p;
             } else {
                 break;
             }
@@ -566,9 +566,9 @@ impl Mla {
             let tv = select!(Video > *).matches(entry);
             if let Some(vols) = entry.volume() {
                 number += &if tv {
-                    format_range("season", "seasons", &vols)
+                    format_range("season", "seasons", vols)
                 } else {
-                    format_range("vol.", "vols.", &vols)
+                    format_range("vol.", "vols.", vols)
                 }
             }
 
@@ -599,7 +599,7 @@ impl Mla {
             if let Some(date) = entry.date() {
                 if !has_date || self.always_print_date {
                     has_date = true;
-                    container.date = format_date(&date);
+                    container.date = format_date(date);
                     if let Some(disambiguation) = disambiguation {
                         container.date.push(alph_designator(disambiguation))
                     }

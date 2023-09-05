@@ -413,8 +413,8 @@ impl<'a> ChicagoNotes<'a> {
             select!((Article | Entry) > (Periodical | Newspaper)).matches(entry);
 
         if !short {
-            let add = if no_author && dictionary.is_some() {
-                get_info_element(dictionary.unwrap(), &self.config, false)
+            let add = if let Some(dict) = dictionary.filter(|_| no_author) {
+                get_info_element(dict, &self.config, false)
             } else {
                 get_info_element(entry, &self.config, false)
             };

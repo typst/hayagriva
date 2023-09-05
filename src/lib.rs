@@ -123,6 +123,7 @@ return `Some` even if no sub-entry was bound / if the hash map is empty.
 */
 
 #![warn(missing_docs)]
+#![allow(clippy::comparison_chain)]
 
 #[macro_use]
 mod selectors;
@@ -224,6 +225,7 @@ impl Entry {
     }
 
     /// Set [any data type](Value) as value for a given field.
+    #[allow(clippy::result_large_err)]
     pub fn set(
         &mut self,
         field: impl Into<String>,
@@ -519,7 +521,7 @@ mod tests {
         }
 
         for entry in &entries {
-            let citation = Citation::new(&entry, None);
+            let citation = Citation::new(entry, None);
             println!("{:#}", db.citation(&mut chicago, &[citation]).display);
         }
     }
@@ -549,7 +551,7 @@ mod tests {
 
     macro_rules! select_all {
         ($select:expr, $entries:tt, [$($key:expr),* $(,)*] $(,)*) => {
-            let keys = vec![ $( $key , )* ];
+            let keys = [$($key,)*];
             let selector = Selector::parse($select).unwrap();
             for entry in &$entries {
                 let res = selector.apply(entry);
