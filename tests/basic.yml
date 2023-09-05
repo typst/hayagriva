@@ -6,7 +6,6 @@ zygos:
         - Bugnion, Edouard
     title:
         value: "ZygOS: Achieving Low Tail Latency for Microsecond-Scale Networked Tasks"
-        sentence-case: "ZygOS: Achieving low tail latency for microsecond-scale networked tasks"
         verbatim: true
     date: 2017
     page-range: 325-341

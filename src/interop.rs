@@ -9,6 +9,8 @@ use tex::{
 };
 use url::Url;
 
+use crate::lang::{Case, TitleCase};
+
 use super::types::{
     Date, EntryType, FmtString, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
 };
@@ -73,8 +75,38 @@ impl From<tex::Date> for Date {
 
 impl From<&[Spanned<Chunk>]> for FmtString {
     fn from(chunks: &[Spanned<Chunk>]) -> Self {
-        Self::new(chunks.format_verbatim()).sentence_case(chunks.format_sentence())
+        let mut fmt = Self::new(chunks.format_verbatim());
+        let verbatim = chunks.iter().all(|chunk| match &chunk.v {
+            Chunk::Normal(s) => s.chars().all(char::is_whitespace),
+            _ => true,
+        });
+
+        fmt = fmt.verbatim(verbatim);
+        if !verbatim {
+            if chunks.iter().any(|chunk| matches!(chunk.v, Chunk::Verbatim(_))) {
+                fmt = fmt.title_case(format_title_case(chunks));
+            }
+            fmt = fmt.sentence_case(chunks.format_sentence());
+        }
+
+        fmt
     }
+}
+
+fn format_title_case(chunks: &[Spanned<Chunk>]) -> String {
+    let mut out = String::new();
+    for chunk in chunks {
+        match &chunk.v {
+            Chunk::Normal(s) => out.push_str(&TitleCase::new().apply(s)),
+            Chunk::Verbatim(s) => out.push_str(s),
+            Chunk::Math(s) => {
+                out.push('$');
+                out += s;
+                out.push('$');
+            }
+        }
+    }
+    out
 }
 
 impl From<&[Spanned<Chunk>]> for NumOrStr {
@@ -91,7 +123,7 @@ impl From<&PermissiveType<i64>> for NumOrStr {
     fn from(edition: &PermissiveType<i64>) -> Self {
         match edition {
             PermissiveType::Typed(i) => Self::Number(*i),
-            PermissiveType::Chunks(c) => Self::Str(c.format_sentence()),
+            PermissiveType::Chunks(c) => Self::Str(c.format_verbatim()),
         }
     }
 }

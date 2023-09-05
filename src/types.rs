@@ -651,7 +651,13 @@ impl FmtString {
     /// This uses an override defined through [`title_case`](Self::title_case)
     /// if present, or falls back to the given title case formatter otherwise.
     pub fn format_title_case(&self, title: &dyn Case) -> String {
-        self.title_case.clone().unwrap_or_else(|| title.apply(&self.value))
+        if self.verbatim {
+            self.value.clone()
+        } else if let Some(defined) = &self.title_case {
+            defined.clone()
+        } else {
+            title.apply(&self.value)
+        }
     }
 
     /// Format this formattable string in sentence case.
@@ -659,9 +665,13 @@ impl FmtString {
     /// This uses an override defined through [`sentence_case`](Self::sentence_case)
     /// if present, or falls back to the given sentence case formatter otherwise.
     pub fn format_sentence_case(&self, sentence: &dyn Case) -> String {
-        self.sentence_case
-            .clone()
-            .unwrap_or_else(|| sentence.apply(&self.value))
+        if self.verbatim {
+            self.value.clone()
+        } else if let Some(defined) = &self.sentence_case {
+            defined.clone()
+        } else {
+            sentence.apply(&self.value)
+        }
     }
 }
 

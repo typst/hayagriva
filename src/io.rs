@@ -821,34 +821,27 @@ impl From<&FmtString> for Yaml {
         } else {
             let mut hm = LinkedHashMap::new();
 
-            let bt_equal = if let Some(sentence) = fmt.sentence_case.as_ref() {
-                fmt.title_case.is_none()
-                    && &SentenceCase::new().apply(&fmt.value) == sentence
-            } else {
-                false
-            };
-
-            let same = fmt.title_case.as_ref().map_or(true, |case| case == &fmt.value)
-                && fmt.sentence_case.as_ref().map_or(true, |case| case == &fmt.value);
-
             hm.insert(Yaml::String("value".into()), Yaml::String(fmt.value.clone()));
 
-            if (fmt.verbatim || same) && !bt_equal {
+            if fmt.verbatim {
                 hm.insert(Yaml::String("verbatim".into()), Yaml::Boolean(true));
-            }
-
-            if !same && !bt_equal {
+            } else {
                 if let Some(title) = &fmt.title_case {
-                    hm.insert(
-                        Yaml::String("title-case".into()),
-                        Yaml::String(title.clone()),
-                    );
+                    if fmt.value != *title {
+                        hm.insert(
+                            Yaml::String("title-case".into()),
+                            Yaml::String(title.clone()),
+                        );
+                    }
                 }
+
                 if let Some(sentence) = &fmt.sentence_case {
-                    hm.insert(
-                        Yaml::String("sentence-case".into()),
-                        Yaml::String(sentence.clone()),
-                    );
+                    if SentenceCase::new().apply(&fmt.value) != *sentence {
+                        hm.insert(
+                            Yaml::String("sentence-case".into()),
+                            Yaml::String(sentence.clone()),
+                        );
+                    }
                 }
             }
 

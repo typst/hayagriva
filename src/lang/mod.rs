@@ -240,7 +240,7 @@ impl Default for SentenceCase {
 }
 
 impl SentenceCase {
-    /// Construct TitleCaseProperties with the default values.
+    /// Construct a new `SentenceCase` with the default values.
     pub fn new() -> Self {
         Default::default()
     }
