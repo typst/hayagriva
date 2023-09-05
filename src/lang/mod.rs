@@ -163,7 +163,7 @@ impl Case for TitleCase {
                 if last_retain {
                     res.push(c)
                 } else {
-                    res.push_str(&c.to_lowercase().to_string());
+                    res.extend(c.to_lowercase());
                 }
                 insert_index += c.len_utf8();
             }
@@ -175,7 +175,7 @@ impl Case for TitleCase {
                 || (last && self.always_capitalize_last_word)
                 || len >= self.always_capitalize_min_len.unwrap_or(usize::MAX)
             {
-                res.push_str(&c.to_uppercase().to_string());
+                res.extend(c.to_uppercase());
             } else {
                 // Collect word to check it against the database
                 let word = &title[index..index + len].to_lowercase();
@@ -183,9 +183,9 @@ impl Case for TitleCase {
                 if self.use_exception_dictionary
                     && en::NEVER_CAPITALIZE.binary_search(&word.as_str()).is_ok()
                 {
-                    res.push_str(&c.to_lowercase().to_string());
+                    res.extend(c.to_lowercase());
                 } else {
-                    res.push_str(&c.to_uppercase().to_string());
+                    res.extend(c.to_uppercase());
                 }
             }
 
@@ -195,9 +195,9 @@ impl Case for TitleCase {
         // Deplete iterator
         for c in iter {
             if last_retain {
-                res.push_str(&c.to_string());
+                res.push(c);
             } else {
-                res.push_str(&c.to_lowercase().to_string());
+                res.extend(c.to_lowercase());
             }
         }
 
@@ -369,6 +369,7 @@ impl Case for SentenceCase {
 
         let mut insert_index = 0;
         let mut last_retain = false;
+
         for (index, force_cap, no_transform, len, situation) in word_indices.into_iter() {
             while insert_index < index {
                 let c = iter.next().expect("title string terminates before word start");
@@ -387,15 +388,18 @@ impl Case for SentenceCase {
                         || self.capitalize_words_with_caps_inside))
                 && has_lowercase;
 
-            if force_cap
-                || ((situation == CaseSituation::HasNonFirstUppercase
+            if situation == CaseSituation::AllUppercase
+                && (self.keep_all_uppercase_words
+                    || self.capitalize_words_with_caps_inside)
+            {
+                res.extend(c.to_uppercase());
+                last_retain = true;
+            } else if force_cap
+                || (situation == CaseSituation::HasNonFirstUppercase
                     && self.capitalize_words_with_caps_inside)
-                    || (situation == CaseSituation::AllUppercase
-                        && (self.keep_all_uppercase_words
-                            || self.capitalize_words_with_caps_inside)))
                     && has_lowercase
             {
-                res.push_str(&c.to_uppercase().to_string());
+                res.extend(c.to_uppercase());
             } else if no_transform && self.do_not_format_after_dot && has_lowercase {
                 res.push(c);
             } else {
@@ -409,9 +413,9 @@ impl Case for SentenceCase {
                         .binary_search(&word.to_lowercase().as_str())
                         .is_ok()
                 {
-                    res.push_str(&c.to_uppercase().to_string());
+                    res.extend(c.to_uppercase());
                 } else {
-                    res.push_str(&c.to_lowercase().to_string());
+                    res.extend(c.to_lowercase());
                 }
             }
 
@@ -420,7 +424,11 @@ impl Case for SentenceCase {
 
         // Deplete iterator
         for c in iter {
-            res.push_str(&c.to_lowercase().to_string());
+            if last_retain {
+                res.push(c);
+            } else {
+                res.extend(c.to_lowercase());
+            }
         }
 
         res
@@ -589,6 +597,12 @@ mod tests {
             "Ubiquity Airmax is the next generation of networking hardware",
             title
         );
+
+        let props = SentenceCase {
+            keep_all_uppercase_words: false,
+            capitalize_words_with_caps_inside: false,
+            ..Default::default()
+        };
 
         let title =
             props.apply("SOME PEOPLE CAN NEVER STOP TO SCREAM. IT IS DRIVING ME CRAZY!");
