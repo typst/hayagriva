@@ -97,7 +97,15 @@ fn format_title_case(chunks: &[Spanned<Chunk>]) -> String {
     let mut out = String::new();
     for chunk in chunks {
         match &chunk.v {
-            Chunk::Normal(s) => out.push_str(&TitleCase::new().apply(s)),
+            Chunk::Normal(s) => out.push_str(
+                &TitleCase {
+                    trim_end: false,
+                    trim_start: false,
+                    always_capitalize_last_word: false,
+                    ..Default::default()
+                }
+                .apply(s),
+            ),
             Chunk::Verbatim(s) => out.push_str(s),
             Chunk::Math(s) => {
                 out.push('$');

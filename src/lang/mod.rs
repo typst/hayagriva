@@ -181,7 +181,7 @@ impl Case for TitleCase {
                 let word = &title[index..index + len].to_lowercase();
 
                 if self.use_exception_dictionary
-                    && en::NEVER_CAPITALIZE.binary_search(&word.as_str()).is_ok()
+                    && en::NEVER_CAPITALIZE.binary_search(&word.trim_end()).is_ok()
                 {
                     res.extend(c.to_lowercase());
                 } else {
