@@ -4,6 +4,7 @@ mod apa;
 mod chicago;
 mod ieee;
 mod mla;
+mod gost;
 
 pub use apa::Apa;
 pub use chicago::author_date::ChicagoAuthorDate;
@@ -11,6 +12,7 @@ pub use chicago::notes::{ChicagoNoteStyle, ChicagoNotes};
 pub use chicago::{ChicagoAccessDateVisibility, ChicagoConfig};
 pub use ieee::Ieee;
 pub use mla::Mla;
+pub use gost::Gost;
 
 use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::ops::{Add, AddAssign};

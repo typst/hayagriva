@@ -9,7 +9,7 @@ use strum::{EnumVariantNames, VariantNames};
 
 use hayagriva::style::{
     Apa, AuthorTitle, BibliographyStyle as UsableBibliographyStyle, ChicagoAuthorDate,
-    ChicagoNotes, Citation, CitationStyle as UsableCitationStyle, Database, Ieee, Mla,
+    ChicagoNotes, Citation, CitationStyle as UsableCitationStyle, Database, Ieee, Mla, Gost,
 };
 use hayagriva::Selector;
 use hayagriva::{
@@ -50,6 +50,7 @@ pub enum BibliographyStyle {
     Mla,
     Apa,
     Ieee,
+    Gost,
 }
 
 impl FromStr for BibliographyStyle {
@@ -64,6 +65,7 @@ impl FromStr for BibliographyStyle {
             "mla" => Ok(BibliographyStyle::Mla),
             "apa" => Ok(BibliographyStyle::Apa),
             "ieee" => Ok(BibliographyStyle::Ieee),
+            "gost" => Ok(BibliographyStyle::Gost),
             _ => Err("unknown style"),
         }
     }
@@ -319,6 +321,7 @@ fn main() {
                 BibliographyStyle::Apa => Box::new(Apa::new()),
                 BibliographyStyle::Ieee => Box::new(Ieee::new()),
                 BibliographyStyle::Mla => Box::new(Mla::new()),
+                BibliographyStyle::Gost => Box::new(Gost)
             };
 
             let mut database = Database::new();
