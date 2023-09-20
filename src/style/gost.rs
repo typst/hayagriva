@@ -227,7 +227,7 @@ impl EntryExt for Entry {
 
         let mut res = String::new();
 
-        if self.entry_type == Proceedings {
+        if self.entry_type == Thesis {
             if authors_count > 0 {
                 res += &self.get_all_authors();
             }
