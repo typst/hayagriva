@@ -1,21 +1,19 @@
 use String;
-use super::{
-    alph_designator, delegate_titled_entry, format_range, name_list, name_list_straight,
-    sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
-    DisplayReference, DisplayString, Formatting, Record,
-};
-use crate::lang::en::{get_month_name, get_ordinal};
-use crate::lang::SentenceCase;
-use crate::types::{EntryType::*, EntryType, FmtOptionExt, NumOrStr, Person, PersonRole};
-use crate::Entry;
-use crate::types::NumOrStr::Str;
 
+use crate::Entry;
+use crate::style::sorted_bibliography;
+use crate::types::{Date, EntryType::*, Person, PersonRole};
+
+use super::{
+    BibliographyOrdering, BibliographyStyle, Database,
+    DisplayReference, DisplayString, Record,
+};
 
 /// Bibliographies following ГОСТ guidance.
 ///
 /// # Examples
 /// - DeRidder J.L. The immediate prospects for the application of ontologies in digital libraries //
-///   Knowledge Organization – 2007. – Vol. 34, No. 4 . – P. 227 – 246 .
+///   Knowledge Organization – 2007. – Т. 34, No. 4 . – P. 227 – 246 .
 /// - Белоозеров В.Н., Федосимов В.И. Место макротезауруса в лингвистическом обеспечении сети органов
 ///   научно-технической информации // Проблемы информационных систем – 1986 . – N 1. – С. 6 – 10 .
 /// - U.S. National Library of Medicine. Fact sheet: Unfied Medical Language System/National Institutes of Health,
@@ -26,319 +24,288 @@ use crate::types::NumOrStr::Str;
 #[derive(Default)]
 pub struct Gost;
 
-impl Gost {
-    fn get_single_record<'a>(&self, record: &Record<'a>) -> DisplayReference<'a> {
-        let entry = delegate_titled_entry(record.entry);
+const DOT_DASH_SEPARATOR: &str = ". - ";
 
-        match entry.entry_type {
-            Thesis => self.get_textbook_record(entry),
-            Article => self.get_journal_record(entry),
-            Newspaper => self.get_newspaper_record(entry),
-            Conference => self.get_conference_record(entry),
-            Book => self.get_book_record(entry),
-            Web => self.get_web_record(entry),
-            _ => DisplayReference::new(entry, None, DisplayString::new()),
-        }
+fn join_with_and(list: &[Person]) -> String {
+    if list.len() == 1 {
+        list.first().unwrap().given_first(true)
+    } else {
+        let mut res = list[0..list.len() - 1]
+            .iter()
+            .map(|p| p.given_first(true))
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        res += " и ";
+        res + &list.last().unwrap().given_first(true)
     }
+}
 
-    fn get_textbook_record<'a>(&self, entry: &'a Entry) -> DisplayReference<'a> {
-        let mut reference = DisplayString::new();
-        reference += &self.get_authors_and_title(entry, true);
+fn to_two_digits_str(mut number: u8) -> String {
+    number += 1;
 
-        if let Some(note) = entry.note() {
-            reference += " - ";
-            reference += note;
-        }
-
-        reference += &self.get_location(entry);
-
-        reference += ": ";
-
-        if let Some(publisher) = entry.publisher() {
-            reference += &publisher.value;
-        }
-
-        if let Some(date) = entry.date() {
-            reference += ", ";
-            reference += &date.year.to_string();
-            reference += ".";
-        }
-
-        reference += &self.get_pages(entry);
-
-        if let Some(isbn) = entry.isbn() {
-            reference += " - ISBN ";
-            reference += isbn;
-        }
-
-        reference += ".";
-
-        DisplayReference::new(
-            entry,
-            None,
-            reference,
-        )
+    if number < 10 {
+        String::from("0") + &number.to_string()
+    } else {
+        number.to_string()
     }
+}
 
-    fn get_journal_record<'a>(&self, entry: &'a Entry) -> DisplayReference<'a> {
-        let mut reference = DisplayString::new();
-        reference += &self.get_authors_and_title(entry, true);
+trait StringExt {
+    fn add_separator(&mut self, separator: &str);
+}
 
-        if let Some(doi) = entry.doi() {
-            reference += " - DOI ";
-            reference += doi;
+impl StringExt for String {
+    fn add_separator(&mut self, separator: &str) {
+        if self.is_empty() {
+            return;
         }
 
-        reference += " // ";
-
-        if let Some(publisher) = entry.publisher() {
-            reference += &publisher.value;
-        }
-
-        if let Some(date) = entry.date() {
-            reference += " - ";
-            reference += &date.year.to_string();
-            reference += ".";
-        }
-
-        if let Some(issue) = entry.issue() {
-            reference += " - ";
-            reference += &issue.to_string();
-        }
-
-        reference += &self.get_pages(entry);
-
-        if let Some(url) = entry.url() {
-            reference += " - URL: ";
-            reference += &url.value.to_string();
-
-            if let Some(date) = url.visit_date {
-                if let (Some(mut month), Some(mut day)) = (date.month, date.day) {
-                    reference += " (дата обращения: ";
-                    let date = self.to_two_digits_str(day) + "." + &self.to_two_digits_str(month) + "." + &date.year.to_string();
-                    reference += &date;
-                    reference += ")";
-                }
-            }
-        }
-
-        reference += ".";
-
-        return DisplayReference::new(entry, None, reference);
-    }
-
-    fn get_newspaper_record<'a>(&self, entry: &'a Entry) -> DisplayReference<'a> {
-        let mut reference = DisplayString::new();
-        reference += &self.get_authors_and_title(entry, false);
-
-        reference += " // ";
-
-        if let Some(publisher) = entry.publisher() {
-            reference += &publisher.value;
-            reference += ".";
-        }
-
-        if let Some(date) = entry.date() {
-            reference += " - ";
-            reference += &date.year.to_string();
-            reference += ".";
-
-            if let (Some(month), Some(day)) = (date.month, date.day) {
-                reference += " - ";
-                reference += &self.to_two_digits_str(day);
-                reference += " ";
-                reference += self.month_to_abbr(month);
-            }
-        }
-
-        if let Some(issue) = entry.issue() {
-            reference += " (";
-            reference += &issue.to_string();
-            reference += ")."
-        }
-
-        reference += &self.get_pages(entry);
-        reference += ".";
-
-        return DisplayReference::new(entry, None, reference);
-    }
-
-    fn get_conference_record<'a>(&self, entry: &'a Entry) -> DisplayReference<'a> {
-        let mut reference = DisplayString::new();
-        reference += &self.get_authors_and_title(entry, true);
-
-        reference += " // ";
-
-        if let Some(note) = entry.note() {
-            reference += note;
-        }
-
-        if let Some(location) = entry.location() {
-            reference += ". - ";
-            reference += &location.value;
-        }
-
-        if let Some(publisher) = entry.publisher() {
-            reference += ": ";
-            reference += &publisher.value;
-        }
-
-        if let Some(date) = entry.date() {
-            reference += ", ";
-            reference += &date.year.to_string();
-            reference += ".";
-        }
-
-        reference += &self.get_pages(entry);
-        reference += ".";
-
-        return DisplayReference::new(entry, None, reference);
-    }
-
-    fn get_book_record<'a>(&self, entry: &'a Entry) -> DisplayReference<'a> {
-        let mut reference = DisplayString::new();
-        let authors = self.get_authors(entry, true);
-
-        if authors.2 <= 3 {
-            reference += &authors.0.unwrap();
-            reference += " ";
-        }
-
-        if let Some(title) = entry.title() {
-            reference += &title.canonical.value;
-        }
-
-        if authors.2 > 1 {
-            reference += " / ";
-            reference += &authors.1.unwrap();
-        }
-
-        if let Some(note) = entry.note() {
-            reference += " - ";
-            reference += note;
-        }
-
-        reference += &self.get_location(entry);
-        reference += ": ";
-
-        if let Some(publisher) = entry.publisher() {
-            reference += &publisher.value;
-        }
-
-        if let Some(date) = entry.date() {
-            reference += ", ";
-            reference += &date.year.to_string();
-            reference += ".";
-        }
-
-        reference += &self.get_pages(entry);
-
-        if let Some(isbn) = entry.isbn() {
-            reference += ". - ISBN ";
-            reference += isbn;
-        }
-
-        reference += ".";
-
-        DisplayReference::new(
-            entry,
-            None,
-            reference,
-        )
-    }
-
-    fn get_web_record<'a>(&self, entry: &'a Entry) -> DisplayReference<'a> {
-        let mut reference = DisplayString::new();
-        if let Some(title) = entry.title() {
-            reference += &title.canonical.value;
-        }
-
-        if let Some(url) = entry.url() {
-            reference += " - URL: ";
-            reference += &url.value.to_string();
-
-            if let Some(date) = url.visit_date {
-                if let (Some(mut month), Some(mut day)) = (date.month, date.day) {
-                    reference += " (дата обращения: ";
-                    let date = self.to_two_digits_str(day) + "." + &self.to_two_digits_str(month) + "." + &date.year.to_string();
-                    reference += &date;
-                    reference += ")";
-                }
-            }
-        }
-
-        DisplayReference::new(
-            entry,
-            None,
-            reference,
-        )
-    }
-
-
-    fn get_authors_and_title(&self, entry: &Entry, initials: bool) -> String {
-        let authors = self.get_authors(entry, initials);
-
-        let mut reference = String::new();
-        if authors.2 != 0 {
-            reference += &authors.0.unwrap();
-        }
-
-        if let Some(title) = entry.title() {
-            reference += " ";
-            reference += &title.canonical.value;
-        }
-
-        if !initials || authors.2 > 1 {
-            reference += " / ";
-            reference += &authors.1.unwrap();
-        }
-
-        reference
-    }
-
-    fn get_authors(&self, entry: &Entry, initials: bool) -> (Option<String>, Option<String>, usize) {
-        if let Some(authors) = entry.authors() {
-            let mut authors_joined = String::new();
-            for author in authors {
-                authors_joined += &author.name_first(true, false);
-                authors_joined += ", ";
-            }
-
-            authors_joined.pop();
-            authors_joined.pop();
-
-            let mut authors_given_first_joined = String::new();
-            for author in authors {
-                if initials {
-                    authors_given_first_joined += &author.given_first(true);
-                } else {
-                    if let Some(given_name) = &author.given_name {
-                        authors_given_first_joined += &given_name.split(" ").collect::<Vec<&str>>()[0];
-                        authors_given_first_joined += " ";
-                    }
-                    authors_given_first_joined += &author.name;
-
-                }
-                authors_given_first_joined += ", ";
-            }
-
-            authors_given_first_joined.pop();
-            authors_given_first_joined.pop();
-
-            (Some(authors_joined), Some(authors_given_first_joined), authors.len())
+        if separator.starts_with(self.chars().last().unwrap()) {
+            *self += &separator[1..separator.len()]
         } else {
-            (None, None, 0)
+            *self += separator;
+        }
+    }
+}
+
+trait DateExt {
+    fn as_numbers(&self) -> String;
+}
+
+impl DateExt for Date {
+    fn as_numbers(&self) -> String {
+        let mut res = String::new();
+
+        if let Some(day) = self.day {
+            res += &to_two_digits_str(day);
+        }
+
+        if let Some(month) = self.month {
+            if !res.is_empty() {
+                res += ".";
+            }
+
+            res += &to_two_digits_str(month);
+        }
+
+        if !res.is_empty() {
+            res += ".";
+        }
+
+        res + &self.year.to_string()
+    }
+}
+
+trait EntryExt {
+    fn is_web(&self) -> bool;
+
+    fn authors_count(&self) -> usize;
+
+    fn get_first_author(&self) -> String;
+
+    fn get_all_authors(&self) -> String;
+
+    fn get_by_role(&self, role: PersonRole) -> Option<Vec<Person>>;
+
+    fn get_affiliated_persons(&self) -> Option<String>;
+
+    fn get_responsibility(&self) -> Option<String>;
+
+    fn get_release_data(&self) -> Option<String>;
+
+    fn get_location(&self) -> Option<String>;
+
+    fn get_pages(&self) -> Option<String>;
+
+    fn get_volumes(&self) -> Option<String>;
+
+    fn get_url(&self) -> Option<String>;
+
+    fn get_contributors(&self) -> Vec<Person>;
+}
+
+impl EntryExt for Entry {
+    fn is_web(&self) -> bool {
+        [Web, Blog, Tweet].contains(&self.entry_type)
+    }
+
+    fn authors_count(&self) -> usize {
+        if let Some(authors) = self.authors() {
+            authors.len()
+        } else {
+            0
         }
     }
 
-    fn get_pages(&self, entry: &Entry) -> String {
+    fn get_first_author(&self) -> String {
+        self.authors().unwrap().first().unwrap().name_first(true, false)
+    }
+
+    fn get_all_authors(&self) -> String {
+        self
+            .authors()
+            .unwrap()
+            .iter()
+            .map(|a| a.given_first(true))
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+
+    fn get_by_role(&self, role: PersonRole) -> Option<Vec<Person>>
+    {
+        if let Some(affiliated) = self.affiliated_persons() {
+            affiliated
+                .iter()
+                .find(|(_, r)| *r == role)
+                .map(|(p, _)| p.clone())
+        } else {
+            None
+        }
+    }
+
+    fn get_affiliated_persons(&self) -> Option<String> {
+        let mut res = String::new();
+
+        if let Some(editors) = self.editors() {
+            res += "ред. ";
+            res += &join_with_and(&editors[..]);
+        }
+
+        if let Some(compilers) = self.get_by_role(PersonRole::Compiler) {
+            res.add_separator("; ");
+            res += "составит. ";
+            res += &join_with_and(&compilers[..]);
+        }
+
+        if let Some(translators) = self.get_by_role(PersonRole::Translator) {
+            res.add_separator("; ");
+            res += "перевод. ";
+            res += &join_with_and(&translators[..]);
+        }
+
+        if let Some(affiliated) = self.affiliated_persons() {
+            let affiliated_joined = affiliated
+                .iter()
+                .filter(|(_, r)| {
+                    match r {
+                        PersonRole::Unknown(_) => true,
+                        _ => false,
+                    }
+                })
+                .map(|(persons, role)| {
+                    if let PersonRole::Unknown(descr) = role {
+                        descr.clone() + " " + &join_with_and(persons)
+                    } else {
+                        join_with_and(persons)
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(", ");
+
+            if !affiliated_joined.is_empty() {
+                res.add_separator("; ");
+                res += &affiliated_joined;
+            }
+        }
+
+        if res.is_empty() {
+            None
+        } else {
+            Some(res)
+        }
+    }
+
+    fn get_responsibility(&self) -> Option<String> {
+        let authors_count = self.authors_count();
+        let organization = self.organization();
+        let affiliated = self.get_affiliated_persons();
+
+        if authors_count == 0 && organization.is_none() && affiliated.is_none() {
+            return None;
+        }
+
+        let mut res = String::new();
+
+        if self.entry_type == Proceedings {
+            if authors_count > 0 {
+                res += &self.get_all_authors();
+            }
+
+            if let Some(organization) = organization {
+                res.add_separator("; ");
+                res += organization;
+            }
+        } else {
+            if let Some(organization) = organization {
+                res += organization;
+            }
+
+            if authors_count > 0 {
+                res.add_separator("; ");
+                res += &self.get_all_authors();
+            }
+        }
+
+        if let Some(affiliated) = affiliated {
+            res.add_separator("; ");
+            res += &affiliated;
+        }
+
+        Some(res)
+    }
+
+    fn get_release_data(&self) -> Option<String> {
+        if self.location().is_none() && self.publisher().is_none() && self.date().is_none() {
+            return None;
+        }
+
+        let mut res = String::new();
+
+        if let Some(location) = self.get_location() {
+            res += &location;
+        }
+
+        if let Some(publisher) = self.publisher() {
+            res.add_separator(": ");
+            res += &publisher.value;
+        }
+
+        if let Some(date) = self.date() {
+            res.add_separator(", ");
+            res += &date.year.to_string();
+        }
+
+        Some(res)
+    }
+
+    fn get_location(&self) -> Option<String> {
+        if let Some(location) = self.location() {
+            let location_value = location.value.to_lowercase();
+
+            if location_value == "москва" {
+                Some(String::from("М."))
+            } else if location_value == "питер" || location_value == "санкт-петербург" {
+                Some(String::from("СПБ."))
+            } else {
+                Some(location.value.clone())
+            }
+        } else {
+            None
+        }
+    }
+
+    fn get_pages(&self) -> Option<String> {
+        if self.page_range().is_none() {
+            return None;
+        }
+
         let mut reference = String::new();
 
-        if let Some(page_range) = entry.page_range() {
-            reference += " - ";
+        if let Some(page_range) = self.page_range() {
             if page_range.start == page_range.end {
                 reference += &page_range.start.to_string();
-                reference += " с";
+                reference += " с.";
             } else {
                 reference += "С. ";
                 reference += &page_range.start.to_string();
@@ -347,70 +314,189 @@ impl Gost {
             }
         }
 
-        reference
+        Some(reference)
     }
 
-    fn get_location(&self, entry: &Entry) -> String {
-        let mut reference = String::new();
+    fn get_volumes(&self) -> Option<String> {
+        if self.volume().is_none() && self.volume_total().is_none() {
+            return None;
+        }
 
-        if let Some(location) = entry.location() {
-            reference += ". - ";
-            let location_value = location.value.to_lowercase();
+        let mut res = String::new();
+        if let Some(volume_total) = self.volume_total() {
+            res += "в ";
+            res += &volume_total.to_string();
+            res += " т.";
+        }
 
-            if location_value == "москва" {
-                reference += "М.";
-            } else if location_value == "питер" || location_value == "санкт-петербург" {
-                reference += "СПБ."
-            } else {
-                reference += &location.value;
+        if let Some(volume) = self.volume() {
+            if !res.is_empty() {
+                res += " ";
+            }
+
+            res += "Т. ";
+            res += &volume.start.to_string();
+            res.add_separator(".");
+        }
+
+        Some(res)
+    }
+
+    fn get_url(&self) -> Option<String> {
+        if let Some(url) = self.url() {
+            let mut res = String::from("URL: ");
+            res += url.value.as_str();
+
+            if let Some(date) = url.visit_date {
+                res += " (дата обращения: ";
+                res += &date.as_numbers();
+                res += ")";
+            }
+
+            Some(res)
+        } else {
+            None
+        }
+    }
+
+    fn get_contributors(&self) -> Vec<Person> {
+        let mut contributors = vec![];
+
+        if let Some(authors) = self.authors() {
+            contributors.extend(authors.iter().cloned());
+        }
+
+        if let Some(editors) = self.editors() {
+            contributors.extend(editors.iter().cloned())
+        }
+
+        if let Some(affiliated_persons) = self.affiliated_persons() {
+            for (persons, _) in affiliated_persons {
+                contributors.extend(persons.iter().cloned())
             }
         }
 
+        contributors
+    }
+}
+
+impl Gost {
+    fn get_single_record<'a>(&self, record: &Record<'a>) -> (DisplayReference<'a>, Vec<Person>) {
+        let entry = record.entry;
+
+        (
+            DisplayReference::new(
+                entry,
+                record.prefix.clone().map(Into::into),
+                DisplayString::from(self.get_entry_representation(entry)),
+            ),
+            entry.get_contributors()
+        )
+    }
+
+    fn get_entry_representation(&self, entry: &Entry) -> String
+    {
+        let mut reference = String::new();
+
+        if entry.authors_count() > 0 && entry.authors_count() < 4 {
+            reference += &entry.get_first_author();
+            reference.add_separator(". ");
+        }
+
+        reference += &entry.title().unwrap().canonical.value;
+
+        if entry.is_web() {
+            reference.add_separator(" ");
+            reference += "[Электронный ресурс]";
+        }
+
+        if let Some(note) = entry.note() {
+            reference.add_separator(" : ");
+            reference += note;
+        }
+
+        if let Some(volumes) = entry.get_volumes() {
+            reference.add_separator(": ");
+            reference += &volumes;
+        }
+
+        if let Some(responsibility) = entry.get_responsibility() {
+            reference.add_separator(" / ");
+            reference += &responsibility;
+        }
+
+        if let Some(edition) = entry.edition() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += &edition.to_string();
+        }
+
+        if let Some(issue_data) = entry.get_release_data() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += &issue_data;
+        }
+
+        if let Some(issue) = entry.issue() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += &issue.to_string();
+        }
+
+        if let Some(parents) = entry.parents() {
+            reference.add_separator(" // ");
+            reference += &parents
+                .iter()
+                .map(|p| self.get_entry_representation(p))
+                .collect::<Vec<String>>()
+                .join("; ");
+        }
+
+        if let Some(pages) = entry.get_pages() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += &pages;
+        }
+
+        if let Some(isbn) = entry.isbn() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += "ISBN ";
+            reference += isbn;
+        }
+
+        if let Some(issn) = entry.issn() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += "ISSN ";
+            reference += issn;
+        }
+
+        if let Some(doi) = entry.doi() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += "DOI ";
+            reference += doi;
+        }
+
+        if let Some(url) = entry.get_url() {
+            reference.add_separator(DOT_DASH_SEPARATOR);
+            reference += &url;
+        }
+
+        reference.add_separator(".");
+
         reference
-    }
-
-    fn to_two_digits_str(&self, mut number: u8) -> String {
-        number += 1;
-
-        if number < 10 {
-            String::from("0") + &number.to_string()
-        } else {
-            number.to_string()
-        }
-    }
-
-    fn month_to_abbr(&self, month: u8) -> &str {
-        match month {
-            0 => "янв.",
-            1 => "фев.",
-            2 => "марта.",
-            3 => "апр.",
-            4 => "мая.",
-            5 => "июня.",
-            6 => "июля.",
-            7 => "авг.",
-            8 => "сент.",
-            9 => "окт.",
-            10 => "нояб.",
-            11 => "дек.",
-            _ => "incorrect",
-        }
     }
 }
 
 impl<'a> BibliographyStyle<'a> for Gost {
-    fn bibliography(&self, db: &Database<'a>, ordering: BibliographyOrdering) -> Vec<DisplayReference<'a>> {
+    fn bibliography(&self, db: &Database<'a>, ordering: BibliographyOrdering)
+                    -> Vec<DisplayReference<'a>> {
         let mut items = vec![];
 
         for record in db.records() {
             items.push(self.get_single_record(record));
         }
 
-        items
+        sorted_bibliography(items, ordering)
     }
 
     fn reference(&self, record: &Record<'a>) -> DisplayReference<'a> {
-        self.get_single_record(record)
+        self.get_single_record(record).0
     }
 
     fn ordering(&self) -> BibliographyOrdering {
