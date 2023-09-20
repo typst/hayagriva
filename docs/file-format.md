@@ -536,3 +536,7 @@ Integer ranges are two integers within a string, separated by a hyphen and optio
 A [Unicode Language Identifier](https://unicode.org/reports/tr35/tr35.html#unicode_language_id) identifies a language or its variants. At the simplest, you can specify an all-lowercase [two-letter ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) like `en` or `es` as a language. It is possible to specify regions, scripts, or variants to more precisely identify a variety of a language, especially in cases where the ISO 639-1 code is considered a "macrolanguage" (`zh` includes both Cantonese and Mandarin). In such cases, specify values like `en-US` for American English or `zh-Hans-CN` for Mandarin written in simplified script in mainland China. The region tags have to be written in all-caps and are mostly corresponding to [ISO 3166-1 alpha_2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#Officially_assigned_code_elements) codes.
 
 Consult the [documentation of the Rust crate unic-langid](https://docs.rs/unic-langid/latest/unic_langid/index.html) we use for parsing these language identifiers for more information.
+
+#### Examples
+
++ [gost style](https://github.com/typst/hayagriva/blob/main/docs/gost.md)
