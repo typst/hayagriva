@@ -2,7 +2,7 @@
 
 pub(crate) mod en;
 
-use std::{default, fmt::Write};
+use std::fmt::Write;
 
 /// Rules for the title case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

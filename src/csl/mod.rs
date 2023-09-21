@@ -1,15 +1,16 @@
 use std::borrow::Cow;
 use std::mem;
+use std::num::NonZeroUsize;
 use std::{fmt::Write, ops::Deref};
 
 use crate::lang::{Case, CaseFolder, SentenceCaseConf, TitleCaseConf};
 use crate::Entry;
-use citationberg::TextCase;
 use citationberg::{
     taxonomy::{OtherTerm, Term, Variable},
     CslMacro, Display, FontStyle, FontVariant, FontWeight, Locale, LocaleCode, TermForm,
     TextDecoration, TextTarget, ToAffixes, VerticalAlign,
 };
+use citationberg::{IndependentStyleSettings, TextCase};
 
 mod taxonomy;
 use taxonomy::{resolve_number_variable, resolve_standard_variable};
@@ -17,6 +18,8 @@ use taxonomy::{resolve_number_variable, resolve_standard_variable};
 use self::taxonomy::MaybeTyped;
 
 struct Context<'a> {
+    /// The settings of the style.
+    pub settings: &'a IndependentStyleSettings,
     /// The current entry.
     pub entry: &'a Entry,
     /// The buffer we're writing to. If block-level or formatting changes, we
@@ -34,14 +37,14 @@ struct Context<'a> {
     /// element at the bottom. Each element with a formatting may push and, if
     /// it did push, must remove. Its formatting shall apply for it and its
     /// children.
-    format_stack: Vec<Formatting>,
+    format_stack: NonEmptyStack<Formatting>,
     /// Finished elements. The last element may be unfinished.
-    elem_stack: Vec<Elem<String>>,
+    elem_stack: NonEmptyStack<Elem<String>>,
     /// Whether to watch out for punctuation that should be pulled inside the
     /// preceeding quoted content.
     pull_punctuation: bool,
-    /// The depth of the quotation marks.
-    quote_depth: u8,
+    /// Whether we should be using inner quotes.
+    inner_quotes: bool,
     /// Whether to strip periods.
     strip_periods: bool,
     /// The case of the next text.
@@ -56,6 +59,7 @@ impl<'a> Context<'a> {
         style_locales: Vec<&'a Locale>,
         locale_file: Vec<&'a Locale>,
         root_format: citationberg::Formatting,
+        settings: &'a IndependentStyleSettings,
     ) -> Self {
         Self {
             entry,
@@ -64,60 +68,50 @@ impl<'a> Context<'a> {
             macros,
             style_locales,
             locale_file,
-            format_stack: vec![Formatting::default().apply(root_format)],
-            elem_stack: vec![Elem::new(None)],
+            format_stack: NonEmptyStack::new(Formatting::default().apply(root_format)),
+            elem_stack: NonEmptyStack::new(Elem::new(None)),
             pull_punctuation: false,
-            quote_depth: 0,
+            inner_quotes: false,
             strip_periods: false,
             case: None,
+            settings,
         }
     }
 
     fn formatting(&self) -> &Formatting {
-        self.format_stack.last().unwrap()
+        self.format_stack.last()
     }
 
     /// Saves the current buffer to the last element in the finished list. This
     /// must happen if [`Display`] or formatting changes, as well as when we're
     /// done with an element.
-    fn save_to_block(&mut self) -> &mut Self {
+    fn save_to_block(&mut self) {
         if self.buf.is_empty() {
-            return self;
+            return;
         }
 
         let formatted = (*self.formatting()).add_text(mem::take(&mut self.buf).finish());
-        match self.elem_stack.last_mut() {
-            Some(elem) => elem.children.push(ElemChild::Text(formatted)),
-            None => panic!("elem stack is empty"),
-        }
-
-        self
+        self.elem_stack.last_mut().children.push(ElemChild::Text(formatted))
     }
 
     /// Push a format on top of the stack if it is not empty.
-    fn push_format(&mut self, format: citationberg::Formatting) -> &mut Self {
+    fn push_format(&mut self, format: citationberg::Formatting) {
         if format.is_empty() {
-            return self;
+            return;
         }
 
         self.save_to_block();
         self.format_stack.push(self.formatting().apply(format));
-        self
     }
 
     /// Pop a format from the stack if it is not empty.
-    fn pop_format(&mut self, format: citationberg::Formatting) -> &mut Self {
+    fn pop_format(&mut self, format: citationberg::Formatting) {
         if format.is_empty() {
-            return self;
+            return;
         }
 
         self.save_to_block();
         self.format_stack.pop();
-        if self.format_stack.is_empty() {
-            panic!("formatting stack is empty");
-        }
-
-        self
     }
 
     /// Push on the element stack if the current element has some [`Display`].
@@ -133,7 +127,7 @@ impl<'a> Context<'a> {
             Some(_) => {
                 self.save_to_block();
                 self.elem_stack.push(Elem::new(display));
-                Some(self.elem_stack.len() - 1)
+                Some(self.elem_stack.len().get() - 1)
             }
             None => None,
         };
@@ -143,34 +137,28 @@ impl<'a> Context<'a> {
 
     /// Pop from the element stack if the current element has some [`Display`].
     /// Also pop formatting.
-    fn pop_elem(
-        &mut self,
-        idx: Option<usize>,
-        format: citationberg::Formatting,
-    ) -> &mut Self {
+    fn pop_elem(&mut self, idx: Option<usize>, format: citationberg::Formatting) {
         self.pop_format(format);
 
         if let Some(idx) = idx {
             self.save_to_block();
             let mut children = self
                 .elem_stack
-                .drain(idx + 1..self.elem_stack.len())
+                .drain(NonZeroUsize::new(idx + 1).unwrap())
                 .map(ElemChild::Elem)
                 .collect::<Vec<_>>();
-            let elem = self.elem_stack.last_mut().unwrap();
+            let elem = self.elem_stack.last_mut();
             elem.children.append(&mut children);
         }
-
-        self
     }
 
     /// Add the appropriate opening quotation marks.
     fn push_quotes(&mut self) {
         let mark = self.term(
-            if self.quote_depth % 2 == 0 {
-                OtherTerm::OpenQuote
-            } else {
+            if self.inner_quotes {
                 OtherTerm::OpenInnerQuote
+            } else {
+                OtherTerm::OpenQuote
             }
             .into(),
             TermForm::default(),
@@ -178,21 +166,21 @@ impl<'a> Context<'a> {
         );
 
         if let Some(mark) = mark {
-            self.write_str(mark).unwrap();
+            self.push_str(mark);
         }
 
-        self.quote_depth = self.quote_depth.wrapping_add(1);
+        self.inner_quotes = !self.inner_quotes;
     }
 
     /// Add the appropriate closing quotation marks.
     fn pop_quotes(&mut self) {
-        self.quote_depth = self.quote_depth.wrapping_sub(1);
+        self.inner_quotes = !self.inner_quotes;
 
         let mark = self.term(
-            if self.quote_depth % 2 == 0 {
-                OtherTerm::CloseQuote
-            } else {
+            if self.inner_quotes {
                 OtherTerm::CloseInnerQuote
+            } else {
+                OtherTerm::CloseQuote
             }
             .into(),
             TermForm::default(),
@@ -200,8 +188,70 @@ impl<'a> Context<'a> {
         );
 
         if let Some(mark) = mark {
-            self.write_str(&mark).unwrap();
+            self.push_str(mark);
         }
+    }
+
+    fn push_str(&mut self, mut s: &str) {
+        if self.pull_punctuation && s.starts_with(['.', ',']) {
+            let close_quote =
+                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
+            let close_inner_quote =
+                self.term(OtherTerm::CloseInnerQuote.into(), TermForm::default(), false);
+
+            let mut used_buf = false;
+            let buf = if self.buf.is_empty() {
+                match self.elem_stack.last_mut().children.last_mut() {
+                    Some(ElemChild::Text(f)) => &mut f.text,
+                    _ => {
+                        used_buf = true;
+                        self.buf.as_str_mut()
+                    }
+                }
+            } else {
+                used_buf = true;
+                self.buf.as_str_mut()
+            };
+
+            for quote in [close_quote, close_inner_quote].iter().flatten() {
+                // Check if buf ends with a close quote.
+                // If it does, replace it with the punctuation.
+                if let Some(head) = buf.strip_suffix(quote) {
+                    buf.truncate(head.len());
+
+                    let punctuation = s.chars().next().unwrap();
+                    s = &s[punctuation.len_utf8()..];
+                    buf.push(punctuation);
+                    buf.push_str(quote);
+
+                    if used_buf {
+                        self.buf.mark_changed();
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        if self.strip_periods {
+            // Replicate citeproc.js behavior: remove a period if the
+            // preceeding character in the original string is not a period.
+            let mut last_period = false;
+            for c in s.chars() {
+                let is_period = c == '.';
+                if !is_period || last_period {
+                    self.buf.push(c);
+                }
+                last_period = is_period;
+            }
+        } else {
+            match self.case {
+                None => self.buf.push_str(s),
+                Some(case) => self.buf.config(case.into()),
+            }
+        }
+
+        self.pull_punctuation = false;
     }
 
     /// Folds all remaining elements into the first element and returns it.
@@ -209,18 +259,13 @@ impl<'a> Context<'a> {
         self.save_to_block();
 
         assert_eq!(
-            self.format_stack.len(),
+            self.format_stack.len().get(),
             1,
-            "formatting stack is not empty but {}",
+            "formatting stack is not one but {}",
             self.format_stack.len()
         );
 
-        let mut first = self.elem_stack.remove(0);
-        for elem in self.elem_stack {
-            first.children.push(ElemChild::Elem(elem));
-        }
-
-        first
+        self.elem_stack.finish()
     }
 
     fn get_macro(&self, name: &str) -> Option<&CslMacro> {
@@ -290,86 +335,34 @@ impl<'a> Context<'a> {
 
     /// Pull the next punctuation character into the preceeding quoted content
     /// if appropriate for the locale.
-    fn may_pull_punctuation(&mut self) -> &mut Self {
+    fn may_pull_punctuation(&mut self) {
         self.pull_punctuation |= self.punctuation_in_quotes();
-        self
     }
 
     /// Set whether to strip periods.
-    fn may_strip_periods(&mut self, strip: bool) -> &mut Self {
+    fn may_strip_periods(&mut self, strip: bool) {
         self.strip_periods = strip;
-        self
     }
 
     /// Stop stripping periods.
-    fn stop_stripping_periods(&mut self) -> &mut Self {
+    fn stop_stripping_periods(&mut self) {
         self.strip_periods = false;
-        self
     }
 
     /// Set the case of the next text.
-    fn set_case(&mut self, case: Option<TextCase>) -> &mut Self {
+    fn set_case(&mut self, case: Option<TextCase>) {
         self.case = case;
-        self
     }
 
     /// Clear the case of the next text.
-    fn clear_case(&mut self) -> &mut Self {
+    fn clear_case(&mut self) {
         self.case = None;
-        self
     }
 }
 
 impl Write for Context<'_> {
-    fn write_str(&mut self, mut s: &str) -> std::fmt::Result {
-        if self.pull_punctuation && s.starts_with(['.', ',']) {
-            let close_quote =
-                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
-            let close_inner_quote =
-                self.term(OtherTerm::CloseInnerQuote.into(), TermForm::default(), false);
-
-            let buf = match self.elem_stack.last_mut() {
-                Some(elem) if self.buf.is_empty() => match elem.children.last_mut() {
-                    Some(ElemChild::Text(f)) => &mut f.text,
-                    _ => self.buf.as_str_mut(),
-                },
-                _ => self.buf.as_str_mut(),
-            };
-
-            for quote in [close_quote, close_inner_quote].iter().flatten() {
-                // Check if buf ends with a close quote.
-                // If it does, replace it with the punctuation.
-                if let Some(head) = buf.strip_suffix(quote) {
-                    buf.truncate(head.len());
-
-                    let punctuation = s.chars().next().unwrap();
-                    s = &s[punctuation.len_utf8()..];
-                    buf.write_char(punctuation)?;
-                    buf.write_str(quote)?;
-                    break;
-                }
-            }
-        }
-
-        if self.strip_periods {
-            // Replicate citeproc.js behavior: remove a period if the
-            // preceeding character in the original string is not a period.
-            let mut last_period = false;
-            for c in s.chars() {
-                let is_period = c == '.';
-                if !is_period || last_period {
-                    self.buf.write_char(c)?;
-                }
-                last_period = is_period;
-            }
-        } else {
-            match self.case {
-                None => self.buf.push_str(s),
-                Some(case) => self.buf.config(case.into()),
-            }
-        }
-
-        self.pull_punctuation = false;
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.push_str(s);
         Ok(())
     }
 }
@@ -515,7 +508,7 @@ impl RenderCsl for citationberg::Text {
 
         let affixes = self.to_affixes();
         if let Some(prefix) = affixes.prefix {
-            ctx.write_str(&prefix).unwrap();
+            ctx.push_str(&prefix);
         }
 
         if *self.quotes {
@@ -525,7 +518,7 @@ impl RenderCsl for citationberg::Text {
         ctx.may_strip_periods(*self.strip_periods);
         ctx.set_case(self.text_case);
 
-        ctx.write_str(
+        ctx.push_str(
             &match &self.target {
                 TextTarget::Variable { var, form } => match var {
                     Variable::Standard(var) => {
@@ -551,8 +544,7 @@ impl RenderCsl for citationberg::Text {
                 TextTarget::Value { val } => Some(Cow::Owned(val.clone())),
             }
             .unwrap_or_default(),
-        )
-        .unwrap();
+        );
 
         ctx.clear_case();
         ctx.stop_stripping_periods();
@@ -563,10 +555,16 @@ impl RenderCsl for citationberg::Text {
         }
 
         if let Some(suffix) = affixes.suffix {
-            ctx.write_str(&suffix).unwrap();
+            ctx.push_str(&suffix);
         }
 
         ctx.pop_elem(depth, self.formatting);
+    }
+}
+
+impl RenderCsl for citationberg::Number {
+    fn render(&self, ctx: &mut Context) {
+        todo!()
     }
 }
 
@@ -580,5 +578,54 @@ impl From<TextCase> for Case {
             TextCase::CapitalizeFirst => Case::FirstUpper,
             TextCase::CapitalizeAll => Case::AllUpper,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NonEmptyStack<T> {
+    head: Vec<T>,
+    last: T,
+}
+
+impl<T> NonEmptyStack<T> {
+    fn new(last: T) -> Self {
+        Self { head: Vec::new(), last }
+    }
+
+    fn last(&self) -> &T {
+        &self.last
+    }
+
+    fn last_mut(&mut self) -> &mut T {
+        &mut self.last
+    }
+
+    fn len(&self) -> NonZeroUsize {
+        NonZeroUsize::new(self.head.len() + 1).unwrap()
+    }
+
+    fn push(&mut self, elem: T) {
+        self.head.push(mem::replace(&mut self.last, elem));
+    }
+
+    fn pop(&mut self) -> Option<T> {
+        let new_last = self.head.pop()?;
+        Some(mem::replace(&mut self.last, new_last))
+    }
+
+    fn drain(&mut self, idx: NonZeroUsize) -> impl Iterator<Item = T> + '_ {
+        let idx = idx.get();
+        mem::swap(&mut self.head[idx - 1], &mut self.last);
+        let mut drain = self.head.drain(idx - 1..);
+        let first = drain.next();
+        drain.chain(first)
+    }
+
+    fn finish(self) -> T {
+        if !self.head.is_empty() {
+            panic!("NonEmptyStack::finish called with non-empty stack")
+        }
+
+        self.last
     }
 }
