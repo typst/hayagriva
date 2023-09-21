@@ -9,7 +9,7 @@ use super::{
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
-use crate::lang::{en, SentenceCase, TitleCase};
+use crate::lang::{en, SentenceCaseConf, TitleCaseConf};
 use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
@@ -39,9 +39,9 @@ use crate::Entry;
 #[non_exhaustive]
 pub struct Ieee {
     /// The sentence case configuration. Used for paper titles etc.
-    pub sentence_case: SentenceCase,
+    pub sentence_case: SentenceCaseConf,
     /// The title case configuration. Used for journal titles etc.
-    pub title_case: TitleCase,
+    pub title_case: TitleCaseConf,
     /// How many authors have to be there for their list to be abbreviated with
     /// "et al."
     pub et_al_threshold: Option<u32>,
@@ -65,12 +65,12 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
 
 impl Default for Ieee {
     fn default() -> Self {
-        let title_case = TitleCase {
+        let title_case = TitleCaseConf {
             always_capitalize_min_len: Some(4),
-            ..TitleCase::default()
+            ..TitleCaseConf::default()
         };
         Self {
-            sentence_case: SentenceCase::default(),
+            sentence_case: SentenceCaseConf::default(),
             title_case,
             et_al_threshold: Some(6),
             abbreviate_journals: true,
@@ -230,7 +230,7 @@ impl Ieee {
             let canon_title = canonical.title();
 
             if let Some(title) = entry.title() {
-                let sentence = title.canonical.format_sentence_case(&self.sentence_case);
+                let sentence = title.canonical.format_sentence_case(self.sentence_case);
                 if canonical.entry_type == Conference {
                     res += &sentence;
                     res.push('.');
@@ -246,7 +246,7 @@ impl Ieee {
             }
 
             if let Some(title) = canon_title {
-                let title_case = title.canonical.format_title_case(&self.title_case);
+                let title_case = title.canonical.format_title_case(self.title_case);
                 let ct = if self.abbreviate_journals {
                     abbreviations::abbreviate_journal(&title_case)
                 } else {
@@ -283,7 +283,7 @@ impl Ieee {
                             .title()
                             .unwrap()
                             .canonical
-                            .format_title_case(&self.title_case);
+                            .format_title_case(self.title_case);
 
                         res.add_if_some(
                             parenth_anth.issue().map(|i| i.to_string()),
@@ -302,7 +302,7 @@ impl Ieee {
                             res += " in ";
                             res += &parenth_title
                                 .canonical
-                                .format_title_case(&self.title_case);
+                                .format_title_case(self.title_case);
                         }
                     }
                 }
@@ -324,13 +324,13 @@ impl Ieee {
                     res += ", ";
                 }
 
-                res += &title.canonical.format_title_case(&self.title_case);
+                res += &title.canonical.format_title_case(self.title_case);
             }
 
             res.commit_formats();
         } else if let Some(title) = entry.title() {
             res += "“";
-            res += &title.canonical.format_sentence_case(&self.sentence_case);
+            res += &title.canonical.format_sentence_case(self.sentence_case);
             res += ",”";
         }
 

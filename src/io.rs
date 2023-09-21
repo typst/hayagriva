@@ -12,7 +12,7 @@ use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
 #[cfg(feature = "biblatex")]
 use biblatex::{Bibliography, TypeError};
 
-use crate::lang::{Case, SentenceCase};
+use crate::lang::{CaseFolder, SentenceCaseConf};
 use crate::types::{
     parse_range, Date, DateError, Duration, DurationError, EntryType, FmtString,
     NumOrStr, Person, PersonError, PersonRole, QualifiedUrl, Title,
@@ -211,8 +211,6 @@ pub fn from_biblatex_str(biblatex: &str) -> Result<Vec<Entry>, Vec<BibLaTeXError
 /// Parse a bibliography from a BibLaTeX [`Bibliography`].
 #[cfg(feature = "biblatex")]
 pub fn from_biblatex(bibliography: &Bibliography) -> Result<Vec<Entry>, Vec<TypeError>> {
-    use std::convert::TryInto;
-
     let res: Vec<Result<Entry, TypeError>> =
         bibliography.iter().map(TryInto::try_into).collect();
     let errors: Vec<TypeError> = res
@@ -836,7 +834,9 @@ impl From<&FmtString> for Yaml {
                 }
 
                 if let Some(sentence) = &fmt.sentence_case {
-                    if SentenceCase::new().apply(&fmt.value) != *sentence {
+                    if CaseFolder::single(&fmt.value, SentenceCaseConf::default().into())
+                        != *sentence
+                    {
                         hm.insert(
                             Yaml::String("sentence-case".into()),
                             Yaml::String(sentence.clone()),

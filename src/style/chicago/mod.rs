@@ -11,7 +11,7 @@ use super::{
     format_range, omit_initial_articles, push_comma_quote_aware, DisplayString,
     Formatting,
 };
-use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
+use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCaseConf, TitleCaseConf};
 use crate::types::{
     Date, EntryType::*, FmtOptionExt, FmtString, NumOrStr, Person, PersonRole, Title,
 };
@@ -124,9 +124,9 @@ pub struct ChicagoConfig {
     /// When to print URL access dates.
     pub url_access_date: ChicagoAccessDateVisibility,
     /// The title case configuration.
-    pub title_case: TitleCase,
+    pub title_case: TitleCaseConf,
     /// The sentence case configuration.
-    pub sentence_case: SentenceCase,
+    pub sentence_case: SentenceCaseConf,
 }
 
 impl Default for ChicagoConfig {
@@ -134,8 +134,8 @@ impl Default for ChicagoConfig {
         Self {
             et_al_limit: Some(4),
             url_access_date: ChicagoAccessDateVisibility::default(),
-            title_case: TitleCase::new(),
-            sentence_case: SentenceCase::new(),
+            title_case: TitleCaseConf::new(),
+            sentence_case: SentenceCaseConf::new(),
         }
     }
 }
@@ -380,11 +380,11 @@ pub(super) fn get_chunk_title(
             res += &if entry.entry_type == Entry {
                 title.value
             } else {
-                title.format_title_case(&common.title_case)
+                title.format_title_case(common.title_case)
             };
         }
     } else if let Some(title) = entry.title() {
-        let tc = title.canonical.format_title_case(&common.title_case);
+        let tc = title.canonical.format_title_case(common.title_case);
         res += &if entry.entry_type == Entry {
             title.canonical.value.clone()
         } else if entry.entry_type == Case {
@@ -408,7 +408,7 @@ pub(super) fn get_chunk_title(
         if let Some(translation) = entry
             .title()
             .and_then(|title| title.translated.as_ref())
-            .map(|transl| transl.format_sentence_case(&common.sentence_case))
+            .map(|transl| transl.format_sentence_case(common.sentence_case))
         {
             if !res.is_empty() {
                 res.push(' ');
@@ -789,7 +789,7 @@ fn get_info_element(
             let mut title = DisplayString::new();
             title.start_format(Formatting::Italic);
             if let Some(own_title) = orig_entry.title() {
-                title += &own_title.canonical.format_title_case(&common.title_case);
+                title += &own_title.canonical.format_title_case(common.title_case);
             }
             if let Some(eds) = orig_entry.editors() {
                 push_comma_quote_aware(&mut title.value, ',', true);

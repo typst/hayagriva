@@ -1,6 +1,7 @@
 //! Provides conversion methods for BibLaTeX.
 
 use std::convert::TryFrom;
+use std::fmt::Write;
 
 use biblatex as tex;
 use tex::{
@@ -9,7 +10,7 @@ use tex::{
 };
 use url::Url;
 
-use crate::lang::{Case, TitleCase};
+use crate::lang::{Case, CaseFolder, TitleCaseConf};
 
 use super::types::{
     Date, EntryType, FmtString, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
@@ -94,27 +95,33 @@ impl From<&[Spanned<Chunk>]> for FmtString {
 }
 
 fn format_title_case(chunks: &[Spanned<Chunk>]) -> String {
-    let mut out = String::new();
+    let mut out = CaseFolder::from_config(Case::NoTransform);
     for chunk in chunks {
         match &chunk.v {
-            Chunk::Normal(s) => out.push_str(
-                &TitleCase {
-                    trim_end: false,
-                    trim_start: false,
-                    always_capitalize_last_word: false,
-                    ..Default::default()
-                }
-                .apply(s),
-            ),
-            Chunk::Verbatim(s) => out.push_str(s),
+            Chunk::Normal(s) => {
+                out.config(
+                    TitleCaseConf {
+                        trim_end: false,
+                        trim_start: false,
+                        always_capitalize_last_word: false,
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+                out.push_str(s)
+            }
+            Chunk::Verbatim(s) => {
+                out.config(Case::NoTransform);
+                out.push_str(s)
+            }
             Chunk::Math(s) => {
-                out.push('$');
-                out += s;
-                out.push('$');
+                out.config(Case::NoTransform);
+                write!(out, "${}$", s).unwrap();
             }
         }
     }
-    out
+
+    out.finish()
 }
 
 impl From<&[Spanned<Chunk>]> for NumOrStr {

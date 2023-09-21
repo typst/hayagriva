@@ -2,7 +2,7 @@
 name = "hayagriva"
 version = "0.3.2"
 authors = ["Martin Haug <mhaug@live.de>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Work with references: Literature database management, storage, and citation formatting"
 repository = "https://github.com/typst/hayagriva"
@@ -16,8 +16,10 @@ cli = ["clap"]
 
 [dependencies]
 biblatex = { version = "0.8", optional = true }
+citationberg = { path = "../citationberg" }
 clap = { version = "3.1", optional = true, features = ["cargo"] }
 chrono = { version = "0.4", default-features = false }
+ecow = "0.1.2"
 isolang = "2.1"
 lazy_static = "1.4.0"
 linked-hash-map = "0.5.3"

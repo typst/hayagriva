@@ -130,6 +130,7 @@ mod selectors;
 #[cfg(feature = "biblatex")]
 mod interop;
 
+mod csl;
 pub mod io;
 pub mod lang;
 pub mod style;

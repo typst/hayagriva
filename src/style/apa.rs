@@ -4,7 +4,7 @@ use super::{
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::en::{get_month_name, get_ordinal};
-use crate::lang::SentenceCase;
+use crate::lang::SentenceCaseConf;
 use crate::types::{EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
@@ -31,7 +31,7 @@ use crate::Entry;
 #[non_exhaustive]
 pub struct Apa {
     /// The configuration for sentence case formatting.
-    pub sentence_case: SentenceCase,
+    pub sentence_case: SentenceCaseConf,
 }
 
 #[derive(Clone, Debug)]
@@ -472,7 +472,7 @@ impl Apa {
             select!(Book | Report | Reference | Anthology | Proceedings).matches(entry);
 
         if let Some(title) = entry.title() {
-            let sent_cased = title.canonical.format_sentence_case(&self.sentence_case);
+            let sent_cased = title.canonical.format_sentence_case(self.sentence_case);
             let multivol_spec = select!(
                 ((Book | Proceedings | Anthology)["volume"])
                 > ("p":(Book | Proceedings | Anthology))
@@ -500,7 +500,7 @@ impl Apa {
                         .title()
                         .unwrap()
                         .canonical
-                        .format_sentence_case(&self.sentence_case),
+                        .format_sentence_case(self.sentence_case),
                     format_range("Vol.", "Vols.", vols),
                 ));
                 new += res;
@@ -700,7 +700,7 @@ impl Apa {
             SourceType::PeriodicalItem(parent) => {
                 let mut comma = if let Some(title) = parent.title() {
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.sentence_case);
+                    res += &title.canonical.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     true
                 } else {
@@ -759,7 +759,7 @@ impl Apa {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.sentence_case);
+                    res += &title.canonical.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     comma = true;
 
@@ -821,7 +821,7 @@ impl Apa {
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.sentence_case);
+                    res += &title.canonical.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     comma = false;
 
@@ -930,7 +930,7 @@ impl Apa {
                         || authors.get(0).map(|a| &a.name) != Some(&title.value)
                     {
                         res.start_format(Formatting::Italic);
-                        res += &title.format_sentence_case(&self.sentence_case);
+                        res += &title.format_sentence_case(self.sentence_case);
                         res.commit_formats();
                     }
                 }
@@ -938,7 +938,7 @@ impl Apa {
             SourceType::NewsItem(parent) => {
                 let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
                     res.start_format(Formatting::Italic);
-                    res += &title.format_sentence_case(&self.sentence_case);
+                    res += &title.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     true
                 } else {
@@ -955,7 +955,7 @@ impl Apa {
             }
             SourceType::ConferenceTalk(parent) => {
                 let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
-                    res += &title.format_sentence_case(&self.sentence_case);
+                    res += &title.format_sentence_case(self.sentence_case);
                     true
                 } else {
                     false

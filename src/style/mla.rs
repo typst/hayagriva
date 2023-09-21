@@ -6,7 +6,7 @@ use super::{
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
-use crate::lang::{en, TitleCase};
+use crate::lang::{en, TitleCaseConf};
 use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
 use crate::Entry;
 
@@ -36,7 +36,7 @@ pub struct Mla {
     /// only the most top-level date field will be printed.
     pub always_print_date: bool,
     /// Title case configuration.
-    pub title_case: TitleCase,
+    pub title_case: TitleCaseConf,
 }
 
 impl Default for Mla {
@@ -194,7 +194,7 @@ fn is_religious(s: &str) -> bool {
 impl Mla {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
-        let mut title_case = TitleCase::new();
+        let mut title_case = TitleCaseConf::new();
         title_case.always_capitalize_last_word = false;
 
         Self {
@@ -419,7 +419,7 @@ impl Mla {
                         .title()
                         .unwrap()
                         .canonical
-                        .format_title_case(&self.title_case);
+                        .format_title_case(self.title_case);
 
                     res += ". ";
                     entry = temp;
@@ -428,7 +428,7 @@ impl Mla {
         }
 
         if let Some(title) = entry.title() {
-            let fmt = title.canonical.format_title_case(&self.title_case);
+            let fmt = title.canonical.format_title_case(self.title_case);
             if sc
                 && !select!(Legislation | Conference).matches(entry)
                 && !is_religious(&fmt)
@@ -678,7 +678,7 @@ impl Mla {
 
             if let Some(series) = series {
                 supplemental.push(
-                    series.title().unwrap().canonical.format_title_case(&self.title_case),
+                    series.title().unwrap().canonical.format_title_case(self.title_case),
                 );
             }
 
