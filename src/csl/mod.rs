@@ -1,7 +1,8 @@
 use std::borrow::Cow;
+use std::fmt::Write;
 use std::mem;
 use std::num::NonZeroUsize;
-use std::{fmt::Write, ops::Deref};
+use std::ops::Deref;
 
 use crate::lang::{Case, CaseFolder, SentenceCaseConf, TitleCaseConf};
 use crate::Entry;
@@ -10,7 +11,7 @@ use citationberg::{
     CslMacro, Display, FontStyle, FontVariant, FontWeight, Locale, LocaleCode, TermForm,
     TextDecoration, TextTarget, ToAffixes, VerticalAlign,
 };
-use citationberg::{IndependentStyleSettings, TextCase};
+use citationberg::{IndependentStyleSettings, LabelPluralize, OrdinalLookup, TextCase};
 
 mod taxonomy;
 use taxonomy::{resolve_number_variable, resolve_standard_variable};
@@ -315,7 +316,7 @@ impl<'a> Context<'a> {
         while let Some(current_form) = form {
             if let Some(localization) = self.lookup_locale(|l| {
                 let term = l.term(term, current_form)?;
-                Some(if plural { term.single() } else { term.multiple() })
+                Some(if plural { term.multiple() } else { term.single() })
             }) {
                 return localization;
             }
@@ -324,6 +325,12 @@ impl<'a> Context<'a> {
         }
 
         None
+    }
+
+    /// Get the ordinal lookup object.
+    fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
+        self.lookup_locale(|l| l.ordinals())
+            .unwrap_or_else(OrdinalLookup::empty)
     }
 
     /// Check whether to do punctuation in quotes.
@@ -564,7 +571,74 @@ impl RenderCsl for citationberg::Text {
 
 impl RenderCsl for citationberg::Number {
     fn render(&self, ctx: &mut Context) {
-        todo!()
+        let depth = ctx.push_elem(self.display, self.formatting);
+
+        let affixes = self.to_affixes();
+        if let Some(prefix) = affixes.prefix {
+            ctx.push_str(&prefix);
+        }
+
+        ctx.set_case(self.text_case);
+
+        let value = resolve_number_variable(ctx.entry, self.variable);
+        match value {
+            Some(MaybeTyped::Typed(num)) if num.will_transform() => {
+                num.with_form(ctx, self.form, ctx.ordinal_lookup()).unwrap();
+            }
+            Some(MaybeTyped::Typed(num)) => write!(ctx, "{}", num).unwrap(),
+            Some(MaybeTyped::String(s)) => ctx.push_str(&s),
+            None => {}
+        }
+
+        ctx.clear_case();
+
+        if let Some(suffix) = affixes.suffix {
+            ctx.push_str(&suffix);
+        }
+
+        ctx.pop_elem(depth, self.formatting);
+    }
+}
+
+impl RenderCsl for citationberg::Label {
+    fn render(&self, ctx: &mut Context) {
+        let Some(variable) = resolve_number_variable(&ctx.entry, self.variable) else {
+            return;
+        };
+        ctx.push_format(self.label.formatting);
+
+        let affixes = &self.label.affixes;
+        if let Some(prefix) = &affixes.prefix {
+            ctx.push_str(prefix);
+        }
+
+        ctx.may_strip_periods(*self.label.strip_periods);
+        ctx.set_case(self.label.text_case);
+
+        let plural = match self.label.plural {
+            LabelPluralize::Always => true,
+            LabelPluralize::Never => false,
+            LabelPluralize::Contextual => match variable {
+                MaybeTyped::String(_) => false,
+                MaybeTyped::Typed(n) => {
+                    n.is_plural(self.variable.is_number_of_variable())
+                }
+            },
+        };
+
+        if let Some(label) = ctx.term(Term::from(self.variable), self.label.form, plural)
+        {
+            ctx.push_str(label);
+        }
+
+        ctx.clear_case();
+        ctx.stop_stripping_periods();
+
+        if let Some(suffix) = &affixes.suffix {
+            ctx.push_str(suffix);
+        }
+
+        ctx.pop_format(self.label.formatting);
     }
 }
 

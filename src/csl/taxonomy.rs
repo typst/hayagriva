@@ -1,9 +1,10 @@
 use std::borrow::Cow;
 use std::convert::TryFrom;
+use std::fmt::Write;
 
 use crate::types::{Date, Person};
 use crate::Entry;
-use citationberg::{taxonomy, LongShortForm};
+use citationberg::{taxonomy, LongShortForm, NumberForm, OrdinalLookup};
 use unscanny::Scanner;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +17,54 @@ pub struct Numeric {
 impl Numeric {
     pub fn will_transform(&self) -> bool {
         self.prefix.is_none() && self.suffix.is_none()
+    }
+
+    pub fn with_form<T>(
+        &self,
+        buf: &mut T,
+        form: NumberForm,
+        ords: OrdinalLookup<'_>,
+    ) -> std::fmt::Result
+    where
+        T: Write,
+    {
+        let format = |n: i32, buf: &mut T| -> std::fmt::Result {
+            match form {
+                NumberForm::Ordinal => {
+                    write!(buf, "{}{}", n, ords.lookup(n).unwrap_or_default())
+                }
+                NumberForm::LongOrdinal => match ords.lookup_long(n) {
+                    Some(str) => buf.write_str(str),
+                    None => write!(buf, "{}{}", n, ords.lookup(n).unwrap_or_default()),
+                },
+                NumberForm::Roman if n > 0 && n <= i16::MAX as i32 => {
+                    write!(buf, "{:x}", numerals::roman::Roman::from(n as i16))
+                }
+                NumberForm::Numeric | NumberForm::Roman => write!(buf, "{}", n),
+            }
+        };
+
+        match &self.value {
+            &NumericValue::Number(n) => format(n, buf)?,
+            NumericValue::Set(s) => {
+                for &(n, sep) in s {
+                    format(n, buf)?;
+                    if let Some(sep) = sep {
+                        write!(buf, "{}", sep)?
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn is_plural(&self, is_number_of: bool) -> bool {
+        match &self.value {
+            NumericValue::Number(n) if is_number_of => n != &1,
+            NumericValue::Number(_) => false,
+            NumericValue::Set(vec) => vec.len() != 1,
+        }
     }
 }
 
@@ -78,25 +127,17 @@ fn number(s: &mut Scanner) -> Option<i32> {
     num.parse::<i32>().ok().map(|n| if negative { -n } else { n })
 }
 
-impl ToString for Numeric {
-    fn to_string(&self) -> String {
-        let mut str = self.prefix.as_ref().cloned().unwrap_or_default();
-        match &self.value {
-            NumericValue::Number(n) => {
-                str.push_str(&n.to_string());
-            }
-            NumericValue::Set(items) => {
-                for (n, d) in items {
-                    str.push_str(&n.to_string());
-                    if let Some(d) = d {
-                        str.push_str(d.into_str());
-                    }
-                }
-            }
+impl std::fmt::Display for Numeric {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(prefix) = &self.prefix {
+            f.write_str(prefix)?;
+        }
+        self.with_form(f, NumberForm::Numeric, OrdinalLookup::empty())?;
+        if let Some(suffix) = &self.suffix {
+            f.write_str(suffix)?;
         }
 
-        str.push_str(&self.suffix.as_ref().cloned().unwrap_or_default());
-        str
+        Ok(())
     }
 }
 
@@ -113,12 +154,12 @@ enum Delimiter {
     Hyphen,
 }
 
-impl Delimiter {
-    fn into_str(self) -> &'static str {
+impl std::fmt::Display for Delimiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Delimiter::Comma => ", ",
-            Delimiter::Ampersand => " & ",
-            Delimiter::Hyphen => "–",
+            Delimiter::Comma => f.write_str(", "),
+            Delimiter::Ampersand => f.write_str(" & "),
+            Delimiter::Hyphen => f.write_char('–'),
         }
     }
 }
@@ -153,8 +194,11 @@ impl TryFrom<char> for Delimiter {
     }
 }
 
+/// A type that may be a string or a stricly typed value.
 pub enum MaybeTyped<T> {
+    /// The typed variant.
     Typed(T),
+    /// The fallback string variant.
     String(String),
 }
 

@@ -95,12 +95,18 @@ impl SentenceCaseConf {
     }
 }
 
+/// Which case to transform to
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum Case {
+    /// Capitalize all words except for some words using customary English rules.
     Title(TitleCaseConf),
+    /// Capitalize at the start of sentences as well as proper nouns.
     Sentence(SentenceCaseConf),
+    /// CAPITALIZE EVERYTHING.
     Uppercase,
+    /// lowercase everything.
     Lowercase,
+    /// Do not apply a case transformation.
     #[default]
     NoTransform,
     /// Capitalize the first letter of the first word if it is lowercase.
@@ -184,6 +190,7 @@ impl CharClass {
     }
 }
 
+/// Buffer that adjusts word case on the fly.
 #[derive(Debug)]
 pub struct CaseFolder {
     case: Case,
@@ -217,7 +224,7 @@ impl WordCase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WordData {
+struct WordData {
     start: usize,
     end: usize,
     case: WordCase,
@@ -318,18 +325,22 @@ impl Default for CaseFolder {
 }
 
 impl CaseFolder {
+    /// Create a new case folder.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create a case folder from a case configuration.
     pub fn from_config(case: Case) -> Self {
         Self { case, ..Default::default() }
     }
 
+    /// Transform a string to a case.
     pub fn single(s: &str, case: Case) -> String {
         Self::from_config(case).push_and_finish(s)
     }
 
+    /// Add a string to the buffer.
     pub fn push_str(&mut self, s: &str) {
         match self.case {
             Case::NoTransform => {
@@ -354,11 +365,13 @@ impl CaseFolder {
         self.pristine = false;
     }
 
+    /// Add a string to the buffer and yield the end result.
     pub fn push_and_finish(mut self, s: &str) -> String {
         self.push_str(s);
         self.finish()
     }
 
+    /// Add a character to the buffer.
     pub fn push(&mut self, c: char) {
         let prev_class = self.char_class;
         let hyphen_separates = match self.case {
@@ -458,7 +471,7 @@ impl CaseFolder {
         Some(&self.buf[data.start..alphabetic_end])
     }
 
-    pub fn process_word(&mut self) {
+    fn process_word(&mut self) {
         let mut verdict = WordVerdict::Keep;
         let data = if let Some(data) = self.last_word {
             data
@@ -539,7 +552,7 @@ impl CaseFolder {
         }
     }
 
-    pub fn may_trim_end(&mut self) {
+    fn may_trim_end(&mut self) {
         let trim = match self.case {
             Case::Title(config) => config.trim_end,
             Case::Sentence(config) => config.trim_end,
@@ -574,6 +587,7 @@ impl CaseFolder {
         }
     }
 
+    /// Change the configuration of the CaseFolder.
     pub fn config(&mut self, case: Case) {
         if self.case == case {
             return;
@@ -585,20 +599,26 @@ impl CaseFolder {
         self.case = case;
     }
 
+    /// Yield the transformed string.
     pub fn finish(mut self) -> String {
         self.process_word();
         self.may_trim_end();
         self.buf
     }
 
+    /// Whether the buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.buf.is_empty()
     }
 
+    /// Yield the buffer as a mutable string. Must call [`Self::mark_changed`]
+    /// if the length of the string is changed.
     pub fn as_str_mut(&mut self) -> &mut String {
         &mut self.buf
     }
 
+    /// Notify the struct that an outside manipulation to the underlying buffer
+    /// occurred.
     pub fn mark_changed(&mut self) {
         self.last_reconfig = self.buf.len();
         self.last_word = None;
