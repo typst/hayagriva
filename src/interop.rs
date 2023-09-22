@@ -65,11 +65,20 @@ impl From<&tex::Person> for Person {
 
 impl From<tex::Date> for Date {
     fn from(date: tex::Date) -> Self {
+        let approximate = date.approximate || date.uncertain;
         match date.value {
-            DateValue::At(x) | DateValue::After(x) | DateValue::Before(x) => {
-                Date { year: x.year, month: x.month, day: x.day }
-            }
-            DateValue::Between(_, x) => Self { year: x.year, month: x.month, day: x.day },
+            DateValue::At(x) | DateValue::After(x) | DateValue::Before(x) => Date {
+                year: x.year,
+                month: x.month,
+                day: x.day,
+                approximate,
+            },
+            DateValue::Between(_, x) => Self {
+                year: x.year,
+                month: x.month,
+                day: x.day,
+                approximate,
+            },
         }
     }
 }

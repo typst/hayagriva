@@ -5,18 +5,22 @@ use std::num::NonZeroUsize;
 use std::ops::Deref;
 
 use crate::lang::{Case, CaseFolder, SentenceCaseConf, TitleCaseConf};
+use crate::types::Date;
 use crate::Entry;
 use citationberg::{
     taxonomy::{OtherTerm, Term, Variable},
     CslMacro, Display, FontStyle, FontVariant, FontWeight, Locale, LocaleCode, TermForm,
     TextDecoration, TextTarget, ToAffixes, VerticalAlign,
 };
-use citationberg::{IndependentStyleSettings, LabelPluralize, OrdinalLookup, TextCase};
+use citationberg::{
+    DateDayForm, DateForm, DateMonthForm, DatePartName, DateParts, DateStrongAnyForm,
+    IndependentStyleSettings, LabelPluralize, LongShortForm, OrdinalLookup, TextCase,
+};
 
 mod taxonomy;
 use taxonomy::{resolve_number_variable, resolve_standard_variable};
 
-use self::taxonomy::MaybeTyped;
+use self::taxonomy::{resolve_date_variable, MaybeTyped};
 
 struct Context<'a> {
     /// The settings of the style.
@@ -40,7 +44,7 @@ struct Context<'a> {
     /// children.
     format_stack: NonEmptyStack<Formatting>,
     /// Finished elements. The last element may be unfinished.
-    elem_stack: NonEmptyStack<Elem<String>>,
+    elem_stack: NonEmptyStack<Elem>,
     /// Whether to watch out for punctuation that should be pulled inside the
     /// preceeding quoted content.
     pull_punctuation: bool,
@@ -256,7 +260,7 @@ impl<'a> Context<'a> {
     }
 
     /// Folds all remaining elements into the first element and returns it.
-    fn flush(mut self) -> Elem<String> {
+    fn flush(mut self) -> Elem {
         self.save_to_block();
 
         assert_eq!(
@@ -327,6 +331,11 @@ impl<'a> Context<'a> {
         None
     }
 
+    /// Get a localized date format.
+    fn localized_date(&self, form: DateForm) -> Option<&'a citationberg::Date> {
+        self.lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)))
+    }
+
     /// Get the ordinal lookup object.
     fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
         self.lookup_locale(|l| l.ordinals())
@@ -365,6 +374,10 @@ impl<'a> Context<'a> {
     fn clear_case(&mut self) {
         self.case = None;
     }
+
+    fn len(&self) -> usize {
+        self.buf.len() + self.elem_stack.iter().map(|e| e.str_len()).sum::<usize>()
+    }
 }
 
 impl Write for Context<'_> {
@@ -375,50 +388,45 @@ impl Write for Context<'_> {
 }
 
 #[derive(Debug, Clone)]
-struct Elem<T>
-where
-    T: AsRef<str> + Clone,
-{
-    children: Vec<ElemChild<T>>,
+struct Elem {
+    children: Vec<ElemChild>,
     display: Option<Display>,
 }
 
-impl<T> Elem<T>
-where
-    T: AsRef<str> + Clone,
-{
+impl Elem {
     fn new(display: Option<Display>) -> Self {
         Self { children: Vec::new(), display }
     }
+
+    fn str_len(&self) -> usize {
+        self.children
+            .iter()
+            .map(|c| match c {
+                ElemChild::Text(t) => t.text.len(),
+                ElemChild::Elem(e) => e.str_len(),
+            })
+            .sum()
+    }
 }
 
 #[derive(Debug, Clone)]
-enum ElemChild<T>
-where
-    T: AsRef<str> + Clone,
-{
-    Text(Formatted<T>),
-    Elem(Elem<T>),
+enum ElemChild {
+    Text(Formatted),
+    Elem(Elem),
 }
 
 #[derive(Debug, Clone)]
-pub struct Formatted<T>
-where
-    T: AsRef<str> + Clone,
-{
-    pub text: T,
+pub struct Formatted {
+    pub text: String,
     pub formatting: Formatting,
 }
 
-impl<T> Formatted<T>
-where
-    T: AsRef<str> + Clone,
-{
-    fn new(text: T) -> Self {
+impl Formatted {
+    fn new(text: String) -> Self {
         Self { text, formatting: Formatting::new() }
     }
 
-    fn elem(self, display: Option<Display>) -> Elem<T> {
+    fn elem(self, display: Option<Display>) -> Elem {
         Elem { children: vec![ElemChild::Text(self)], display }
     }
 }
@@ -437,10 +445,7 @@ impl Formatting {
         Self::default()
     }
 
-    fn add_text<T>(self, text: T) -> Formatted<T>
-    where
-        T: AsRef<str> + Clone,
-    {
+    fn add_text(self, text: String) -> Formatted {
         Formatted { text, formatting: self }
     }
 
@@ -602,7 +607,7 @@ impl RenderCsl for citationberg::Number {
 
 impl RenderCsl for citationberg::Label {
     fn render(&self, ctx: &mut Context) {
-        let Some(variable) = resolve_number_variable(&ctx.entry, self.variable) else {
+        let Some(variable) = resolve_number_variable(ctx.entry, self.variable) else {
             return;
         };
         ctx.push_format(self.label.formatting);
@@ -640,6 +645,174 @@ impl RenderCsl for citationberg::Label {
 
         ctx.pop_format(self.label.formatting);
     }
+}
+
+impl RenderCsl for citationberg::Date {
+    fn render(&self, ctx: &mut Context) {
+        let Some(date) = resolve_date_variable(ctx.entry, self.variable) else { return };
+
+        let base = if let Some(form) = self.form {
+            let Some(base) = ctx.localized_date(form) else { return };
+            Some(base)
+        } else {
+            None
+        };
+
+        let formatting = base
+            .map(|b| self.formatting.apply(b.formatting))
+            .unwrap_or(self.formatting);
+        let depth = ctx.push_elem(self.display, formatting);
+
+        let affixes = self.to_affixes();
+        if let Some(prefix) = affixes.prefix {
+            ctx.push_str(&prefix);
+        }
+
+        ctx.set_case(self.text_case.or(base.and_then(|b| b.text_case)));
+
+        let parts = if let Some(base) = base {
+            base.parts.unwrap_or_default()
+        } else {
+            DateParts::default()
+        };
+
+        // TODO: Date ranges
+        let mut last_was_empty = true;
+        for part in &base.unwrap_or(self).date_part {
+            match part.name {
+                DatePartName::Month if !parts.has_month() => continue,
+                DatePartName::Day if !parts.has_day() => continue,
+                _ => {}
+            }
+
+            let cursor = ctx.len();
+            if !last_was_empty {
+                if let Some(delim) = &self.delimiter {
+                    ctx.push_str(delim);
+                }
+            }
+
+            let over_ride = base
+                .is_some()
+                .then(|| self.date_part.iter().find(|p| p.name == part.name))
+                .flatten();
+
+            render_date_part(part, &date, ctx, over_ride);
+            last_was_empty = cursor == ctx.len();
+        }
+
+        ctx.clear_case();
+
+        if let Some(suffix) = affixes.suffix {
+            ctx.push_str(&suffix);
+        }
+
+        ctx.pop_elem(depth, formatting);
+    }
+}
+
+fn render_date_part(
+    date_part: &citationberg::DatePart,
+    date: &Date,
+    ctx: &mut Context,
+    over_ride: Option<&citationberg::DatePart>,
+) {
+    let Some(val) = (match date_part.name {
+        DatePartName::Day => date.day.map(|i| i as i32),
+        DatePartName::Month => date.month.map(|i| i as i32),
+        DatePartName::Year => Some(date.year),
+    }) else {
+        return;
+    };
+
+    let formatting = over_ride
+        .map(|p| p.formatting.apply(date_part.formatting))
+        .unwrap_or(date_part.formatting);
+
+    ctx.push_format(formatting);
+
+    let affixes = &date_part.affixes;
+
+    if let Some(prefix) = &affixes.prefix {
+        ctx.push_str(prefix);
+    }
+
+    ctx.set_case(over_ride.and_then(|o| o.text_case).or(date_part.text_case));
+
+    let form = over_ride
+        .map(citationberg::DatePart::form)
+        .unwrap_or_else(|| date_part.form());
+    match form {
+        DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
+        | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
+            write!(ctx, "{:02}", val).unwrap();
+        }
+        DateStrongAnyForm::Day(DateDayForm::Ordinal)
+            if val != 1
+                || !*ctx
+                    .lookup_locale(|l| {
+                        Some(
+                            l.style_options
+                                .and_then(|o| o.limit_day_ordinals_to_day_1)
+                                .unwrap_or_default(),
+                        )
+                    })
+                    .unwrap_or_default() =>
+        {
+            write!(
+                ctx,
+                "{}{}",
+                val,
+                ctx.ordinal_lookup().lookup(val).unwrap_or_default()
+            )
+            .unwrap();
+        }
+        DateStrongAnyForm::Day(DateDayForm::Numeric | DateDayForm::Ordinal)
+        | DateStrongAnyForm::Month(DateMonthForm::Numeric) => {
+            write!(ctx, "{}", val).unwrap();
+        }
+        DateStrongAnyForm::Month(DateMonthForm::Long) => {
+            if let Some(month) = ctx.term(
+                OtherTerm::month(val as u8).unwrap().into(),
+                TermForm::Long,
+                false,
+            ) {
+                ctx.push_str(month);
+            } else {
+                write!(ctx, "{}", val).unwrap();
+            }
+        }
+        DateStrongAnyForm::Month(DateMonthForm::Short) => {
+            if let Some(month) = ctx.term(
+                OtherTerm::month(val as u8).unwrap().into(),
+                TermForm::Short,
+                false,
+            ) {
+                ctx.push_str(month);
+            } else {
+                write!(ctx, "{}", val).unwrap();
+            }
+        }
+        DateStrongAnyForm::Year(LongShortForm::Short) => {
+            write!(ctx, "{:02}", (val % 100).abs()).unwrap();
+        }
+        DateStrongAnyForm::Year(LongShortForm::Long) => {
+            write!(ctx, "{}", val.abs()).unwrap();
+        }
+    }
+
+    if let DateStrongAnyForm::Year(_) = form {
+        if val < 1000 {
+            ctx.push_str(if val < 0 { "BC" } else { "AD" });
+        }
+    }
+
+    if let Some(suffix) = &affixes.suffix {
+        ctx.push_str(suffix);
+    }
+
+    ctx.clear_case();
+    ctx.pop_format(formatting);
 }
 
 impl From<TextCase> for Case {
@@ -693,6 +866,10 @@ impl<T> NonEmptyStack<T> {
         let mut drain = self.head.drain(idx - 1..);
         let first = drain.next();
         drain.chain(first)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        self.head.iter().chain(std::iter::once(&self.last))
     }
 
     fn finish(self) -> T {

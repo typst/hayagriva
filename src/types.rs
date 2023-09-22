@@ -497,6 +497,8 @@ pub struct Date {
     pub month: Option<u8>,
     /// The optional day (0-30).
     pub day: Option<u8>,
+    /// Whether the date is approximate
+    pub approximate: bool,
 }
 
 /// This error can occur when trying to get a date from a string.
@@ -517,7 +519,10 @@ impl FromStr for Date {
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         let mut source = source.to_string();
         source.retain(|f| !f.is_whitespace());
+        let approx_marker = '~';
+        let approximate = source.starts_with(approx_marker);
 
+        let source = &source[if approximate { approx_marker.len_utf8() } else { 0 }..];
         let full_date = source.parse::<NaiveDate>();
 
         if let Ok(ndate) = full_date {
@@ -525,8 +530,9 @@ impl FromStr for Date {
                 year: ndate.year(),
                 month: Some(ndate.month0() as u8),
                 day: Some(ndate.day0() as u8),
+                approximate,
             })
-        } else if let Some(captures) = MONTH_REGEX.captures(&source) {
+        } else if let Some(captures) = MONTH_REGEX.captures(source) {
             let month = (captures.name("m").unwrap()).as_str().parse::<u8>().unwrap() - 1;
             if month > 11 {
                 Err(DateError::MonthOutOfBounds)
@@ -535,13 +541,15 @@ impl FromStr for Date {
                     year: (captures.name("y").unwrap()).as_str().parse().unwrap(),
                     month: Some(month),
                     day: None,
+                    approximate,
                 })
             }
-        } else if let Some(captures) = YEAR_REGEX.captures(&source) {
+        } else if let Some(captures) = YEAR_REGEX.captures(source) {
             Ok(Self {
                 year: (captures.name("y").unwrap()).as_str().parse().unwrap(),
                 month: None,
                 day: None,
+                approximate,
             })
         } else {
             Err(DateError::UnknownFormat)
@@ -552,7 +560,7 @@ impl FromStr for Date {
 impl Date {
     /// Get a date from an integer.
     pub fn from_year(year: i32) -> Self {
-        Self { year, month: None, day: None }
+        Self { year, month: None, day: None, approximate: false }
     }
 
     /// Returns the year as a human-readable gregorian year.

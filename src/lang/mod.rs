@@ -611,6 +611,11 @@ impl CaseFolder {
         self.buf.is_empty()
     }
 
+    /// Return the length of the buffer.
+    pub fn len(&self) -> usize {
+        self.buf.len()
+    }
+
     /// Yield the buffer as a mutable string. Must call [`Self::mark_changed`]
     /// if the length of the string is changed.
     pub fn as_str_mut(&mut self) -> &mut String {

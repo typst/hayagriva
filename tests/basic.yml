@@ -88,7 +88,7 @@ harry:
         volume-total: 7
         isbn: 978-0747551003
         page-total: 768
-        date: 2003-06-21
+        date: ~2003-06-21
 
 science-e-issue:
     type: Web
