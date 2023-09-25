@@ -8,8 +8,9 @@ use clap::{crate_version, Arg, Command};
 use strum::{EnumVariantNames, VariantNames};
 
 use hayagriva::style::{
-    Apa, ApaCitationForm, AuthorTitle, BibliographyStyle as UsableBibliographyStyle, ChicagoAuthorDate,
-    ChicagoNotes, Citation, CitationStyle as UsableCitationStyle, Database, Ieee, Mla,
+    Apa, ApaCitationForm, AuthorTitle, BibliographyStyle as UsableBibliographyStyle,
+    ChicagoAuthorDate, ChicagoNotes, Citation, CitationStyle as UsableCitationStyle,
+    Database, Ieee, Mla,
 };
 use hayagriva::Selector;
 use hayagriva::{
@@ -368,7 +369,9 @@ fn main() {
             let mut style: Box<dyn UsableCitationStyle> = match style {
                 CitationStyle::Alphanumerical => Box::new(Alphanumerical::new()),
                 CitationStyle::Apa => Box::new(Apa::new()),
-                CitationStyle::ApaNarrative => Box::new(Apa::new_citation(ApaCitationForm::Narrative)),
+                CitationStyle::ApaNarrative => {
+                    Box::new(Apa::new_citation(ApaCitationForm::Narrative))
+                }
                 CitationStyle::AuthorDate => Box::new(ChicagoAuthorDate::default()),
                 CitationStyle::AuthorTitle => Box::new(AuthorTitle::new()),
                 CitationStyle::ChicagoNote => Box::new(ChicagoNotes::default()),

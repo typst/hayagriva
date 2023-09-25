@@ -1179,7 +1179,7 @@ impl Apa {
 
         let and = match self.citation_form {
             ApaCitationForm::Parenthetical => " & ",
-            ApaCitationForm::Narrative => " and "
+            ApaCitationForm::Narrative => " and ",
         };
 
         for (index, name) in names.iter().enumerate() {
@@ -1249,7 +1249,9 @@ impl<'a> CitationStyle<'a> for Apa {
             let authors = self.get_author(entry).1;
 
             if !authors.0.is_empty() {
-                if let Some((_, entries)) = author_lists.iter_mut().find(|(a, _)| a == &authors) {
+                if let Some((_, entries)) =
+                    author_lists.iter_mut().find(|(a, _)| a == &authors)
+                {
                     entries.push((atomic, entry));
                     continue;
                 }
@@ -1295,7 +1297,11 @@ impl<'a> CitationStyle<'a> for Apa {
                         let len = other_authors.0.len();
                         let mut mismatch = len;
 
-                        if let Some(i) = authors.iter().zip(other_authors.into_iter()).position(|(a, b)| a != &b) {
+                        if let Some(i) = authors
+                            .iter()
+                            .zip(other_authors.into_iter())
+                            .position(|(a, b)| a != &b)
+                        {
                             mismatch = i;
                         }
 
@@ -1317,7 +1323,8 @@ impl<'a> CitationStyle<'a> for Apa {
             } else {
                 let entry = entries[0].1;
 
-                if let Some(title) = entry.title().map(|t| self.citation_title(entry, t)) {
+                if let Some(title) = entry.title().map(|t| self.citation_title(entry, t))
+                {
                     separator_included = true;
                     title
                 } else if let Some(creator) = self.citation_web_creator(entry) {
@@ -1362,7 +1369,7 @@ impl<'a> CitationStyle<'a> for Apa {
                     .records()
                     .filter(|&r| {
                         r.entry.date_any().map(|d| d.year) == date.map(|d| d.year)
-                            && self.get_author(r.entry).1.0 == authors
+                            && self.get_author(r.entry).1 .0 == authors
                             && !authors.is_empty()
                     })
                     .collect::<Vec<_>>();
@@ -1509,10 +1516,7 @@ mod tests {
         let mut apa = Apa::new();
         let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
         let (citations, mut database) = Cs(&es);
-        assert_eq!(
-            database.citation(&mut apa, &citations).display.value,
-            "Haug, 2018"
-        );
+        assert_eq!(database.citation(&mut apa, &citations).display.value, "Haug, 2018");
         assert_eq!(
             database.citation(&mut apa_narrative, &citations).display.value,
             "Haug (2018)"
@@ -1696,10 +1700,7 @@ mod tests {
         let mut apa = Apa::new();
         let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
         let (citations, mut database) = Cs(&es);
-        assert_eq!(
-            database.citation(&mut apa, &citations).display.value,
-            "Doe, n.d."
-        );
+        assert_eq!(database.citation(&mut apa, &citations).display.value, "Doe, n.d.");
         assert_eq!(
             database.citation(&mut apa_narrative, &citations).display.value,
             "Doe (n.d.)"
