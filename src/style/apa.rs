@@ -1,16 +1,31 @@
 use super::{
     alph_designator, delegate_titled_entry, format_range, name_list, name_list_straight,
-    sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
-    DisplayReference, DisplayString, Formatting, Record,
+    sorted_bibliography, AuthorUniqueness, BibliographyOrdering, BibliographyStyle,
+    Brackets, Citation, CitationStyle, Database, DisplayCitation, DisplayReference,
+    DisplayString, Formatting, Record,
 };
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
-use crate::types::{EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
+use crate::types::{EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole, Title};
 use crate::Entry;
 
-/// Bibliographies following APA guidance.
+/// The form of an APA citation.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ApaCitationForm {
+    /// Enclosed in parentheses.
+    Parenthetical,
+    /// Only the year is enclosed in parentheses.
+    Narrative,
+}
+
+/// Citations and bibliographies following APA guidance.
 ///
 /// # Examples
+/// Citations:
+/// - Angell, 1997
+/// - Davidson & McKenna, 2010
+///
+/// Bibliography:
 /// - Henrich, J., Heine, S. J., & Norenzayan, A. (2010, June 15). The weirdest
 ///   people in the world? _Behavioral and brain sciences,_ 33(2-3), 61–83.
 ///   <https://doi.org/10.1017/S0140525X0999152X>
@@ -27,11 +42,22 @@ use crate::Entry;
 /// bibliographies.
 ///
 /// [apa]: https://apastyle.apa.org/style-grammar-guidelines/references
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Apa {
     /// The configuration for sentence case formatting.
     pub sentence_case: SentenceCase,
+    /// The form of citation to use.
+    pub citation_form: ApaCitationForm,
+}
+
+impl Default for Apa {
+    fn default() -> Self {
+        Self {
+            sentence_case: SentenceCase::default(),
+            citation_form: ApaCitationForm::Parenthetical,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -187,13 +213,39 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct AuthorList(Vec<Person>);
+
+impl From<Vec<Person>> for AuthorList {
+    fn from(authors: Vec<Person>) -> Self {
+        Self(authors)
+    }
+}
+
+impl IntoIterator for AuthorList {
+    type Item = Person;
+    type IntoIter = std::vec::IntoIter<Person>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl Apa {
     /// Creates a new bibliography generator.
     pub fn new() -> Self {
         Self::default()
     }
 
-    fn get_author(&self, entry: &Entry) -> (String, Vec<Person>) {
+    /// Creates a new citation generator with a specific citation form.
+    pub fn new_citation(citation_form: ApaCitationForm) -> Self {
+        Self {
+            sentence_case: SentenceCase::default(),
+            citation_form,
+        }
+    }
+
+    fn get_author(&self, entry: &Entry) -> (String, AuthorList) {
         #[derive(Clone, Debug)]
         enum AuthorRole {
             Normal,
@@ -354,7 +406,7 @@ impl Apa {
             }
         }
 
-        (al, pers_refs)
+        (al, pers_refs.into())
     }
 
     fn get_date(&self, entry: &Entry, disambiguation: Option<usize>) -> String {
@@ -451,19 +503,22 @@ impl Apa {
         }
     }
 
-    fn get_title(&self, entry: &Entry, wrap: bool) -> DisplayString {
-        let italicise =
-            if let Some(titled) = select!(* > ("p":(*["title"]))).bound(entry, "p") {
-                let talk = select!(* > Conference);
-                let preprint = select!((Article | Book | Anthos) > Repository);
-                let booklike = select!(Book | Proceedings | Anthology);
+    fn italicise_title(entry: &Entry) -> bool {
+        if let Some(titled) = select!(* > ("p":(*["title"]))).bound(entry, "p") {
+            let talk = select!(* > Conference);
+            let preprint = select!((Article | Book | Anthos) > Repository);
+            let booklike = select!(Book | Proceedings | Anthology);
 
-                talk.matches(entry)
-                    || preprint.matches(entry)
-                    || (titled.kind() == entry.kind() && booklike.matches(entry))
-            } else {
-                true
-            };
+            talk.matches(entry)
+                || preprint.matches(entry)
+                || (titled.kind() == entry.kind() && booklike.matches(entry))
+        } else {
+            true
+        }
+    }
+
+    fn get_title(&self, entry: &Entry, wrap: bool) -> DisplayString {
+        let italicise = Apa::italicise_title(entry);
 
         let mut res = DisplayString::new();
         let vid_match = select!((Video["issue", "volume"]) > Video);
@@ -1086,8 +1141,297 @@ impl Apa {
                 record.prefix.clone().map(Into::into),
                 res,
             ),
-            al,
+            al.0,
         )
+    }
+
+    fn citation_web_creator(&self, entry: &Entry) -> Option<String> {
+        let web_thing = select!(Web | ((Misc | Web) > ("p": Web))).apply(entry);
+        web_thing.map(|wt| {
+            if let Some(org) = entry.organization() {
+                org.into()
+            } else if wt.get("p").and_then(|e| e.authors()).is_some() {
+                let authors = self
+                    .get_author(wt.get("p").unwrap())
+                    .1
+                    .into_iter()
+                    .map(|p| p.given_first(false));
+
+                let count = if authors.len() >= 3 { 1 } else { authors.len() };
+
+                self.citation_and_list(authors, count)
+            } else if let Some(org) = wt.get("p").and_then(|e| e.organization()) {
+                org.into()
+            } else {
+                "".into()
+            }
+        })
+    }
+
+    fn citation_and_list(
+        &self,
+        names: impl IntoIterator<Item = String>,
+        count: usize,
+    ) -> String {
+        let names = names.into_iter().collect::<Vec<_>>();
+        let name_len = names.len();
+        let mut res = String::new();
+
+        let and = match self.citation_form {
+            ApaCitationForm::Parenthetical => " & ",
+            ApaCitationForm::Narrative => " and "
+        };
+
+        for (index, name) in names.iter().enumerate() {
+            if index >= count {
+                break;
+            }
+
+            res += name;
+
+            if index + 1 < name_len && index + 1 < count {
+                if name_len > 2 {
+                    res += ", ";
+                } else {
+                    res += and;
+                }
+            }
+        }
+
+        if name_len > count {
+            if count > 1 {
+                res += ",";
+            }
+            if count + 1 == name_len {
+                res += and;
+                res += &names[count];
+            } else {
+                res += " et al."
+            }
+        }
+
+        res
+    }
+
+    fn citation_title(&self, entry: &Entry, title: &Title) -> DisplayString {
+        let italicise = Apa::italicise_title(entry);
+        let mut res = DisplayString::new();
+
+        if italicise {
+            res.start_format(Formatting::Italic);
+        } else {
+            res.push('“');
+        }
+
+        res += &super::chicago::shorthand(title).value;
+
+        if self.citation_form == ApaCitationForm::Parenthetical {
+            res.push(',');
+        }
+
+        if !italicise {
+            res.push('”');
+        }
+
+        res
+    }
+}
+
+impl<'a> CitationStyle<'a> for Apa {
+    fn citation(
+        &mut self,
+        db: &mut Database<'a>,
+        parts: &[Citation<'a>],
+    ) -> DisplayCitation {
+        let mut author_lists = Vec::<(_, Vec<_>)>::new();
+        for atomic in parts {
+            let entry = delegate_titled_entry(atomic.entry);
+            let authors = self.get_author(entry).1;
+
+            if !authors.0.is_empty() {
+                if let Some((_, entries)) = author_lists.iter_mut().find(|(a, _)| a == &authors) {
+                    entries.push((atomic, entry));
+                    continue;
+                }
+            }
+
+            author_lists.push((authors, vec![(atomic, entry)]));
+        }
+
+        let mut items: Vec<DisplayString> = vec![];
+        for (AuthorList(authors), entries) in author_lists {
+            let mut last_full = false;
+            let mut separator_included = false;
+            let mut s = if !authors.is_empty() {
+                let names = authors
+                    .iter()
+                    .map(|author| {
+                        let uniqueness = db.uniqueness(author);
+                        last_full = uniqueness == AuthorUniqueness::None;
+                        match uniqueness {
+                            AuthorUniqueness::Full => {
+                                let mut res = String::new();
+                                if let Some(prefix) = &author.prefix {
+                                    res += prefix;
+                                    res.push(' ');
+                                }
+                                res += &author.name;
+                                res
+                            }
+                            AuthorUniqueness::Initials => author.given_first(true),
+                            AuthorUniqueness::None => author.name_first(false, true),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let count = if names.len() >= 3 {
+                    // 0: First author is different
+                    let mut distinction_authors = 0;
+                    for entry in db.records().map(|r| r.entry) {
+                        if entries.iter().any(|(_, e)| e == &entry) {
+                            continue;
+                        }
+                        let other_authors = self.get_author(entry).1;
+                        let len = other_authors.0.len();
+                        let mut mismatch = len;
+
+                        if let Some(i) = authors.iter().zip(other_authors.into_iter()).position(|(a, b)| a != &b) {
+                            mismatch = i;
+                        }
+
+                        if mismatch == len {
+                            continue;
+                        }
+
+                        if mismatch > distinction_authors {
+                            distinction_authors = mismatch;
+                        }
+                    }
+
+                    distinction_authors + 1
+                } else {
+                    names.len()
+                };
+
+                self.citation_and_list(names, count).into()
+            } else {
+                let entry = entries[0].1;
+
+                if let Some(title) = entry.title().map(|t| self.citation_title(entry, t)) {
+                    separator_included = true;
+                    title
+                } else if let Some(creator) = self.citation_web_creator(entry) {
+                    creator.into()
+                } else if matches!(
+                    entry.entry_type,
+                    Report | Patent | Legislation | Conference | Exhibition
+                ) {
+                    entry.organization().unwrap_or_default().into()
+                } else if let Some(np) = select!(* > ("p":Newspaper)).bound(entry, "p") {
+                    separator_included = true;
+                    np.title().map(|t| self.citation_title(np, t)).unwrap_or_default()
+                } else {
+                    DisplayString::new()
+                }
+            };
+
+            match self.citation_form {
+                ApaCitationForm::Parenthetical => {
+                    if !s.is_empty() {
+                        if last_full {
+                            if s.last() != Some('.') {
+                                s.push('.');
+                            }
+                        } else if !separator_included && s.last() != Some(',') {
+                            s.push(',')
+                        }
+                        s.push(' ');
+                    }
+                }
+                ApaCitationForm::Narrative => {
+                    if !s.is_empty() {
+                        s.push(' ');
+                    }
+                    s.push('(');
+                }
+            }
+
+            for (i, (atomic, entry)) in entries.iter().enumerate() {
+                let date = entry.date_any();
+                let similars = db
+                    .records()
+                    .filter(|&r| {
+                        r.entry.date_any().map(|d| d.year) == date.map(|d| d.year)
+                            && self.get_author(r.entry).1.0 == authors
+                            && !authors.is_empty()
+                    })
+                    .collect::<Vec<_>>();
+
+                let colon = if let Some(date) = date {
+                    s += &date.display_year();
+                    false
+                } else {
+                    s += "n.d.";
+                    true
+                };
+
+                if similars.len() > 1 {
+                    let pos = similars.iter().position(|&x| x.entry == *entry).unwrap();
+                    let num = if let Some(disambiguation) = similars[pos].disambiguation {
+                        disambiguation
+                    } else {
+                        db.records
+                            .iter_mut()
+                            .find(|(_, r)| r.entry == *entry)
+                            .unwrap()
+                            .1
+                            .disambiguation = Some(pos);
+                        pos
+                    };
+
+                    let designator = alph_designator(num);
+
+                    if colon {
+                        s.push('-');
+                    }
+
+                    s.push(designator);
+                }
+
+                if let Some(supplement) = atomic.supplement {
+                    if !supplement.ends_with(';') {
+                        s += ", ";
+                    }
+
+                    s += supplement;
+                }
+
+                if i + 1 < entries.len() {
+                    s += ", ";
+                }
+            }
+
+            if self.citation_form == ApaCitationForm::Narrative {
+                s.push(')');
+            }
+
+            items.push(s);
+        }
+
+        let joiner = match self.citation_form {
+            ApaCitationForm::Parenthetical => "; ",
+            ApaCitationForm::Narrative => ", ",
+        };
+
+        DisplayCitation::new(DisplayString::join(&items, joiner), false)
+    }
+
+    fn brackets(&self) -> Brackets {
+        Brackets::Round
+    }
+
+    fn wrapped(&self) -> bool {
+        true
     }
 }
 
@@ -1121,12 +1465,243 @@ mod tests {
 
     use url::Url;
 
-    use super::Apa;
-    use crate::types::Date;
-    use crate::types::EntryType;
-    use crate::types::Person;
-    use crate::types::QualifiedUrl;
+    use super::{Apa, ApaCitationForm};
+    use crate::style::{Citation, Database};
+    use crate::types::{Date, EntryType, Person, QualifiedUrl, Title};
     use crate::Entry;
+
+    fn date_author_entry(key: &str, authors: Vec<Person>, year: i32) -> Entry {
+        let mut e = Entry::new(key, EntryType::Article);
+        e.set_authors(authors);
+        e.set_date(Date::from_year(year));
+        e
+    }
+
+    #[allow(non_snake_case)]
+    fn A(given: &str, family: &str) -> Person {
+        Person::from_strings(&[family, given]).unwrap()
+    }
+
+    #[allow(non_snake_case)]
+    fn C(entry: &Entry) -> Citation {
+        Citation::new(entry, None)
+    }
+
+    #[allow(non_snake_case)]
+    fn Cs(entries: &[Entry]) -> (Vec<Citation>, Database) {
+        let cv = entries.iter().map(C).collect();
+
+        let mut db = Database::new();
+
+        for entry in entries {
+            db.push(entry);
+        }
+
+        (cv, db)
+    }
+
+    #[test]
+    fn simple() {
+        let es = vec![date_author_entry("key", vec![A("Martin", "Haug")], 2018)];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Haug, 2018"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Haug (2018)"
+        );
+    }
+
+    #[test]
+    fn same_author_year() {
+        let es = vec![
+            date_author_entry("klaus1", vec![A("Klaus", "Kinsky")], 2018),
+            date_author_entry("klaus2", vec![A("Klaus", "Kinsky")], 2018),
+            date_author_entry("unklaus", vec![A("Haus", "Hinsky")], 2018),
+            date_author_entry("klaus3", vec![A("Klaus", "Kinsky")], 2018),
+            date_author_entry("klaus4", vec![A("Klaus", "Kinsky")], 2019),
+            date_author_entry("klaus5", vec![A("Klaus", "Kinsky")], 2019),
+        ];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Kinsky, 2018a, 2018b, 2018c, 2019a, 2019b; Hinsky, 2018"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Kinsky (2018a, 2018b, 2018c, 2019a, 2019b), Hinsky (2018)"
+        );
+    }
+
+    #[test]
+    fn author_initials() {
+        let es = vec![
+            date_author_entry("1", vec![A("John", "Doe")], 1967),
+            date_author_entry("2", vec![A("Rich", "Doe")], 2011),
+        ];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "J. Doe, 1967; R. Doe, 2011"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "J. Doe (1967), R. Doe (2011)"
+        );
+    }
+
+    #[test]
+    fn author_gn() {
+        let es = vec![
+            date_author_entry("1", vec![A("John", "Doe")], 1967),
+            date_author_entry("2", vec![A("Janet", "Doe")], 2011),
+        ];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Doe, John. 1967; Doe, Janet. 2011"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Doe, John (1967), Doe, Janet (2011)"
+        );
+    }
+
+    #[test]
+    fn multi_author() {
+        let es = vec![
+            date_author_entry(
+                "key",
+                vec![A("Laurenz", "Mädje"), A("Martin", "Haug")],
+                2020,
+            ),
+            date_author_entry(
+                "key2",
+                vec![
+                    A("Jean-Baptiste", "Poquelin"),
+                    A("Madeleine", "Béjart"),
+                    A("Charles", "du Fresne"),
+                ],
+                1648,
+            ),
+        ];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Mädje & Haug, 2020; Poquelin et al., 1648"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Mädje and Haug (2020), Poquelin et al. (1648)"
+        );
+    }
+
+    #[test]
+    fn differentiate_et_al() {
+        let es = vec![
+            date_author_entry(
+                "key",
+                vec![
+                    A("Jean-Baptiste", "Poquelin"),
+                    A("Madeleine", "Béjart"),
+                    A("Charles", "du Fresne"),
+                    A("Bernard", "de Nogaret"),
+                ],
+                1648,
+            ),
+            date_author_entry(
+                "2",
+                vec![
+                    A("Jean-Baptiste", "Poquelin"),
+                    A("Armande", "Béjart"),
+                    A("Charles", "du Fresne"),
+                ],
+                1662,
+            ),
+        ];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Poquelin, M. Béjart, et al., 1648; Poquelin, A. Béjart, & du Fresne, 1662"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Poquelin, M. Béjart, et al. (1648), Poquelin, A. Béjart, and du Fresne (1662)"
+        );
+    }
+
+    #[test]
+    fn no_author_report() {
+        let mut e = Entry::new("report", EntryType::Report);
+        e.set_date(Date::from_year(1999));
+        e.set_title(Title::new("Third International Report on Reporting"));
+        let es = vec![e];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Third International Report on Reporting, 1999"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Third International Report on Reporting (1999)"
+        );
+    }
+
+    #[test]
+    fn no_author_article() {
+        let mut e = Entry::new("article", EntryType::Article);
+        e.set_date(Date::from_year(1999));
+        e.set_title(Title::new("Article on Articles"));
+        let mut p = Entry::new("article", EntryType::Periodical);
+        p.set_title(Title::new("International Magazine on Magazines"));
+        e.add_parent(p);
+        let es = vec![e];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "“Article on Articles,” 1999"
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "“Article on Articles” (1999)"
+        );
+    }
+
+    #[test]
+    fn no_date() {
+        let mut e = Entry::new("report", EntryType::Report);
+        e.set_authors(vec![A("John", "Doe")]);
+        let es = vec![e];
+        let mut apa = Apa::new();
+        let mut apa_narrative = Apa::new_citation(ApaCitationForm::Narrative);
+        let (citations, mut database) = Cs(&es);
+        assert_eq!(
+            database.citation(&mut apa, &citations).display.value,
+            "Doe, n.d."
+        );
+        assert_eq!(
+            database.citation(&mut apa_narrative, &citations).display.value,
+            "Doe (n.d.)"
+        );
+    }
 
     #[test]
     fn name_list() {

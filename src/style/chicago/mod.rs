@@ -460,7 +460,7 @@ fn self_contained(entry: &Entry) -> bool {
         .matches(entry))
 }
 
-fn shorthand(title: &Title) -> FmtString {
+pub(crate) fn shorthand(title: &Title) -> FmtString {
     if let Some(sh) = title.shorthand.as_ref() {
         sh.clone()
     } else {

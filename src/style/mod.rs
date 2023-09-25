@@ -12,6 +12,7 @@ pub use chicago::{ChicagoAccessDateVisibility, ChicagoConfig};
 pub use ieee::Ieee;
 pub use mla::Mla;
 
+use std::collections::HashSet;
 use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::ops::{Add, AddAssign};
 use std::{cmp::Ordering, convert::Into};
@@ -103,6 +104,17 @@ impl<'a> DisplayReference<'a> {
     ) -> Self {
         DisplayReference { entry, prefix, display }
     }
+}
+
+/// The uniqueness of an author's name in a database.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AuthorUniqueness {
+    /// The author's family name and initials are not unique.
+    None,
+    /// The author's initials are unique.
+    Initials,
+    /// The author's family name is unique.
+    Full,
 }
 
 /// A database of citation entries.
@@ -202,6 +214,27 @@ impl<'a> Database<'a> {
         S: BibliographyStyle<'a>,
     {
         self.records.get(key).map(|record| style.reference(record))
+    }
+
+    pub(self) fn uniqueness(&self, author: &Person) -> AuthorUniqueness {
+        let total_authors: HashSet<_> = self
+            .records()
+            .flat_map(|e| chicago::get_creators(e.entry).0)
+            .filter(|a| a != author)
+            .collect();
+
+        let mut unique = AuthorUniqueness::Full;
+        for other in total_authors {
+            if other.name == author.name {
+                if other.initials(None) == author.initials(None) {
+                    return AuthorUniqueness::None;
+                } else {
+                    unique = AuthorUniqueness::Initials;
+                }
+            }
+        }
+
+        unique
     }
 }
 

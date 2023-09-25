@@ -1,23 +1,13 @@
-use std::collections::HashSet;
-
 use super::{
     and_list_opt, bibliography::Bibliography, get_chunk_title, get_creators, web_creator,
     ChicagoConfig, Mode,
 };
 use crate::style::{
-    alph_designator, delegate_titled_entry, sorted_bibliography, BibliographyOrdering,
-    BibliographyStyle, Brackets, Citation, CitationStyle, Database, DisplayCitation,
-    DisplayReference, DisplayString, Record,
+    alph_designator, delegate_titled_entry, sorted_bibliography, AuthorUniqueness,
+    BibliographyOrdering, BibliographyStyle, Brackets, Citation, CitationStyle, Database,
+    DisplayCitation, DisplayReference, DisplayString, Record,
 };
 use crate::types::EntryType::*;
-use crate::types::Person;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum Uniqueness {
-    None,
-    Initials,
-    Full,
-}
 
 /// Citations and bibliographies following the Chicago _Author Date_ style.
 ///
@@ -64,27 +54,6 @@ impl ChicagoAuthorDate {
     pub fn new() -> Self {
         Self { config: ChicagoConfig::new(), et_al_limit: 4 }
     }
-
-    fn uniqueness(author: &Person, db: &Database) -> Uniqueness {
-        let total_authors: HashSet<_> = db
-            .records()
-            .flat_map(|e| get_creators(e.entry).0)
-            .filter(|a| a != author)
-            .collect();
-
-        let mut unique = Uniqueness::Full;
-        for other in total_authors {
-            if other.name == author.name {
-                if other.initials(None) == author.initials(None) {
-                    return Uniqueness::None;
-                } else {
-                    unique = Uniqueness::Initials;
-                }
-            }
-        }
-
-        unique
-    }
 }
 
 impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
@@ -114,12 +83,12 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 let names = authors
                     .iter()
                     .map(|author| {
-                        let uniqueness = ChicagoAuthorDate::uniqueness(author, db);
-                        last_full = uniqueness == Uniqueness::None;
+                        let uniqueness = db.uniqueness(author);
+                        last_full = uniqueness == AuthorUniqueness::None;
                         match uniqueness {
-                            Uniqueness::Full => author.name.clone(),
-                            Uniqueness::Initials => author.given_first(true),
-                            Uniqueness::None => author.name_first(false, true),
+                            AuthorUniqueness::Full => author.name.clone(),
+                            AuthorUniqueness::Initials => author.given_first(true),
+                            AuthorUniqueness::None => author.name_first(false, true),
                         }
                     })
                     .collect::<Vec<_>>();
