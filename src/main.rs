@@ -8,7 +8,7 @@ use clap::{crate_version, Arg, Command};
 use strum::{EnumVariantNames, VariantNames};
 
 use hayagriva::style::{
-    Apa, AuthorTitle, BibliographyStyle as UsableBibliographyStyle, ChicagoAuthorDate,
+    Apa, ApaCitationForm, AuthorTitle, BibliographyStyle as UsableBibliographyStyle, ChicagoAuthorDate,
     ChicagoNotes, Citation, CitationStyle as UsableCitationStyle, Database, Ieee, Mla,
 };
 use hayagriva::Selector;
@@ -74,6 +74,8 @@ impl FromStr for BibliographyStyle {
 pub enum CitationStyle {
     AuthorDate,
     ChicagoNote,
+    Apa,
+    ApaNarrative,
     Alphanumerical,
     AuthorTitle,
     Numerical,
@@ -86,6 +88,8 @@ impl FromStr for CitationStyle {
         match s.to_ascii_lowercase().as_ref() {
             "author-date" | "author-year" => Ok(CitationStyle::AuthorDate),
             "chicago-note" | "note" | "chicago" => Ok(CitationStyle::ChicagoNote),
+            "apa" | "apa-parenthetical" => Ok(CitationStyle::Apa),
+            "apa-narrative" => Ok(CitationStyle::ApaNarrative),
             "alphanumerical" | "alphanumeric" | "alphabetical" | "alphabetic"
             | "alpha" => Ok(CitationStyle::Alphanumerical),
             "author-title" => Ok(CitationStyle::AuthorTitle),
@@ -363,6 +367,8 @@ fn main() {
 
             let mut style: Box<dyn UsableCitationStyle> = match style {
                 CitationStyle::Alphanumerical => Box::new(Alphanumerical::new()),
+                CitationStyle::Apa => Box::new(Apa::new()),
+                CitationStyle::ApaNarrative => Box::new(Apa::new_citation(ApaCitationForm::Narrative)),
                 CitationStyle::AuthorDate => Box::new(ChicagoAuthorDate::default()),
                 CitationStyle::AuthorTitle => Box::new(AuthorTitle::new()),
                 CitationStyle::ChicagoNote => Box::new(ChicagoNotes::default()),

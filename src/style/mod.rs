@@ -5,7 +5,7 @@ mod chicago;
 mod ieee;
 mod mla;
 
-pub use apa::Apa;
+pub use apa::{Apa, ApaCitationForm};
 pub use chicago::author_date::ChicagoAuthorDate;
 pub use chicago::notes::{ChicagoNoteStyle, ChicagoNotes};
 pub use chicago::{ChicagoAccessDateVisibility, ChicagoConfig};

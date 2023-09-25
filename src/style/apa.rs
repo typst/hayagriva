@@ -1431,7 +1431,10 @@ impl<'a> CitationStyle<'a> for Apa {
     }
 
     fn wrapped(&self) -> bool {
-        true
+        match self.citation_form {
+            ApaCitationForm::Parenthetical => true,
+            ApaCitationForm::Narrative => false,
+        }
     }
 }
 
