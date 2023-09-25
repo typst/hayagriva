@@ -1,6 +1,7 @@
 //! Language-dependant string transformations.
 
 pub(crate) mod en;
+pub(crate) mod name;
 
 use std::fmt::Write;
 

@@ -18,6 +18,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};
 
 use super::{Entry, Value};
+use crate::lang::name::NAME_PARTICLES;
 use crate::lang::{CaseFolder, SentenceCaseConf, TitleCaseConf};
 
 #[rustfmt::skip]
@@ -445,6 +446,32 @@ impl Person {
         }
 
         res
+    }
+
+    /// Get the non-dropping name particle in the family name.
+    pub fn name_particle(&self) -> Option<&str> {
+        for (idx, char) in self.name.char_indices().rev() {
+            if char != ' ' {
+                continue;
+            }
+
+            let particle = &self.name[0..idx];
+            let lowercase = particle.to_lowercase();
+            if NAME_PARTICLES.binary_search(&lowercase.as_str()).is_ok() {
+                return Some(particle);
+            }
+        }
+
+        None
+    }
+
+    /// Get the family name without the non-dropping particle.
+    pub fn name_without_particle(&self) -> &str {
+        if let Some(particle) = self.name_particle() {
+            self.name[particle.len()..].trim_start()
+        } else {
+            self.name.as_str()
+        }
     }
 }
 
@@ -1043,5 +1070,12 @@ mod tests {
         assert_eq!("C. D.", p.initials(Some(".")).unwrap());
         let p = Person::from_strings(&["Günther", "Hans-Joseph"]).unwrap();
         assert_eq!("H-J", p.initials(None).unwrap());
+    }
+
+    #[test]
+    fn person_non_dropping_initials() {
+        let p = Person::from_strings(&["Von Der Leyen", "Ursula"]).unwrap();
+        assert_eq!("Von Der", p.name_particle().unwrap());
+        assert_eq!("Leyen", p.name_without_particle());
     }
 }
