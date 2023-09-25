@@ -34,6 +34,7 @@ to install and use Hayagriva on your terminal.
     - Author-Date references and citations
 - American Psychological Association (APA), 7th edition of the APA Publication Manual
     - References
+    - Author-Date citations, both parenthetical and narrative
 - Other in-text citation styles
     - Alphanumerical (e. g. "Rass97")
     - Author Title
