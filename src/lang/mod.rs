@@ -623,6 +623,11 @@ impl CaseFolder {
         &mut self.buf
     }
 
+    /// Check if the buffer ends with a character.
+    pub fn ends_with(&self, pattern: char) -> bool {
+        self.buf.ends_with(pattern)
+    }
+
     /// Notify the struct that an outside manipulation to the underlying buffer
     /// occurred.
     pub fn mark_changed(&mut self) {
@@ -686,6 +691,19 @@ fn capitalize_char(buf: &mut String, start: usize) {
         }
         _ => {}
     }
+}
+
+/// Check if a character is a CJK character.
+pub fn is_cjk(c: char) -> bool {
+    let cp: u32 = c.into();
+    (cp >= 0x4E00 && cp <= 0x9FFF)
+        || (cp >= 0x3400 && cp <= 0x4DBF)
+        || (cp >= 0x20000 && cp <= 0x2A6DF)
+        || (cp >= 0x2A700 && cp <= 0x2B73F)
+        || (cp >= 0x2B740 && cp <= 0x2B81F)
+        || (cp >= 0x2B820 && cp <= 0x2CEAF)
+        || (cp >= 0xF900 && cp <= 0xFAFF)
+        || (cp >= 0x2F800 && cp <= 0x2FA1F)
 }
 
 #[cfg(test)]

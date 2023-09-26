@@ -2,19 +2,22 @@ use std::borrow::Cow;
 use std::fmt::Write;
 use std::mem;
 use std::num::NonZeroUsize;
-use std::ops::Deref;
 
+use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::{Case, CaseFolder, SentenceCaseConf, TitleCaseConf};
-use crate::types::Date;
+use crate::types::{Date, Person};
 use crate::Entry;
+use citationberg::taxonomy::NameVariable;
 use citationberg::{
     taxonomy::{OtherTerm, Term, Variable},
     CslMacro, Display, FontStyle, FontVariant, FontWeight, Locale, LocaleCode, TermForm,
-    TextDecoration, TextTarget, ToAffixes, VerticalAlign,
+    TextDecoration, TextTarget, VerticalAlign,
 };
 use citationberg::{
     DateDayForm, DateForm, DateMonthForm, DatePartName, DateParts, DateStrongAnyForm,
-    IndependentStyleSettings, LabelPluralize, LongShortForm, OrdinalLookup, TextCase,
+    DelimiterBehavior, DemoteNonDroppingParticle, IndependentStyleSettings,
+    LabelPluralize, LongShortForm, NameAnd, NameAsSortOrder, NameForm, Names,
+    OrdinalLookup, TextCase,
 };
 
 mod taxonomy;
@@ -259,6 +262,13 @@ impl<'a> Context<'a> {
         self.pull_punctuation = false;
     }
 
+    /// Ensure that the buffer is either empty or the last character is a space.
+    pub fn ensure_space(&mut self) {
+        if !self.buf.is_empty() && !self.buf.ends_with(' ') {
+            self.buf.push(' ');
+        }
+    }
+
     /// Folds all remaining elements into the first element and returns it.
     fn flush(mut self) -> Elem {
         self.save_to_block();
@@ -345,7 +355,6 @@ impl<'a> Context<'a> {
     /// Check whether to do punctuation in quotes.
     fn punctuation_in_quotes(&self) -> bool {
         self.lookup_locale(|f| f.style_options?.punctuation_in_quote)
-            .map(|b| *b.deref())
             .unwrap_or_default()
     }
 
@@ -518,16 +527,15 @@ impl RenderCsl for citationberg::Text {
     fn render(&self, ctx: &mut Context) {
         let depth = ctx.push_elem(self.display, self.formatting);
 
-        let affixes = self.to_affixes();
-        if let Some(prefix) = affixes.prefix {
-            ctx.push_str(&prefix);
+        if let Some(prefix) = &self.affixes.prefix {
+            ctx.push_str(prefix);
         }
 
-        if *self.quotes {
+        if self.quotes {
             ctx.push_quotes();
         }
 
-        ctx.may_strip_periods(*self.strip_periods);
+        ctx.may_strip_periods(self.strip_periods);
         ctx.set_case(self.text_case);
 
         ctx.push_str(
@@ -551,7 +559,7 @@ impl RenderCsl for citationberg::Text {
                     todo!()
                 }
                 TextTarget::Term { term, form, plural } => {
-                    ctx.term(*term, *form, **plural).map(|t| t.to_owned().into())
+                    ctx.term(*term, *form, *plural).map(|t| t.to_owned().into())
                 }
                 TextTarget::Value { val } => Some(Cow::Owned(val.clone())),
             }
@@ -561,13 +569,13 @@ impl RenderCsl for citationberg::Text {
         ctx.clear_case();
         ctx.stop_stripping_periods();
 
-        if *self.quotes {
+        if self.quotes {
             ctx.pop_quotes();
             ctx.may_pull_punctuation();
         }
 
-        if let Some(suffix) = affixes.suffix {
-            ctx.push_str(&suffix);
+        if let Some(suffix) = &self.affixes.suffix {
+            ctx.push_str(suffix);
         }
 
         ctx.pop_elem(depth, self.formatting);
@@ -578,9 +586,8 @@ impl RenderCsl for citationberg::Number {
     fn render(&self, ctx: &mut Context) {
         let depth = ctx.push_elem(self.display, self.formatting);
 
-        let affixes = self.to_affixes();
-        if let Some(prefix) = affixes.prefix {
-            ctx.push_str(&prefix);
+        if let Some(prefix) = &self.affixes.prefix {
+            ctx.push_str(prefix);
         }
 
         ctx.set_case(self.text_case);
@@ -597,8 +604,8 @@ impl RenderCsl for citationberg::Number {
 
         ctx.clear_case();
 
-        if let Some(suffix) = affixes.suffix {
-            ctx.push_str(&suffix);
+        if let Some(suffix) = &self.affixes.suffix {
+            ctx.push_str(suffix);
         }
 
         ctx.pop_elem(depth, self.formatting);
@@ -610,15 +617,6 @@ impl RenderCsl for citationberg::Label {
         let Some(variable) = resolve_number_variable(ctx.entry, self.variable) else {
             return;
         };
-        ctx.push_format(self.label.formatting);
-
-        let affixes = &self.label.affixes;
-        if let Some(prefix) = &affixes.prefix {
-            ctx.push_str(prefix);
-        }
-
-        ctx.may_strip_periods(*self.label.strip_periods);
-        ctx.set_case(self.label.text_case);
 
         let plural = match self.label.plural {
             LabelPluralize::Always => true,
@@ -631,25 +629,45 @@ impl RenderCsl for citationberg::Label {
             },
         };
 
-        if let Some(label) = ctx.term(Term::from(self.variable), self.label.form, plural)
-        {
-            ctx.push_str(label);
-        }
+        let content = ctx
+            .term(Term::from(self.variable), self.label.form, plural)
+            .unwrap_or_default();
 
-        ctx.clear_case();
-        ctx.stop_stripping_periods();
-
-        if let Some(suffix) = &affixes.suffix {
-            ctx.push_str(suffix);
-        }
-
-        ctx.pop_format(self.label.formatting);
+        render_label_with_var(&self.label, ctx, content)
     }
+}
+
+fn render_label_with_var(
+    label: &citationberg::VariablelessLabel,
+    ctx: &mut Context,
+    content: &str,
+) {
+    ctx.push_format(label.formatting);
+
+    let affixes = &label.affixes;
+    if let Some(prefix) = &affixes.prefix {
+        ctx.push_str(prefix);
+    }
+
+    ctx.may_strip_periods(label.strip_periods);
+    ctx.set_case(label.text_case);
+
+    ctx.push_str(content);
+
+    ctx.clear_case();
+    ctx.stop_stripping_periods();
+
+    if let Some(suffix) = &affixes.suffix {
+        ctx.push_str(suffix);
+    }
+
+    ctx.pop_format(label.formatting);
 }
 
 impl RenderCsl for citationberg::Date {
     fn render(&self, ctx: &mut Context) {
-        let Some(date) = resolve_date_variable(ctx.entry, self.variable) else { return };
+        let Some(variable) = self.variable else { return };
+        let Some(date) = resolve_date_variable(ctx.entry, variable) else { return };
 
         let base = if let Some(form) = self.form {
             let Some(base) = ctx.localized_date(form) else { return };
@@ -663,9 +681,8 @@ impl RenderCsl for citationberg::Date {
             .unwrap_or(self.formatting);
         let depth = ctx.push_elem(self.display, formatting);
 
-        let affixes = self.to_affixes();
-        if let Some(prefix) = affixes.prefix {
-            ctx.push_str(&prefix);
+        if let Some(prefix) = &self.affixes.prefix {
+            ctx.push_str(prefix);
         }
 
         ctx.set_case(self.text_case.or(base.and_then(|b| b.text_case)));
@@ -703,8 +720,8 @@ impl RenderCsl for citationberg::Date {
 
         ctx.clear_case();
 
-        if let Some(suffix) = affixes.suffix {
-            ctx.push_str(&suffix);
+        if let Some(suffix) = &self.affixes.suffix {
+            ctx.push_str(suffix);
         }
 
         ctx.pop_elem(depth, formatting);
@@ -749,7 +766,7 @@ fn render_date_part(
         }
         DateStrongAnyForm::Day(DateDayForm::Ordinal)
             if val != 1
-                || !*ctx
+                || !ctx
                     .lookup_locale(|l| {
                         Some(
                             l.style_options
@@ -813,6 +830,445 @@ fn render_date_part(
 
     ctx.clear_case();
     ctx.pop_format(formatting);
+}
+
+impl RenderCsl for Names {
+    fn render(&self, ctx: &mut Context) {
+        let people: Vec<(Vec<&Person>, Term)> = if self.variable.len() == 2
+            && self.variable.contains(&NameVariable::Editor)
+            && self.variable.contains(&NameVariable::Translator)
+        {
+            let editors = resolve_name_variable(ctx.entry, NameVariable::Editor);
+            let translators = resolve_name_variable(ctx.entry, NameVariable::Translator);
+
+            match (editors, translators) {
+                (Some(editors), Some(translators)) if editors == translators => {
+                    vec![(editors, NameVariable::EditorTranslator.into())]
+                }
+                (editors, translators) => {
+                    let mut res = Vec::new();
+                    if let Some(editors) = editors {
+                        res.push((editors, NameVariable::Editor.into()));
+                    }
+
+                    if let Some(translators) = translators {
+                        res.push((translators, NameVariable::Translator.into()));
+                    }
+
+                    res
+                }
+            }
+        } else {
+            self.variable
+                .iter()
+                .map(|v| {
+                    (
+                        resolve_name_variable(ctx.entry, *v).unwrap_or_default(),
+                        Term::from(*v),
+                    )
+                })
+                .collect()
+        };
+
+        let is_empty = people.iter().all(|(p, _)| p.is_empty());
+        if is_empty {
+            todo!("implement cs:substitute and don't do what happens below.")
+        }
+
+        let idx = ctx.push_elem(self.display, self.formatting);
+
+        if let Some(prefix) = &self.affixes.prefix {
+            ctx.push_str(prefix);
+        }
+
+        for (i, (persons, term)) in people.into_iter().enumerate() {
+            let plural = persons.len() != 1;
+            add_names(self, ctx, persons);
+
+            if let Some(label) = &self.label {
+                render_label_with_var(
+                    label,
+                    ctx,
+                    ctx.term(term, label.form, plural).unwrap_or_default(),
+                )
+            }
+
+            if i > 0 {
+                if let Some(delim) = &self.delimiter {
+                    ctx.push_str(delim);
+                }
+            }
+        }
+
+        if let Some(suffix) = &self.affixes.suffix {
+            ctx.push_str(suffix);
+        }
+
+        ctx.pop_elem(idx, self.formatting);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum EndDelim {
+    Delim,
+    And(NameAnd),
+    DelimAnd(NameAnd),
+}
+
+// TODO differentiate subsequent cites.
+fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Person>) {
+    let take =
+        if persons.len() >= names.options.et_al_min.map_or(usize::MAX, |u| u as usize) {
+            (names.options.et_al_use_first.map_or(usize::MAX, |u| u as usize))
+                .min(persons.len())
+        } else {
+            persons.len()
+        };
+
+    let has_et_al = persons.len() > take;
+    let et_al_use_last =
+        names.options.et_al_use_last.unwrap_or_default() && take + 2 <= persons.len();
+    let mut last_inverted = false;
+    let reverse = matches!(
+        ctx.settings.demote_non_dropping_particle,
+        DemoteNonDroppingParticle::DisplayAndSort
+    );
+
+    for (i, name) in persons.iter().take(take).enumerate() {
+        let last = i + 1 == take;
+
+        if i != 0 {
+            let mut delim = EndDelim::Delim;
+            if last && i > 0 && !has_et_al {
+                if let Some(d) = names.options.and {
+                    delim =
+                        match names.options.delimiter_precedes_last.unwrap_or_default() {
+                            DelimiterBehavior::Contextual if i >= 2 => {
+                                EndDelim::DelimAnd(d)
+                            }
+                            DelimiterBehavior::AfterInvertedName if last_inverted => {
+                                EndDelim::DelimAnd(d)
+                            }
+                            DelimiterBehavior::Always => EndDelim::DelimAnd(d),
+                            _ => EndDelim::And(d),
+                        }
+                }
+            }
+
+            match delim {
+                EndDelim::Delim => ctx.push_str(&names.name.delimiter),
+                EndDelim::And(and) => {
+                    ctx.push_str(" ");
+                    ctx.push_str(match and {
+                        NameAnd::Text => ctx
+                            .term(Term::Other(OtherTerm::And), TermForm::default(), false)
+                            .unwrap_or_default(),
+                        NameAnd::Symbol => "&",
+                    });
+                    ctx.push_str(" ");
+                }
+                EndDelim::DelimAnd(and) => {
+                    ctx.push_str(&names.name.delimiter);
+                    ctx.push_str(match and {
+                        NameAnd::Text => ctx
+                            .term(Term::Other(OtherTerm::And), TermForm::default(), false)
+                            .unwrap_or_default(),
+                        NameAnd::Symbol => "&",
+                    });
+                    ctx.push_str(" ");
+                }
+            }
+        }
+
+        let inverted = match names.options.name_as_sort_order {
+            Some(NameAsSortOrder::First) if i == 0 => true,
+            Some(NameAsSortOrder::All) => true,
+            _ => false,
+        };
+
+        write_name(
+            name,
+            ctx,
+            names.name.form == NameForm::Long,
+            inverted,
+            reverse,
+            names,
+        );
+
+        last_inverted = inverted;
+    }
+
+    if et_al_use_last {
+        if let Some(name) = persons.last() {
+            ctx.push_str(&names.name.delimiter);
+            ctx.push_str("… ");
+            write_name(
+                name,
+                ctx,
+                names.name.form == NameForm::Long,
+                matches!(names.options.name_as_sort_order, Some(NameAsSortOrder::All)),
+                reverse,
+                names,
+            );
+        }
+    } else if has_et_al {
+        if let Some(term) = ctx.term(names.et_al.term.into(), TermForm::default(), false)
+        {
+            let delim = match names.options.delimiter_precedes_et_al {
+                Some(DelimiterBehavior::Always) => true,
+                Some(DelimiterBehavior::Contextual) if take >= 2 => true,
+                Some(DelimiterBehavior::AfterInvertedName) if last_inverted => true,
+                _ => false,
+            };
+
+            if delim {
+                ctx.push_str(&names.name.delimiter);
+            }
+
+            ctx.push_format(names.et_al.formatting);
+            ctx.push_str(term);
+            ctx.pop_format(names.et_al.formatting);
+        }
+    }
+}
+
+fn write_name(
+    name: &Person,
+    ctx: &mut Context,
+    long: bool,
+    reverse: bool,
+    demote_non_dropping: bool,
+    names: &citationberg::Names,
+) {
+    let hyphen_init = ctx.settings.initialize_with_hyphen;
+    let initialize = names.options.initialize.unwrap_or(true);
+    let initialize_with = names.options.initialize_with.as_deref();
+    let sort_sep = names.options.sort_separator.as_deref().unwrap_or(", ");
+
+    let first_part = names.name.name_part_given();
+    let family_part = names.name.name_part_family();
+    let first_format = first_part.map(|p| p.formatting).unwrap_or_default();
+    let first_case = first_part.map(|p| p.text_case).unwrap_or_default();
+    let first_affixes = [
+        first_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
+        first_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
+    ];
+    let family_format = family_part.map(|p| p.formatting).unwrap_or_default();
+    let family_case = family_part.map(|p| p.text_case).unwrap_or_default();
+    let family_affixes = [
+        family_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
+        family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
+    ];
+
+    let first_name = |ctx: &mut Context| {
+        if let Some(first) = &name.given_name {
+            if let Some(initialize_with) = initialize_with {
+                if initialize {
+                    name.initials(ctx, Some(initialize_with), hyphen_init).unwrap();
+                } else {
+                    name.first_name_with_delimiter(ctx, Some(initialize_with)).unwrap();
+                }
+            } else {
+                ctx.push_str(first);
+            }
+
+            true
+        } else {
+            false
+        }
+    };
+
+    let simple = |ctx: &mut Context| {
+        ctx.push_format(family_format);
+        ctx.set_case(family_case);
+        if let Some(prefix) = family_affixes[0] {
+            ctx.push_str(prefix);
+        }
+        ctx.push_str(&name.name);
+        ctx.clear_case();
+        ctx.pop_format(family_format);
+        if let Some(suffix) = family_affixes[1] {
+            ctx.push_str(suffix);
+        }
+    };
+
+    match (long, reverse, demote_non_dropping) {
+        _ if name.is_institutional() => simple(ctx),
+        (true, _, _) if name.is_cjk() => {
+            ctx.push_format(family_format);
+            if let Some(prefix) = family_affixes[0] {
+                ctx.push_str(prefix);
+            }
+            ctx.push_str(&name.name);
+            ctx.pop_format(family_format);
+            if let Some(suffix) = family_affixes[1] {
+                ctx.push_str(suffix);
+            }
+
+            if let Some(given) = &name.given_name {
+                ctx.push_format(first_format);
+                if let Some(prefix) = first_affixes[0] {
+                    ctx.push_str(prefix);
+                }
+
+                ctx.push_str(given);
+                ctx.pop_format(first_format);
+
+                if let Some(suffix) = first_affixes[1] {
+                    ctx.push_str(suffix);
+                }
+            }
+        }
+        (true, false, _) => {
+            ctx.push_format(first_format);
+            ctx.set_case(first_case);
+
+            if let Some(prefix) = first_affixes[0] {
+                ctx.push_str(prefix);
+            }
+
+            first_name(ctx);
+            ctx.ensure_space();
+            if let Some(prefix) = &name.prefix {
+                ctx.push_str(prefix);
+            }
+
+            ctx.pop_format(first_format);
+            ctx.clear_case();
+
+            if let Some(suffix) = first_affixes[1] {
+                ctx.push_str(suffix);
+            }
+
+            ctx.ensure_space();
+            ctx.push_format(family_format);
+            ctx.set_case(family_case);
+
+            if let Some(prefix) = family_affixes[0] {
+                ctx.push_str(prefix);
+            }
+
+            ctx.push_str(&name.name);
+
+            ctx.clear_case();
+            ctx.pop_format(family_format);
+
+            if let Some(suffix) = &name.suffix {
+                ctx.ensure_space();
+                ctx.push_str(suffix);
+            }
+
+            if let Some(suffix) = family_affixes[1] {
+                ctx.push_str(suffix);
+            }
+        }
+        (true, true, false) => {
+            ctx.push_format(family_format);
+            ctx.set_case(family_case);
+
+            if let Some(prefix) = family_affixes[0] {
+                ctx.push_str(prefix);
+            }
+
+            ctx.push_str(&name.name);
+
+            ctx.clear_case();
+            ctx.pop_format(family_format);
+
+            if let Some(suffix) = family_affixes[1] {
+                ctx.push_str(suffix);
+            }
+
+            if name.given_name.is_some() {
+                ctx.push_str(sort_sep);
+                ctx.ensure_space();
+
+                ctx.push_format(first_format);
+                ctx.set_case(first_case);
+
+                if let Some(prefix) = first_affixes[0] {
+                    ctx.push_str(prefix);
+                }
+
+                first_name(ctx);
+
+                if let Some(prefix) = &name.prefix {
+                    ctx.ensure_space();
+                    ctx.push_str(prefix);
+                }
+
+                ctx.clear_case();
+                ctx.pop_format(first_format);
+
+                if let Some(suffix) = first_affixes[1] {
+                    ctx.push_str(suffix);
+                }
+            }
+
+            if let Some(suffix) = &name.suffix {
+                ctx.push_str(sort_sep);
+                ctx.ensure_space();
+                ctx.push_str(suffix);
+            }
+        }
+        (true, true, true) => {
+            ctx.push_format(family_format);
+            ctx.set_case(family_case);
+
+            if let Some(prefix) = family_affixes[0] {
+                ctx.push_str(prefix);
+            }
+
+            ctx.push_str(name.name_without_particle());
+
+            ctx.clear_case();
+            ctx.pop_format(family_format);
+
+            if let Some(suffix) = family_affixes[1] {
+                ctx.push_str(suffix);
+            }
+
+            if name.given_name.is_some() {
+                ctx.push_str(sort_sep);
+                ctx.ensure_space();
+
+                ctx.push_format(first_format);
+                ctx.set_case(first_case);
+
+                if let Some(prefix) = first_affixes[0] {
+                    ctx.push_str(prefix);
+                }
+
+                first_name(ctx);
+
+                if let Some(prefix) = &name.prefix {
+                    ctx.ensure_space();
+                    ctx.push_str(prefix);
+                }
+
+                ctx.clear_case();
+                ctx.pop_format(first_format);
+
+                if let Some(particle) = &name.name_particle() {
+                    ctx.ensure_space();
+                    ctx.push_str(particle);
+                }
+
+                if let Some(suffix) = first_affixes[1] {
+                    ctx.push_str(suffix);
+                }
+            }
+
+            if let Some(suffix) = &name.suffix {
+                ctx.push_str(sort_sep);
+                ctx.ensure_space();
+                ctx.push_str(suffix);
+            }
+        }
+        (false, _, _) => {
+            simple(ctx);
+        }
+    }
 }
 
 impl From<TextCase> for Case {

@@ -75,7 +75,11 @@ impl ChicagoAuthorDate {
         let mut unique = Uniqueness::Full;
         for other in total_authors {
             if other.name == author.name {
-                if other.initials(None) == author.initials(None) {
+                let mut buf_a = String::new();
+                let mut buf_b = String::new();
+                other.initials(&mut buf_a, None, true);
+                author.initials(&mut buf_b, None, true);
+                if buf_a == buf_b {
                     return Uniqueness::None;
                 } else {
                     unique = Uniqueness::Initials;

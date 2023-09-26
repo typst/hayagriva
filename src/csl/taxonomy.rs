@@ -237,7 +237,7 @@ pub(crate) fn resolve_date_variable(
 pub(crate) fn resolve_name_variable(
     entry: &Entry,
     variable: taxonomy::NameVariable,
-) -> Option<Vec<Person>> {
+) -> Option<Vec<&Person>> {
     todo!()
 }
 

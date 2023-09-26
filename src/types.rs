@@ -18,8 +18,9 @@ use unicode_segmentation::UnicodeSegmentation;
 use url::{Host, Url};
 
 use super::{Entry, Value};
+use crate::lang::en::ARTICLES;
 use crate::lang::name::NAME_PARTICLES;
-use crate::lang::{CaseFolder, SentenceCaseConf, TitleCaseConf};
+use crate::lang::{is_cjk, CaseFolder, SentenceCaseConf, TitleCaseConf};
 
 #[rustfmt::skip]
 lazy_static! {
@@ -339,44 +340,75 @@ impl Person {
     /// For example, `"Judith Beatrice"` would yield `"J. B."` if the
     /// `delimiter` argument is set to `Some(".")`, `"Klaus-Peter"` would become
     /// `"K-P"` without a delimiter.
-    ///
-    /// Returns `None` if the person has no given name.
-    pub fn initials(&self, delimiter: Option<&str>) -> Option<String> {
-        if let Some(gn) = &self.given_name {
-            let mut collect = true;
-            let mut letters = vec![];
-            let mut seps = vec![];
+    pub fn initials(
+        &self,
+        buf: &mut impl std::fmt::Write,
+        delimiter: Option<&str>,
+        with_hyphen: bool,
+    ) -> std::fmt::Result {
+        let Some(gn) = &self.given_name else { return Ok(()) };
 
-            for (_, gr) in gn.grapheme_indices(true) {
-                if let Some(c) = gr.chars().next() {
-                    if c.is_whitespace() || c == '-' {
+        let mut collect = true;
+        let mut non_empty = false;
+
+        for (_, gr) in gn.grapheme_indices(true) {
+            if let Some(c) = gr.chars().next() {
+                if c.is_whitespace() || c == '-' {
+                    if !collect {
+                        if let Some(delimiter) = delimiter {
+                            buf.write_str(delimiter)?;
+                        }
+
                         collect = true;
-                        seps.push(c);
-                        continue;
+                        buf.write_char(if with_hyphen { c } else { ' ' })?;
                     }
-                }
-
-                if collect {
-                    letters.push(gr);
-                    collect = false;
+                    continue;
                 }
             }
 
-            let mut res = String::new();
-            for (i, e) in letters.into_iter().enumerate() {
-                if i != 0 {
-                    res.push(seps[i - 1]);
-                }
-                res += e;
-                if let Some(delimiter) = delimiter {
-                    res += delimiter;
-                }
+            if collect {
+                buf.write_str(gr)?;
+                collect = false;
+                non_empty = true;
             }
-
-            Some(res)
-        } else {
-            None
         }
+
+        if non_empty && !collect {
+            if let Some(delim) = delimiter {
+                buf.write_str(delim)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Yields the first name of a person. Will add the delimiter after initials
+    /// / single letters.
+    pub fn first_name_with_delimiter(
+        &self,
+        buf: &mut impl std::fmt::Write,
+        delimiter: Option<&str>,
+    ) -> std::fmt::Result {
+        let Some(name) = &self.given_name else { return Ok(()) };
+
+        let mut first = true;
+        for item in name.split(' ') {
+            if !first {
+                buf.write_char(' ')?;
+            }
+
+            buf.write_str(item)?;
+
+            if let Some(delimiter) = delimiter {
+                if item.graphemes(true).count() == 1 {
+                    buf.write_str(delimiter)?;
+                }
+            }
+
+            first = false;
+        }
+
+        Ok(())
     }
 
     /// Get the name with the family name fist, the initials
@@ -393,9 +425,9 @@ impl Person {
         };
 
         if initials {
-            if let Some(initials) = self.initials(Some(".")) {
+            if self.given_name.is_some() {
                 res += ", ";
-                res += &initials;
+                self.initials(&mut res, Some("."), true).unwrap();
             }
         } else if let Some(given_name) = &self.given_name {
             res += ", ";
@@ -421,17 +453,17 @@ impl Person {
 
     /// Get the name with the given name first, the family name afterwards.
     pub fn given_first(&self, initials: bool) -> String {
-        let mut res = if initials {
-            if let Some(initials) = self.initials(Some(".")) {
-                format!("{} ", initials)
-            } else {
-                String::new()
+        let mut res = String::new();
+
+        if initials {
+            if self.given_name.is_some() {
+                self.initials(&mut res, Some("."), true).unwrap();
+                res.push(' ');
             }
-        } else if let Some(given_name) = self.given_name.clone() {
-            format!("{} ", given_name)
-        } else {
-            String::new()
-        };
+        } else if let Some(given_name) = &self.given_name {
+            res += given_name;
+            res.push(' ');
+        }
 
         if let Some(prefix) = &self.prefix {
             res += prefix;
@@ -469,6 +501,31 @@ impl Person {
     pub fn name_without_particle(&self) -> &str {
         if let Some(particle) = self.name_particle() {
             self.name[particle.len()..].trim_start()
+        } else {
+            self.name.as_str()
+        }
+    }
+
+    /// Whether to treat this as an institutional name.
+    pub fn is_institutional(&self) -> bool {
+        self.given_name.is_none() && self.suffix.is_none() && self.prefix.is_none()
+    }
+
+    /// Whether the name contains CJK characters.
+    pub fn is_cjk(&self) -> bool {
+        self.name.chars().any(is_cjk)
+            || self.given_name.as_ref().map_or(false, |gn| gn.chars().any(is_cjk))
+    }
+
+    /// Get the name without the leading article.
+    pub fn name_without_article(&self) -> &str {
+        let space_idx = self.name.find(' ');
+        if let Some(space_idx) = space_idx {
+            if ARTICLES.binary_search(&&self.name[0..space_idx]).is_ok() {
+                &self.name[space_idx + 1..]
+            } else {
+                self.name.as_str()
+            }
         } else {
             self.name.as_str()
         }
@@ -1066,10 +1123,15 @@ mod tests {
 
     #[test]
     fn person_initials() {
+        let mut s = String::new();
         let p = Person::from_strings(&["Dissmer", "Courtney Deliah"]).unwrap();
-        assert_eq!("C. D.", p.initials(Some(".")).unwrap());
+        p.initials(&mut s, Some("."), true).unwrap();
+        assert_eq!("C. D.", s);
+
+        let mut s = String::new();
         let p = Person::from_strings(&["Günther", "Hans-Joseph"]).unwrap();
-        assert_eq!("H-J", p.initials(None).unwrap());
+        p.initials(&mut s, None, true).unwrap();
+        assert_eq!("H-J", s);
     }
 
     #[test]
@@ -1077,5 +1139,12 @@ mod tests {
         let p = Person::from_strings(&["Von Der Leyen", "Ursula"]).unwrap();
         assert_eq!("Von Der", p.name_particle().unwrap());
         assert_eq!("Leyen", p.name_without_particle());
+    }
+    #[test]
+    fn person_middle_initial() {
+        let p = Person::from_strings(&["Kirk", "James T"]).unwrap();
+        let mut s = String::new();
+        p.first_name_with_delimiter(&mut s, Some(".")).unwrap();
+        assert_eq!("James T.", s);
     }
 }

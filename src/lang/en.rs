@@ -1,3 +1,5 @@
+pub const ARTICLES: [&str; 8] = ["A", "AN", "An", "THE", "The", "a", "an", "the"];
+
 pub const NEVER_CAPITALIZE: [&str; 46] = [
     "A",
     "Above",
