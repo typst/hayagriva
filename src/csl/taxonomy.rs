@@ -241,6 +241,13 @@ pub(crate) fn resolve_name_variable(
     todo!()
 }
 
+pub(crate) fn matches_entry_type(
+    entry: &Entry,
+    kind: citationberg::taxonomy::Kind,
+) -> bool {
+    todo!()
+}
+
 mod tests {
     use super::*;
 
