@@ -2,8 +2,9 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt::Write;
 
-use crate::types::{Date, Person};
+use crate::types::{Date, FmtString, Person};
 use crate::Entry;
+use citationberg::taxonomy::{NumberVariable, StandardVariable};
 use citationberg::{taxonomy, LongShortForm, NumberForm, OrdinalLookup};
 use unscanny::Scanner;
 
@@ -15,6 +16,14 @@ pub struct Numeric {
 }
 
 impl Numeric {
+    pub fn new(value: i32) -> Self {
+        Self {
+            value: NumericValue::Number(value),
+            prefix: None,
+            suffix: None,
+        }
+    }
+
     pub fn will_transform(&self) -> bool {
         self.prefix.is_none() && self.suffix.is_none()
     }
@@ -213,8 +222,56 @@ impl<T: ToString> MaybeTyped<T> {
 
 pub(crate) fn resolve_number_variable(
     entry: &Entry,
-    variable: taxonomy::NumberVariable,
+    variable: NumberVariable,
 ) -> Option<MaybeTyped<Numeric>> {
+    match variable {
+        NumberVariable::ChapterNumber => entry.get_with_selector(
+            "volume",
+            &select!(
+                (("e":Anthos) > ("p":Anthology)) |
+                (("e":*) > ("p":Reference)) |
+                (("e":Article) > ("p":Proceedings)) |
+                (("e":*) > ("p":Book))
+            ),
+            "e",
+        ),
+        NumberVariable::CitationNumber => todo!("that's for us to do baby"),
+        NumberVariable::CollectionNumber => entry.get_with_selector(
+            "volume",
+            &select!(
+                (* > ("p":(Book | Anthology | Proceedings)))
+            ),
+            "p",
+        ),
+        NumberVariable::Edition => entry.get_recursive("edition"),
+        NumberVariable::FirstReferenceNoteNumber => todo!("you guessed it, baybee"),
+        NumberVariable::Issue => entry.get_recursive("issue"),
+        NumberVariable::Locator => todo!("boy oh boy"),
+        NumberVariable::Number => entry.get("serial-number"),
+        NumberVariable::NumberOfPages => entry.get("page-total"),
+        NumberVariable::NumberOfVolumes => entry.get("volume-total"),
+        NumberVariable::Page => entry.get("page-range"),
+        NumberVariable::PageFirst => {
+            return entry
+                .page_range()
+                .map(|r| MaybeTyped::Typed(Numeric::new(r.start as i32)))
+        }
+        NumberVariable::PartNumber => entry.get_with_selector(
+            "volume",
+            &select!(
+                (("e":*) > (Article | Blog | Book | Legislation))
+            ),
+            "e",
+        ),
+        NumberVariable::PrintingNumber => None,
+        NumberVariable::Section => None,
+        NumberVariable::SupplementNumber => None,
+        NumberVariable::Version => {
+            entry.get_with_selector("edition", &select!(("e":Repository)), "e")
+        }
+        NumberVariable::Volume => entry.get("volume"),
+    };
+
     todo!()
 }
 
@@ -222,9 +279,84 @@ pub(crate) fn resolve_number_variable(
 pub(crate) fn resolve_standard_variable(
     entry: &Entry,
     form: LongShortForm,
-    variable: taxonomy::StandardVariable,
+    variable: StandardVariable,
 ) -> Option<&str> {
-    todo!()
+    match variable {
+        StandardVariable::Abstract => None,
+        StandardVariable::Annote => None,
+        StandardVariable::Archive => entry.get_recursive("archive"),
+        StandardVariable::ArchiveCollection => None,
+        StandardVariable::ArchiveLocation => entry.get("archive-location"),
+        StandardVariable::ArchivePlace => None,
+        StandardVariable::Authority => entry.get("organization"),
+        StandardVariable::CallNumber => None,
+        StandardVariable::CitationKey => return Some(entry.key.as_str()),
+        // The spec tells us that the CSL processor may assign this, we do not.
+        StandardVariable::CitationLabel => None,
+        // Get third-order title first, then second-order title.
+        StandardVariable::CollectionTitle => entry
+            .parents()
+            .unwrap_or(&[])
+            .iter()
+            .find_map(|p| p.get_parents("title"))
+            .or_else(|| entry.get_parents("title")),
+        StandardVariable::ContainerTitle => entry.get_parents("title"),
+        StandardVariable::ContainerTitleShort => None,
+        StandardVariable::Dimensions => entry.get("runtime"),
+        StandardVariable::Division => None,
+        StandardVariable::DOI => entry.get("doi"),
+        StandardVariable::Event | StandardVariable::EventTitle => entry
+            .get_with_selector(
+                "title",
+                &select!(* > ("p":(Exhibition | Conference | Misc))),
+                "p",
+            ),
+        StandardVariable::EventPlace => entry.get_with_selector(
+            "location",
+            &select!(* > ("p":(Exhibition | Conference | Misc))),
+            "p",
+        ),
+        StandardVariable::Genre => None,
+        StandardVariable::ISBN => entry.get("isbn"),
+        StandardVariable::ISSN => entry.get("issn"),
+        StandardVariable::Jurisdiction => None,
+        StandardVariable::Keyword => None,
+        StandardVariable::Language => entry.get_recursive("language"),
+        StandardVariable::License => None,
+        StandardVariable::Medium => None,
+        StandardVariable::Note => entry.get("note"),
+        StandardVariable::OriginalPublisher => None,
+        StandardVariable::OriginalPublisherPlace => None,
+        StandardVariable::OriginalTitle => None,
+        StandardVariable::PartTitle => None,
+        StandardVariable::PMCID => None,
+        StandardVariable::PMID => None,
+        StandardVariable::Publisher => entry.get_recursive("publisher"),
+        StandardVariable::PublisherPlace => None,
+        StandardVariable::References => None,
+        StandardVariable::ReviewedGenre => None,
+        StandardVariable::ReviewedTitle => entry.get_parents("title"),
+        StandardVariable::Scale => None,
+        StandardVariable::Source => {
+            entry.get_with_selector("title", &select!(* > ("p":Repository)), "p")
+        }
+        StandardVariable::Status => None,
+        StandardVariable::Title => entry.get("title"),
+        StandardVariable::TitleShort => None,
+        StandardVariable::URL => entry.get_recursive("url"),
+        StandardVariable::VolumeTitle => {
+            let selector = select!(
+                (Anthos > ("p":Anthology)) |
+                (Entry  > ("p":*)) |
+                (* > ("p":Reference)) |
+                (Article > ("p":Proceedings))
+            );
+            entry.get_with_selector("title", &selector, "p")
+        }
+        StandardVariable::YearSuffix => todo!("we actually have to generate this"),
+    }
+    .and_then(|v| <&FmtString>::try_from(v).ok())
+    .map(|v: &FmtString| v.value.as_str())
 }
 
 pub(crate) fn resolve_date_variable(

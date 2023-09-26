@@ -225,6 +225,73 @@ impl Entry {
         self.content.get(key)
     }
 
+    /// Get the unconverted value of a certain field from this entry or any of
+    /// its parents.
+    pub fn get_recursive(&self, key: &str) -> Option<&Value> {
+        self.content.get(key).or_else(|| self.get_parents(key))
+    }
+
+    /// Get the unconverted value of a certain field from the parents only by BFS.
+    pub fn get_parents(&self, key: &str) -> Option<&Value> {
+        let mut path: Vec<usize> = vec![0];
+        let parents = self.parents().unwrap_or(&[]);
+        let up = |path: &mut Vec<usize>| {
+            path.pop();
+            if let Some(last) = path.last_mut() {
+                *last += 1;
+            }
+        };
+
+        'outer: loop {
+            // Index parents with the items in path. If, at any level, the index
+            // exceeds the number of parents, increment the index at the
+            // previous level. If no other level remains, return.
+            let Some(first_path) = path.first() else {
+                return None;
+            };
+
+            if parents.len() <= *first_path {
+                return None;
+            }
+
+            let mut item = &parents[*first_path];
+
+            for i in 1..path.len() {
+                if let Some(parents) = item.parents() {
+                    if path[i] >= parents.len() {
+                        up(&mut path);
+                        continue 'outer;
+                    }
+                    item = &parents[path[i]];
+                } else {
+                    up(&mut path);
+                }
+            }
+
+            if let Some(first_path) = path.first_mut() {
+                *first_path += 1;
+            }
+
+            if let Some(value) = item.get(key) {
+                return Some(value);
+            }
+        }
+    }
+
+    /// Get a certain field with a selector that binds an entry.
+    pub fn get_with_selector(
+        &self,
+        key: &str,
+        selector: &Selector,
+        bound: &str,
+    ) -> Option<&Value> {
+        if let Some(item) = selector.apply(self) {
+            item.get(bound).and_then(|p| p.get(key))
+        } else {
+            None
+        }
+    }
+
     /// Set [any data type](Value) as value for a given field.
     #[allow(clippy::result_large_err)]
     pub fn set(
