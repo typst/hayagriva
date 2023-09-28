@@ -58,17 +58,11 @@ impl FormatStr {
     }
 
     /// Format this formattable string in title case.
-    ///
-    /// This uses an override defined through [`title_case`](Self::title_case)
-    /// if present, or falls back to the given title case formatter otherwise.
     pub fn format_title_case(&self, props: TitleCaseConf) -> String {
         self.value.format_title_case(props)
     }
 
     /// Format this formattable string in sentence case.
-    ///
-    /// This uses an override defined through [`sentence_case`](Self::sentence_case)
-    /// if present, or falls back to the given sentence case formatter otherwise.
     pub fn format_sentence_case(&self, props: SentenceCaseConf) -> String {
         self.value.format_sentence_case(props)
     }
@@ -216,9 +210,6 @@ impl ChunkedStr {
     }
 
     /// Format this formattable string in title case.
-    ///
-    /// This uses an override defined through [`title_case`](Self::title_case)
-    /// if present, or falls back to the given title case formatter otherwise.
     pub fn format_title_case(&self, props: TitleCaseConf) -> String {
         let mut c = CaseFolder::from_config(props.into());
         self.fold_case(&mut c);
@@ -226,9 +217,6 @@ impl ChunkedStr {
     }
 
     /// Format this formattable string in sentence case.
-    ///
-    /// This uses an override defined through [`sentence_case`](Self::sentence_case)
-    /// if present, or falls back to the given sentence case formatter otherwise.
     pub fn format_sentence_case(&self, props: SentenceCaseConf) -> String {
         let mut c = CaseFolder::from_config(props.into());
         self.fold_case(&mut c);
