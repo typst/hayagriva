@@ -380,6 +380,7 @@ pub(crate) fn matches_entry_type(
     todo!()
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

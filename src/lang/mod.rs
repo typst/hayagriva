@@ -696,14 +696,14 @@ fn capitalize_char(buf: &mut String, start: usize) {
 /// Check if a character is a CJK character.
 pub fn is_cjk(c: char) -> bool {
     let cp: u32 = c.into();
-    (cp >= 0x4E00 && cp <= 0x9FFF)
-        || (cp >= 0x3400 && cp <= 0x4DBF)
-        || (cp >= 0x20000 && cp <= 0x2A6DF)
-        || (cp >= 0x2A700 && cp <= 0x2B73F)
-        || (cp >= 0x2B740 && cp <= 0x2B81F)
-        || (cp >= 0x2B820 && cp <= 0x2CEAF)
-        || (cp >= 0xF900 && cp <= 0xFAFF)
-        || (cp >= 0x2F800 && cp <= 0x2FA1F)
+    (0x4E00..=0x9FFF).contains(&cp)
+        || (0x3400..=0x4DBF).contains(&cp)
+        || (0x20000..=0x2A6DF).contains(&cp)
+        || (0x2A700..=0x2B73F).contains(&cp)
+        || (0x2B740..=0x2B81F).contains(&cp)
+        || (0x2B820..=0x2CEAF).contains(&cp)
+        || (0xF900..=0xFAFF).contains(&cp)
+        || (0x2F800..=0x2FA1F).contains(&cp)
 }
 
 #[cfg(test)]

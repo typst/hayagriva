@@ -70,6 +70,16 @@ pub enum YamlBibliographyError {
     },
 }
 
+impl YamlBibliographyError {
+    fn loc(&self) -> Option<usize> {
+        if let Self::Scan(err) = self {
+            Some(err.marker().index())
+        } else {
+            None
+        }
+    }
+}
+
 /// Errors that can occur when reading a [FmtString] from the yaml
 /// bibliography file
 #[derive(Clone, Error, Debug)]
