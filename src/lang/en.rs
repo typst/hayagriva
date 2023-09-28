@@ -1,50 +1,54 @@
+use crate::types::Numeric;
+
+pub const ARTICLES: [&str; 8] = ["A", "AN", "An", "THE", "The", "a", "an", "the"];
+
 pub const NEVER_CAPITALIZE: [&str; 46] = [
-    "a",
-    "above",
-    "across",
-    "against",
-    "among",
-    "an",
-    "and",
-    "around",
-    "as",
-    "at",
-    "behind",
-    "below",
-    "beneath",
-    "beside",
-    "between",
-    "but",
-    "by",
-    "during",
-    "for",
-    "from",
-    "front",
-    "in",
-    "inside",
-    "into",
-    "m",
-    "n",
-    "near",
-    "nor",
-    "of",
-    "on",
-    "onto",
-    "or",
-    "over",
-    "s",
-    "since",
-    "so",
-    "t",
-    "the",
-    "to",
-    "toward",
-    "under",
-    "underneath",
-    "until",
-    "with",
-    "within",
-    "yet",
+    "A",
+    "Above",
+    "Across",
+    "Against",
+    "Among",
+    "An",
+    "And",
+    "Around",
+    "As",
+    "At",
+    "Behind",
+    "Below",
+    "Beneath",
+    "Beside",
+    "Between",
+    "But",
+    "By",
+    "During",
+    "For",
+    "From",
+    "Front",
+    "In",
+    "Inside",
+    "Into",
+    "M",
+    "N",
+    "Near",
+    "Nor",
+    "Of",
+    "On",
+    "Onto",
+    "Or",
+    "Over",
+    "S",
+    "Since",
+    "So",
+    "T",
+    "The",
+    "To",
+    "Toward",
+    "Under",
+    "Underneath",
+    "Until",
+    "With",
+    "Within",
+    "Yet",
 ];
 
 pub const ALWAYS_CAPITALIZE: [&str; 426] = [
@@ -524,14 +528,19 @@ pub fn get_month_abbr(month: u8, dot: bool) -> Result<String, ()> {
     Ok(res)
 }
 
-pub fn get_ordinal(num: i64) -> String {
-    let my = num.abs();
-    let suffix = match my {
-        1 => "st",
-        2 => "nd",
-        3 => "rd",
-        _ => "th",
-    };
+pub fn get_ordinal(num: &Numeric) -> String {
+    match num.single_number() {
+        Some(num) => {
+            let my = num.abs();
+            let suffix = match my {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th",
+            };
 
-    num.to_string() + suffix
+            num.to_string() + suffix
+        }
+        None => num.to_string(),
+    }
 }

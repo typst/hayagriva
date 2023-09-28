@@ -6,12 +6,15 @@ use super::{
     and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
     get_title, AuthorRole, ChicagoConfig, DateMode, Mode,
 };
+use crate::style::FmtOptionExt;
 use crate::style::{
     abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
     format_range, push_comma_quote_aware, DisplayString, Formatting,
 };
-use crate::types::{EntryType::*, FmtOptionExt, Person};
+use crate::types::{EntryType::*, Person};
 use crate::Entry;
+
+use std::fmt::Write;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -85,8 +88,8 @@ impl Bibliography {
                     Report | Patent | Legislation | Conference | Exhibition
                 )
             {
-                if let Some(org) = entry.organization() {
-                    res += org
+                if let Some(org) = entry.organization.as_ref() {
+                    write!(res, "{}", org).unwrap();
                 }
             }
         }
@@ -102,13 +105,14 @@ impl Bibliography {
         let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if conference.is_none() {
             if let Some(loc) = entry
-                .location()
-                .or_else(|| published_entry.and_then(|e| e.location()))
+                .location
+                .as_ref()
+                .or_else(|| published_entry.and_then(|e| e.location.as_ref()))
             {
                 if !res.is_empty() {
                     res += ", ";
                 }
-                res += &loc.value;
+                write!(res, "{}", loc).unwrap();
             } else if matches!(&entry.entry_type, Book | Anthology)
                 && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
             {
@@ -160,33 +164,33 @@ impl Bibliography {
                 res += "Conference presentation";
             }
 
-            if let Some(org) = conf.organization() {
+            if let Some(org) = &conf.organization {
                 res += ", ";
-                res += org;
+                write!(res, "{}", org).unwrap();
             }
 
-            if let Some(loc) = conf.location() {
+            if let Some(loc) = &conf.location {
                 res += ", ";
-                res += &loc.value;
+                write!(res, "{}", loc).unwrap();
             }
         } else if let Some(publisher) = entry
-            .publisher()
-            .value()
-            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
+            .publisher
+            .as_ref()
+            .or_else(|| published_entry.map(|e| e.publisher.as_ref().unwrap()))
             .or_else(|| {
                 if matches!(&entry.entry_type, Report | Thesis)
                     || (matches!(&entry.entry_type, Case | Legislation)
-                        && entry.serial_number().is_some())
+                        && entry.serial_number.is_some())
                 {
-                    entry.organization()
+                    entry.organization.as_ref()
                 } else {
                     None
                 }
             })
-            .map(Into::into)
+            .map(|p| p.to_string())
             .or_else(|| {
-                if entry.entry_type == Reference && entry.volume().is_none() {
-                    entry.authors().map(|a| {
+                if entry.entry_type == Reference && entry.volume.is_none() {
+                    entry.authors.as_ref().map(|a| {
                         and_list(
                             a.iter().map(|p| p.given_first(false)),
                             false,
@@ -225,22 +229,24 @@ impl Bibliography {
         if entry.entry_type == Artwork {
             let mut items: Vec<String> = vec![];
 
-            items.extend(entry.note().map(Into::into));
+            items.extend(entry.note.as_ref().value());
 
             let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
-                    .organization()
-                    .or_else(|| entry.publisher().value())
-                    .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher().value()))
-                    .map(Into::into),
+                    .organization
+                    .as_ref()
+                    .or(entry.publisher.as_ref())
+                    .or_else(|| parent.and_then(|p| p.organization.as_ref()))
+                    .or_else(|| parent.and_then(|p| p.publisher.as_ref()))
+                    .map(|p| p.to_string()),
             );
 
             items.extend(
                 entry
-                    .location()
-                    .or_else(|| parent.and_then(|p| p.location()))
+                    .location
+                    .as_ref()
+                    .or_else(|| parent.and_then(|p| p.location.as_ref()))
                     .value()
                     .map(Into::into),
             );
@@ -272,8 +278,8 @@ impl Bibliography {
         entry = delegate_titled_entry(entry);
 
         let mut res: DisplayString = if entry.entry_type != Reference
-            || entry.publisher().is_some()
-            || entry.volume().is_some()
+            || entry.publisher.is_some()
+            || entry.volume.is_some()
         {
             self.get_author(entry).into()
         } else {
@@ -373,13 +379,13 @@ impl Bibliography {
             colon = true;
         }
 
-        if no_author && dictionary.is_some() && entry.authors().is_none() {
+        if no_author && dictionary.is_some() && entry.authors.is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.config);
         }
 
-        if let Some(pr) = entry.page_range() {
+        if let Some(pr) = entry.page_range.clone() {
             if !res.is_empty() {
                 if colon {
                     res.push(':');
@@ -393,7 +399,7 @@ impl Bibliography {
         }
 
         if journal {
-            if let Some(sn) = entry.serial_number() {
+            if let Some(sn) = &entry.serial_number {
                 if !sn.is_empty() {
                     push_comma_quote_aware(&mut res.value, ',', false);
                 }
@@ -402,11 +408,11 @@ impl Bibliography {
                     res.push(' ');
                 }
 
-                res += sn;
+                write!(res, "no. {}", sn).unwrap();
             }
         }
 
-        let url = if let Some(doi) = entry.doi() {
+        let url = if let Some(doi) = &entry.doi {
             let mut res = DisplayString::new();
             let link = format!("https://doi.org/{}", doi);
             res.start_format(Formatting::Link(link.clone()));
@@ -417,7 +423,8 @@ impl Bibliography {
             let mut res = DisplayString::new();
             if let Some(date) = qurl.visit_date.as_ref() {
                 if database.is_none() && self.config.url_access_date.needs_date(entry) {
-                    res += &format!("accessed {}, ", format_date(date, DateMode::Day));
+                    write!(res, "accessed {}, ", format_date(date, DateMode::Day))
+                        .unwrap();
                 }
             }
 
@@ -435,9 +442,9 @@ impl Bibliography {
             }
         } else if database.is_some() {
             let mut brack_content = get_chunk_title(entry, false, false, &self.config);
-            if let Some(sn) = entry.serial_number() {
+            if let Some(sn) = &entry.serial_number {
                 push_comma_quote_aware(&mut brack_content.value, ',', true);
-                brack_content += sn;
+                write!(brack_content, "no. {}", sn).unwrap();
             }
             if self.config.url_access_date.needs_date(entry) {
                 if let Some(date) = entry.url_any().and_then(|u| u.visit_date.as_ref()) {
@@ -468,14 +475,13 @@ impl Bibliography {
 
         let preprint = select!(Article > Repository).matches(entry);
         if no_url || entry.entry_type == Manuscript || preprint {
-            if let Some(archive) = entry.archive() {
+            if let Some(archive) = &entry.archive {
                 push_comma_quote_aware(&mut res.value, ',', true);
 
-                res += &archive.value;
+                write!(res, ", {}", archive).unwrap();
 
-                if let Some(al) = entry.archive_location() {
-                    res += ", ";
-                    res += &al.value;
+                if let Some(al) = &entry.archive_location {
+                    write!(res, ", {}", al).unwrap();
                 }
             }
         }

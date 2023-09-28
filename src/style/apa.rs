@@ -4,9 +4,10 @@ use super::{
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::en::{get_month_name, get_ordinal};
-use crate::lang::SentenceCase;
-use crate::types::{EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
+use crate::lang::SentenceCaseConf;
+use crate::types::{EntryType::*, MaybeTyped, Person, PersonRole};
 use crate::Entry;
+use std::fmt::Write;
 
 /// Bibliographies following APA guidance.
 ///
@@ -31,7 +32,7 @@ use crate::Entry;
 #[non_exhaustive]
 pub struct Apa {
     /// The configuration for sentence case formatting.
-    pub sentence_case: SentenceCase,
+    pub sentence_case: SentenceCaseConf,
 }
 
 #[derive(Clone, Debug)]
@@ -139,7 +140,7 @@ fn ampersand_list(names: Vec<String>) -> String {
 }
 
 fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
-    let vstr = if let Some(vols) = entry.volume() {
+    let vstr = if let Some(vols) = entry.volume.clone() {
         if is_tv_show {
             Some(format_range("Episode", "Episodes", vols))
         } else {
@@ -149,7 +150,7 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
         None
     };
 
-    let ed = if is_tv_show { entry.issue() } else { entry.edition() };
+    let ed = if is_tv_show { &entry.issue } else { &entry.edition };
 
     let translator = entry.affiliated_with_role(PersonRole::Translator);
 
@@ -166,8 +167,8 @@ fn ed_vol_str(entry: &Entry, is_tv_show: bool) -> String {
             Some(format!(
                 "{} ed.",
                 match ed {
-                    NumOrStr::Number(e) => get_ordinal(*e),
-                    NumOrStr::Str(s) => s.to_string(),
+                    MaybeTyped::Typed(e) => get_ordinal(e),
+                    MaybeTyped::String(s) => s.to_string(),
                 }
             ))
         }
@@ -254,7 +255,7 @@ impl Apa {
 
         let authors = if let Some(names) = names {
             Some(names)
-        } else if let Some(authors) = entry.authors() {
+        } else if let Some(authors) = &entry.authors {
             let list = name_list(authors);
             pers_refs.extend(authors.iter().cloned());
             Some(list)
@@ -262,7 +263,7 @@ impl Apa {
             None
         };
 
-        let mut al = if let Some(mut authors) = authors {
+        let mut al = if let Some(mut authors) = authors.clone() {
             let count = authors.len();
             if entry.entry_type == Tweet {
                 authors = authors
@@ -290,7 +291,7 @@ impl Apa {
                 AuthorRole::Director if count == 1 => format!("{} (Director)", amps),
                 AuthorRole::Director => format!("{} (Directors)", amps),
             }
-        } else if let Some(eds) = entry.editors() {
+        } else if let Some(eds) = &entry.editors {
             let res = if !eds.is_empty() {
                 format!(
                     "{} ({})",
@@ -310,7 +311,8 @@ impl Apa {
         let booklike = select!(Book | Proceedings | Anthology);
         if booklike.apply(entry).is_some() {
             let affs = entry
-                .affiliated_persons()
+                .affiliated
+                .as_deref()
                 .unwrap_or_default()
                 .iter()
                 .filter(|(_, role)| {
@@ -460,7 +462,7 @@ impl Apa {
 
                 talk.matches(entry)
                     || preprint.matches(entry)
-                    || (titled.kind() == entry.kind() && booklike.matches(entry))
+                    || (titled.entry_type == entry.entry_type && booklike.matches(entry))
             } else {
                 true
             };
@@ -471,8 +473,8 @@ impl Apa {
         let book =
             select!(Book | Report | Reference | Anthology | Proceedings).matches(entry);
 
-        if let Some(title) = entry.title() {
-            let sent_cased = title.canonical.format_sentence_case(&self.sentence_case);
+        if let Some(title) = &entry.title {
+            let sent_cased = title.value.format_sentence_case(self.sentence_case);
             let multivol_spec = select!(
                 ((Book | Proceedings | Anthology)["volume"])
                 > ("p":(Book | Proceedings | Anthology))
@@ -484,7 +486,8 @@ impl Apa {
                 res.start_format(Formatting::Italic);
             }
             if entry.entry_type == Tweet {
-                let words = &title.canonical.value.split_whitespace().collect::<Vec<_>>();
+                let title = title.to_string();
+                let words = &title.split_whitespace().collect::<Vec<_>>();
                 res += &words[..(if words.len() >= 20 { 20 } else { words.len() })]
                     .join(" ");
             } else {
@@ -493,19 +496,20 @@ impl Apa {
             res.commit_formats();
 
             if let Some(mv_parent) = multivolume_parent {
-                let vols = entry.volume().unwrap();
+                let vols = entry.volume.clone().unwrap();
                 let mut new = DisplayString::from_string(format!(
                     "{}: {} ",
                     mv_parent
-                        .title()
+                        .title
+                        .as_ref()
                         .unwrap()
-                        .canonical
-                        .format_sentence_case(&self.sentence_case),
+                        .value
+                        .format_sentence_case(self.sentence_case),
                     format_range("Vol.", "Vols.", vols),
                 ));
                 new += res;
                 res = new;
-            } else if (entry.volume().is_some() || entry.edition().is_some()) && book {
+            } else if (entry.volume.is_some() || entry.edition.is_some()) && book {
                 res += &ed_vol_str(entry, false);
             } else if vid_match.apply(entry).is_some() {
                 res += &ed_vol_str(entry, true);
@@ -522,10 +526,10 @@ impl Apa {
                 ));
             }
 
-            if entry.note().and_then(|_| entry.editors()).is_some()
-                && !entry.authors().unwrap_or_default().is_empty()
+            if entry.note.as_ref().and(entry.editors.as_ref()).is_some()
+                && !entry.authors.as_deref().unwrap_or_default().is_empty()
             {
-                let editors = entry.editors().unwrap();
+                let editors = entry.editors.as_ref().unwrap();
                 let amp_list = ampersand_list(name_list_straight(editors));
                 if editors.len() == 1 {
                     items.push(format!("{}, Ed.", amp_list));
@@ -534,11 +538,11 @@ impl Apa {
                 }
             }
         } else if entry.entry_type == Report {
-            if let Some(serial) = entry.serial_number() {
+            if let Some(serial) = &entry.serial_number {
                 items.push(serial.to_string());
             }
         } else if entry.entry_type == Thesis {
-            if let Some(serial) = entry.serial_number() {
+            if let Some(serial) = &entry.serial_number {
                 items.push(format!("Publication No. {}", serial));
             }
         }
@@ -549,7 +553,7 @@ impl Apa {
                 res += " ";
             }
 
-            res += &format!("({})", items);
+            write!(res, "({})", items).unwrap();
         }
 
         #[derive(Clone, Debug, PartialEq)]
@@ -581,7 +585,7 @@ impl Apa {
         } else if talk_spec.apply(entry).is_some() {
             TitleSpec::ConferenceSession
         } else if entry.entry_type == Thesis {
-            if entry.archive().is_some() || entry.url().is_some() {
+            if entry.archive.is_some() || entry.url.is_some() {
                 TitleSpec::Thesis
             } else {
                 TitleSpec::UnpublishedThesis
@@ -596,19 +600,20 @@ impl Apa {
             TitleSpec::Audio
         } else if entry.entry_type == Video {
             if entry
-                .affiliated_persons()
+                .affiliated
+                .as_deref()
                 .unwrap_or_default()
                 .iter()
                 .filter(|(_, role)| role == &PersonRole::Director)
                 .flat_map(|(v, _)| v)
                 .next()
                 .is_none()
-                && entry.volume_total().is_none()
-                && entry.parents().is_none()
+                && entry.volume_total.is_none()
+                && entry.parents.is_empty()
             {
                 TitleSpec::Film
             } else {
-                let is_online_vid = if let Some(url) = entry.url() {
+                let is_online_vid = if let Some(url) = &entry.url {
                     matches!(
                         url.value.host_str().unwrap_or("").to_lowercase().as_ref(),
                         "youtube.com" | "dailymotion.com" | "vimeo.com"
@@ -624,7 +629,7 @@ impl Apa {
 
                     if vid_match.apply(entry).is_some() {
                         TitleSpec::TvEpisode
-                    } else if !prods.is_empty() || entry.volume_total().is_some() {
+                    } else if !prods.is_empty() || entry.volume_total.is_some() {
                         TitleSpec::TvShow
                     } else {
                         TitleSpec::Video
@@ -661,8 +666,8 @@ impl Apa {
             }
 
             let printed = if spec == TitleSpec::Thesis {
-                if let Some(org) = entry.organization() {
-                    res += &format!("[{}, {}]", append, org);
+                if let Some(org) = &entry.organization {
+                    write!(res, "[{}, {}]", append, org).unwrap();
                     true
                 } else {
                     false
@@ -672,7 +677,7 @@ impl Apa {
             };
 
             if !printed {
-                res += &format!("[{}]", append);
+                write!(res, "[{}]", append).unwrap();
             }
         }
 
@@ -698,54 +703,54 @@ impl Apa {
 
         match st {
             SourceType::PeriodicalItem(parent) => {
-                let mut comma = if let Some(title) = parent.title() {
+                let mut comma = if let Some(title) = &parent.title {
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.sentence_case);
+                    res += &title.value.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     true
                 } else {
                     false
                 };
 
-                if parent.volume().is_some() || parent.issue().is_some() {
+                if parent.volume.is_some() || parent.issue.is_some() {
                     if comma {
                         res += ", ";
                     }
 
-                    if let Some(volume) = parent.volume() {
+                    if let Some(volume) = parent.volume.clone() {
                         res += &format_range("", "", volume);
                     }
 
-                    if let Some(issue) = parent.issue() {
-                        res += &format!("({})", issue);
+                    if let Some(issue) = &parent.issue {
+                        write!(res, "({})", issue).unwrap();
                     }
                     comma = true;
                 }
 
-                if entry.serial_number().is_some() || entry.page_range().is_some() {
+                if entry.serial_number.is_some() || entry.page_range.is_some() {
                     if comma {
                         res += ", ";
                     }
 
-                    if let Some(sn) = entry.serial_number() {
+                    if let Some(sn) = &entry.serial_number {
                         res += "Article ";
-                        res += sn;
-                    } else if let Some(pages) = entry.page_range() {
+                        write!(res, "{}", sn).unwrap();
+                    } else if let Some(pages) = entry.page_range.clone() {
                         res += &format_range("", "", pages);
                     }
                 }
             }
             SourceType::CollectionItem(parent) => {
-                let mut comma = if let Some(eds) = parent.editors() {
+                let mut comma = if let Some(eds) = &parent.editors {
                     let names = name_list(eds);
                     match names.len() {
                         0 => false,
                         1 => {
-                            res += &format!("{} (Ed.)", names[0]);
+                            write!(res, "{} (Ed.)", names[0]).unwrap();
                             true
                         }
                         _ => {
-                            res += &format!("{} (Eds.)", ampersand_list(names));
+                            write!(res, "{} (Eds.)", ampersand_list(names)).unwrap();
                             true
                         }
                     }
@@ -753,17 +758,17 @@ impl Apa {
                     false
                 };
 
-                if let Some(title) = parent.title() {
+                if let Some(title) = &parent.title {
                     if comma {
                         res += ", ";
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.sentence_case);
+                    res += &title.value.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     comma = true;
 
-                    if parent.volume().is_some() || parent.edition().is_some() {
+                    if parent.volume.is_some() || parent.edition.is_some() {
                         res += &ed_vol_str(parent, false);
                         res.push('.');
                         comma = false;
@@ -780,27 +785,27 @@ impl Apa {
                     res = new;
                 }
 
-                if parent.publisher().is_some() || parent.organization().is_some() {
+                if parent.publisher.is_some() || parent.organization.is_some() {
                     res.push(' ');
 
-                    if let Some(publisher) = parent.publisher() {
-                        res += &publisher.value;
-                    } else if let Some(organization) = parent.organization() {
-                        res += organization;
+                    if let Some(publisher) = &parent.publisher {
+                        write!(res, "{}", &publisher).unwrap();
+                    } else if let Some(organization) = &parent.organization {
+                        write!(res, "{}", organization).unwrap();
                     }
                 }
             }
             SourceType::TvSeries(parent) => {
                 let mut prods = entry.affiliated_with_role(PersonRole::ExecutiveProducer);
                 if prods.is_empty() {
-                    prods = entry.authors().unwrap_or_default().to_vec();
+                    prods = entry.authors.as_deref().unwrap_or_default().to_vec();
                 }
                 let mut comma = if !prods.is_empty() {
                     let names = name_list(&prods);
                     match names.len() {
                         0 => false,
                         1 => {
-                            res += &format!("{} (Executive Producer)", names[0]);
+                            write!(res, "{} (Executive Producer)", names[0]).unwrap();
                             true
                         }
                         _ => {
@@ -815,17 +820,17 @@ impl Apa {
                     false
                 };
 
-                if let Some(title) = parent.title() {
+                if let Some(title) = &parent.title {
                     if comma {
                         res += ", ";
                     }
 
                     res.start_format(Formatting::Italic);
-                    res += &title.canonical.format_sentence_case(&self.sentence_case);
+                    res += &title.value.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     comma = false;
 
-                    if parent.volume().is_some() || parent.edition().is_some() {
+                    if parent.volume.is_some() || parent.edition.is_some() {
                         res.push(' ');
                         res += &ed_vol_str(entry, true);
                         res.push('.');
@@ -848,104 +853,108 @@ impl Apa {
                     res = new;
                 }
 
-                if parent.publisher().is_some() || parent.organization().is_some() {
+                if parent.publisher.is_some() || parent.organization.is_some() {
                     res.push(' ');
 
-                    if let Some(publisher) = parent.publisher() {
-                        res += &publisher.value;
-                    } else if let Some(organization) = parent.organization() {
-                        res += organization;
+                    if let Some(publisher) = &parent.publisher {
+                        write!(res, "{}", &publisher.value).unwrap();
+                    } else if let Some(organization) = &parent.organization {
+                        write!(res, "{}", organization).unwrap();
                     }
                 }
             }
             SourceType::Thesis => {
-                if let Some(archive) = entry.archive() {
-                    res += &archive.value;
-                } else if let Some(org) = entry.organization() {
-                    if entry.url().is_none() {
-                        res += org;
+                if let Some(archive) = &entry.archive {
+                    write!(res, "{}", &archive.value).unwrap();
+                } else if let Some(org) = &entry.organization {
+                    if entry.url.is_none() {
+                        write!(res, "{}", org).unwrap();
                     }
                 }
             }
             SourceType::Manuscript => {
-                if let Some(archive) = entry.archive() {
-                    res += &archive.value;
+                if let Some(archive) = &entry.archive {
+                    write!(res, "{}", &archive.value).unwrap();
                 }
             }
             SourceType::ArtContainer(parent) => {
                 let org = parent
-                    .organization()
-                    .or_else(|| parent.archive().value())
-                    .or_else(|| parent.publisher().value())
-                    .or_else(|| entry.organization())
-                    .or_else(|| entry.archive().value())
-                    .or_else(|| entry.publisher().value());
+                    .organization
+                    .as_ref()
+                    .or(parent.archive.as_ref())
+                    .or(parent.publisher.as_ref())
+                    .or(entry.organization.as_ref())
+                    .or(entry.archive.as_ref())
+                    .or(entry.publisher.as_ref())
+                    .map(|s| s.value.clone());
 
                 if let Some(org) = org {
                     if let Some(loc) = parent
-                        .location()
-                        .or_else(|| parent.archive_location())
-                        .or_else(|| entry.location())
-                        .or_else(|| entry.archive_location())
+                        .location
+                        .as_ref()
+                        .or(parent.archive_location.as_ref())
+                        .or(entry.location.as_ref())
+                        .or(entry.archive_location.as_ref())
                     {
-                        res += &format!("{}, {}.", org, loc.value);
+                        write!(res, "{}, {}.", org, loc.value).unwrap();
                     } else {
-                        res += org;
+                        write!(res, "{}", org).unwrap();
                     }
                 }
             }
             SourceType::StandaloneArt => {
                 let org = entry
-                    .organization()
-                    .or_else(|| entry.archive().value())
-                    .or_else(|| entry.publisher().value());
+                    .organization
+                    .as_ref()
+                    .or(entry.archive.as_ref())
+                    .or(entry.publisher.as_ref());
 
                 if let Some(org) = org {
                     if let Some(loc) =
-                        entry.location().or_else(|| entry.archive_location())
+                        entry.location.as_ref().or(entry.archive_location.as_ref())
                     {
-                        res += &format!("{}, {}.", org, loc.value);
+                        write!(res, "{}, {}.", org, loc.value).unwrap();
                     } else {
-                        res += org;
+                        write!(res, "{}", org.value).unwrap();
                     }
                 }
             }
             SourceType::StandaloneWeb => {
-                let publisher =
-                    entry.publisher().value().or_else(|| entry.organization());
+                let publisher = entry.publisher.as_ref().or(entry.organization.as_ref());
 
-                if let Some(publisher) = publisher {
-                    let authors = entry.authors().unwrap_or_default();
+                if let Some(publisher) = &publisher {
+                    let authors = entry.authors.as_deref().unwrap_or_default();
                     if authors.len() != 1
-                        || authors.get(0).map(|a| a.name.as_ref()) != Some(publisher)
+                        || authors.get(0).map(|a| a.name.as_str())
+                            != Some(&publisher.to_string())
                     {
-                        res += publisher;
+                        write!(res, "{}", publisher.value).unwrap();
                     }
                 }
             }
             SourceType::Web(parent) => {
-                if let Some(title) = parent.title().map(|t| &t.canonical) {
-                    let authors = entry.authors().unwrap_or_default();
+                if let Some(title) = parent.title.as_ref().map(|t| &t.value) {
+                    let authors = entry.authors.as_deref().unwrap_or_default();
                     if authors.len() != 1
-                        || authors.get(0).map(|a| &a.name) != Some(&title.value)
+                        || authors.get(0).map(|a| &a.name) != Some(&title.to_string())
                     {
                         res.start_format(Formatting::Italic);
-                        res += &title.format_sentence_case(&self.sentence_case);
+                        res += &title.format_sentence_case(self.sentence_case);
                         res.commit_formats();
                     }
                 }
             }
             SourceType::NewsItem(parent) => {
-                let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
+                let comma = if let Some(title) = parent.title.as_ref().map(|t| &t.value) {
                     res.start_format(Formatting::Italic);
-                    res += &title.format_sentence_case(&self.sentence_case);
+                    res += &title.format_sentence_case(self.sentence_case);
                     res.commit_formats();
                     true
                 } else {
                     false
                 };
 
-                if let Some(pps) = entry.page_range() {
+                if let Some(pps) = entry.page_range.clone() {
                     if comma {
                         res += ", ";
                     }
@@ -954,37 +963,37 @@ impl Apa {
                 }
             }
             SourceType::ConferenceTalk(parent) => {
-                let comma = if let Some(title) = parent.title().map(|t| &t.canonical) {
-                    res += &title.format_sentence_case(&self.sentence_case);
+                let comma = if let Some(title) = parent.title.as_ref().map(|t| &t.value) {
+                    res += &title.format_sentence_case(self.sentence_case);
                     true
                 } else {
                     false
                 };
 
-                if let Some(loc) = parent.location() {
+                if let Some(loc) = &parent.location {
                     if comma {
                         res += ", ";
                     }
 
-                    res += &loc.value;
+                    write!(res, "{}", loc.value).unwrap();
                 }
             }
             SourceType::GenericParent(parent) => {
-                if let Some(title) = parent.title() {
+                if let Some(title) = &parent.title {
                     let preprint = select!((Article | Book | Anthos) > Repository);
                     if preprint.apply(entry).is_none() {
                         res.start_format(Formatting::Italic);
                     }
-                    res += &title.canonical.value;
+                    write!(res, "{}", &title.value).unwrap();
                     res.commit_formats();
                 }
             }
             SourceType::Generic => {
-                if entry.publisher().is_some() || entry.organization().is_some() {
-                    if let Some(publisher) = entry.publisher() {
-                        res += &publisher.value;
-                    } else if let Some(organization) = entry.organization() {
-                        res += organization;
+                if entry.publisher.is_some() || entry.organization.is_some() {
+                    if let Some(publisher) = &entry.publisher {
+                        write!(res, "{}", &publisher.value).unwrap();
+                    } else if let Some(organization) = &entry.organization {
+                        write!(res, "{}", organization).unwrap();
                     }
                 }
             }
@@ -996,7 +1005,7 @@ impl Apa {
             res.push('.');
         }
 
-        if let Some(doi) = entry.doi() {
+        if let Some(doi) = &entry.doi {
             if !res.is_empty() {
                 res.push(' ');
             }
@@ -1009,10 +1018,10 @@ impl Apa {
             let reference_entry = select!(Reference > Entry);
             let url_str = self.get_retrieval_date(
                 entry,
-                entry.date().is_none()
+                entry.date.is_none()
                     || reference_entry.apply(entry).is_some()
                     || (matches!(st, SourceType::StandaloneWeb)
-                        && entry.parents().unwrap_or_default().is_empty()),
+                        && entry.parents.is_empty()),
             );
             if let Some(url) = url_str {
                 if !res.is_empty() {
@@ -1044,14 +1053,14 @@ impl Apa {
 
             if !date.is_empty() {
                 if !res.is_empty() {
-                    res += &format!(" {}", date);
+                    write!(res, " {}", date).unwrap();
                 } else {
                     res += &date;
                 }
             }
         } else {
             if !date.is_empty() {
-                res += &format!(" {}", date);
+                write!(res, " {}", date).unwrap();
             }
 
             if !title.is_empty() {
@@ -1073,11 +1082,11 @@ impl Apa {
             }
         }
 
-        if let Some(note) = entry.note() {
+        if let Some(note) = &entry.note {
             if !res.is_empty() {
                 res.push(' ');
             }
-            res += &format!("({})", note);
+            write!(res, "({})", note).unwrap();
         }
 
         (
@@ -1131,15 +1140,15 @@ mod tests {
     #[test]
     fn name_list() {
         let p = vec![
-            Person::from_strings(&["van de Graf", "Judith"]),
-            Person::from_strings(&["Günther", "Hans-Joseph"]),
-            Person::from_strings(&["Mädje", "Laurenz Elias"]),
+            Person::from_strings(vec!["van de Graf", "Judith"]),
+            Person::from_strings(vec!["Günther", "Hans-Joseph"]),
+            Person::from_strings(vec!["Mädje", "Laurenz Elias"]),
         ]
         .into_iter()
         .map(|e| e.unwrap())
         .collect();
         let mut entry = Entry::new("test", EntryType::Newspaper);
-        entry.set_authors(p);
+        entry.authors = Some(p);
 
         let apa = Apa::new();
         assert_eq!(
@@ -1151,7 +1160,7 @@ mod tests {
     #[test]
     fn retrieved_date() {
         let mut entry = Entry::new("test", EntryType::Article);
-        entry.set_url(QualifiedUrl {
+        entry.url = Some(QualifiedUrl {
             value: Url::parse("https://example.net").unwrap(),
             visit_date: Some(Date::from_str("2023-03-1").unwrap()),
         });

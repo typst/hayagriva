@@ -20,8 +20,32 @@ use isolang::Language;
 use linked_hash_map::LinkedHashMap;
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::types::{ChunkedStr, FormatStr, MaybeTyped, Numeric};
+
 use super::types::Person;
 use super::Entry;
+
+pub(crate) trait FmtOptionExt<'a> {
+    fn value(self) -> Option<String>;
+}
+
+impl<'a> FmtOptionExt<'a> for Option<&'a FormatStr> {
+    fn value(self) -> Option<String> {
+        self.map(|fmt| fmt.value.to_string())
+    }
+}
+
+impl<'a> FmtOptionExt<'a> for Option<FormatStr> {
+    fn value(self) -> Option<String> {
+        self.map(|fmt| fmt.value.to_string())
+    }
+}
+
+impl<'a> FmtOptionExt<'a> for Option<&'a ChunkedStr> {
+    fn value(self) -> Option<String> {
+        self.map(|chunks| chunks.to_string())
+    }
+}
 
 /// A database record that contains some style-set supplementary info.
 #[derive(Clone, Debug, PartialEq)]
@@ -512,16 +536,26 @@ impl<'a> CitationStyle<'a> for Numerical {
     }
 }
 
-fn format_range<T: std::fmt::Display + PartialEq>(
+fn format_range(
     prefix_s: &str,
     prefix_m: &str,
-    range: &std::ops::Range<T>,
+    num: impl Into<MaybeTyped<Numeric>>,
 ) -> String {
-    let space = if prefix_s.is_empty() { "" } else { " " };
-    if range.start == range.end {
-        format!("{}{}{}", prefix_s, space, range.start)
-    } else {
-        format!("{}{}{}–{}", prefix_m, space, range.start, range.end)
+    let maybe: MaybeTyped<Numeric> = num.into();
+    match maybe {
+        MaybeTyped::Typed(n) => {
+            if let Some(range) = n.range() {
+                let space = if prefix_s.is_empty() { "" } else { " " };
+                if range.start == range.end {
+                    format!("{}{}{}", prefix_s, space, range.start)
+                } else {
+                    format!("{}{}{}–{}", prefix_m, space, range.start, range.end)
+                }
+            } else {
+                n.to_string()
+            }
+        }
+        MaybeTyped::String(s) => s.clone(),
     }
 }
 
@@ -727,6 +761,13 @@ impl Add<&str> for DisplayString {
     }
 }
 
+impl std::fmt::Write for DisplayString {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.value.push_str(s);
+        Ok(())
+    }
+}
+
 impl Add<Self> for DisplayString {
     type Output = Self;
 
@@ -866,11 +907,11 @@ fn abbreviate_publisher(s: &str, up: bool) -> String {
 }
 
 fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
-    let mut parent = entry.parents().and_then(|v| v.first());
-    while select!(Chapter | Scene).matches(entry) && entry.title().is_none() {
+    let mut parent = entry.parents.first();
+    while select!(Chapter | Scene).matches(entry) && entry.title.is_none() {
         if let Some(p) = parent {
             entry = p;
-            parent = entry.parents().and_then(|v| v.first());
+            parent = entry.parents.first();
         } else {
             break;
         }
@@ -931,7 +972,12 @@ fn sorted_bibliography(
 }
 
 fn author_title_ord(item: &Entry, other: &Entry) -> Ordering {
-    author_title_ord_custom(item, other, item.authors(), other.authors())
+    author_title_ord_custom(
+        item,
+        other,
+        item.authors.as_deref(),
+        other.authors.as_deref(),
+    )
 }
 
 fn author_title_ord_custom(
@@ -958,9 +1004,9 @@ fn author_title_ord_custom(
         (None, None) => Ordering::Equal,
     }
     .then_with(|| {
-        if let (Some(title), Some(other_title)) = (item.title(), other.title()) {
-            omit_initial_articles(&title.canonical.value)
-                .cmp(&omit_initial_articles(&other_title.canonical.value))
+        if let (Some(title), Some(other_title)) = (&item.title, &other.title) {
+            omit_initial_articles(&title.value.to_string())
+                .cmp(&omit_initial_articles(&other_title.value.to_string()))
         } else {
             Ordering::Equal
         }
@@ -1014,10 +1060,10 @@ impl Alphanumerical {
 
         match creators.len() {
             0 => {
-                let pseudo_creator = if let Some(org) = entry.organization() {
-                    org.into()
-                } else if let Some(title) = delegate_titled_entry(entry).title() {
-                    title.canonical.value.clone()
+                let pseudo_creator = if let Some(org) = &entry.organization {
+                    org.to_string()
+                } else if let Some(title) = &delegate_titled_entry(entry).title {
+                    title.value.to_string()
                 } else {
                     entry.key().chars().filter(|c| c.is_alphabetic()).collect::<String>()
                 };
@@ -1144,8 +1190,8 @@ impl AuthorTitle {
         let creators = chicago::get_creators(entry).0;
         match creators.len() {
             0 => {
-                if let Some(org) = entry.organization() {
-                    org.into()
+                if let Some(org) = &entry.organization {
+                    org.to_string()
                 } else {
                     String::new()
                 }
@@ -1177,7 +1223,8 @@ impl<'a> CitationStyle<'a> for AuthorTitle {
 
             let mut res: DisplayString = self.creator_list(entry).into();
             let title = entry
-                .title()
+                .title
+                .as_ref()
                 .map(|_| chicago::get_chunk_title(entry, false, true, &self.config));
 
             if let Some(title) = title.clone() {
@@ -1185,7 +1232,7 @@ impl<'a> CitationStyle<'a> for AuthorTitle {
                 res += title;
             }
 
-            if let Some(lang) = entry.language() {
+            if let Some(lang) = &entry.language {
                 push_comma_quote_aware(&mut res.value, ',', true);
                 res += "(";
                 res += Language::from_639_1(lang.language.as_str()).unwrap().to_name();

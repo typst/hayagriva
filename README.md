@@ -65,7 +65,7 @@ crazy-rich:
 
 // Parse a bibliography
 let bib = from_yaml_str(yaml).unwrap();
-assert_eq!(bib[0].date().unwrap().year, 2014);
+assert_eq!(bib[0].date.unwrap().year, 2014);
 
 // Format the reference
 let db = Database::from_entries(bib.iter());

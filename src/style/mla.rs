@@ -1,4 +1,5 @@
-use en::get_ordinal;
+use std::fmt::Write;
+
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{
@@ -6,9 +7,11 @@ use super::{
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
-use crate::lang::{en, TitleCase};
-use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
+use crate::lang::{en, TitleCaseConf};
+use crate::types::{Date, EntryType::*, MaybeTyped, Person, PersonRole};
 use crate::Entry;
+
+use en::get_ordinal;
 
 /// Bibliographies following MLA guidance.
 ///
@@ -36,7 +39,7 @@ pub struct Mla {
     /// only the most top-level date field will be printed.
     pub always_print_date: bool,
     /// Title case configuration.
-    pub title_case: TitleCase,
+    pub title_case: TitleCaseConf,
 }
 
 impl Default for Mla {
@@ -194,7 +197,7 @@ fn is_religious(s: &str) -> bool {
 impl Mla {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
-        let mut title_case = TitleCase::new();
+        let mut title_case = TitleCaseConf::new();
         title_case.always_capitalize_last_word = false;
 
         Self {
@@ -254,10 +257,11 @@ impl Mla {
 
     fn get_main_contributors(&self, entry: &Entry) -> Option<Vec<Person>> {
         entry
-            .authors()
+            .authors
+            .as_ref()
             .map(|a| a.to_vec())
             .or_else(|| {
-                entry.affiliated_persons().and_then(|a| {
+                entry.affiliated.as_ref().and_then(|a| {
                     if a.len() == 1 {
                         Some(a[0].0.clone())
                     } else {
@@ -265,7 +269,7 @@ impl Mla {
                     }
                 })
             })
-            .or_else(|| entry.editors().map(|a| a.to_vec()))
+            .or_else(|| entry.editors.as_ref().map(|a| a.to_vec()))
     }
 
     fn name_list(&self, persons: &[Person], tweet_entry: Option<&Entry>) -> Vec<String> {
@@ -292,12 +296,12 @@ impl Mla {
         mut entry: &Entry,
         prev_entry: Option<&Entry>,
     ) -> (String, Vec<Person>) {
-        while entry.authors().is_none()
-            && entry.affiliated_persons().is_none()
-            && entry.editors().is_none()
+        while entry.authors.is_none()
+            && entry.affiliated.is_none()
+            && entry.editors.is_none()
             && select!(Chapter | Scene).matches(entry)
         {
-            if let Some(p) = entry.parents().and_then(|ps| ps.first()) {
+            if let Some(p) = entry.parents.first() {
                 entry = p;
             } else {
                 break;
@@ -313,7 +317,7 @@ impl Mla {
         } else {
             (String::new(), false)
         };
-        res += &if let Some(authors) = entry.authors() {
+        res += &if let Some(authors) = &entry.authors {
             contribs.extend(authors.iter().cloned());
             if !previous && entry.entry_type == Tweet {
                 self.and_list(self.name_list(authors, Some(entry)), true)
@@ -322,7 +326,7 @@ impl Mla {
             } else {
                 String::new()
             }
-        } else if let Some(affs) = entry.affiliated_persons() {
+        } else if let Some(affs) = &entry.affiliated {
             let mut res = String::new();
             for (persons, role) in affs.iter() {
                 let plural = persons.len() > 1;
@@ -378,7 +382,7 @@ impl Mla {
                 res += desc;
             }
             res
-        } else if let Some(eds) = entry.editors() {
+        } else if let Some(eds) = &entry.editors {
             let plural = eds.len() > 1;
             let mut res = if !previous {
                 self.and_list(self.name_list(eds, None), true)
@@ -412,14 +416,14 @@ impl Mla {
                 let temp = bindings.remove("a").unwrap();
 
                 if ["preface", "introduction", "foreword", "afterword"].iter().any(|&x| {
-                    Some(x.into())
-                        == entry.title().map(|x| x.canonical.value.to_lowercase())
+                    Some(x.into()) == entry.title.as_ref().map(|x| x.value.to_lowercase())
                 }) {
                     res += &entry
-                        .title()
+                        .title
+                        .as_ref()
                         .unwrap()
-                        .canonical
-                        .format_title_case(&self.title_case);
+                        .value
+                        .format_title_case(self.title_case);
 
                     res += ". ";
                     entry = temp;
@@ -427,8 +431,8 @@ impl Mla {
             }
         }
 
-        if let Some(title) = entry.title() {
-            let fmt = title.canonical.format_title_case(&self.title_case);
+        if let Some(title) = &entry.title {
+            let fmt = title.value.format_title_case(self.title_case);
             if sc
                 && !select!(Legislation | Conference).matches(entry)
                 && !is_religious(&fmt)
@@ -445,8 +449,8 @@ impl Mla {
             if !sc {
                 res += "”";
             }
-        } else if let Some(note) = entry.note() {
-            res += note;
+        } else if let Some(note) = &entry.note {
+            write!(res, "{}", note).unwrap();
             if !res.is_empty() && res.last() != Some('.') && use_quotes {
                 res.push('.');
             }
@@ -477,8 +481,8 @@ impl Mla {
 
             // Other contributors.
             let mut contributors = vec![];
-            if let Some(affiliated) = entry.affiliated_persons() {
-                if entry != root || entry.authors().is_some() {
+            if let Some(affiliated) = &entry.affiliated {
+                if entry != root || entry.authors.is_some() {
                     for (ps, r) in affiliated.iter() {
                         if ps.is_empty() {
                             continue;
@@ -528,11 +532,11 @@ impl Mla {
                 }
             }
 
-            if let Some(eds) = entry.editors() {
+            if let Some(eds) = &entry.editors {
                 if !eds.is_empty()
                     && (entry != root
-                        || entry.authors().is_some()
-                        || entry.affiliated_persons().is_some())
+                        || entry.authors.is_some()
+                        || entry.affiliated.is_some())
                 {
                     let mut res = "edited by ".to_string();
                     res += &self.and_list(self.name_list(eds, None), true);
@@ -545,26 +549,26 @@ impl Mla {
             }
 
             // Version
-            if let Some(edition) = entry.edition() {
-                match edition {
-                    NumOrStr::Str(i) => {
-                        container.version = i
+            if let Some(edition) = &entry.edition {
+                match &edition {
+                    MaybeTyped::String(s) => {
+                        container.version = s
                             .replace("revised", "rev.")
                             .replace("edition", "ed.")
                             .replace("Edition", "ed.")
                     }
-                    NumOrStr::Number(i) => {
-                        container.version = format!("{} ed.", get_ordinal(*i))
+                    MaybeTyped::Typed(i) => {
+                        container.version = format!("{} ed.", get_ordinal(i))
                     }
                 }
-            } else if let Some(serial_number) = entry.serial_number() {
+            } else if let Some(serial_number) = &entry.serial_number {
                 container.version = serial_number.to_string();
             }
 
             // Number
             let mut number = String::new();
             let tv = select!(Video > *).matches(entry);
-            if let Some(vols) = entry.volume() {
+            if let Some(vols) = entry.volume.clone() {
                 number += &if tv {
                     format_range("season", "seasons", vols)
                 } else {
@@ -572,11 +576,11 @@ impl Mla {
                 }
             }
 
-            if let Some(issue) = entry.issue() {
+            if let Some(issue) = &entry.issue {
                 let res = match issue {
-                    NumOrStr::Str(i) => i.clone(),
-                    NumOrStr::Number(i) if tv => format!("episode {}", i),
-                    NumOrStr::Number(i) => format!("no. {}", i),
+                    MaybeTyped::String(i) => i.clone(),
+                    MaybeTyped::Typed(i) if tv => format!("episode {}", i),
+                    MaybeTyped::Typed(i) => format!("no. {}", i),
                 };
 
                 if !number.is_empty() && !res.is_empty() {
@@ -589,14 +593,15 @@ impl Mla {
             // Publisher
             if !select!((Manuscript > (!*)) | Periodical).matches(entry) {
                 if let Some(publisher) =
-                    entry.publisher().value().or_else(|| entry.organization())
+                    &entry.publisher.as_ref().or(entry.organization.as_ref())
                 {
-                    container.publisher = abbreviate_publisher(publisher, true);
+                    container.publisher =
+                        abbreviate_publisher(&publisher.to_string(), true);
                 }
             }
 
             // Date
-            if let Some(date) = entry.date() {
+            if let Some(date) = &entry.date {
                 if !has_date || self.always_print_date {
                     has_date = true;
                     container.date = format_date(date);
@@ -610,42 +615,42 @@ impl Mla {
             let mut location: Vec<DisplayString> = vec![];
             let physical =
                 select!(Scene | Artwork | Case | Conference | Exhibition).matches(entry);
-            if physical || self.always_use_location || entry.publisher().is_none() {
-                if let Some(loc) = entry.location() {
-                    location.push(DisplayString::from_string(loc.value.clone()));
+            if physical || self.always_use_location || entry.publisher.is_none() {
+                if let Some(loc) = &entry.location {
+                    location.push(DisplayString::from_string(loc.value.to_string()));
                 }
             }
-            if let Some(page_range) = entry.page_range() {
-                location.push(format_range("p.", "pp.", page_range).into());
+            if let Some(page_range) = &entry.page_range {
+                location.push(format_range("p.", "pp.", page_range.clone()).into());
             }
 
-            if entry.publisher().is_some() && entry.organization().is_some() {
-                location.push(entry.organization().unwrap().into());
+            if entry.publisher.is_some() && entry.organization.is_some() {
+                location.push(entry.organization.as_ref().unwrap().to_string().into());
             }
 
-            if entry.edition().is_some() && entry.serial_number().is_some() {
-                location.push(entry.serial_number().unwrap().into());
+            if entry.edition.is_some() && entry.serial_number.is_some() {
+                location.push(entry.serial_number.clone().unwrap().into());
             }
 
-            if let Some(archive) = entry.archive() {
-                if let Some(aloc) = entry.archive_location() {
-                    location.push(aloc.value.clone().into());
+            if let Some(archive) = &entry.archive {
+                if let Some(aloc) = &entry.archive_location {
+                    location.push(aloc.value.to_string().into());
                 }
 
-                location.push(archive.value.clone().into());
+                location.push(archive.value.to_string().into());
             }
 
             let mut supplemental = vec![];
 
             // Location: May also produce a supplemental item.
-            if let Some(doi) = entry.doi() {
+            if let Some(doi) = &entry.doi {
                 let mut dstr = DisplayString::new();
                 dstr.start_format(Formatting::Link(format!("https://doi.org/{}", doi)));
-                dstr += &format!("doi:{}", doi);
+                write!(dstr, "doi:{}", doi).unwrap();
                 dstr.commit_formats();
                 location.push(dstr);
                 has_url = true;
-            } else if let Some(qurl) = entry.url() {
+            } else if let Some(qurl) = &entry.url {
                 let vdate = qurl.visit_date.is_some()
                     && select!(Blog | Web | Misc | (!(*["date"])) | (* > (Blog | Web | Misc)))
                     .matches(entry);
@@ -670,7 +675,9 @@ impl Mla {
             }
 
             // Supplemental
-            if let Some(&tvol) = entry.volume_total() {
+            if let Some(tvol) =
+                entry.volume_total.as_ref().and_then(|n| n.single_number())
+            {
                 if tvol > 1 {
                     supplemental.push(format!("{} vols", tvol));
                 }
@@ -678,7 +685,12 @@ impl Mla {
 
             if let Some(series) = series {
                 supplemental.push(
-                    series.title().unwrap().canonical.format_title_case(&self.title_case),
+                    series
+                        .title
+                        .as_ref()
+                        .unwrap()
+                        .value
+                        .format_title_case(self.title_case),
                 );
             }
 
@@ -691,7 +703,7 @@ impl Mla {
             }
         }
 
-        for p in &entry.parents().map(|r| r.to_vec()).unwrap_or_default() {
+        for p in &entry.parents {
             if Some(p) == series {
                 continue;
             }
@@ -704,11 +716,11 @@ impl Mla {
 
         if entry == root && !has_url {
             if let Some(lc) = containers.last_mut() {
-                if let Some(doi) = entry.doi() {
+                if let Some(doi) = &entry.doi {
                     if !lc.location.is_empty() {
                         lc.location += ", ";
                     }
-                    lc.location += &format!("doi:{}", doi);
+                    write!(lc.location, "doi:{}", doi).unwrap();
                 } else if let Some(qurl) = entry.url_any() {
                     let vdate = qurl.visit_date.is_some()
                         && select!(
@@ -735,11 +747,11 @@ impl Mla {
                     lc.location.commit_formats();
                     has_url = true;
                 }
-            } else if let Some(doi) = entry.doi() {
+            } else if let Some(doi) = &entry.doi {
                 let mut nc = ContainerInfo::new();
                 nc.location
                     .start_format(Formatting::Link(format!("https://doi.org/{}", doi)));
-                nc.location += &format!("doi:{}", doi);
+                write!(nc.location, "doi:{}", doi).unwrap();
                 nc.location.commit_formats();
                 containers.push(nc);
             } else if let Some(qurl) = entry.url_any() {

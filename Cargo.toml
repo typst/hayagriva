@@ -29,6 +29,7 @@ unic-langid = "0.9.0"
 unicode-segmentation = "1.6.0"
 url = "2.1.1"
 yaml-rust = "0.4.4"
+unscanny = "0.1.0"
 
 [[bin]]
 name = "hayagriva"
