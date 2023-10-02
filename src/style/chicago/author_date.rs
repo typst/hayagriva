@@ -168,7 +168,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 }
 
                 list.into()
-            } else if entry.title.is_some() {
+            } else if entry.title().is_some() {
                 get_chunk_title(entry, true, true, &self.config)
             } else if let Some(creator) =
                 web_creator(entry, false, self.config.et_al_limit)
@@ -178,7 +178,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 entry.entry_type,
                 Report | Patent | Legislation | Conference | Exhibition
             ) {
-                if let Some(org) = &entry.organization {
+                if let Some(org) = entry.organization() {
                     org.to_string().into()
                 } else {
                     DisplayString::new()

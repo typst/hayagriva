@@ -171,9 +171,9 @@ pub enum AuthorRole {
 pub(crate) fn get_creators(entry: &Entry) -> (Vec<Person>, AuthorRole) {
     let mut add = AuthorRole::Normal;
 
-    let authors = if let Some(authors) = &entry.authors {
+    let authors = if let Some(authors) = entry.authors() {
         authors.to_vec()
-    } else if let Some(eds) = &entry.editors {
+    } else if let Some(eds) = entry.editors() {
         add = AuthorRole::Editor;
         eds.to_vec()
     } else if entry.entry_type == Video {
@@ -294,7 +294,7 @@ fn get_title(
         if let Some(parent) = edited_book.or(chapter) {
             push_comma_quote_aware(&mut res.value, comma, true);
             if chapter.is_some() {
-                if let Some(sn) = &entry.serial_number {
+                if let Some(sn) = entry.serial_number() {
                     if sn.chars().all(char::is_numeric) {
                         write!(res, "chap. {} ", sn).unwrap();
                     } else {
@@ -329,7 +329,7 @@ fn get_title(
         let web_parent =
             select!((Web > ("p":*)) | ((Misc | Web) > ("p":Web))).bound(entry, "p");
 
-        if web_parent.and_then(|p| p.title.as_ref()).is_some() {
+        if web_parent.and_then(|p| p.title()).is_some() {
             push_comma_quote_aware(&mut res.value, comma, true);
             res += &get_chunk_title(web_parent.unwrap(), false, false, common).value;
         }
@@ -364,7 +364,7 @@ pub(super) fn get_chunk_title(
 ) -> DisplayString {
     let mut res = DisplayString::new();
 
-    if entry.title.as_ref().value() == Some("Wikipedia".to_string())
+    if entry.title().value() == Some("Wikipedia".to_string())
         || entry.entry_type == Repository
     {
         fmt = false;
@@ -380,14 +380,14 @@ pub(super) fn get_chunk_title(
     let np = entry.entry_type == Newspaper;
 
     if short {
-        if let Some(title) = entry.title.as_ref().map(shorthand) {
+        if let Some(title) = entry.title().map(shorthand) {
             res += &if entry.entry_type == Entry {
                 title.to_string()
             } else {
                 title.format_title_case(common.title_case)
             };
         }
-    } else if let Some(title) = &entry.title {
+    } else if let Some(title) = entry.title() {
         let tc = title.value.format_title_case(common.title_case);
         res += &if entry.entry_type == Entry {
             title.value.to_string()
@@ -463,9 +463,9 @@ fn web_creator(
 ) -> Option<String> {
     let web_thing = select!(Web | ((Misc | Web) > ("p": Web))).apply(entry);
     web_thing.map(|wt| {
-        if let Some(org) = &entry.organization {
+        if let Some(org) = entry.organization() {
             org.to_string()
-        } else if wt.get("p").and_then(|e| e.authors.as_ref()).is_some() {
+        } else if wt.get("p").and_then(|e| e.authors()).is_some() {
             let authors =
                 get_creators(wt.get("p").unwrap()).0.into_iter().enumerate().map(
                     |(i, p)| {
@@ -478,7 +478,7 @@ fn web_creator(
                 );
 
             and_list(authors, invert_first, et_al_limit)
-        } else if let Some(org) = wt.get("p").and_then(|e| e.organization.as_ref()) {
+        } else if let Some(org) = wt.get("p").and_then(|e| e.organization()) {
             org.to_string()
         } else {
             "".into()
@@ -526,7 +526,7 @@ fn get_info_element(
     )
     .matches(entry);
 
-    let prepend = if let Some(lang) = &entry.language {
+    let prepend = if let Some(lang) = entry.language() {
         let mut lingo = if capitals { "[In " } else { "[in " }.to_string();
         lingo += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
         if capitals {
@@ -563,7 +563,7 @@ fn get_info_element(
         (* > ("ed":(*["editor"])))
     )
     .bound(entry, "ed");
-    let eds = ed_match.map(|e| e.editors.as_ref().unwrap());
+    let eds = ed_match.map(|e| e.editors().unwrap());
 
     let translators = affs.and_then(|e| {
         let ts = e.affiliated_with_role(PersonRole::Translator);
@@ -584,7 +584,7 @@ fn get_info_element(
     });
 
     if let Some(trans) = translators {
-        if orig_entry.authors.is_some() || orig_entry.editors.is_some() {
+        if orig_entry.authors().is_some() || orig_entry.editors().is_some() {
             let trans_names = trans.into_iter().map(|p| p.given_first(false));
 
             let mut local =
@@ -604,7 +604,7 @@ fn get_info_element(
         )
         .bound(entry, "p");
 
-        if orig_entry.authors.is_some() && ed_match != edited_book {
+        if orig_entry.authors().is_some() && ed_match != edited_book {
             let ed_names = eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
             let mut local = if capitals && ed_match != Some(orig_entry) {
@@ -622,7 +622,7 @@ fn get_info_element(
     }
 
     if let Some(journal) = journal {
-        if let Some(volume) = entry.volume.clone() {
+        if let Some(volume) = entry.volume().cloned() {
             res.push(format_range("pt.", "pts.", volume).into());
         }
 
@@ -691,8 +691,8 @@ fn get_info_element(
     }
 
     if let Some(comp) = compilers {
-        if (orig_entry.authors.is_some() || orig_entry.entry_type == Reference)
-            || orig_entry.editors.is_some()
+        if (orig_entry.authors().is_some() || orig_entry.entry_type == Reference)
+            || orig_entry.editors().is_some()
         {
             let comp_names =
                 comp.into_iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
@@ -711,7 +711,7 @@ fn get_info_element(
         }
     }
 
-    if let Some(edition) = &entry.edition {
+    if let Some(edition) = entry.edition() {
         match edition {
             MaybeTyped::Typed(i) if i.single_number().map_or(false, |n| n <= 1) => {}
             MaybeTyped::Typed(i) => res.push(format!("{} ed.", get_ordinal(i)).into()),
@@ -734,7 +734,7 @@ fn get_info_element(
     }
 
     if journal.is_none() {
-        if let Some(vols) = orig_entry.volume.clone() {
+        if let Some(vols) = orig_entry.volume().cloned() {
             if series {
                 res.push(format_range("season", "seasons", vols).into())
             } else {
@@ -803,7 +803,7 @@ fn get_info_element(
             let par_anth = bindings.remove("p").unwrap();
             let mut title = get_chunk_title(par_anth, false, false, common).value.into();
 
-            let issue = par_anth.issue.as_ref().map(|issue| match issue {
+            let issue = par_anth.issue().map(|issue| match issue {
                 MaybeTyped::String(s) => (s.clone(), None),
                 MaybeTyped::Typed(i) => (
                     if series { format!("ep. {}", i) } else { format!("no. {}", i) },
@@ -851,14 +851,14 @@ fn get_info_element(
     }
 
     if entry.entry_type == Reference {
-        if let Some(sn) = entry.serial_number.clone() {
+        if let Some(sn) = entry.serial_number().cloned() {
             res.push(sn.into());
         }
     } else if entry.entry_type == Case || entry.entry_type == Legislation {
         if let Some(org) = entry
-            .serial_number
-            .clone()
-            .or_else(|| entry.organization.as_ref().value())
+            .serial_number()
+            .cloned()
+            .or_else(|| entry.organization().value())
         {
             res.push(org.into());
         }
@@ -904,7 +904,7 @@ fn entry_date(entry: &Entry, force_year: bool) -> String {
 
         format_date(date, mode)
     } else if force_year
-        || (matches!(&entry.entry_type, Book | Anthology)
+        || (matches!(entry.entry_type(), Book | Anthology)
             && entry.url_any().and_then(|url| url.visit_date.as_ref()).is_none())
     {
         "n.d.".to_string()

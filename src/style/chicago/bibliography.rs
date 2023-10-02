@@ -88,7 +88,7 @@ impl Bibliography {
                     Report | Patent | Legislation | Conference | Exhibition
                 )
             {
-                if let Some(org) = entry.organization.as_ref() {
+                if let Some(org) = entry.organization() {
                     write!(res, "{}", org).unwrap();
                 }
             }
@@ -107,13 +107,13 @@ impl Bibliography {
             if let Some(loc) = entry
                 .location
                 .as_ref()
-                .or_else(|| published_entry.and_then(|e| e.location.as_ref()))
+                .or_else(|| published_entry.and_then(|e| e.location()))
             {
                 if !res.is_empty() {
                     res += ", ";
                 }
                 write!(res, "{}", loc).unwrap();
-            } else if matches!(&entry.entry_type, Book | Anthology)
+            } else if matches!(entry.entry_type(), Book | Anthology)
                 && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
             {
                 if !res.is_empty() {
@@ -176,21 +176,21 @@ impl Bibliography {
         } else if let Some(publisher) = entry
             .publisher
             .as_ref()
-            .or_else(|| published_entry.map(|e| e.publisher.as_ref().unwrap()))
+            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
             .or_else(|| {
-                if matches!(&entry.entry_type, Report | Thesis)
-                    || (matches!(&entry.entry_type, Case | Legislation)
-                        && entry.serial_number.is_some())
+                if matches!(entry.entry_type(), Report | Thesis)
+                    || (matches!(entry.entry_type(), Case | Legislation)
+                        && entry.serial_number().is_some())
                 {
-                    entry.organization.as_ref()
+                    entry.organization()
                 } else {
                     None
                 }
             })
             .map(|p| p.to_string())
             .or_else(|| {
-                if entry.entry_type == Reference && entry.volume.is_none() {
-                    entry.authors.as_ref().map(|a| {
+                if entry.entry_type == Reference && entry.volume().is_none() {
+                    entry.authors().map(|a| {
                         and_list(
                             a.iter().map(|p| p.given_first(false)),
                             false,
@@ -229,16 +229,16 @@ impl Bibliography {
         if entry.entry_type == Artwork {
             let mut items: Vec<String> = vec![];
 
-            items.extend(entry.note.as_ref().value());
+            items.extend(entry.note().value());
 
             let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
                     .organization
                     .as_ref()
-                    .or(entry.publisher.as_ref())
-                    .or_else(|| parent.and_then(|p| p.organization.as_ref()))
-                    .or_else(|| parent.and_then(|p| p.publisher.as_ref()))
+                    .or(entry.publisher())
+                    .or_else(|| parent.and_then(|p| p.organization()))
+                    .or_else(|| parent.and_then(|p| p.publisher()))
                     .map(|p| p.to_string()),
             );
 
@@ -246,7 +246,7 @@ impl Bibliography {
                 entry
                     .location
                     .as_ref()
-                    .or_else(|| parent.and_then(|p| p.location.as_ref()))
+                    .or_else(|| parent.and_then(|p| p.location()))
                     .value()
                     .map(Into::into),
             );
@@ -278,8 +278,8 @@ impl Bibliography {
         entry = delegate_titled_entry(entry);
 
         let mut res: DisplayString = if entry.entry_type != Reference
-            || entry.publisher.is_some()
-            || entry.volume.is_some()
+            || entry.publisher().is_some()
+            || entry.volume().is_some()
         {
             self.get_author(entry).into()
         } else {
@@ -379,13 +379,13 @@ impl Bibliography {
             colon = true;
         }
 
-        if no_author && dictionary.is_some() && entry.authors.is_none() {
+        if no_author && dictionary.is_some() && entry.authors().is_none() {
             push_comma_quote_aware(&mut res.value, ',', true);
             res += "s.v. ";
             res += get_chunk_title(entry, false, true, &self.config);
         }
 
-        if let Some(pr) = entry.page_range.clone() {
+        if let Some(pr) = entry.page_range().cloned() {
             if !res.is_empty() {
                 if colon {
                     res.push(':');
@@ -399,7 +399,7 @@ impl Bibliography {
         }
 
         if journal {
-            if let Some(sn) = &entry.serial_number {
+            if let Some(sn) = entry.serial_number() {
                 if !sn.is_empty() {
                     push_comma_quote_aware(&mut res.value, ',', false);
                 }
@@ -412,7 +412,7 @@ impl Bibliography {
             }
         }
 
-        let url = if let Some(doi) = &entry.doi {
+        let url = if let Some(doi) = entry.doi() {
             let mut res = DisplayString::new();
             let link = format!("https://doi.org/{}", doi);
             res.start_format(Formatting::Link(link.clone()));
@@ -442,7 +442,7 @@ impl Bibliography {
             }
         } else if database.is_some() {
             let mut brack_content = get_chunk_title(entry, false, false, &self.config);
-            if let Some(sn) = &entry.serial_number {
+            if let Some(sn) = entry.serial_number() {
                 push_comma_quote_aware(&mut brack_content.value, ',', true);
                 write!(brack_content, "no. {}", sn).unwrap();
             }
@@ -475,12 +475,12 @@ impl Bibliography {
 
         let preprint = select!(Article > Repository).matches(entry);
         if no_url || entry.entry_type == Manuscript || preprint {
-            if let Some(archive) = &entry.archive {
+            if let Some(archive) = entry.archive() {
                 push_comma_quote_aware(&mut res.value, ',', true);
 
                 write!(res, ", {}", archive).unwrap();
 
-                if let Some(al) = &entry.archive_location {
+                if let Some(al) = entry.archive_location() {
                     write!(res, ", {}", al).unwrap();
                 }
             }

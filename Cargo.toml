@@ -26,6 +26,7 @@ unicode-segmentation = "1.6.0"
 url = "2.1.1"
 yaml-rust = "0.4.4"
 unscanny = "0.1.0"
+paste = "1.0.14"
 
 [[bin]]
 name = "hayagriva"

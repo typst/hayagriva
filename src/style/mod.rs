@@ -907,11 +907,11 @@ fn abbreviate_publisher(s: &str, up: bool) -> String {
 }
 
 fn delegate_titled_entry(mut entry: &Entry) -> &Entry {
-    let mut parent = entry.parents.first();
-    while select!(Chapter | Scene).matches(entry) && entry.title.is_none() {
+    let mut parent = entry.parents().first();
+    while select!(Chapter | Scene).matches(entry) && entry.title().is_none() {
         if let Some(p) = parent {
             entry = p;
-            parent = entry.parents.first();
+            parent = entry.parents().first();
         } else {
             break;
         }
@@ -972,12 +972,7 @@ fn sorted_bibliography(
 }
 
 fn author_title_ord(item: &Entry, other: &Entry) -> Ordering {
-    author_title_ord_custom(
-        item,
-        other,
-        item.authors.as_deref(),
-        other.authors.as_deref(),
-    )
+    author_title_ord_custom(item, other, item.authors(), other.authors())
 }
 
 fn author_title_ord_custom(
@@ -1060,7 +1055,7 @@ impl Alphanumerical {
 
         match creators.len() {
             0 => {
-                let pseudo_creator = if let Some(org) = &entry.organization {
+                let pseudo_creator = if let Some(org) = entry.organization() {
                     org.to_string()
                 } else if let Some(title) = &delegate_titled_entry(entry).title {
                     title.value.to_string()
@@ -1190,7 +1185,7 @@ impl AuthorTitle {
         let creators = chicago::get_creators(entry).0;
         match creators.len() {
             0 => {
-                if let Some(org) = &entry.organization {
+                if let Some(org) = entry.organization() {
                     org.to_string()
                 } else {
                     String::new()
@@ -1232,7 +1227,7 @@ impl<'a> CitationStyle<'a> for AuthorTitle {
                 res += title;
             }
 
-            if let Some(lang) = &entry.language {
+            if let Some(lang) = entry.language() {
                 push_comma_quote_aware(&mut res.value, ',', true);
                 res += "(";
                 res += Language::from_639_1(lang.language.as_str()).unwrap().to_name();

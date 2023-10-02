@@ -43,7 +43,7 @@ crazy-rich:
 
 // Parse a bibliography
 let bib = from_yaml_str(yaml).unwrap();
-assert_eq!(bib[0].date.unwrap().year, 2014);
+assert_eq!(bib[0].date().unwrap().year, 2014);
 
 // Format the reference
 let db = Database::from_entries(bib.iter());
@@ -137,26 +137,27 @@ pub mod types;
 
 pub use selectors::{Selector, SelectorError};
 
+use paste::paste;
 use thiserror::Error;
 use types::*;
 use unic_langid::LanguageIdentifier;
 use yaml_rust::{Yaml, YamlLoader};
 
 macro_rules! entry {
-    ($($(#[$docs:meta])+ $s:literal => $i:ident : $t:ty $(,)?),*) => {
+    ($($(#[$docs:meta])+ $s:literal => $i:ident : $t:ty $(| $d:ty)? $(,)?),*) => {
         /// A citable item in a bibliography.
         #[derive(Debug, Clone, PartialEq)]
         pub struct Entry {
             /// The key of the entry.
-            pub key: String,
+            key: String,
             /// The type of the item.
-            pub entry_type: EntryType,
+            entry_type: EntryType,
             /// Item in which the item was published / to which it is strongly
             /// associated to.
-            pub parents: Vec<Entry>,
+            parents: Vec<Entry>,
             $(
                 $(#[$docs])+
-                pub $i: Option<$t>,
+                $i: Option<$t>,
             )*
         }
 
@@ -182,6 +183,41 @@ macro_rules! entry {
                     _ => false,
                 }
             }
+        }
+
+        /// Getters.
+        impl Entry {
+            /// Get the key of the entry.
+            pub fn key(&self) -> &str {
+                &self.key
+            }
+
+            /// Get the type of the entry.
+            pub fn entry_type(&self) -> &EntryType {
+                &self.entry_type
+            }
+
+            /// Get the parents of the entry.
+            pub fn parents(&self) -> &[Entry] {
+                &self.parents
+            }
+
+            $(
+                entry!(get $(#[$docs])+ $s => $i : $t $(| $d)?);
+            )*
+        }
+
+        /// Setters.
+        impl Entry {
+            /// Set the parents of the entry.
+            pub fn set_parents(&mut self, parents: Vec<Entry>) {
+                self.parents = parents;
+            }
+
+
+            $(
+                entry!(set $s => $i : $t);
+            )*
         }
 
         impl HayagrivaValue for Entry {
@@ -255,19 +291,45 @@ macro_rules! entry {
             }
         }
     };
+
+    // Getter macro for deref types
+    (get $(#[$docs:meta])+ $s:literal => $i:ident : $t:ty | $d:ty $(,)?) => {
+            $(#[$docs])+
+            pub fn $i(&self) -> Option<&$d> {
+                self.$i.as_deref()
+            }
+    };
+
+    // Getter macro for regular types.
+    (get $(#[$docs:meta])+ $s:literal => $i:ident : $t:ty $(,)?) => {
+        $(#[$docs])+
+        pub fn $i(&self) -> Option<&$t> {
+            self.$i.as_ref()
+        }
+    };
+
+    // Setter for all types.
+    (set $s:literal => $i:ident : $t:ty $(,)?) => {
+        paste! {
+            #[doc = "Set the `" $s "` field."]
+            pub fn [<set_ $i>](&mut self, $i: $t) {
+                self.$i = Some($i);
+            }
+        }
+    };
 }
 
 entry! {
     /// Title of the item.
     "title" => title: FormatStr,
     /// Persons primarily responsible for creating the item.
-    "author" => authors: Vec<Person>,
+    "author" => authors: Vec<Person> | [Person],
     /// Date at which the item was published.
     "date" => date: Date,
     /// Persons responsible for selecting and revising the content of the item.
-    "editor" => editors: Vec<Person>,
+    "editor" => editors: Vec<Person> | [Person],
     /// Persons involved in the production of the item that are not authors or editors.
-    "affiliated" => affiliated: Vec<PersonsWithRoles>,
+    "affiliated" => affiliated: Vec<PersonsWithRoles> | [PersonsWithRoles],
     /// Publisher of the item.
     "publisher" => publisher: FormatStr,
     /// Physical location at which the item was published or created.
@@ -327,11 +389,6 @@ impl Entry {
             .filter_map(|(persons, r)| if r == role { Some(persons) } else { None })
             .flatten()
             .collect()
-    }
-
-    /// Get the key of the entry.
-    pub fn key(&self) -> &str {
-        &self.key
     }
 
     /// Get the unconverted value of a certain field from this entry or any of
@@ -503,7 +560,7 @@ pub enum LibraryError {
 ///     location: New York, NY, US
 /// "#;
 /// let bib = from_yaml_str(yaml).unwrap();
-/// assert_eq!(bib[0].date.unwrap().year, 2014);
+/// assert_eq!(bib[0].date().unwrap().year, 2014);
 /// ```
 pub fn from_yaml_str(s: &str) -> Result<Vec<Entry>, LibraryError> {
     let yaml = YamlLoader::load_from_str(s)?;

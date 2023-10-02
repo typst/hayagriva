@@ -177,7 +177,7 @@ impl Ieee {
 
         let authors = if let Some(names) = names {
             Some(names)
-        } else if let Some(authors) = entry.authors.as_ref().or(value.authors.as_ref()) {
+        } else if let Some(authors) = entry.authors().or(value.authors()) {
             let list = name_list_straight(authors);
             pers_refs.extend(authors.iter().cloned());
             Some(list)
@@ -197,7 +197,7 @@ impl Ieee {
                 AuthorRole::Director if count == 1 => format!("{}, Director", amps),
                 AuthorRole::Director => format!("{}, Directors", amps),
             }
-        } else if let Some(eds) = &entry.editors {
+        } else if let Some(eds) = entry.editors() {
             let res = if !eds.is_empty() {
                 format!(
                     "{}, {}",
@@ -230,7 +230,7 @@ impl Ieee {
         if entry != value {
             let canon_title = &value.title;
 
-            if let Some(title) = &entry.title {
+            if let Some(title) = entry.title() {
                 let sentence = title.value.format_sentence_case(self.sentence_case);
                 if value.entry_type == Conference {
                     res += &sentence;
@@ -258,9 +258,7 @@ impl Ieee {
                     res += "Presented at ";
                     res += &ct;
                 } else {
-                    if let Some(lang) =
-                        entry.language.as_ref().or(value.language.as_ref())
-                    {
+                    if let Some(lang) = entry.language().or(value.language()) {
                         res += "(in ";
                         res += Language::from_639_1(lang.language.as_str())
                             .unwrap()
@@ -289,7 +287,7 @@ impl Ieee {
                             .format_title_case(self.title_case);
 
                         res.add_if_some(
-                            parenth_anth.issue.as_ref().map(|i| i.to_string()),
+                            parenth_anth.issue().map(|i| i.to_string()),
                             Some(", no. "),
                             None,
                         );
@@ -318,10 +316,10 @@ impl Ieee {
             res.start_format(Formatting::Italic);
 
             if entry.entry_type == Legislation {
-                res.add_if_some(entry.serial_number.clone(), None, None);
+                res.add_if_some(entry.serial_number().cloned(), None, None);
             }
 
-            if let Some(title) = &entry.title {
+            if let Some(title) = entry.title() {
                 if !res.is_empty() {
                     res += ", ";
                 }
@@ -330,7 +328,7 @@ impl Ieee {
             }
 
             res.commit_formats();
-        } else if let Some(title) = &entry.title {
+        } else if let Some(title) = entry.title() {
             res += "“";
             res += &title.value.format_sentence_case(self.sentence_case);
             res += ",”";
@@ -365,7 +363,7 @@ impl Ieee {
                         res.push(al);
                     }
 
-                    if let Some(vols) = entry.volume.as_ref().or(value.volume.as_ref()) {
+                    if let Some(vols) = entry.volume().or(value.volume()) {
                         res.push(format_range("vol.", "vols.", vols.clone()));
                     }
 
@@ -392,15 +390,15 @@ impl Ieee {
                 }
 
                 if value.entry_type == Conference {
-                    if let Some(sn) = &entry.serial_number {
+                    if let Some(sn) = entry.serial_number() {
                         res.push(format!("Paper {}", sn));
                     }
                 } else {
-                    if let Some(pages) = entry.page_range.clone() {
+                    if let Some(pages) = entry.page_range().cloned() {
                         res.push(format_range("p.", "pp.", pages));
                     }
 
-                    if let Some(doi) = &entry.doi {
+                    if let Some(doi) = entry.doi() {
                         res.push(format!("doi: {}", doi));
                     }
                 }
@@ -421,9 +419,7 @@ impl Ieee {
                 }
 
                 if !has_url {
-                    if let Some(publisher) =
-                        value.organization.as_ref().or(value.publisher.as_ref())
-                    {
+                    if let Some(publisher) = value.organization().or(value.publisher()) {
                         res.push(publisher.to_string());
 
                         if let Some(loc) = &value.location {
@@ -435,7 +431,7 @@ impl Ieee {
                         res.push(date);
                     }
 
-                    if let Some(pages) = &entry.page_range {
+                    if let Some(pages) = entry.page_range() {
                         res.push(format_range("p.", "pp.", pages.clone()));
                     }
                 } else if let Some(date) = date {
@@ -445,15 +441,11 @@ impl Ieee {
             (_, Repository) => {
                 if let Some(sn) = &value.serial_number {
                     res.push(format!("(version {})", sn));
-                } else if let Some(date) =
-                    value.date.as_ref().or_else(|| entry.date_any())
-                {
+                } else if let Some(date) = value.date().or_else(|| entry.date_any()) {
                     res.push(format!("({})", date.year));
                 }
 
-                if let Some(publisher) =
-                    value.publisher.as_ref().or(value.organization.as_ref())
-                {
+                if let Some(publisher) = value.publisher().or(value.organization()) {
                     let mut publ = String::new();
                     if let Some(location) = &value.location {
                         write!(publ, "{}: ", location.value).unwrap();
@@ -462,9 +454,7 @@ impl Ieee {
 
                     write!(publ, "{}", publisher.value).unwrap();
 
-                    if let Some(lang) =
-                        entry.language.as_ref().or(value.language.as_ref())
-                    {
+                    if let Some(lang) = entry.language().or(value.language()) {
                         publ += " (in ";
                         publ += Language::from_639_1(lang.language.as_str())
                             .unwrap()
@@ -476,7 +466,7 @@ impl Ieee {
                 }
             }
             (_, Video) => {
-                if let Some(date) = value.date.as_ref().or_else(|| entry.date_any()) {
+                if let Some(date) = value.date().or_else(|| entry.date_any()) {
                     res.push(format!("({})", date.year));
                 }
             }
@@ -532,7 +522,7 @@ impl Ieee {
                     res.push(format!("no. {}", iss));
                 }
 
-                let pages = if let Some(pages) = entry.page_range.clone() {
+                let pages = if let Some(pages) = entry.page_range().cloned() {
                     res.push(format_range("p.", "pp.", pages));
                     true
                 } else {
@@ -544,19 +534,17 @@ impl Ieee {
                 }
 
                 if !pages {
-                    if let Some(sn) = &entry.serial_number {
+                    if let Some(sn) = entry.serial_number() {
                         res.push(format!("Art. no. {}", sn));
                     }
                 }
 
-                if let Some(doi) = &entry.doi {
+                if let Some(doi) = entry.doi() {
                     res.push(format!("doi: {}", doi));
                 }
             }
             (_, Report) => {
-                if let Some(publisher) =
-                    value.organization.as_ref().or(value.publisher.as_ref())
-                {
+                if let Some(publisher) = value.organization().or(value.publisher()) {
                     res.push(publisher.to_string());
 
                     if let Some(location) = &value.location {
@@ -576,7 +564,7 @@ impl Ieee {
                     }
                 }
 
-                if let Some(vols) = value.volume.as_ref().or(entry.volume.as_ref()) {
+                if let Some(vols) = value.volume().or(entry.volume()) {
                     res.push(format_range("vol.", "vols.", vols.clone()));
                 }
 
@@ -604,7 +592,7 @@ impl Ieee {
                     }
                 }
 
-                if let Some(sn) = &entry.serial_number {
+                if let Some(sn) = entry.serial_number() {
                     res.push(sn.into());
                 }
 
@@ -618,7 +606,7 @@ impl Ieee {
             }
             _ if preprint.is_some() => {
                 let parent = preprint.unwrap().remove("p").unwrap();
-                if let Some(serial) = &entry.serial_number {
+                if let Some(serial) = entry.serial_number() {
                     let mut sn = if let Some(url) = entry.url_any() {
                         let has_arxiv_serial = serial.to_lowercase().contains("arxiv");
 
@@ -643,7 +631,7 @@ impl Ieee {
                         serial.to_string()
                     };
 
-                    if let Some(al) = entry.archive.as_ref().or(parent.archive.as_ref()) {
+                    if let Some(al) = entry.archive().or(parent.archive()) {
                         write!(sn, " [{}]", al.value).unwrap();
                     }
 
@@ -655,9 +643,7 @@ impl Ieee {
                 }
             }
             (Web, _) | (Blog, _) => {
-                if let Some(publisher) =
-                    entry.publisher.as_ref().or(entry.organization.as_ref())
-                {
+                if let Some(publisher) = entry.publisher().or(entry.organization()) {
                     res.push(publisher.to_string());
                 }
             }
@@ -666,18 +652,18 @@ impl Ieee {
                 if let Some(publisher) = parent
                     .title
                     .as_ref()
-                    .or(parent.publisher.as_ref())
-                    .or(entry.publisher.as_ref())
-                    .or(parent.organization.as_ref())
-                    .or(entry.organization.as_ref())
+                    .or(parent.publisher())
+                    .or(entry.publisher())
+                    .or(parent.organization())
+                    .or(entry.organization())
                 {
                     res.push(publisher.to_string());
                 }
             }
             _ => {
                 if let (Some(_), Some(eds)) = (
-                    entry.authors.as_deref().unwrap_or_default().get(0),
-                    entry.editors.as_ref().or(value.editors.as_ref()),
+                    entry.authors().unwrap_or_default().get(0),
+                    entry.editors().or(value.editors()),
                 ) {
                     let mut al = self.and_list(name_list_straight(eds));
                     if eds.len() > 1 {
@@ -688,7 +674,7 @@ impl Ieee {
                     res.push(al);
                 }
 
-                if let Some(vols) = entry.volume.as_ref().or(value.volume.as_ref()) {
+                if let Some(vols) = entry.volume().or(value.volume()) {
                     res.push(format_range("vol.", "vols.", vols.clone()));
                 }
 
@@ -704,9 +690,7 @@ impl Ieee {
                     }
                 }
 
-                if let Some(publisher) =
-                    value.publisher.as_ref().or(value.organization.as_ref())
-                {
+                if let Some(publisher) = value.publisher().or(value.organization()) {
                     let mut publ = String::new();
                     if let Some(location) = &value.location {
                         write!(publ, "{}: ", location).unwrap();
@@ -714,9 +698,7 @@ impl Ieee {
 
                     write!(publ, "{}", publisher).unwrap();
 
-                    if let Some(lang) =
-                        entry.language.as_ref().or(value.language.as_ref())
-                    {
+                    if let Some(lang) = entry.language().or(value.language()) {
                         publ += " (in ";
                         publ += Language::from_639_1(lang.language.as_str())
                             .unwrap()
@@ -739,7 +721,7 @@ impl Ieee {
                     res.push(format!("sec. {}", section));
                 }
 
-                if let Some(pages) = &entry.page_range {
+                if let Some(pages) = entry.page_range() {
                     res.push(format_range("p.", "pp.", pages.clone()));
                 }
             }
@@ -753,22 +735,22 @@ impl Ieee {
         record: &Record<'a>,
     ) -> (DisplayReference<'a>, Vec<Person>) {
         let mut entry = record.entry;
-        let mut parent = entry.parents.first();
+        let mut parent = entry.parents().first();
         let mut sn_stack = vec![];
-        while entry.title.is_none() && select!(Chapter | Scene).matches(entry) {
-            if let Some(sn) = &entry.serial_number {
+        while entry.title().is_none() && select!(Chapter | Scene).matches(entry) {
+            if let Some(sn) = entry.serial_number() {
                 sn_stack.push(sn);
             }
             if let Some(p) = parent {
                 entry = p;
-                parent = entry.parents.first();
+                parent = entry.parents().first();
             } else {
                 break;
             }
         }
 
         if entry.entry_type == Chapter {
-            if let Some(sn) = &entry.serial_number {
+            if let Some(sn) = entry.serial_number() {
                 sn_stack.push(sn);
             }
         }
@@ -795,7 +777,7 @@ impl Ieee {
         let mut res = DisplayString::from_string(authors);
 
         if value.entry_type == Legislation {
-            if let Some(MaybeTyped::String(session)) = &entry.edition {
+            if let Some(MaybeTyped::String(session)) = entry.edition() {
                 if !res.is_empty() {
                     res += ". ";
                 }
@@ -893,7 +875,7 @@ impl Ieee {
             }
         }
 
-        if let Some(note) = &entry.note {
+        if let Some(note) = entry.note() {
             if !res.is_empty() {
                 res += " ";
             }
