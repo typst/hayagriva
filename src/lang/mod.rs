@@ -8,7 +8,7 @@ use std::fmt::Write;
 /// Rules for the title case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct TitleCaseConf {
+pub struct TitleCase {
     /// Always capitalize after a full stop, question or exclamation mark, and
     /// colon even if the punctuation is followed by a word on the
     /// capitalization blacklist.
@@ -33,7 +33,7 @@ pub struct TitleCaseConf {
     pub trim_end: bool,
 }
 
-impl Default for TitleCaseConf {
+impl Default for TitleCase {
     fn default() -> Self {
         Self {
             always_capitalize_after_punctuation: true,
@@ -48,7 +48,7 @@ impl Default for TitleCaseConf {
     }
 }
 
-impl TitleCaseConf {
+impl TitleCase {
     /// Construct TitleCaseProperties with the default values.
     pub fn new() -> Self {
         Default::default()
@@ -58,7 +58,7 @@ impl TitleCaseConf {
 /// Rules for the sentence case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct SentenceCaseConf {
+pub struct SentenceCase {
     /// Capitalize words that contain caps
     /// in a non-start position (e. g. `fahrCard`).
     pub capitalize_words_with_caps_inside: bool,
@@ -76,7 +76,7 @@ pub struct SentenceCaseConf {
     pub trim_end: bool,
 }
 
-impl Default for SentenceCaseConf {
+impl Default for SentenceCase {
     fn default() -> Self {
         Self {
             capitalize_words_with_caps_inside: true,
@@ -89,7 +89,7 @@ impl Default for SentenceCaseConf {
     }
 }
 
-impl SentenceCaseConf {
+impl SentenceCase {
     /// Construct a new `SentenceCase` with the default values.
     pub fn new() -> Self {
         Default::default()
@@ -100,9 +100,9 @@ impl SentenceCaseConf {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum Case {
     /// Capitalize all words except for some words using customary English rules.
-    Title(TitleCaseConf),
+    Title(TitleCase),
     /// Capitalize at the start of sentences as well as proper nouns.
-    Sentence(SentenceCaseConf),
+    Sentence(SentenceCase),
     /// CAPITALIZE EVERYTHING.
     Uppercase,
     /// lowercase everything.
@@ -116,14 +116,25 @@ pub enum Case {
     AllUpper,
 }
 
-impl From<TitleCaseConf> for Case {
-    fn from(props: TitleCaseConf) -> Self {
+impl Case {
+    /// Transform a string to a case.
+    ///
+    /// If you need a reconfigurable buffer, use [`CaseFolder`].
+    pub fn transform(self, s: &str) -> String {
+        let mut buf = CaseFolder::with_config(self);
+        buf.push_str(s);
+        buf.finish()
+    }
+}
+
+impl From<TitleCase> for Case {
+    fn from(props: TitleCase) -> Self {
         Self::Title(props)
     }
 }
 
-impl From<SentenceCaseConf> for Case {
-    fn from(props: SentenceCaseConf) -> Self {
+impl From<SentenceCase> for Case {
+    fn from(props: SentenceCase) -> Self {
         Self::Sentence(props)
     }
 }
@@ -331,14 +342,9 @@ impl CaseFolder {
         Self::default()
     }
 
-    /// Create a case folder from a case configuration.
-    pub fn from_config(case: Case) -> Self {
+    /// Create a case folder with a case configuration.
+    pub fn with_config(case: Case) -> Self {
         Self { case, ..Default::default() }
-    }
-
-    /// Transform a string to a case.
-    pub fn single(s: &str, case: Case) -> String {
-        Self::from_config(case).push_and_finish(s)
     }
 
     /// Add a string to the buffer.
@@ -364,12 +370,6 @@ impl CaseFolder {
         }
 
         self.pristine = false;
-    }
-
-    /// Add a string to the buffer and yield the end result.
-    pub fn push_and_finish(mut self, s: &str) -> String {
-        self.push_str(s);
-        self.finish()
     }
 
     /// Add a character to the buffer.
@@ -594,7 +594,7 @@ impl CaseFolder {
     }
 
     /// Change the configuration of the CaseFolder.
-    pub fn config(&mut self, case: Case) {
+    pub fn reconfigure(&mut self, case: Case) {
         if self.case == case {
             return;
         }
@@ -624,7 +624,7 @@ impl CaseFolder {
 
     /// Yield the buffer as a mutable string. Must call [`Self::mark_changed`]
     /// if the length of the string is changed.
-    pub fn as_str_mut(&mut self) -> &mut String {
+    pub(crate) fn as_string_mut(&mut self) -> &mut String {
         &mut self.buf
     }
 
@@ -699,7 +699,7 @@ fn capitalize_char(buf: &mut String, start: usize) {
 }
 
 /// Check if a character is a CJK character.
-pub fn is_cjk(c: char) -> bool {
+pub(crate) fn is_cjk(c: char) -> bool {
     let cp: u32 = c.into();
     (0x4E00..=0x9FFF).contains(&cp)
         || (0x3400..=0x4DBF).contains(&cp)
@@ -832,107 +832,99 @@ mod tests {
 
     #[test]
     fn title_case_last_word() {
-        let props = TitleCaseConf::new();
+        let case: Case = TitleCase::new().into();
 
-        let title = CaseFolder::single(
-            "a holistic investigation of me in general so ",
-            props.into(),
-        );
+        let title = case.transform("a holistic investigation of me in general so ");
         assert_eq!("A Holistic Investigation of Me in General So", title);
     }
 
     #[test]
     fn title_case_char_segmentation() {
-        let props = TitleCaseConf::new();
-        let title = CaseFolder::single("She AiN’T Be Getting on my Nerves", props.into());
+        let case: Case = TitleCase::new().into();
+        let title = case.transform("She AiN’T Be Getting on my Nerves");
         assert_eq!("She Ain’t Be Getting on My Nerves", title);
 
-        let title = CaseFolder::single(
-            "We don’t bank on the Pope’s decisions being sensible",
-            props.into(),
-        );
+        let title =
+            case.transform("We don’t bank on the Pope’s decisions being sensible");
         assert_eq!("We Don’t Bank on the Pope’s Decisions Being Sensible", title);
     }
 
     #[test]
     fn title_case_edge_cases() {
-        let mut props = TitleCaseConf::new();
+        let mut props = TitleCase::new();
         props.trim_start = false;
         props.trim_end = false;
+        let case: Case = props.into();
 
-        let title = CaseFolder::single("          crap.   oh  ", props.into());
+        let title = case.transform("          crap.   oh  ");
         assert_eq!("          Crap.   Oh  ", title);
 
-        let title = CaseFolder::single("", props.into());
+        let title = case.transform("");
         assert_eq!("", title);
     }
 
     #[test]
     fn title_case_punctuation() {
-        let props = TitleCaseConf::new();
+        let case: Case = TitleCase::new().into();
 
-        let title = CaseFolder::single(
-            "Around a table: the reason why we just could not care",
-            props.into(),
-        );
+        let title =
+            case.transform("Around a table: the reason why we just could not care");
         assert_eq!("Around a Table: The Reason Why We Just Could Not Care", title);
     }
 
     #[test]
     fn title_case_word_length() {
-        let mut props = TitleCaseConf::new();
+        let mut props = TitleCase::new();
         props.always_capitalize_min_len = Some(4);
         props.keep_all_uppercase_words = false;
+        let case: Case = props.into();
 
-        let title = CaseFolder::single("sToNES iNSidE OF CaVES", props.into());
+        let title = case.transform("sToNES iNSidE OF CaVES");
         assert_eq!("Stones Inside of Caves", title);
     }
 
     #[test]
     fn title_case_name_detecion() {
-        let mut props = TitleCaseConf::new();
+        let mut props = TitleCase::new();
+        let case: Case = props.into();
 
-        let title =
-            CaseFolder::single("Exploring NASA's new moon strategy", props.into());
+        let title = case.transform("Exploring NASA's new moon strategy");
         assert_eq!("Exploring NASA's New Moon Strategy", title);
 
         props.keep_all_uppercase_words = false;
+        let case: Case = props.into();
 
-        let title = CaseFolder::single("P-HACKING IN SCIENCE: AN OBITUARY", props.into());
+        let title = case.transform("P-HACKING IN SCIENCE: AN OBITUARY");
         assert_eq!("P-Hacking in Science: An Obituary", title);
     }
 
     #[test]
     fn title_case_full_stop_handling() {
-        let mut props = TitleCaseConf::new();
+        let mut props = TitleCase::new();
         props.always_capitalize_min_len = Some(4);
+        let case: Case = props.into();
 
-        let title = CaseFolder::single(
-            "Facebook.com and aHo are corporate behemoths",
-            props.into(),
-        );
+        let title = case.transform("Facebook.com and aHo are corporate behemoths");
         assert_eq!("Facebook.com and Aho Are Corporate Behemoths", title);
 
-        let title = CaseFolder::single("Still. coming into focus.", props.into());
+        let title = case.transform("Still. coming into focus.");
         assert_eq!("Still. Coming Into Focus.", title);
     }
 
     #[test]
     fn title_case_hyphens() {
-        let props = TitleCaseConf::new();
+        let case: Case = TitleCase::new().into();
 
-        let title = CaseFolder::single(
-            "Comparative study of Self-reporting students' performance",
-            props.into(),
-        );
+        let title =
+            case.transform("Comparative study of Self-reporting students' performance");
         assert_eq!("Comparative Study of Self-Reporting Students' Performance", title);
     }
 
     #[test]
     fn sentence_case() {
-        let props = SentenceCaseConf::new();
+        let case: Case = SentenceCase::new().into();
 
-        let title = CaseFolder::single("This page is not for Discussions. Please Use the Table below to Find the Most Appropriate Section to Post.", props.into());
+        let title = case.transform("This page is not for Discussions. Please Use the Table below to Find the Most Appropriate Section to Post.");
         assert_eq!(
             "This page is not for discussions. Please use the table below to find the most appropriate section to post.",
             title
@@ -941,38 +933,36 @@ mod tests {
 
     #[test]
     fn sentence_case_char_segmentation() {
-        let props = SentenceCaseConf::new();
+        let case: Case = SentenceCase::new().into();
 
-        let title = CaseFolder::single("She AINT Be Getting on my Nerves", props.into());
+        let title = case.transform("She AINT Be Getting on my Nerves");
         assert_eq!("She AINT be getting on my nerves", title);
 
-        let title = CaseFolder::single(
-            "We don’t bank on the Pope’s decisions being sensible",
-            props.into(),
-        );
+        let title =
+            case.transform("We don’t bank on the Pope’s decisions being sensible");
         assert_eq!("We don’t bank on the pope’s decisions being sensible", title);
     }
 
     #[test]
     fn sentence_case_edge_cases() {
-        let mut props = SentenceCaseConf::new();
+        let mut props = SentenceCase::new();
         props.trim_start = false;
         props.trim_end = false;
+        let case: Case = props.into();
 
-        let title = CaseFolder::single("          crap.   oh  ", props.into());
+        let title = case.transform("          crap.   oh  ");
         assert_eq!("          Crap.   Oh  ", title);
 
-        let title = CaseFolder::single("", props.into());
+        let title = case.transform("");
         assert_eq!("", title);
     }
 
     #[test]
     fn sentence_case_dictionary() {
-        let props = SentenceCaseConf::new();
+        let case: Case = SentenceCase::new().into();
 
-        let title = CaseFolder::single(
+        let title = case.transform(
             "if i must distance myself from the euroPe-centric mindset for a moment",
-            props.into(),
         );
         assert_eq!(
             "If I must distance myself from the Europe-centric mindset for a moment",
@@ -982,11 +972,10 @@ mod tests {
 
     #[test]
     fn sentence_case_no_transform() {
-        let props = SentenceCaseConf::new();
+        let case: Case = SentenceCase::new().into();
 
-        let title = CaseFolder::single(
+        let title = case.transform(
             "As seen in Figure 4.A, we achieved a significant performance increase",
-            props.into(),
         );
         assert_eq!(
             "As seen in figure 4.A, we achieved a significant performance increase",
@@ -996,36 +985,32 @@ mod tests {
 
     #[test]
     fn sentence_case_name_detection() {
-        let props = SentenceCaseConf::new();
+        let case: Case = SentenceCase::new().into();
 
-        let title = CaseFolder::single(
+        let title = case.transform(
             "We want to present GRAL, a localization algorithm for Wireless Sensor Networks",
-            props.into(),
         );
         assert_eq!(
             "We want to present GRAL, a localization algorithm for wireless sensor networks",
             title
         );
 
-        let title = CaseFolder::single(
-            "Ubiquity airMAX is the next generation of networking hardware",
-            props.into(),
-        );
+        let title = case
+            .transform("Ubiquity airMAX is the next generation of networking hardware");
         assert_eq!(
             "Ubiquity Airmax is the next generation of networking hardware",
             title
         );
 
-        let props = SentenceCaseConf {
+        let case: Case = SentenceCase {
             keep_all_uppercase_words: false,
             capitalize_words_with_caps_inside: false,
             ..Default::default()
-        };
+        }
+        .into();
 
-        let title = CaseFolder::single(
-            "SOME PEOPLE CAN NEVER STOP TO SCREAM. IT IS DRIVING ME CRAZY!",
-            props.into(),
-        );
+        let title = case
+            .transform("SOME PEOPLE CAN NEVER STOP TO SCREAM. IT IS DRIVING ME CRAZY!");
         assert_eq!(
             "Some people can never stop to scream. It is driving me crazy!",
             title

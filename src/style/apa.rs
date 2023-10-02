@@ -4,7 +4,7 @@ use super::{
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::en::{get_month_name, get_ordinal};
-use crate::lang::SentenceCaseConf;
+use crate::lang::SentenceCase;
 use crate::types::{EntryType::*, MaybeTyped, Person, PersonRole};
 use crate::Entry;
 use std::fmt::Write;
@@ -32,7 +32,7 @@ use std::fmt::Write;
 #[non_exhaustive]
 pub struct Apa {
     /// The configuration for sentence case formatting.
-    pub sentence_case: SentenceCaseConf,
+    pub sentence_case: SentenceCase,
 }
 
 #[derive(Clone, Debug)]

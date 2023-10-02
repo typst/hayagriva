@@ -7,7 +7,7 @@ use thiserror::Error;
 use unscanny::Scanner;
 use yaml_rust::Yaml;
 
-use crate::lang::{Case, CaseFolder, SentenceCaseConf, TitleCaseConf};
+use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
 
 use super::{DeserializationError, HayagrivaValue, ParseContext, YamlDictExt, YamlExt};
 
@@ -30,17 +30,14 @@ impl FormatStr {
 
     /// Creates a new `FormatStr` for the value string.
     pub fn with_value(value: impl Into<String>) -> Self {
-        Self {
-            value: ChunkedStr::from_normal_str(value, StrChunkKind::Normal),
-            short: None,
-        }
+        Self { value: StrChunk::normal(value).into(), short: None }
     }
 
     /// Creates a new `FormatStr` from a long and a short string.
     pub fn with_short(value: impl Into<String>, short: impl Into<String>) -> Self {
         Self {
-            value: ChunkedStr::from_normal_str(value, StrChunkKind::Normal),
-            short: Some(ChunkedStr::from_normal_str(short, StrChunkKind::Normal)),
+            value: StrChunk::normal(value).into(),
+            short: Some(StrChunk::normal(short).into()),
         }
     }
 
@@ -58,12 +55,12 @@ impl FormatStr {
     }
 
     /// Format this formattable string in title case.
-    pub fn format_title_case(&self, props: TitleCaseConf) -> String {
+    pub fn format_title_case(&self, props: TitleCase) -> String {
         self.value.format_title_case(props)
     }
 
     /// Format this formattable string in sentence case.
-    pub fn format_sentence_case(&self, props: SentenceCaseConf) -> String {
+    pub fn format_sentence_case(&self, props: SentenceCase) -> String {
         self.value.format_sentence_case(props)
     }
 }
@@ -139,13 +136,9 @@ impl ChunkedStr {
         Self::default()
     }
 
-    /// Creates a new `ChunkedStr` from a string and a kind.
-    pub fn from_normal_str(s: impl Into<String>, kind: StrChunkKind) -> Self {
-        Self(vec![StrChunk::new(s, kind)])
-    }
-
-    /// Appends a string to the last chunk if it has the same kind.
-    pub fn push_str(&mut self, s: &str, kind: StrChunkKind) {
+    /// Appends a string to the last chunk if it has the same kind or starts a
+    /// new chunk if the types differ.
+    pub fn push_str(&mut self, s: &str, kind: ChunkKind) {
         match self.0.last_mut() {
             Some(StrChunk { value, kind: target_kind }) if target_kind == &kind => {
                 value.push_str(s);
@@ -156,8 +149,9 @@ impl ChunkedStr {
         }
     }
 
-    /// Appends a character to the last chunk if it has the same kind.
-    pub fn push_char(&mut self, c: char, kind: StrChunkKind) {
+    /// Appends a character to the last chunk if it has the same kind or starts
+    /// a new chunk if the types differ.
+    pub fn push_char(&mut self, c: char, kind: ChunkKind) {
         match self.0.last_mut() {
             Some(StrChunk { value, kind: target_kind }) if target_kind == &kind => {
                 value.push(c);
@@ -169,13 +163,13 @@ impl ChunkedStr {
     }
 
     /// Appends a chunk to the end of the string.
-    pub fn push(&mut self, chunk: StrChunk) {
+    pub fn push_chunk(&mut self, chunk: StrChunk) {
         self.0.push(chunk);
     }
 
     /// Returns the string as a `Cow`. It will be borrowed if there is only one
     /// chunk.
-    pub fn as_cow(&self) -> Cow<'_, str> {
+    pub fn to_str(&self) -> Cow<'_, str> {
         if self.0.is_empty() {
             Cow::Borrowed("")
         } else if self.0.len() == 1 {
@@ -186,9 +180,9 @@ impl ChunkedStr {
     }
 
     /// Write the chunked string as a parenthesized string.
-    pub fn fmt_parenthesized(&self, buf: &mut impl fmt::Write) -> fmt::Result {
+    pub fn fmt_serialized(&self, buf: &mut impl fmt::Write) -> fmt::Result {
         for chunk in &self.0 {
-            chunk.fmt_parenthesized(buf)?;
+            chunk.fmt_serialized(buf)?;
         }
 
         Ok(())
@@ -210,29 +204,29 @@ impl ChunkedStr {
     }
 
     /// Format this formattable string in title case.
-    pub fn format_title_case(&self, props: TitleCaseConf) -> String {
-        let mut c = CaseFolder::from_config(props.into());
+    pub fn format_title_case(&self, props: TitleCase) -> String {
+        let mut c = CaseFolder::with_config(props.into());
         self.fold_case(&mut c);
         c.finish()
     }
 
     /// Format this formattable string in sentence case.
-    pub fn format_sentence_case(&self, props: SentenceCaseConf) -> String {
-        let mut c = CaseFolder::from_config(props.into());
+    pub fn format_sentence_case(&self, props: SentenceCase) -> String {
+        let mut c = CaseFolder::with_config(props.into());
         self.fold_case(&mut c);
         c.finish()
     }
 
     /// Lowercase the string.
     pub fn to_lowercase(&self) -> String {
-        let mut c = CaseFolder::from_config(Case::Lowercase);
+        let mut c = CaseFolder::with_config(Case::Lowercase);
         self.fold_case(&mut c);
         c.finish()
     }
 
     /// Uppercase the string.
     pub fn to_uppercase(&self) -> String {
-        let mut c = CaseFolder::from_config(Case::Uppercase);
+        let mut c = CaseFolder::with_config(Case::Uppercase);
         self.fold_case(&mut c);
         c.finish()
     }
@@ -242,10 +236,8 @@ impl ChunkedStr {
         let config = c.case();
         for chunk in &self.0 {
             match chunk.kind {
-                StrChunkKind::Normal => c.config(config),
-                StrChunkKind::Verbatim | StrChunkKind::Math => {
-                    c.config(Case::NoTransform)
-                }
+                ChunkKind::Normal => c.reconfigure(config),
+                ChunkKind::Verbatim | ChunkKind::Math => c.reconfigure(Case::NoTransform),
             };
 
             c.push_str(&chunk.value);
@@ -271,40 +263,36 @@ impl FromStr for ChunkedStr {
     fn from_str(s: &str) -> Result<Self, ChunkedStrParseError> {
         let mut s = Scanner::new(s);
         let mut chunks = Self::new();
-        let mut kind = StrChunkKind::Normal;
+        let mut kind = ChunkKind::Normal;
         let mut depth = 0;
 
-        while !s.done() {
-            let c = s.eat().unwrap();
-            if c == '\\' && s.peek().filter(|c| is_chunk_control(*c)).is_some() {
+        while let Some(c) = s.eat() {
+            if c == '\\' && s.peek().is_some_and(is_chunk_control) {
                 chunks.push_char(s.eat().unwrap(), kind);
                 break;
             }
 
             match c {
-                '{' if kind != StrChunkKind::Math => {
+                '{' if kind != ChunkKind::Math => {
                     depth += 1;
-                    kind = StrChunkKind::Verbatim;
+                    kind = ChunkKind::Verbatim;
                 }
-                '}' if kind != StrChunkKind::Math => {
+                '}' if kind != ChunkKind::Math => {
                     if depth == 0 {
                         return Err(ChunkedStrParseError(s.cursor().saturating_sub(1)));
                     }
 
                     depth -= 1;
                     if depth == 0 {
-                        kind = StrChunkKind::Normal;
+                        kind = ChunkKind::Normal;
                     }
                 }
-                '$' if kind == StrChunkKind::Math => {
-                    kind = if depth > 0 {
-                        StrChunkKind::Verbatim
-                    } else {
-                        StrChunkKind::Normal
-                    };
+                '$' if kind == ChunkKind::Math => {
+                    kind =
+                        if depth > 0 { ChunkKind::Verbatim } else { ChunkKind::Normal };
                 }
                 '$' => {
-                    kind = StrChunkKind::Math;
+                    kind = ChunkKind::Math;
                 }
                 _ => chunks.push_char(c, kind),
             }
@@ -316,23 +304,19 @@ impl FromStr for ChunkedStr {
 
 impl From<String> for ChunkedStr {
     fn from(s: String) -> Self {
-        Self::from_normal_str(s, StrChunkKind::Normal)
+        StrChunk::normal(s).into()
     }
 }
 
 impl fmt::Write for ChunkedStr {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        match self.0.last_mut() {
-            Some(StrChunk { value, kind: StrChunkKind::Normal }) => {
-                value.write_str(s)?;
-                Ok(())
-            }
-            _ => {
-                self.0
-                    .push(StrChunk { value: s.to_owned(), kind: StrChunkKind::Normal });
-                Ok(())
-            }
-        }
+        self.push_str(s, ChunkKind::default());
+        Ok(())
+    }
+
+    fn write_char(&mut self, c: char) -> fmt::Result {
+        self.push_char(c, ChunkKind::default());
+        Ok(())
     }
 }
 
@@ -380,7 +364,7 @@ impl HayagrivaValue for ChunkedStr {
 
                 Ok(StrChunk::new(
                     value,
-                    if verbatim { StrChunkKind::Verbatim } else { StrChunkKind::Normal },
+                    if verbatim { ChunkKind::Verbatim } else { ChunkKind::Normal },
                 )
                 .into())
             }
@@ -390,7 +374,7 @@ impl HayagrivaValue for ChunkedStr {
 
     fn to_yaml(&self) -> yaml_rust::Yaml {
         let mut buf = String::with_capacity(self.len());
-        self.fmt_parenthesized(&mut buf).unwrap();
+        self.fmt_serialized(&mut buf).unwrap();
         Yaml::String(buf)
     }
 
@@ -405,28 +389,28 @@ pub struct StrChunk {
     /// The string value.
     pub value: String,
     /// Whether the chunk is subject to case folding or contains math.
-    pub kind: StrChunkKind,
+    pub kind: ChunkKind,
 }
 
 impl StrChunk {
     /// Creates a new `StrChunk` from a string and a kind.
-    pub fn new(value: impl Into<String>, kind: StrChunkKind) -> Self {
+    pub fn new(value: impl Into<String>, kind: ChunkKind) -> Self {
         Self { value: value.into(), kind }
     }
 
-    /// Creates a new `StrChunk` with the `StrChunkKind::Verbatim` kind.
-    pub fn new_verbatim(value: impl Into<String>) -> Self {
-        Self::new(value, StrChunkKind::Verbatim)
+    /// Creates a new `StrChunk` with the `ChunkKind::Normal` kind.
+    pub fn normal(value: impl Into<String>) -> Self {
+        Self::new(value, ChunkKind::Normal)
     }
 
-    /// Creates a new `StrChunk` with the `StrChunkKind::Math` kind.
-    pub fn new_math(value: impl Into<String>) -> Self {
-        Self::new(value, StrChunkKind::Math)
+    /// Creates a new `StrChunk` with the `ChunkKind::Verbatim` kind.
+    pub fn verbatim(value: impl Into<String>) -> Self {
+        Self::new(value, ChunkKind::Verbatim)
     }
 
-    /// Creates a new `StrChunk` with the `StrChunkKind::Normal` kind.
-    pub fn new_normal(value: impl Into<String>) -> Self {
-        Self::new(value, StrChunkKind::Normal)
+    /// Creates a new `StrChunk` with the `ChunkKind::Math` kind.
+    pub fn math(value: impl Into<String>) -> Self {
+        Self::new(value, ChunkKind::Math)
     }
 
     /// Returns the string value.
@@ -454,7 +438,7 @@ impl fmt::Write for StrChunk {
 
 impl fmt::Display for StrChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.kind == StrChunkKind::Math {
+        if self.kind == ChunkKind::Math {
             write!(f, "${}$", self.value)
         } else {
             write!(f, "{}", self.value)
@@ -464,15 +448,15 @@ impl fmt::Display for StrChunk {
 
 impl StrChunk {
     /// Writes the chunk as a parenthesized string.
-    fn fmt_parenthesized(&self, buf: &mut impl fmt::Write) -> fmt::Result {
+    fn fmt_serialized(&self, buf: &mut impl fmt::Write) -> fmt::Result {
         match self.kind {
-            StrChunkKind::Normal => {
+            ChunkKind::Normal => {
                 write!(buf, "{}", self.value)?;
             }
-            StrChunkKind::Verbatim => {
+            ChunkKind::Verbatim => {
                 write!(buf, "{{{}}}", self.value)?;
             }
-            StrChunkKind::Math => {
+            ChunkKind::Math => {
                 write!(buf, "${}$", self.value)?;
             }
         }
@@ -482,13 +466,14 @@ impl StrChunk {
 }
 
 /// The kind of a string chunk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StrChunkKind {
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChunkKind {
     /// Case-folding will be applied.
+    #[default]
     Normal,
     /// Case-folding will not be applied.
     Verbatim,
-    /// The containing markup is expected to be evaluated using
+    /// The contained markup is expected to be evaluated using
     /// [Typst](https://typst.app/).
     Math,
 }

@@ -10,7 +10,7 @@ use super::{
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
-use crate::lang::{en, SentenceCaseConf, TitleCaseConf};
+use crate::lang::{en, SentenceCase, TitleCase};
 use crate::types::{Date, EntryType::*, MaybeTyped, Person, PersonRole};
 use crate::Entry;
 
@@ -40,9 +40,9 @@ use crate::Entry;
 #[non_exhaustive]
 pub struct Ieee {
     /// The sentence case configuration. Used for paper titles etc.
-    pub sentence_case: SentenceCaseConf,
+    pub sentence_case: SentenceCase,
     /// The title case configuration. Used for journal titles etc.
-    pub title_case: TitleCaseConf,
+    pub title_case: TitleCase,
     /// How many authors have to be there for their list to be abbreviated with
     /// "et al."
     pub et_al_threshold: Option<u32>,
@@ -66,12 +66,12 @@ fn get_value_parent(entry: &Entry) -> Option<&Entry> {
 
 impl Default for Ieee {
     fn default() -> Self {
-        let title_case = TitleCaseConf {
+        let title_case = TitleCase {
             always_capitalize_min_len: Some(4),
-            ..TitleCaseConf::default()
+            ..TitleCase::default()
         };
         Self {
-            sentence_case: SentenceCaseConf::default(),
+            sentence_case: SentenceCase::default(),
             title_case,
             et_al_threshold: Some(6),
             abbreviate_journals: true,

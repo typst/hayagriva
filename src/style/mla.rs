@@ -7,7 +7,7 @@ use super::{
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
-use crate::lang::{en, TitleCaseConf};
+use crate::lang::{en, TitleCase};
 use crate::types::{Date, EntryType::*, MaybeTyped, Person, PersonRole};
 use crate::Entry;
 
@@ -39,7 +39,7 @@ pub struct Mla {
     /// only the most top-level date field will be printed.
     pub always_print_date: bool,
     /// Title case configuration.
-    pub title_case: TitleCaseConf,
+    pub title_case: TitleCase,
 }
 
 impl Default for Mla {
@@ -197,7 +197,7 @@ fn is_religious(s: &str) -> bool {
 impl Mla {
     /// Create a new MLA Bibliography Generator with default values.
     pub fn new() -> Self {
-        let mut title_case = TitleCaseConf::new();
+        let mut title_case = TitleCase::new();
         title_case.always_capitalize_last_word = false;
 
         Self {

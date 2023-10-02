@@ -84,9 +84,9 @@ impl From<&[Spanned<Chunk>]> for ChunkedStr {
         let mut res = Self::new();
         for chunk in chunks {
             match &chunk.v {
-                Chunk::Normal(s) => res.push_str(s, StrChunkKind::Normal),
-                Chunk::Verbatim(s) => res.push_str(s, StrChunkKind::Verbatim),
-                Chunk::Math(s) => res.push_str(s, StrChunkKind::Math),
+                Chunk::Normal(s) => res.push_str(s, ChunkKind::Normal),
+                Chunk::Verbatim(s) => res.push_str(s, ChunkKind::Verbatim),
+                Chunk::Math(s) => res.push_str(s, ChunkKind::Math),
             }
         }
         res
@@ -470,9 +470,8 @@ impl TryFrom<&tex::Entry> for Entry {
             })
             .and_then(|p| p.get(0).cloned())
         {
-            item.page_range = Some(
-                Numeric::from_range((pages.start as i32)..(pages.end as i32)),
-            );
+            item.page_range =
+                Some(Numeric::from_range((pages.start as i32)..(pages.end as i32)));
         }
 
         if let Some(ptotal) =
@@ -528,7 +527,7 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatStr {
     let mut value = ChunkedStr::new();
     for (i, entity) in items.iter().enumerate() {
         if i != 0 {
-            value.push_str(", ", StrChunkKind::Normal);
+            value.push_str(", ", ChunkKind::Normal);
         }
 
         let chunked = ChunkedStr::from(entity.as_slice());

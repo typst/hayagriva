@@ -13,7 +13,7 @@ use super::{
     format_range, omit_initial_articles, push_comma_quote_aware, DisplayString,
     FmtOptionExt, Formatting,
 };
-use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCaseConf, TitleCaseConf};
+use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
 use crate::types::{
     ChunkedStr, Date, EntryType::*, FormatStr, MaybeTyped, Numeric, Person, PersonRole,
 };
@@ -126,9 +126,9 @@ pub struct ChicagoConfig {
     /// When to print URL access dates.
     pub url_access_date: ChicagoAccessDateVisibility,
     /// The title case configuration.
-    pub title_case: TitleCaseConf,
+    pub title_case: TitleCase,
     /// The sentence case configuration.
-    pub sentence_case: SentenceCaseConf,
+    pub sentence_case: SentenceCase,
 }
 
 impl Default for ChicagoConfig {
@@ -136,8 +136,8 @@ impl Default for ChicagoConfig {
         Self {
             et_al_limit: Some(4),
             url_access_date: ChicagoAccessDateVisibility::default(),
-            title_case: TitleCaseConf::new(),
-            sentence_case: SentenceCaseConf::new(),
+            title_case: TitleCase::new(),
+            sentence_case: SentenceCase::new(),
         }
     }
 }

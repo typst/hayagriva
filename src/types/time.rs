@@ -351,6 +351,15 @@ impl Duration {
 
         Ok(Duration { days, hours, minutes, seconds, milliseconds })
     }
+
+    /// Get the duration in milliseconds.
+    fn milliseconds(self) -> u64 {
+        self.milliseconds as u64
+            + self.seconds as u64 * 1000
+            + self.minutes as u64 * 60 * 1000
+            + self.hours as u64 * 60 * 60 * 1000
+            + self.days as u64 * 24 * 60 * 60 * 1000
+    }
 }
 
 impl PartialOrd for Duration {
@@ -361,11 +370,7 @@ impl PartialOrd for Duration {
 
 impl Ord for Duration {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.hours
-            .cmp(&other.hours)
-            .then(self.minutes.cmp(&other.minutes))
-            .then(self.seconds.cmp(&other.seconds))
-            .then(self.milliseconds.cmp(&other.milliseconds))
+        self.milliseconds().cmp(&other.milliseconds())
     }
 }
 
