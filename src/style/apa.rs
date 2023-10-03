@@ -5,7 +5,7 @@ use super::{
 };
 use crate::lang::en::{get_month_name, get_ordinal};
 use crate::lang::SentenceCase;
-use crate::types::{EntryType::*, MaybeTyped, Person, PersonRole};
+use crate::types::{EntryType::*, MaybeTyped, Person, PersonRole, PersonsWithRoles};
 use crate::Entry;
 use std::fmt::Write;
 
@@ -265,12 +265,12 @@ impl Apa {
 
         let mut al = if let Some(mut authors) = authors.clone() {
             let count = authors.len();
-            if entry.entry_type == Tweet {
+            if entry.entry_type == Post {
                 authors = authors
                     .into_iter()
                     .enumerate()
                     .map(|(i, n)| {
-                        if let Some(handle) = entry.twitter_handle(i) {
+                        if let Some(handle) = entry.social_handle(i) {
                             format!("{} [{}]", n, handle)
                         } else {
                             n
@@ -314,7 +314,7 @@ impl Apa {
                 .affiliated()
                 .unwrap_or_default()
                 .iter()
-                .filter(|(_, role)| {
+                .filter(|PersonsWithRoles { role, .. }| {
                     [
                         PersonRole::Foreword,
                         PersonRole::Afterword,
@@ -324,7 +324,7 @@ impl Apa {
                     ]
                     .contains(role)
                 })
-                .flat_map(|(v, _)| v)
+                .flat_map(|PersonsWithRoles { names, .. }| names)
                 .cloned()
                 .collect::<Vec<Person>>();
 
@@ -484,7 +484,7 @@ impl Apa {
             if italicise {
                 res.start_format(Formatting::Italic);
             }
-            if entry.entry_type == Tweet {
+            if entry.entry_type == Post {
                 let title = title.to_string();
                 let words = &title.split_whitespace().collect::<Vec<_>>();
                 res += &words[..(if words.len() >= 20 { 20 } else { words.len() })]
@@ -571,7 +571,7 @@ impl Apa {
             TvShow,
             TvEpisode,
             Film,
-            Tweet,
+            Post,
         }
 
         let conf_spec = select!(Article > Proceedings);
@@ -602,8 +602,8 @@ impl Apa {
                 .affiliated()
                 .unwrap_or_default()
                 .iter()
-                .filter(|(_, role)| role == &PersonRole::Director)
-                .flat_map(|(v, _)| v)
+                .filter(|PersonsWithRoles { role, .. }| role == &PersonRole::Director)
+                .flat_map(|PersonsWithRoles { names, .. }| names)
                 .next()
                 .is_none()
                 && entry.volume_total().is_none()
@@ -634,8 +634,8 @@ impl Apa {
                     }
                 }
             }
-        } else if entry.entry_type == Tweet {
-            TitleSpec::Tweet
+        } else if entry.entry_type == Post {
+            TitleSpec::Post
         } else {
             TitleSpec::Normal
         };
@@ -655,7 +655,7 @@ impl Apa {
             TitleSpec::TvShow => "TV series",
             TitleSpec::TvEpisode => "TV series episode",
             TitleSpec::Film => "Film",
-            TitleSpec::Tweet => "Tweet",
+            TitleSpec::Post => "Post",
         };
 
         if !append.is_empty() {

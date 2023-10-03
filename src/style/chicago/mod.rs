@@ -15,7 +15,8 @@ use super::{
 };
 use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
 use crate::types::{
-    ChunkedStr, Date, EntryType::*, FormatStr, MaybeTyped, Numeric, Person, PersonRole,
+    ChunkedString, Date, EntryType::*, FormatString, MaybeTyped, Numeric, Person,
+    PersonRole,
 };
 use crate::Entry;
 
@@ -448,7 +449,7 @@ fn self_contained(entry: &Entry) -> bool {
         .matches(entry))
 }
 
-fn shorthand(title: &FormatStr) -> &ChunkedStr {
+fn shorthand(title: &FormatString) -> &ChunkedString {
     if let Some(sh) = title.short.as_ref() {
         sh
     } else {

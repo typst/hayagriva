@@ -10,6 +10,7 @@ pub use chicago::author_date::ChicagoAuthorDate;
 pub use chicago::notes::{ChicagoNoteStyle, ChicagoNotes};
 pub use chicago::{ChicagoAccessDateVisibility, ChicagoConfig};
 pub use ieee::Ieee;
+use indexmap::IndexMap;
 pub use mla::Mla;
 
 use std::fmt::{self, Debug, Display, Formatter, Write};
@@ -17,10 +18,9 @@ use std::ops::{Add, AddAssign};
 use std::{cmp::Ordering, convert::Into};
 
 use isolang::Language;
-use linked_hash_map::LinkedHashMap;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::types::{ChunkedStr, FormatStr, MaybeTyped, Numeric};
+use crate::types::{ChunkedString, FormatString, MaybeTyped, Numeric};
 
 use super::types::Person;
 use super::Entry;
@@ -29,19 +29,19 @@ pub(crate) trait FmtOptionExt<'a> {
     fn value(self) -> Option<String>;
 }
 
-impl<'a> FmtOptionExt<'a> for Option<&'a FormatStr> {
+impl<'a> FmtOptionExt<'a> for Option<&'a FormatString> {
     fn value(self) -> Option<String> {
         self.map(|fmt| fmt.value.to_string())
     }
 }
 
-impl<'a> FmtOptionExt<'a> for Option<FormatStr> {
+impl<'a> FmtOptionExt<'a> for Option<FormatString> {
     fn value(self) -> Option<String> {
         self.map(|fmt| fmt.value.to_string())
     }
 }
 
-impl<'a> FmtOptionExt<'a> for Option<&'a ChunkedStr> {
+impl<'a> FmtOptionExt<'a> for Option<&'a ChunkedString> {
     fn value(self) -> Option<String> {
         self.map(|chunks| chunks.to_string())
     }
@@ -134,7 +134,7 @@ impl<'a> DisplayReference<'a> {
 #[non_exhaustive]
 pub struct Database<'a> {
     /// Records in order of insertion. Citation style might change their content.
-    pub records: LinkedHashMap<&'a str, Record<'a>>,
+    pub records: IndexMap<&'a str, Record<'a>>,
 }
 
 impl<'a> Database<'a> {
@@ -170,7 +170,7 @@ impl<'a> Database<'a> {
         }
     }
 
-    fn records(&self) -> linked_hash_map::Values<&'a str, Record<'a>> {
+    fn records(&self) -> indexmap::map::Values<&'a str, Record<'a>> {
         self.records.values()
     }
 

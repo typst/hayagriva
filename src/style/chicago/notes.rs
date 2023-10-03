@@ -139,8 +139,8 @@ impl<'a> ChicagoNotes<'a> {
                 .enumerate()
                 .map(|(i, p)| {
                     let name = p.given_first(false);
-                    if entry.entry_type == Tweet {
-                        if let Some(pseud) = entry.twitter_handle(i) {
+                    if entry.entry_type == Post {
+                        if let Some(pseud) = entry.social_handle(i) {
                             format!("{} ({})", name, pseud)
                         } else {
                             name
@@ -211,7 +211,7 @@ impl<'a> ChicagoNotes<'a> {
             res += "n.p.";
         }
 
-        if entry.entry_type == Tweet {
+        if entry.entry_type == Post {
             if let Some(host) = entry
                 .url_any()
                 .and_then(|u| u.value.host_str())

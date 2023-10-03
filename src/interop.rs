@@ -79,7 +79,7 @@ impl From<tex::Date> for Date {
     }
 }
 
-impl From<&[Spanned<Chunk>]> for ChunkedStr {
+impl From<&[Spanned<Chunk>]> for ChunkedString {
     fn from(chunks: &[Spanned<Chunk>]) -> Self {
         let mut res = Self::new();
         for chunk in chunks {
@@ -92,7 +92,7 @@ impl From<&[Spanned<Chunk>]> for ChunkedStr {
         res
     }
 }
-impl From<&[Spanned<Chunk>]> for FormatStr {
+impl From<&[Spanned<Chunk>]> for FormatString {
     fn from(chunks: &[Spanned<Chunk>]) -> Self {
         Self { value: chunks.into(), short: None }
     }
@@ -209,9 +209,10 @@ impl TryFrom<&tex::Entry> for Entry {
             let ptype = ed_role(role);
             match ptype {
                 None => eds.extend(editors.iter().map(Into::into)),
-                Some(role) => {
-                    collaborators.push((editors.iter().map(Into::into).collect(), role))
-                }
+                Some(role) => collaborators.push(PersonsWithRoles::new(
+                    editors.iter().map(Into::into).collect(),
+                    role,
+                )),
             }
         }
 
@@ -494,7 +495,7 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(series) = map_res(entry.series())? {
-            let title: FormatStr = series.into();
+            let title: FormatString = series.into();
             let mut new = Entry::new(&entry.key, item.entry_type);
             new.title = Some(title);
 
@@ -523,16 +524,16 @@ impl TryFrom<&tex::Entry> for Entry {
     }
 }
 
-fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatStr {
-    let mut value = ChunkedStr::new();
+fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
+    let mut value = ChunkedString::new();
     for (i, entity) in items.iter().enumerate() {
         if i != 0 {
             value.push_str(", ", ChunkKind::Normal);
         }
 
-        let chunked = ChunkedStr::from(entity.as_slice());
+        let chunked = ChunkedString::from(entity.as_slice());
         value.extend(chunked);
     }
 
-    FormatStr { value, short: None }
+    FormatString { value, short: None }
 }

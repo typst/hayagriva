@@ -1,26 +1,41 @@
-use std::{cmp::Ordering, str::FromStr};
+use std::cmp::Ordering;
+use std::str::FromStr;
 
-use strum::{Display, EnumString};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
-use yaml_rust::{yaml, Yaml};
 
 use crate::lang::en::ARTICLES;
 use crate::lang::is_cjk;
 use crate::lang::name::NAME_PARTICLES;
+use crate::util::{deserialize_one_or_many, serialize_one_or_many};
 
-use super::DeserializationError;
-
-use super::{HayagrivaValue, ParseContext, YamlDictExt, YamlExt};
+use super::derive_or_from_str;
 
 /// A list of persons with a common role.
-pub type PersonsWithRoles = (Vec<Person>, PersonRole);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PersonsWithRoles {
+    /// The persons.
+    #[serde(serialize_with = "serialize_one_or_many")]
+    #[serde(deserialize_with = "deserialize_one_or_many")]
+    pub names: Vec<Person>,
+    /// The role the persons had in the creation of the cited item.
+    pub role: PersonRole,
+}
+
+impl PersonsWithRoles {
+    /// Create a new list of persons with a common role.
+    pub fn new(names: Vec<Person>, role: PersonRole) -> Self {
+        Self { names, role }
+    }
+}
 
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
-#[derive(Clone, Debug, Display, EnumString, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[non_exhaustive]
-#[strum(serialize_all = "kebab_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum PersonRole {
     /// Translated the work from a foreign language to the cited edition.
     Translator,
@@ -64,23 +79,58 @@ pub enum PersonRole {
     Narrator,
 
     /// Various other roles described by the contained string.
-    #[strum(disabled)]
+    #[serde(skip)]
     Unknown(String),
 }
 
-/// Holds the name of a person.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Person {
-    /// The family name.
-    pub name: String,
-    /// The given name / forename.
-    pub given_name: Option<String>,
-    /// A prefix of the family name such as 'van' or 'de'.
-    pub prefix: Option<String>,
-    /// A suffix of the family name such as 'Jr.' or 'IV'.
-    pub suffix: Option<String>,
-    /// Another name (often user name) the person might be known under.
-    pub alias: Option<String>,
+derive_or_from_str! {
+    /// Holds the name of a person.
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct Person where "a name string or a dictionary with a \"name\" key" {
+        /// The family name.
+        pub name: String,
+        /// The given name / forename.
+        pub given_name: Option<String>,
+        /// A prefix of the family name such as 'van' or 'de'.
+        pub prefix: Option<String>,
+        /// A suffix of the family name such as 'Jr.' or 'IV'.
+        pub suffix: Option<String>,
+        /// Another name (often user name) the person might be known under.
+        pub alias: Option<String>,
+    }
+}
+
+impl Serialize for Person {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Aliases are not represented in the string, prefixes can create
+        // ambiguity.
+        if self.alias.is_none() && self.prefix.is_none() {
+            serializer.serialize_str(&self.name_first(false, false))
+        } else {
+            let entries = [
+                ("name", Some(&self.name)),
+                ("given-name", self.given_name.as_ref()),
+                ("prefix", self.prefix.as_ref()),
+                ("suffix", self.suffix.as_ref()),
+                ("alias", self.alias.as_ref()),
+            ];
+
+            let map_len = entries.iter().filter(|(_, v)| v.is_some()).count();
+
+            let mut map = serializer.serialize_map(Some(map_len))?;
+
+            for (key, value) in entries.iter() {
+                if let Some(value) = value {
+                    map.serialize_entry(key, value)?;
+                }
+            }
+
+            map.end()
+        }
+    }
 }
 
 /// Error that may occur when parsing a slice of strings as a name.
@@ -379,135 +429,6 @@ impl Person {
     }
 }
 
-impl HayagrivaValue for Person {
-    fn from_yaml(
-        yaml: &yaml_rust::Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, super::DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::String(s) => Ok(Person::from_strings(s.split(',').collect())?),
-            Yaml::Hash(h) => {
-                let name = h.get_with_str("name", ctx)?.as_deserialized_str()?;
-                ctx.pop_dict_key();
-
-                let mut optional_key = |key| -> Result<_, DeserializationError> {
-                    let res = h
-                        .get_with_str(key, ctx)
-                        .ok()
-                        .map(|v| v.as_deserialized_str().map(ToString::to_string))
-                        .transpose()?;
-                    ctx.pop_dict_key();
-                    Ok(res)
-                };
-
-                Ok(Person {
-                    name: name.to_string(),
-                    given_name: optional_key("given-name")?,
-                    prefix: optional_key("prefix")?,
-                    suffix: optional_key("suffix")?,
-                    alias: optional_key("alias")?,
-                })
-            }
-            _ => Err(Self::expected_error()),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        if self.alias.is_none() && self.prefix.is_none() {
-            Yaml::String(self.name_first(false, false))
-        } else {
-            let entries = [
-                ("name", Some(&self.name)),
-                ("given-name", self.given_name.as_ref()),
-                ("prefix", self.prefix.as_ref()),
-                ("suffix", self.suffix.as_ref()),
-                ("alias", self.alias.as_ref()),
-            ];
-            let hash = entries
-                .iter()
-                .filter_map(|(key, val)| {
-                    val.map(|v| (Yaml::from_str(key), Yaml::from_str(v)))
-                })
-                .collect();
-
-            Yaml::Hash(hash)
-        }
-    }
-
-    fn explain() -> &'static str {
-        "a name string or a dictionary with a \"name\" key"
-    }
-}
-
-impl<T: HayagrivaValue> HayagrivaValue for Vec<T> {
-    fn from_yaml(
-        yaml: &yaml_rust::Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, super::DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::Array(arr) => arr.iter().map(|v| T::from_yaml(v, ctx)).collect(),
-            _ => T::from_yaml(yaml, ctx).map(|p| vec![p]),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        if self.len() == 1 {
-            self[0].to_yaml()
-        } else {
-            Yaml::Array(self.iter().map(|p| p.to_yaml()).collect())
-        }
-    }
-
-    fn explain() -> &'static str {
-        "a list or a single value"
-    }
-}
-
-impl HayagrivaValue for PersonsWithRoles {
-    fn from_yaml(
-        yaml: &yaml_rust::Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, super::DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::Hash(h) => {
-                let names = <Vec<Person>>::from_yaml(h.get_with_str("names", ctx)?, ctx)?;
-                ctx.pop_dict_key();
-
-                let role = PersonRole::from_str(
-                    h.get_with_str("role", ctx)?.as_deserialized_str()?,
-                )
-                .map_err(|_| PersonError::UnknownRole)?;
-                ctx.pop_dict_key();
-
-                Ok((names, role))
-            }
-            _ => Err(Self::expected_error()),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        let mut hash = yaml::Hash::new();
-
-        hash.insert_with_str("names", self.0.to_yaml());
-        hash.insert(Yaml::from_str("role"), Yaml::from_str(&self.1.to_string()));
-
-        Yaml::Hash(hash)
-    }
-
-    fn explain() -> &'static str {
-        "a dictionary with a \"names\" list and a \"role\" key"
-    }
-}
-
 impl Ord for Person {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name
@@ -521,6 +442,14 @@ impl Ord for Person {
 impl PartialOrd for Person {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl FromStr for Person {
+    type Err = PersonError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_strings(s.split(',').collect())
     }
 }
 

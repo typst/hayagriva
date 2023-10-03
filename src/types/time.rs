@@ -1,13 +1,14 @@
 use std::{
+    convert::TryInto,
     fmt::{Debug, Display, Write},
     str::FromStr,
 };
 
+use serde::{de, Deserialize, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
-use yaml_rust::Yaml;
 
-use super::{DeserializationError, HayagrivaValue, ParseContext, YamlDictExt, YamlExt};
+use super::{derive_or_from_str, deserialize_from_str, serialize_display};
 
 /// A date that can be as coarse as a year and as fine-grained as a day.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -18,8 +19,84 @@ pub struct Date {
     pub month: Option<u8>,
     /// The optional day (0-30).
     pub day: Option<u8>,
-    /// Whether the date is approximate
+    /// Whether the date is approximate.
     pub approximate: bool,
+}
+
+impl<'de> Deserialize<'de> for Date {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Visitor;
+        use std::fmt;
+        struct OurVisitor;
+
+        impl<'de> Visitor<'de> for OurVisitor {
+            type Value = Date;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a date in the format YYYY-MM-DD")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Self::Value::from_str(value).map_err(|e| E::custom(e.to_string()))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                #[derive(Deserialize)]
+                struct Inner {
+                    pub year: i32,
+                    pub month: Option<u8>,
+                    pub day: Option<u8>,
+                    #[serde(default)]
+                    pub approximate: bool,
+                }
+
+                Deserialize::deserialize(de::value::MapAccessDeserializer::new(map)).map(
+                    |inner: Inner| Date {
+                        year: inner.year,
+                        month: inner.month,
+                        day: inner.day,
+                        approximate: inner.approximate,
+                    },
+                )
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Date::from_year(
+                    value.try_into().map_err(|_| E::custom("year out of bounds"))?,
+                ))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Date::from_year(
+                    value.try_into().map_err(|_| E::custom("year out of bounds"))?,
+                ))
+            }
+
+            fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(Date::from_year(v))
+            }
+        }
+
+        deserializer.deserialize_any(OurVisitor)
+    }
 }
 
 /// This error can occur when trying to get a date from a string.
@@ -147,89 +224,36 @@ impl Date {
     }
 }
 
-impl HayagrivaValue for Date {
-    fn from_yaml(
-        yaml: &Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::String(s) => {
-                let date = Self::from_str(s)?;
-                Ok(date)
-            }
-            Yaml::Integer(i) => Ok(Self::from_year(*i as i32)),
-            Yaml::Hash(hash) => {
-                let approx = hash.get_with_str("approximate", ctx)?;
-                let Yaml::Boolean(approx) = approx else {
-                    return Err(DateError::UnknownFormat.into());
-                };
-                ctx.pop_dict_key();
-
-                let year = hash.get_with_str("year", ctx)?;
-                let year = match year {
-                    Yaml::Integer(i) => *i as i32,
-                    Yaml::String(s) => parse_year(&mut Scanner::new(s))?,
-                    _ => return Err(DateError::UnknownFormat.into()),
-                };
-                ctx.pop_dict_key();
-
-                let month = hash.get_with_str("month", ctx).ok();
-                let month = match month {
-                    Some(Yaml::Integer(i)) => Some(*i as u8),
-                    Some(Yaml::String(s)) => Some(parse_month(&mut Scanner::new(s))?),
-                    None => None,
-                    _ => return Err(DateError::UnknownFormat.into()),
-                };
-                ctx.pop_dict_key();
-
-                let day = if month.is_some() {
-                    let yaml = hash.get_with_str("day", ctx).ok();
-                    let res = match yaml {
-                        Some(Yaml::Integer(i)) => Some(*i as u8),
-                        Some(Yaml::String(s)) => Some(parse_day(&mut Scanner::new(s))?),
-                        None => None,
-                        _ => return Err(DateError::UnknownFormat.into()),
-                    };
-
-                    if yaml.is_some() {
-                        ctx.pop_dict_key();
-                    }
-
-                    res
-                } else {
-                    None
-                };
-
-                Ok(Self { year, month, day, approximate: *approx })
-            }
-            _ => Err(Self::expected_error()),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        let mut buf = String::with_capacity(10);
+impl Display for Date {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.approximate {
-            buf.push('~');
+            f.write_char('~')?;
         }
 
-        write!(&mut buf, "{:04}", self.year).unwrap();
+        write!(f, "{:04}", self.year)?;
 
         if let Some(month) = self.month {
-            write!(&mut buf, "-{:02}", month + 1).unwrap();
+            write!(f, "-{:02}", month + 1)?;
 
             if let Some(day) = self.day {
-                write!(&mut buf, "-{:02}", day + 1).unwrap();
+                write!(f, "-{:02}", day + 1)?;
             }
         }
 
-        yaml_rust::Yaml::String(buf)
+        Ok(())
     }
+}
 
-    fn explain() -> &'static str {
-        "A date in the format YYYY-MM-DD"
+impl Serialize for Date {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if self.month.is_none() {
+            serializer.serialize_i32(self.year)
+        } else {
+            serializer.serialize_str(&self.to_string())
+        }
     }
 }
 
@@ -247,6 +271,9 @@ pub struct Duration {
     /// Milliseconds.
     pub milliseconds: u16,
 }
+
+serialize_display!(Duration);
+deserialize_from_str!(Duration);
 
 impl Duration {
     fn scan(s: &mut Scanner, require_end: bool) -> Result<Self, DurationError> {
@@ -414,60 +441,48 @@ impl Display for Duration {
     }
 }
 
-impl HayagrivaValue for Duration {
-    fn from_yaml(
-        yaml: &Yaml,
-        _: &mut ParseContext<'_>,
-    ) -> Result<Self, DeserializationError>
-    where
-        Self: Sized,
-    {
-        Self::from_str(yaml.as_deserialized_str()?).map_err(Into::into)
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        yaml_rust::Yaml::String(self.to_string())
-    }
-
-    fn explain() -> &'static str {
-        "a duration string in the format DD:HH:MM:SS,MMM"
+derive_or_from_str! {
+    /// An half-open interval of durations.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct DurationRange where "two durations separated by a hyphen or a map with a `from` and `to` field" {
+        /// The start of the interval.
+        pub start: Duration,
+        /// The end of the interval.
+        pub end: Duration,
     }
 }
 
-/// An half-open interval of durations.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DurationRange(Duration, Duration);
-
 impl DurationRange {
-    fn new(dur: Duration, dur2: Option<Duration>) -> Self {
-        Self(dur, dur2.unwrap_or(dur))
+    /// Create a new duration range.
+    pub fn new(start: Duration, end: Option<Duration>) -> Self {
+        Self { start, end: end.unwrap_or(start) }
     }
 
     fn scan(s: &mut Scanner) -> Result<Self, DurationError> {
-        let dur = Duration::scan(s, false)?;
+        let start = Duration::scan(s, false)?;
         let hyphens = s.eat_while('-');
 
         if hyphens.is_empty() {
             s.eat_whitespace();
 
             if s.done() {
-                return Ok(Self(dur, dur));
+                return Ok(Self::new(start, None));
             } else {
                 return Err(DurationError::Malformed);
             }
         }
 
-        let dur2 = Duration::scan(s, true)?;
+        let end = Duration::scan(s, true)?;
 
-        Ok(Self(dur, dur2))
+        Ok(Self { start, end })
     }
 }
 
 impl Display for DurationRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)?;
-        if self.0 != self.1 {
-            write!(f, "-{}", self.1)?;
+        write!(f, "{}", self.start)?;
+        if self.start != self.end {
+            write!(f, "-{}", self.end)?;
         }
 
         Ok(())
@@ -483,40 +498,7 @@ impl FromStr for DurationRange {
     }
 }
 
-impl HayagrivaValue for DurationRange {
-    fn from_yaml(
-        yaml: &yaml_rust::Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::String(s) => {
-                let range = Self::from_str(s)?;
-                Ok(range)
-            }
-            Yaml::Hash(h) => {
-                let from = h.get_with_str("from", ctx)?.as_deserialized_str()?;
-                let from = Duration::from_str(from)?;
-                ctx.pop_dict_key();
-                let to = h.get_with_str("to", ctx)?.as_deserialized_str().ok();
-                let res = Ok(Self::new(from, to.map(Duration::from_str).transpose()?));
-                ctx.pop_dict_key();
-                res
-            }
-            _ => Err(Self::expected_error()),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        Yaml::String(self.to_string())
-    }
-
-    fn explain() -> &'static str {
-        "a duration string in the format DD:HH:MM:SS,MMM or a hash with keys \"from\" and \"to\""
-    }
-}
+serialize_display!(DurationRange);
 
 fn parse_int<R>(s: &mut Scanner, digits: R) -> Option<i32>
 where
@@ -701,7 +683,7 @@ mod tests {
     fn test_duration_range_parse() {
         assert_eq!(
             DurationRange::from_str("01:00").unwrap(),
-            DurationRange(
+            DurationRange::new(
                 Duration {
                     days: 0,
                     hours: 0,
@@ -709,18 +691,12 @@ mod tests {
                     seconds: 0,
                     milliseconds: 0,
                 },
-                Duration {
-                    days: 0,
-                    hours: 0,
-                    minutes: 1,
-                    seconds: 0,
-                    milliseconds: 0,
-                }
+                None
             )
         );
         assert_eq!(
             DurationRange::from_str("01:00-02:00").unwrap(),
-            DurationRange(
+            DurationRange::new(
                 Duration {
                     days: 0,
                     hours: 0,
@@ -728,13 +704,13 @@ mod tests {
                     seconds: 0,
                     milliseconds: 0,
                 },
-                Duration {
+                Some(Duration {
                     days: 0,
                     hours: 0,
                     minutes: 2,
                     seconds: 0,
                     milliseconds: 0,
-                }
+                })
             )
         );
     }

@@ -43,10 +43,10 @@ crazy-rich:
 
 // Parse a bibliography
 let bib = from_yaml_str(yaml).unwrap();
-assert_eq!(bib[0].date().unwrap().year, 2014);
+assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 
 // Format the reference
-let db = Database::from_entries(bib.iter());
+let db = bib.database();
 let mut mla = Mla::new();
 let reference = db.bibliography(&mut mla, None);
 assert_eq!(reference[0].display.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
@@ -112,7 +112,7 @@ quantized-vortex:
 
 let entries = from_yaml_str(yaml).unwrap();
 let journal = select!((Article["date"]) > ("journal":Periodical));
-assert!(journal.matches(&entries[0]));
+assert!(journal.matches(entries.nth(0).unwrap()));
 ```
 
 There are two ways to check if a selector matches an entry.
@@ -134,38 +134,132 @@ pub mod io;
 pub mod lang;
 pub mod style;
 pub mod types;
+mod util;
 
+use indexmap::IndexMap;
 pub use selectors::{Selector, SelectorError};
 
 use paste::paste;
+use serde::{de::Visitor, Deserialize, Serialize};
 use thiserror::Error;
 use types::*;
 use unic_langid::LanguageIdentifier;
-use yaml_rust::{Yaml, YamlLoader};
+use util::{
+    deserialize_one_or_many_opt, serialize_one_or_many, serialize_one_or_many_opt,
+    OneOrMany,
+};
+
+/// A collection of entries.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Bibliography(IndexMap<String, Entry>);
+
+impl Bibliography {
+    /// Construct a new, empty bibliography.
+    pub fn new() -> Self {
+        Self(IndexMap::new())
+    }
+
+    /// Add an entry to the bibliography.
+    pub fn push(&mut self, entry: &Entry) {
+        self.0.insert(entry.key.clone(), entry.clone());
+    }
+
+    /// Retrieve an entry from the bibliography.
+    pub fn get(&self, key: &str) -> Option<&Entry> {
+        self.0.get(key)
+    }
+
+    /// Get an iterator over the entries in the bibliography.
+    pub fn iter(&self) -> impl Iterator<Item = &Entry> {
+        self.0.values()
+    }
+
+    /// Get an iterator over the keys in the bibliography.
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.0.keys().map(|k| k.as_str())
+    }
+
+    /// Remove an entry from the bibliography.
+    pub fn remove(&mut self, key: &str) -> Option<Entry> {
+        self.0.remove(key)
+    }
+
+    /// Get the length of the bibliography.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Check whether the bibliography is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Get the bibliography as a [`style::Database`].
+    pub fn database(&self) -> style::Database {
+        style::Database::from_entries(self.iter())
+    }
+
+    /// Get the nth entry in the bibliography.
+    pub fn nth(&self, n: usize) -> Option<&Entry> {
+        self.0.get_index(n).map(|(_, v)| v)
+    }
+}
+
+impl IntoIterator for Bibliography {
+    type Item = Entry;
+    type IntoIter = std::iter::Map<
+        indexmap::map::IntoIter<String, Entry>,
+        fn((String, Entry)) -> Entry,
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter().map(|(_, v)| v)
+    }
+}
 
 macro_rules! entry {
-    ($($(#[$docs:meta])+ $s:literal => $i:ident : $t:ty $(| $d:ty)? $(,)?),*) => {
+    ($(
+        $(#[doc = $doc:literal])*
+        $(#[serde $serde:tt])*
+        $s:literal => $i:ident : $t:ty
+        $(| $d:ty)? $(,)?
+    ),*) => {
+        // Build the struct and make it serializable.
+
         /// A citable item in a bibliography.
-        #[derive(Debug, Clone, PartialEq)]
+        #[derive(Debug, Clone, PartialEq, Serialize)]
         pub struct Entry {
             /// The key of the entry.
+            #[serde(skip)]
             key: String,
             /// The type of the item.
+            #[serde(rename = "type")]
             entry_type: EntryType,
-            /// Item in which the item was published / to which it is strongly
-            /// associated to.
-            parents: Vec<Entry>,
             $(
-                $(#[$docs])+
+                $(#[doc = $doc])*
+                $(#[serde $serde])*
+                #[serde(skip_serializing_if = "Option::is_none")]
+                #[serde(rename = $s)]
                 $i: Option<$t>,
             )*
+            /// Item in which the item was published / to which it is strongly
+            /// associated to.
+            #[serde(serialize_with = "serialize_one_or_many")]
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            #[serde(rename = "parent")]
+            parents: Vec<Entry>,
         }
 
         impl Entry {
+            /// Get the key of the entry.
+            pub fn key(&self) -> &str {
+                &self.key
+            }
+
             /// Construct a new, empty entry.
             pub fn new(key: &str, entry_type: EntryType) -> Self {
                 Self {
-                    key: key.to_string(),
+                    key: key.to_owned(),
                     entry_type,
                     $(
                         $i: None,
@@ -187,11 +281,6 @@ macro_rules! entry {
 
         /// Getters.
         impl Entry {
-            /// Get the key of the entry.
-            pub fn key(&self) -> &str {
-                &self.key
-            }
-
             /// Get the type of the entry.
             pub fn entry_type(&self) -> &EntryType {
                 &self.entry_type
@@ -203,7 +292,7 @@ macro_rules! entry {
             }
 
             $(
-                entry!(get $(#[$docs])+ $s => $i : $t $(| $d)?);
+                entry!(@get $(#[doc = $doc])* $s => $i : $t $(| $d)?);
             )*
         }
 
@@ -216,84 +305,131 @@ macro_rules! entry {
 
 
             $(
-                entry!(set $s => $i : $t);
+                entry!(@set $s => $i : $t);
             )*
         }
 
-        impl HayagrivaValue for Entry {
-            fn from_yaml(
-                yaml: &yaml_rust::Yaml,
-                ctx: &mut ParseContext<'_>,
-            ) -> Result<Self, DeserializationError>
+        /// The bibliography deserialization also handles entries.
+        ///
+        /// Entries do not implement [`Deserialize`] because they have a data
+        /// dependency on their key (stored in the parent map) and their
+        /// children for default types.
+        impl<'de> Deserialize<'de> for Bibliography {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
-                Self: Sized,
+                D: serde::Deserializer<'de>,
             {
-                let Yaml::Hash(h) = yaml else {
-                    return Err(Self::expected_error());
-                };
-                let entry_type = match h.get_with_str("type", ctx) {
-                    Ok(y) => {
-                        let res = EntryType::from_yaml(y, ctx);
-                        ctx.pop_dict_key();
-                        res
-                    }
-                    Err(e) => ctx.default_type().ok_or(e),
-                }?;
-                ctx.path.push(entry_type);
+                struct MyVisitor;
 
-                let parents = match h.get_with_str("parent", ctx) {
-                    Ok(y) => {
-                        let res = Vec::<Entry>::from_yaml(y, ctx)?;
-                        ctx.pop_dict_key();
-                        res
-                    }
-                    Err(_) => Vec::new(),
-                };
-
-                let res = Ok(Self {
-                    key: ctx.key.to_owned(),
-                    entry_type,
+                #[derive(Deserialize)]
+                struct NakedEntry {
+                    #[serde(rename = "type")]
+                    entry_type: Option<EntryType>,
+                    #[serde(default)]
+                    #[serde(rename = "parent")]
+                    parents: OneOrMany<NakedEntry>,
                     $(
-                        $i: match h.get_with_str($s, ctx) {
-                            Ok(y) => {
-                                let res = <$t>::from_yaml(y, ctx)?;
-                                ctx.pop_dict_key();
-                                Some(res)
-                            }
-                            Err(_) => None,
-                        },
+                        $(#[serde $serde])*
+                        #[serde(rename = $s)]
+                        #[serde(default)]
+                        $i: Option<$t>,
                     )*
-                    parents,
-                });
-
-                ctx.path.pop();
-                res
-            }
-
-            fn to_yaml(&self) -> yaml_rust::Yaml {
-                let mut h = yaml_rust::yaml::Hash::new();
-                h.insert_with_str("type", self.entry_type.to_yaml());
-                if !self.parents.is_empty() {
-                    h.insert_with_str("parent", self.parents.to_yaml());
                 }
 
-                $(
-                    if let Some($i) = &self.$i {
-                        h.insert_with_str($s, $i.to_yaml());
+                impl NakedEntry {
+                    /// Convert into a full entry using the child entry type
+                    /// (if any) and the key.
+                    fn into_entry<E>(
+                        self,
+                        key: &str,
+                        child_entry_type: Option<EntryType>,
+                    ) -> Result<Entry, E>
+                        where E: serde::de::Error
+                    {
+                        let entry_type = self.entry_type
+                            .or_else(|| child_entry_type.map(|e| e.default_parent()))
+                            .ok_or_else(|| E::custom("no entry type"))?;
+
+                        let parents: Result<Vec<_>, _> = self.parents
+                            .into_iter()
+                            .map(|p| p.into_entry(key, Some(entry_type)))
+                            .collect();
+
+                        Ok(Entry {
+                            key: key.to_owned(),
+                            entry_type,
+                            parents: parents?,
+                            $(
+                                $i: self.$i,
+                            )*
+                        })
                     }
-                )*
+                }
 
-                Yaml::Hash(h)
-            }
+                impl<'de> Visitor<'de> for MyVisitor {
+                    type Value = Bibliography;
 
-            fn explain() -> &'static str {
-                "a dictionary with a `type` key"
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter)
+                        -> std::fmt::Result
+                    {
+                        formatter.write_str(
+                            "a map between cite keys and entries"
+                        )
+                    }
+
+                    fn visit_map<A>(self, mut map: A)
+                        -> Result<Self::Value, A::Error>
+                    where
+                        A: serde::de::MapAccess<'de>,
+                    {
+                        let mut entries = Vec::with_capacity(
+                            map.size_hint().unwrap_or(0).min(128)
+                        );
+                        while let Some(key) = map.next_key::<String>()? {
+                            if entries.iter().any(|(k, _)| k == &key) {
+                                return Err(serde::de::Error::custom(format!(
+                                    "duplicate key {}",
+                                    key
+                                )));
+                            }
+
+                            let entry: NakedEntry = map.next_value()?;
+                            entries.push((key, entry));
+                        }
+
+                        let entries: Result<IndexMap<_, _>, A::Error> =
+                            entries.into_iter().map(|(k, v)| {
+                                v.into_entry(&k, None).map(|e| (k, e))
+                            }).collect();
+
+                        Ok(Bibliography(entries?))
+                    }
+                }
+
+                deserializer.deserialize_map(MyVisitor)
             }
         }
     };
 
+    (@match
+        $s:literal => $i:ident,
+        $naked:ident, $map:ident $(,)?
+    ) => {
+        $naked.$i = Some($map.next_value()?)
+    };
+
+    // All items with a serde attribute are expected to be collections.
+    (@match
+        $(#[serde $serde:tt])+
+        $s:literal => $i:ident,
+        $naked:ident, $map:ident $(,)?
+    ) => {
+        let one_or_many: OneOrMany = $map.next_value()?;
+        $naked.$i = Some(one_or_many.into());
+    };
+
     // Getter macro for deref types
-    (get $(#[$docs:meta])+ $s:literal => $i:ident : $t:ty | $d:ty $(,)?) => {
+    (@get $(#[$docs:meta])+ $s:literal => $i:ident : $t:ty | $d:ty $(,)?) => {
             $(#[$docs])+
             pub fn $i(&self) -> Option<&$d> {
                 self.$i.as_deref()
@@ -301,7 +437,7 @@ macro_rules! entry {
     };
 
     // Getter macro for regular types.
-    (get $(#[$docs:meta])+ $s:literal => $i:ident : $t:ty $(,)?) => {
+    (@get $(#[$docs:meta])+ $s:literal => $i:ident : $t:ty $(,)?) => {
         $(#[$docs])+
         pub fn $i(&self) -> Option<&$t> {
             self.$i.as_ref()
@@ -309,7 +445,7 @@ macro_rules! entry {
     };
 
     // Setter for all types.
-    (set $s:literal => $i:ident : $t:ty $(,)?) => {
+    (@set $s:literal => $i:ident : $t:ty $(,)?) => {
         paste! {
             #[doc = "Set the `" $s "` field."]
             pub fn [<set_ $i>](&mut self, $i: $t) {
@@ -321,21 +457,27 @@ macro_rules! entry {
 
 entry! {
     /// Title of the item.
-    "title" => title: FormatStr,
+    "title" => title: FormatString,
     /// Persons primarily responsible for creating the item.
+    #[serde(serialize_with = "serialize_one_or_many_opt")]
+    #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "author" => authors: Vec<Person> | [Person],
     /// Date at which the item was published.
     "date" => date: Date,
     /// Persons responsible for selecting and revising the content of the item.
+    #[serde(serialize_with = "serialize_one_or_many_opt")]
+    #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "editor" => editors: Vec<Person> | [Person],
     /// Persons involved in the production of the item that are not authors or editors.
+    #[serde(serialize_with = "serialize_one_or_many_opt")]
+    #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "affiliated" => affiliated: Vec<PersonsWithRoles> | [PersonsWithRoles],
     /// Publisher of the item.
-    "publisher" => publisher: FormatStr,
+    "publisher" => publisher: FormatString,
     /// Physical location at which the item was published or created.
-    "location" => location: FormatStr,
+    "location" => location: FormatString,
     /// Organization at/for which the item was created.
-    "organization" => organization: FormatStr,
+    "organization" => organization: FormatString,
     /// For an item whose parent has multiple issues, indicates the position in
     /// the issue sequence. Also used to indicate the episode number for TV.
     "issue" => issue: MaybeTyped<Numeric>,
@@ -369,13 +511,13 @@ entry! {
     /// The language of the item.
     "language" => language: LanguageIdentifier,
     /// Name of the institution/collection where the item is kept.
-    "archive" => archive: FormatStr,
+    "archive" => archive: FormatString,
     /// Physical location of the institution/collection where the item is kept.
-    "archive-location" => archive_location: FormatStr,
+    "archive-location" => archive_location: FormatString,
     /// The call number of the item in the institution/collection.
-    "call-number" => call_number: FormatStr,
+    "call-number" => call_number: FormatString,
     /// Additional description to be appended in the bibliographic entry.
-    "note" => note: FormatStr,
+    "note" => note: FormatString,
 }
 
 impl Entry {
@@ -386,7 +528,15 @@ impl Entry {
             .iter()
             .flatten()
             .cloned()
-            .filter_map(|(persons, r)| if r == role { Some(persons) } else { None })
+            .filter_map(
+                |PersonsWithRoles { names, role: r }| {
+                    if r == role {
+                        Some(names)
+                    } else {
+                        None
+                    }
+                },
+            )
             .flatten()
             .collect()
     }
@@ -459,13 +609,13 @@ impl Entry {
         self.map(|e| e.url.as_ref())
     }
 
-    /// Extract the twitter handle for the nth author from their alias.
+    /// Extract the social media handle for the nth author from their alias.
     /// Will make sure the handle starts with `@`.
     ///
     /// If the `user_index` is 0, the function will try to extract
     /// the handle from the URL.
-    pub(crate) fn twitter_handle(&self, user_index: usize) -> Option<String> {
-        if self.entry_type != EntryType::Tweet {
+    pub(crate) fn social_handle(&self, user_index: usize) -> Option<String> {
+        if self.entry_type != EntryType::Post {
             return None;
         }
 
@@ -513,10 +663,11 @@ impl Entry {
         &mut self,
         new_persons: (Vec<Person>, PersonRole),
     ) {
+        let obj = PersonsWithRoles { names: new_persons.0, role: new_persons.1 };
         if let Some(affiliated) = &mut self.affiliated {
-            affiliated.push(new_persons);
+            affiliated.push(obj);
         } else {
-            self.affiliated = Some(vec![new_persons]);
+            self.affiliated = Some(vec![obj]);
         }
     }
 
@@ -528,9 +679,6 @@ impl Entry {
 /// Errors that may occur while parsing a library.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LibraryError {
-    /// The YAML is malformed.
-    #[error("malformed YAML: {0}")]
-    YamlError(#[from] yaml_rust::ScanError),
     /// The YAML string does not contain exactly one document.
     #[error("expected exactly one document")]
     WrongNumberOfDocuments,
@@ -560,56 +708,15 @@ pub enum LibraryError {
 ///     location: New York, NY, US
 /// "#;
 /// let bib = from_yaml_str(yaml).unwrap();
-/// assert_eq!(bib[0].date().unwrap().year, 2014);
+/// assert_eq!(bib.nth(0).unwrap().date().unwrap().year, 2014);
 /// ```
-pub fn from_yaml_str(s: &str) -> Result<Vec<Entry>, LibraryError> {
-    let yaml = YamlLoader::load_from_str(s)?;
-    if yaml.len() != 1 {
-        return Err(LibraryError::WrongNumberOfDocuments);
-    }
-
-    let yaml = &yaml[0];
-    from_yaml(yaml)
-}
-
-/// Parse a bibliography from YAML.
-pub fn from_yaml(yaml: &Yaml) -> Result<Vec<Entry>, LibraryError> {
-    let Yaml::Hash(h) = yaml else {
-        return Err(LibraryError::NoTopLevelHash);
-    };
-
-    let mut res = Vec::with_capacity(h.len());
-
-    for (key, value) in h.into_iter() {
-        let Yaml::String(key) = key else {
-            return Err(LibraryError::NonStringKey);
-        };
-
-        let mut ctx = ParseContext::new(key);
-        let entry = Entry::from_yaml(value, &mut ctx)?;
-        res.push(entry);
-    }
-
-    Ok(res)
-}
-
-/// Serialize a bibliography to YAML.
-pub fn to_yaml(entries: &[Entry]) -> Yaml {
-    let mut h = yaml_rust::yaml::Hash::new();
-
-    for entry in entries {
-        h.insert_with_str(&entry.key, entry.to_yaml());
-    }
-
-    Yaml::Hash(h)
+pub fn from_yaml_str(s: &str) -> Result<Bibliography, serde_yaml::Error> {
+    serde_yaml::from_str(s)
 }
 
 /// Serialize a bibliography to a YAML string.
-pub fn to_yaml_str(entries: &[Entry]) -> Result<String, yaml_rust::EmitError> {
-    let yaml = to_yaml(entries);
-    let mut buf = String::new();
-    yaml_rust::YamlEmitter::new(&mut buf).dump(&yaml)?;
-    Ok(buf)
+pub fn to_yaml_str(entries: &Bibliography) -> Result<String, serde_yaml::Error> {
+    serde_yaml::to_string(&entries)
 }
 
 #[cfg(test)]
@@ -619,7 +726,7 @@ mod tests {
     use style::Citation;
 
     use super::*;
-    use crate::style::{Apa, ChicagoNotes, Database, Ieee, Mla};
+    use crate::style::{Apa, ChicagoNotes, Ieee, Mla};
 
     #[test]
     fn apa() {
@@ -627,11 +734,7 @@ mod tests {
         let entries = from_yaml_str(&contents).unwrap();
         let apa = Apa::new();
 
-        let mut db = Database::new();
-        for entry in &entries {
-            db.push(entry);
-        }
-
+        let db = entries.database();
         for reference in db.bibliography(&apa, None) {
             println!("{:#}", reference.display);
         }
@@ -643,11 +746,7 @@ mod tests {
         let entries = from_yaml_str(&contents).unwrap();
         let ieee = Ieee::new();
 
-        let mut db = Database::new();
-        for entry in &entries {
-            db.push(entry);
-        }
-
+        let db = entries.database();
         for reference in db.bibliography(&ieee, None) {
             println!("{:#}", reference.display);
         }
@@ -659,11 +758,7 @@ mod tests {
         let entries = from_yaml_str(&contents).unwrap();
         let mla = Mla::new();
 
-        let mut db = Database::new();
-        for entry in &entries {
-            db.push(entry);
-        }
-
+        let db = entries.database();
         for reference in db.bibliography(&mla, None) {
             println!("{:#}", reference.display);
         }
@@ -675,12 +770,8 @@ mod tests {
         let entries = from_yaml_str(&contents).unwrap();
         let mut chicago = ChicagoNotes::default();
 
-        let mut db = Database::new();
-        for entry in &entries {
-            db.push(entry);
-        }
-
-        for entry in &entries {
+        let mut db = entries.database();
+        for entry in entries.iter() {
             let citation = Citation::new(entry, None);
             println!("{:#}", db.citation(&mut chicago, &[citation]).display);
         }
@@ -692,11 +783,7 @@ mod tests {
         let entries = from_yaml_str(&contents).unwrap();
         let chicago = ChicagoNotes::default();
 
-        let mut db = Database::new();
-        for entry in &entries {
-            db.push(entry);
-        }
-
+        let db = entries.database();
         for reference in db.bibliography(&chicago, None) {
             println!("{:#}", reference.display);
         }
@@ -706,7 +793,7 @@ mod tests {
         ($select:expr, $entries:tt, [$($key:expr),* $(,)*] $(,)*) => {
             let keys = [$($key,)*];
             let selector = Selector::parse($select).unwrap();
-            for entry in &$entries {
+            for entry in $entries.iter() {
                 let res = selector.apply(entry);
                 if keys.contains(&entry.key.as_str()) {
                     if res.is_none() {
@@ -813,6 +900,8 @@ mod tests {
         let contents = fs::read_to_string("tests/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
         let yaml = to_yaml_str(&entries).unwrap();
+        println!("{}", &yaml);
+
         let reconstructed = from_yaml_str(&yaml).unwrap();
         assert_eq!(entries.len(), reconstructed.len());
 

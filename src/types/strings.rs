@@ -3,26 +3,90 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
+use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
-use yaml_rust::Yaml;
 
 use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
-
-use super::{DeserializationError, HayagrivaValue, ParseContext, YamlDictExt, YamlExt};
 
 /// A string for presentation.
 ///
 /// It can contain an optional short version and control case folding.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct FormatStr {
+pub struct FormatString {
     /// The canonical version of the string.
-    pub value: ChunkedStr,
+    pub value: ChunkedString,
     /// The short version of the string.
-    pub short: Option<ChunkedStr>,
+    pub short: Option<Box<ChunkedString>>,
 }
 
-impl FormatStr {
+impl<'de> Deserialize<'de> for FormatString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self};
+        struct OurVisitor;
+
+        impl<'de> Visitor<'de> for OurVisitor {
+            type Value = FormatString;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str(
+                    "a formattable string or a dictionary with an optional short version",
+                )
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Self::Value::from_str(value).map_err(|e| E::custom(e.to_string()))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                #[derive(Deserialize)]
+                #[serde(untagged)]
+                enum Inner {
+                    Full { value: ChunkedString, short: Option<ChunkedString> },
+                    Val(ChunkedString),
+                }
+
+                Deserialize::deserialize(de::value::MapAccessDeserializer::new(map)).map(
+                    |inner: Inner| match inner {
+                        Inner::Val(value) => Self::Value { value, short: None },
+                        Inner::Full { value, short } => {
+                            Self::Value { value, short: short.map(Box::new) }
+                        }
+                    },
+                )
+            }
+        }
+
+        deserializer.deserialize_any(OurVisitor)
+    }
+}
+
+impl Serialize for FormatString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if let Some(short) = &self.short {
+            let mut map = serializer.serialize_map(Some(2))?;
+            map.serialize_entry("value", &self.value)?;
+            map.serialize_entry("short", short)?;
+            map.end()
+        } else {
+            self.value.serialize(serializer)
+        }
+    }
+}
+
+impl FormatString {
     /// Creates a new empty `FormatStr`.
     pub fn new() -> Self {
         Self::default()
@@ -30,14 +94,17 @@ impl FormatStr {
 
     /// Creates a new `FormatStr` for the value string.
     pub fn with_value(value: impl Into<String>) -> Self {
-        Self { value: StrChunk::normal(value).into(), short: None }
+        Self {
+            value: StringChunk::normal(value).into(),
+            short: None,
+        }
     }
 
     /// Creates a new `FormatStr` from a long and a short string.
     pub fn with_short(value: impl Into<String>, short: impl Into<String>) -> Self {
         Self {
-            value: StrChunk::normal(value).into(),
-            short: Some(StrChunk::normal(short).into()),
+            value: StringChunk::normal(value).into(),
+            short: Some(Box::new(StringChunk::normal(short).into())),
         }
     }
 
@@ -65,72 +132,93 @@ impl FormatStr {
     }
 }
 
-impl fmt::Display for FormatStr {
+impl fmt::Display for FormatString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.fmt_long(f)
     }
 }
 
-impl HayagrivaValue for FormatStr {
-    fn from_yaml(
-        yaml: &yaml_rust::Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::String(s) => Ok(Self { value: ChunkedStr::from_str(s)?, short: None }),
-            Yaml::Hash(h) => {
-                let short = Some(match h.get_with_str("short", ctx) {
-                    Ok(y) => {
-                        let res = ChunkedStr::from_yaml(y, ctx)?;
-                        ctx.pop_dict_key();
-                        res
-                    }
-                    Err(_) => {
-                        return ChunkedStr::from_yaml(yaml, ctx)
-                            .map(|v| Self { value: v, short: None })
-                    }
-                });
-
-                let value = h.get_with_str("value", ctx)?;
-                let value = ChunkedStr::from_yaml(value, ctx)?;
-                ctx.pop_dict_key();
-
-                Ok(Self { value, short })
-            }
-            _ => Err(Self::expected_error()),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        if let Some(short) = &self.short {
-            let mut h = yaml_rust::yaml::Hash::new();
-            h.insert_with_str("value", self.value.to_yaml());
-            h.insert_with_str("short", short.to_yaml());
-            Yaml::Hash(h)
-        } else {
-            self.value.to_yaml()
-        }
-    }
-
-    fn explain() -> &'static str {
-        "a formattable string or a dictionary with an optional short version"
-    }
-}
-
-impl From<String> for FormatStr {
+impl From<String> for FormatString {
     fn from(s: String) -> Self {
         Self::with_value(s)
     }
 }
 
+impl FromStr for FormatString {
+    type Err = ChunkedStrParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self { value: ChunkedString::from_str(s)?, short: None })
+    }
+}
+
 /// A string whose elements can set whether they do case folding.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ChunkedStr(pub Vec<StrChunk>);
+pub struct ChunkedString(pub Vec<StringChunk>);
 
-impl ChunkedStr {
+impl<'de> Deserialize<'de> for ChunkedString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ChunkedVisitor;
+
+        impl<'de> Visitor<'de> for ChunkedVisitor {
+            type Value = ChunkedString;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a formattable string")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Self::Value::from_str(v).map_err(|e| E::custom(e.to_string()))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                #[derive(Deserialize)]
+                struct Inner {
+                    value: String,
+                    #[serde(default)]
+                    verbatim: bool,
+                }
+
+                Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(
+                    map,
+                ))
+                .map(|inner: Inner| {
+                    if inner.verbatim {
+                        StringChunk::verbatim(inner.value)
+                    } else {
+                        StringChunk::normal(inner.value)
+                    }
+                    .into()
+                })
+            }
+        }
+
+        deserializer.deserialize_any(ChunkedVisitor)
+    }
+}
+
+impl Serialize for ChunkedString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut buf = String::with_capacity(self.len());
+        self.fmt_serialized(&mut buf)
+            .map_err(|_| serde::ser::Error::custom("could not write to string"))?;
+        serializer.serialize_str(&buf)
+    }
+}
+
+impl ChunkedString {
     /// Creates a new empty `ChunkedStr`.
     pub fn new() -> Self {
         Self::default()
@@ -140,11 +228,11 @@ impl ChunkedStr {
     /// new chunk if the types differ.
     pub fn push_str(&mut self, s: &str, kind: ChunkKind) {
         match self.0.last_mut() {
-            Some(StrChunk { value, kind: target_kind }) if target_kind == &kind => {
+            Some(StringChunk { value, kind: target_kind }) if target_kind == &kind => {
                 value.push_str(s);
             }
             _ => {
-                self.0.push(StrChunk::new(s, kind));
+                self.0.push(StringChunk::new(s, kind));
             }
         }
     }
@@ -153,17 +241,17 @@ impl ChunkedStr {
     /// a new chunk if the types differ.
     pub fn push_char(&mut self, c: char, kind: ChunkKind) {
         match self.0.last_mut() {
-            Some(StrChunk { value, kind: target_kind }) if target_kind == &kind => {
+            Some(StringChunk { value, kind: target_kind }) if target_kind == &kind => {
                 value.push(c);
             }
             _ => {
-                self.0.push(StrChunk::new(c.to_string(), kind));
+                self.0.push(StringChunk::new(c.to_string(), kind));
             }
         }
     }
 
     /// Appends a chunk to the end of the string.
-    pub fn push_chunk(&mut self, chunk: StrChunk) {
+    pub fn push_chunk(&mut self, chunk: StringChunk) {
         self.0.push(chunk);
     }
 
@@ -245,6 +333,7 @@ impl ChunkedStr {
     }
 }
 
+/// Check whether this is a control character for [`ChunkedStr`].
 fn is_chunk_control(c: char) -> bool {
     c == '\\' || c == '{' || c == '}' || c == '$'
 }
@@ -257,7 +346,7 @@ fn is_chunk_control(c: char) -> bool {
 #[error("unmatched closing brace at position {0}")]
 pub struct ChunkedStrParseError(usize);
 
-impl FromStr for ChunkedStr {
+impl FromStr for ChunkedString {
     type Err = ChunkedStrParseError;
 
     fn from_str(s: &str) -> Result<Self, ChunkedStrParseError> {
@@ -302,13 +391,13 @@ impl FromStr for ChunkedStr {
     }
 }
 
-impl From<String> for ChunkedStr {
+impl From<String> for ChunkedString {
     fn from(s: String) -> Self {
-        StrChunk::normal(s).into()
+        StringChunk::normal(s).into()
     }
 }
 
-impl fmt::Write for ChunkedStr {
+impl fmt::Write for ChunkedString {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.push_str(s, ChunkKind::default());
         Ok(())
@@ -320,7 +409,7 @@ impl fmt::Write for ChunkedStr {
     }
 }
 
-impl fmt::Display for ChunkedStr {
+impl fmt::Display for ChunkedString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for chunk in &self.0 {
             chunk.fmt(f)?;
@@ -330,69 +419,22 @@ impl fmt::Display for ChunkedStr {
     }
 }
 
-impl From<StrChunk> for ChunkedStr {
-    fn from(chunk: StrChunk) -> Self {
+impl From<StringChunk> for ChunkedString {
+    fn from(chunk: StringChunk) -> Self {
         Self(vec![chunk])
-    }
-}
-
-impl HayagrivaValue for ChunkedStr {
-    fn from_yaml(
-        yaml: &yaml_rust::Yaml,
-        ctx: &mut ParseContext<'_>,
-    ) -> Result<Self, DeserializationError>
-    where
-        Self: Sized,
-    {
-        match yaml {
-            Yaml::String(s) => Ok(Self::from_str(s)?),
-            Yaml::Hash(h) => {
-                let value = h.get_with_str("value", ctx)?.as_deserialized_str()?;
-                ctx.pop_dict_key();
-
-                let res = h.get_with_str("verbatim", ctx);
-
-                let verbatim = match res {
-                    Ok(Yaml::Boolean(b)) => *b,
-                    Ok(_) => return Err(DeserializationError::ExpectedKey("verbatim")),
-                    Err(_) => false,
-                };
-
-                if res.is_ok() {
-                    ctx.pop_dict_key();
-                }
-
-                Ok(StrChunk::new(
-                    value,
-                    if verbatim { ChunkKind::Verbatim } else { ChunkKind::Normal },
-                )
-                .into())
-            }
-            _ => Err(Self::expected_error()),
-        }
-    }
-
-    fn to_yaml(&self) -> yaml_rust::Yaml {
-        let mut buf = String::with_capacity(self.len());
-        self.fmt_serialized(&mut buf).unwrap();
-        Yaml::String(buf)
-    }
-
-    fn explain() -> &'static str {
-        "a formattable string"
     }
 }
 
 /// A chunk of a string.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StrChunk {
+pub struct StringChunk {
     /// The string value.
     pub value: String,
     /// Whether the chunk is subject to case folding or contains math.
     pub kind: ChunkKind,
 }
 
-impl StrChunk {
+impl StringChunk {
     /// Creates a new `StrChunk` from a string and a kind.
     pub fn new(value: impl Into<String>, kind: ChunkKind) -> Self {
         Self { value: value.into(), kind }
@@ -429,14 +471,14 @@ impl StrChunk {
     }
 }
 
-impl fmt::Write for StrChunk {
+impl fmt::Write for StringChunk {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.value.push_str(s);
         Ok(())
     }
 }
 
-impl fmt::Display for StrChunk {
+impl fmt::Display for StringChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.kind == ChunkKind::Math {
             write!(f, "${}$", self.value)
@@ -446,7 +488,7 @@ impl fmt::Display for StrChunk {
     }
 }
 
-impl StrChunk {
+impl StringChunk {
     /// Writes the chunk as a parenthesized string.
     fn fmt_serialized(&self, buf: &mut impl fmt::Write) -> fmt::Result {
         match self.kind {

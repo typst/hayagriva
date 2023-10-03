@@ -8,7 +8,9 @@ use super::{
     DisplayReference, DisplayString, Formatting, Record,
 };
 use crate::lang::{en, TitleCase};
-use crate::types::{Date, EntryType::*, MaybeTyped, Person, PersonRole};
+use crate::types::{
+    Date, EntryType::*, MaybeTyped, Person, PersonRole, PersonsWithRoles,
+};
 use crate::Entry;
 
 use en::get_ordinal;
@@ -263,7 +265,7 @@ impl Mla {
             .or_else(|| {
                 entry.affiliated().and_then(|a| {
                     if a.len() == 1 {
-                        Some(a[0].0.clone())
+                        Some(a[0].names.clone())
                     } else {
                         None
                     }
@@ -277,7 +279,7 @@ impl Mla {
 
         for (i, author) in persons.iter().enumerate() {
             let alias = tweet_entry
-                .and_then(|entry| entry.twitter_handle(i))
+                .and_then(|entry| entry.social_handle(i))
                 .or_else(|| author.alias.clone());
 
             names.push(if let Some(alias) = alias {
@@ -319,7 +321,7 @@ impl Mla {
         };
         res += &if let Some(authors) = entry.authors() {
             contribs.extend(authors.iter().cloned());
-            if !previous && entry.entry_type == Tweet {
+            if !previous && entry.entry_type == Post {
                 self.and_list(self.name_list(authors, Some(entry)), true)
             } else if !previous {
                 self.and_list(self.name_list(authors, None), true)
@@ -328,8 +330,8 @@ impl Mla {
             }
         } else if let Some(affs) = entry.affiliated() {
             let mut res = String::new();
-            for (persons, role) in affs.iter() {
-                let plural = persons.len() > 1;
+            for PersonsWithRoles { names, role } in affs.iter() {
+                let plural = names.len() > 1;
                 let desc = match role {
                     PersonRole::Translator if plural => "translators",
                     PersonRole::Translator => "translator",
@@ -366,17 +368,17 @@ impl Mla {
                     _ => "",
                 };
 
-                if desc.is_empty() || persons.is_empty() {
+                if desc.is_empty() || names.is_empty() {
                     continue;
                 }
-                contribs.extend(persons.iter().cloned());
+                contribs.extend(names.iter().cloned());
 
                 if !res.is_empty() {
                     res += ", ";
                 }
 
                 if !previous {
-                    res += &self.and_list(self.name_list(persons, None), true);
+                    res += &self.and_list(self.name_list(names, None), true);
                 }
                 res += ", ";
                 res += desc;
@@ -483,7 +485,7 @@ impl Mla {
             let mut contributors = vec![];
             if let Some(affiliated) = entry.affiliated() {
                 if entry != root || entry.authors().is_some() {
-                    for (ps, r) in affiliated.iter() {
+                    for PersonsWithRoles { names: ps, role: r } in affiliated.iter() {
                         if ps.is_empty() {
                             continue;
                         }

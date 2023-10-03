@@ -43,8 +43,8 @@ impl Bibliography {
         let authors = authors.into_iter().enumerate().map(|(i, p)| {
             let name =
                 if i == 0 { p.name_first(false, true) } else { p.given_first(false) };
-            if entry.entry_type == Tweet {
-                if let Some(pseud) = entry.twitter_handle(i) {
+            if entry.entry_type == Post {
+                if let Some(pseud) = entry.social_handle(i) {
                     format!("{} ({})", name, pseud)
                 } else {
                     name
@@ -123,7 +123,7 @@ impl Bibliography {
             }
         }
 
-        if entry.entry_type == Tweet {
+        if entry.entry_type == Post {
             if let Some(host) = entry
                 .url_any()
                 .and_then(|u| u.value.host_str())
@@ -211,7 +211,7 @@ impl Bibliography {
 
         let journal = select!((Article | Entry) > Periodical).matches(entry);
         let date = if self.mode == Mode::NotesAndBibliography
-            || select!((* > Newspaper) | Tweet | Thread | (* > Thread)).matches(entry)
+            || select!((* > Newspaper) | Post | Thread | (* > Thread)).matches(entry)
         {
             entry_date(entry, false)
         } else {

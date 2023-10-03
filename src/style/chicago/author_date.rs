@@ -294,7 +294,7 @@ impl<'a> BibliographyStyle<'a> for ChicagoAuthorDate {
 #[cfg(test)]
 mod tests {
     use crate::style::Database;
-    use crate::types::{Date, EntryType, FormatStr, Person};
+    use crate::types::{Date, EntryType, FormatString, Person};
     use crate::{style::Citation, Entry};
 
     use super::ChicagoAuthorDate;
@@ -446,7 +446,8 @@ mod tests {
     fn no_author() {
         let mut e = Entry::new("report", EntryType::Report);
         e.date = Some(Date::from_year(1999));
-        e.title = Some(FormatStr::with_value("Third International Report on Reporting"));
+        e.title =
+            Some(FormatString::with_value("Third International Report on Reporting"));
         let es = vec![e];
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
