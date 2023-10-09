@@ -64,8 +64,6 @@ pub fn from_biblatex_str(biblatex: &str) -> Result<Vec<Entry>, Vec<BibLaTeXError
 /// Parse a bibliography from a BibLaTeX [`Bibliography`].
 #[cfg(feature = "biblatex")]
 pub fn from_biblatex(bibliography: &Bibliography) -> Result<Vec<Entry>, Vec<TypeError>> {
-    use std::convert::TryInto;
-
     let res: Vec<Result<Entry, TypeError>> =
         bibliography.iter().map(TryInto::try_into).collect();
     let errors: Vec<TypeError> = res

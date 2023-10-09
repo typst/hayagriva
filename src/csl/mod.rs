@@ -3,10 +3,11 @@ use std::cell::RefCell;
 use std::fmt::Write;
 use std::mem;
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 
 use crate::csl::taxonomy::resolve_name_variable;
-use crate::lang::{Case, CaseFolder, SentenceCaseConf, TitleCaseConf};
-use crate::types::{Date, Person};
+use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
+use crate::types::{Date, MaybeTyped, Numeric, Person};
 use crate::Entry;
 use citationberg::taxonomy::{Locator, NameVariable};
 use citationberg::{taxonomy as csl_taxonomy, ToFormatting};
@@ -25,7 +26,7 @@ use citationberg::{
 mod taxonomy;
 use taxonomy::{resolve_number_variable, resolve_standard_variable};
 
-use self::taxonomy::{matches_entry_type, resolve_date_variable, MaybeTyped, Numeric};
+use self::taxonomy::{matches_entry_type, resolve_date_variable};
 
 pub(crate) struct Context<'a> {
     /// The settings of the style.
@@ -270,12 +271,12 @@ impl<'a> Context<'a> {
                     Some(ElemChild::Text(f)) => &mut f.text,
                     _ => {
                         used_buf = true;
-                        self.buf.as_str_mut()
+                        self.buf.as_string_mut()
                     }
                 }
             } else {
                 used_buf = true;
-                self.buf.as_str_mut()
+                self.buf.as_string_mut()
             };
 
             for quote in [close_quote, close_inner_quote].iter().flatten() {
@@ -299,7 +300,7 @@ impl<'a> Context<'a> {
         }
 
         self.buf
-            .config((*self.cases.last()).map(Into::into).unwrap_or_default());
+            .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
 
         if self.strip_periods {
             // Replicate citeproc.js behavior: remove a period if the
@@ -1715,7 +1716,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                         Variable::Standard(var) => self
                             .ctx
                             .resolve_standard_variable(LongShortForm::default(), var)
-                            .map(|v| TryInto::<Numeric>::try_into(v).is_ok())
+                            .map(|v| Numeric::from_str(v).is_ok())
                             .unwrap_or_default(),
                         Variable::Number(var) => matches!(
                             self.ctx.resolve_number_variable(var),
@@ -1926,8 +1927,8 @@ impl From<TextCase> for Case {
         match case {
             TextCase::Uppercase => Case::Uppercase,
             TextCase::Lowercase => Case::Lowercase,
-            TextCase::TitleCase => Case::Title(TitleCaseConf::default()),
-            TextCase::SentenceCase => Case::Sentence(SentenceCaseConf::default()),
+            TextCase::TitleCase => Case::Title(TitleCase::default()),
+            TextCase::SentenceCase => Case::Sentence(SentenceCase::default()),
             TextCase::CapitalizeFirst => Case::FirstUpper,
             TextCase::CapitalizeAll => Case::AllUpper,
         }

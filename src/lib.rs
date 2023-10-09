@@ -599,6 +599,11 @@ impl Entry {
         }
     }
 
+    /// Apply a selector and return a bound parent entry or self.
+    pub fn bound_select(&self, selector: &Selector, binding: &str) -> Option<&Entry> {
+        selector.apply(self).and_then(|map| map.get(binding).copied())
+    }
+
     /// Will recursively get a date off either the entry or any of its ancestors.
     pub fn date_any(&self) -> Option<&Date> {
         self.map(|e| e.date.as_ref())

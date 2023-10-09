@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use citationberg::{NumberForm, OrdinalLookup};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -145,6 +146,47 @@ impl Numeric {
         self.fmt_value(buf, machine_readable)?;
         if let Some(suffix) = &self.suffix {
             buf.write_str(suffix)?;
+        }
+
+        Ok(())
+    }
+
+    /// Format the value with a given form.
+    pub fn with_form<T>(
+        &self,
+        buf: &mut T,
+        form: NumberForm,
+        ords: OrdinalLookup<'_>,
+    ) -> std::fmt::Result
+    where
+        T: Write,
+    {
+        let format = |n: i32, buf: &mut T| -> std::fmt::Result {
+            match form {
+                NumberForm::Ordinal => {
+                    write!(buf, "{}{}", n, ords.lookup(n).unwrap_or_default())
+                }
+                NumberForm::LongOrdinal => match ords.lookup_long(n) {
+                    Some(str) => buf.write_str(str),
+                    None => write!(buf, "{}{}", n, ords.lookup(n).unwrap_or_default()),
+                },
+                NumberForm::Roman if n > 0 && n <= i16::MAX as i32 => {
+                    write!(buf, "{:x}", numerals::roman::Roman::from(n as i16))
+                }
+                NumberForm::Numeric | NumberForm::Roman => write!(buf, "{}", n),
+            }
+        };
+
+        match &self.value {
+            &NumericValue::Number(n) => format(n, buf)?,
+            NumericValue::Set(s) => {
+                for &(n, sep) in s {
+                    format(n, buf)?;
+                    if let Some(sep) = sep {
+                        write!(buf, "{}", sep)?
+                    }
+                }
+            }
         }
 
         Ok(())

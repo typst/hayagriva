@@ -1,7 +1,6 @@
 //! Provides conversion methods for BibLaTeX.
 
 use std::convert::TryFrom;
-use std::fmt::Write;
 
 use biblatex as tex;
 use tex::{
