@@ -28,7 +28,7 @@ Language Association-style citation.
 # Usage
 
 ```rust
-use hayagriva::from_yaml_str;
+use hayagriva::io::from_yaml_str;
 use hayagriva::style::{Database, Mla};
 
 let yaml = r#"
@@ -94,7 +94,7 @@ parsing a selector when working with constant selectors.
 
 ```rust
 use hayagriva::select;
-use hayagriva::from_yaml_str;
+use hayagriva::io::from_yaml_str;
 
 let yaml = r#"
 quantized-vortex:
@@ -141,7 +141,6 @@ pub use selectors::{Selector, SelectorError};
 
 use paste::paste;
 use serde::{de::Visitor, Deserialize, Serialize};
-use thiserror::Error;
 use types::*;
 use unic_langid::LanguageIdentifier;
 use util::{
@@ -149,47 +148,47 @@ use util::{
     OneOrMany,
 };
 
-/// A collection of entries.
+/// A collection of bibliographic entries.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
-pub struct Bibliography(IndexMap<String, Entry>);
+pub struct Library(IndexMap<String, Entry>);
 
-impl Bibliography {
-    /// Construct a new, empty bibliography.
+impl Library {
+    /// Construct a new, empty bibliography library.
     pub fn new() -> Self {
         Self(IndexMap::new())
     }
 
-    /// Add an entry to the bibliography.
+    /// Add an entry to the library.
     pub fn push(&mut self, entry: &Entry) {
         self.0.insert(entry.key.clone(), entry.clone());
     }
 
-    /// Retrieve an entry from the bibliography.
+    /// Retrieve an entry from the library.
     pub fn get(&self, key: &str) -> Option<&Entry> {
         self.0.get(key)
     }
 
-    /// Get an iterator over the entries in the bibliography.
+    /// Get an iterator over the entries in the library.
     pub fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.values()
     }
 
-    /// Get an iterator over the keys in the bibliography.
+    /// Get an iterator over the keys in the library.
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.0.keys().map(|k| k.as_str())
     }
 
-    /// Remove an entry from the bibliography.
+    /// Remove an entry from the library.
     pub fn remove(&mut self, key: &str) -> Option<Entry> {
         self.0.remove(key)
     }
 
-    /// Get the length of the bibliography.
+    /// Get the length of the library.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
-    /// Check whether the bibliography is empty.
+    /// Check whether the library is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -199,13 +198,13 @@ impl Bibliography {
         style::Database::from_entries(self.iter())
     }
 
-    /// Get the nth entry in the bibliography.
+    /// Get the nth entry in the library.
     pub fn nth(&self, n: usize) -> Option<&Entry> {
         self.0.get_index(n).map(|(_, v)| v)
     }
 }
 
-impl IntoIterator for Bibliography {
+impl IntoIterator for Library {
     type Item = Entry;
     type IntoIter = std::iter::Map<
         indexmap::map::IntoIter<String, Entry>,
@@ -309,12 +308,12 @@ macro_rules! entry {
             )*
         }
 
-        /// The bibliography deserialization also handles entries.
+        /// The library deserialization also handles entries.
         ///
         /// Entries do not implement [`Deserialize`] because they have a data
         /// dependency on their key (stored in the parent map) and their
         /// children for default types.
-        impl<'de> Deserialize<'de> for Bibliography {
+        impl<'de> Deserialize<'de> for Library {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
                 D: serde::Deserializer<'de>,
@@ -367,7 +366,7 @@ macro_rules! entry {
                 }
 
                 impl<'de> Visitor<'de> for MyVisitor {
-                    type Value = Bibliography;
+                    type Value = Library;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter)
                         -> std::fmt::Result
@@ -402,7 +401,7 @@ macro_rules! entry {
                                 v.into_entry(&k, None).map(|e| (k, e))
                             }).collect();
 
-                        Ok(Bibliography(entries?))
+                        Ok(Library(entries?))
                     }
                 }
 
@@ -676,49 +675,6 @@ impl Entry {
     }
 }
 
-/// Errors that may occur while parsing a library.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum LibraryError {
-    /// The YAML string does not contain exactly one document.
-    #[error("expected exactly one document")]
-    WrongNumberOfDocuments,
-    /// The library is not a dictionary.
-    #[error("no top-level dictionary found")]
-    NoTopLevelHash,
-    /// The key for an entry is not a string.
-    #[error("expected a string key")]
-    NonStringKey,
-    /// There was an error while parsing a value.
-    #[error("error while deserializing: {0}")]
-    DeserializationError(#[from] DeserializationError),
-}
-
-/// Parse a bibliography from a YAML string.
-///
-/// ```
-/// use hayagriva::from_yaml_str;
-///
-/// let yaml = r#"
-/// crazy-rich:
-///     type: Book
-///     title: Crazy Rich Asians
-///     author: Kwan, Kevin
-///     date: 2014
-///     publisher: Anchor Books
-///     location: New York, NY, US
-/// "#;
-/// let bib = from_yaml_str(yaml).unwrap();
-/// assert_eq!(bib.nth(0).unwrap().date().unwrap().year, 2014);
-/// ```
-pub fn from_yaml_str(s: &str) -> Result<Bibliography, serde_yaml::Error> {
-    serde_yaml::from_str(s)
-}
-
-/// Serialize a bibliography to a YAML string.
-pub fn to_yaml_str(entries: &Bibliography) -> Result<String, serde_yaml::Error> {
-    serde_yaml::to_string(&entries)
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -726,6 +682,7 @@ mod tests {
     use style::Citation;
 
     use super::*;
+    use crate::io::from_yaml_str;
     use crate::style::{Apa, ChicagoNotes, Ieee, Mla};
 
     #[test]
@@ -893,21 +850,5 @@ mod tests {
             entries >> "wwdc-network",
             ["a", "b", "c"]
         );
-    }
-
-    #[test]
-    fn roundtrip() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = from_yaml_str(&contents).unwrap();
-        let yaml = to_yaml_str(&entries).unwrap();
-        println!("{}", &yaml);
-
-        let reconstructed = from_yaml_str(&yaml).unwrap();
-        assert_eq!(entries.len(), reconstructed.len());
-
-        for entry in entries {
-            let match_e = reconstructed.iter().find(|x| x.key == entry.key).unwrap();
-            assert_eq!(match_e, &entry);
-        }
     }
 }
