@@ -1,5 +1,6 @@
 mod abbreviations;
 
+use std::fmt::Write;
 use std::vec;
 
 use isolang::Language;
@@ -9,8 +10,8 @@ use super::{
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Database,
     DisplayReference, DisplayString, Formatting, Record,
 };
-use crate::lang::{en, SentenceCaseConf, TitleCaseConf};
-use crate::types::{Date, EntryType::*, FmtOptionExt, NumOrStr, Person, PersonRole};
+use crate::lang::{en, SentenceCase, TitleCase};
+use crate::types::{Date, EntryType::*, MaybeTyped, Person, PersonRole};
 use crate::Entry;
 
 /// Bibliographies following IEEE guidance.
@@ -39,9 +40,9 @@ use crate::Entry;
 #[non_exhaustive]
 pub struct Ieee {
     /// The sentence case configuration. Used for paper titles etc.
-    pub sentence_case: SentenceCaseConf,
+    pub sentence_case: SentenceCase,
     /// The title case configuration. Used for journal titles etc.
-    pub title_case: TitleCaseConf,
+    pub title_case: TitleCase,
     /// How many authors have to be there for their list to be abbreviated with
     /// "et al."
     pub et_al_threshold: Option<u32>,
@@ -49,7 +50,7 @@ pub struct Ieee {
     pub abbreviate_journals: bool,
 }
 
-fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
+fn get_value_parent(entry: &Entry) -> Option<&Entry> {
     let section = select!((Chapter | Scene | Web) > ("p":*));
     let anthology = select!(Anthos > ("p": Anthology));
     let entry_spec = select!(Entry > ("p":(Reference | Repository)));
@@ -65,12 +66,12 @@ fn get_canonical_parent(entry: &Entry) -> Option<&Entry> {
 
 impl Default for Ieee {
     fn default() -> Self {
-        let title_case = TitleCaseConf {
+        let title_case = TitleCase {
             always_capitalize_min_len: Some(4),
-            ..TitleCaseConf::default()
+            ..TitleCase::default()
         };
         Self {
-            sentence_case: SentenceCaseConf::default(),
+            sentence_case: SentenceCase::default(),
             title_case,
             et_al_threshold: Some(6),
             abbreviate_journals: true,
@@ -115,7 +116,7 @@ impl Ieee {
         entry.url_any().is_some()
     }
 
-    fn get_author(&self, entry: &Entry, canonical: &Entry) -> (String, Vec<Person>) {
+    fn get_author(&self, entry: &Entry, value: &Entry) -> (String, Vec<Person>) {
         #[derive(Clone, Debug)]
         enum AuthorRole {
             Normal,
@@ -176,7 +177,7 @@ impl Ieee {
 
         let authors = if let Some(names) = names {
             Some(names)
-        } else if let Some(authors) = entry.authors().or_else(|| canonical.authors()) {
+        } else if let Some(authors) = entry.authors().or(value.authors()) {
             let list = name_list_straight(authors);
             pers_refs.extend(authors.iter().cloned());
             Some(list)
@@ -215,23 +216,23 @@ impl Ieee {
         (al, pers_refs)
     }
 
-    fn get_title_element(&self, entry: &Entry, canonical: &Entry) -> DisplayString {
+    fn get_title_element(&self, entry: &Entry, value: &Entry) -> DisplayString {
         // Article > Periodical: "<SC>," _<abbr(TC)>_
         // Any > Conference:     <SC>. Presented at <abbr(TC)>
         // Any > Anthology:      "<SC>," in _<TC>_ (TC, no. <issue>)
-        // entry != canonical:   "<SC>," in _<TC>_
+        // entry != value:   "<SC>," in _<TC>_
         // Legislation:          _<serial number>, <TC>_
         // Repository, Video, Reference, Book, Proceedings, Anthology, : _<TC>_
         // Fallback:             "<SC>,"
 
         let mut res = DisplayString::new();
 
-        if entry != canonical {
-            let canon_title = canonical.title();
+        if entry != value {
+            let canon_title = &value.title;
 
             if let Some(title) = entry.title() {
-                let sentence = title.canonical.format_sentence_case(self.sentence_case);
-                if canonical.entry_type == Conference {
+                let sentence = title.value.format_sentence_case(self.sentence_case);
+                if value.entry_type == Conference {
                     res += &sentence;
                     res.push('.');
                 } else {
@@ -246,19 +247,18 @@ impl Ieee {
             }
 
             if let Some(title) = canon_title {
-                let title_case = title.canonical.format_title_case(self.title_case);
+                let title_case = title.value.format_title_case(self.title_case);
                 let ct = if self.abbreviate_journals {
                     abbreviations::abbreviate_journal(&title_case)
                 } else {
                     title_case.to_string()
                 };
 
-                if canonical.entry_type == Conference {
+                if value.entry_type == Conference {
                     res += "Presented at ";
                     res += &ct;
                 } else {
-                    if let Some(lang) = entry.language().or_else(|| canonical.language())
-                    {
+                    if let Some(lang) = entry.language().or(value.language()) {
                         res += "(in ";
                         res += Language::from_639_1(lang.language.as_str())
                             .unwrap()
@@ -266,7 +266,7 @@ impl Ieee {
                         res += ") ";
                     }
 
-                    if entry.entry_type != Article || canonical.entry_type != Periodical {
+                    if entry.entry_type != Article || value.entry_type != Periodical {
                         res += "in ";
                     }
                     res.start_format(Formatting::Italic);
@@ -275,14 +275,15 @@ impl Ieee {
 
                     // Do the series parentheses thing here
                     let spec = select!(Anthology > ("p":(Anthology["title"])));
-                    if let Some(mut bindings) = spec.apply(canonical) {
+                    if let Some(mut bindings) = spec.apply(value) {
                         let parenth_anth = bindings.remove("p").unwrap();
 
                         res += " (";
                         res += &parenth_anth
-                            .title()
+                            .title
+                            .as_ref()
                             .unwrap()
-                            .canonical
+                            .value
                             .format_title_case(self.title_case);
 
                         res.add_if_some(
@@ -296,19 +297,18 @@ impl Ieee {
                     // And the conference series thing as well
                     let spec =
                         select!(Proceedings > ("p":(Proceedings | Anthology | Misc)));
-                    if let Some(mut bindings) = spec.apply(canonical) {
+                    if let Some(mut bindings) = spec.apply(value) {
                         let par_conf = bindings.remove("p").unwrap();
-                        if let Some(parenth_title) = par_conf.title() {
+                        if let Some(parenth_title) = &par_conf.title {
                             res += " in ";
-                            res += &parenth_title
-                                .canonical
-                                .format_title_case(self.title_case);
+                            res +=
+                                &parenth_title.value.format_title_case(self.title_case);
                         }
                     }
                 }
             }
         }
-        // No canonical parent
+        // No value parent
         else if matches!(
             entry.entry_type,
             Legislation | Repository | Video | Reference | Book | Proceedings | Anthology
@@ -316,7 +316,7 @@ impl Ieee {
             res.start_format(Formatting::Italic);
 
             if entry.entry_type == Legislation {
-                res.add_if_some(entry.serial_number(), None, None);
+                res.add_if_some(entry.serial_number().cloned(), None, None);
             }
 
             if let Some(title) = entry.title() {
@@ -324,13 +324,13 @@ impl Ieee {
                     res += ", ";
                 }
 
-                res += &title.canonical.format_title_case(self.title_case);
+                res += &title.value.format_title_case(self.title_case);
             }
 
             res.commit_formats();
         } else if let Some(title) = entry.title() {
             res += "“";
-            res += &title.canonical.format_sentence_case(self.sentence_case);
+            res += &title.value.format_sentence_case(self.sentence_case);
             res += ",”";
         }
 
@@ -340,7 +340,7 @@ impl Ieee {
     fn get_addons(
         &self,
         entry: &Entry,
-        canonical: &Entry,
+        value: &Entry,
         chapter: Option<u32>,
         section: Option<u32>,
         disamb: Option<usize>,
@@ -350,10 +350,10 @@ impl Ieee {
             select!((Article | Book | Anthos) > ("p": Repository)).apply(entry);
         let web_parented = select!(* > ("p":(Blog | Web))).apply(entry);
 
-        match (entry.entry_type, canonical.entry_type) {
+        match (entry.entry_type, value.entry_type) {
             (_, Conference) | (_, Proceedings) => {
-                if canonical.entry_type == Proceedings {
-                    if let Some(eds) = canonical.editors() {
+                if value.entry_type == Proceedings {
+                    if let Some(eds) = &value.editors {
                         let mut al = self.and_list(name_list_straight(eds));
                         if eds.len() > 1 {
                             al += ", Eds."
@@ -363,38 +363,38 @@ impl Ieee {
                         res.push(al);
                     }
 
-                    if let Some(vols) = entry.volume().or_else(|| canonical.volume()) {
-                        res.push(format_range("vol.", "vols.", vols));
+                    if let Some(vols) = entry.volume().or(value.volume()) {
+                        res.push(format_range("vol.", "vols.", vols.clone()));
                     }
 
-                    if let Some(ed) = canonical.edition() {
+                    if let Some(ed) = &value.edition {
                         match ed {
-                            NumOrStr::Number(i) => {
-                                if *i > 1 {
-                                    res.push(format!("{} ed.", en::get_ordinal(*i)));
-                                }
+                            MaybeTyped::Typed(n)
+                                if n.single_number().map_or(false, |n| n > 1) =>
+                            {
+                                res.push(format!("{} ed.", en::get_ordinal(n)));
                             }
-                            NumOrStr::Str(s) => res.push(s.clone()),
+                            _ => res.push(ed.to_string()),
                         }
                     }
                 }
 
-                if let Some(loc) = canonical.location() {
-                    res.push(loc.value.clone());
+                if let Some(loc) = &value.location {
+                    res.push(loc.value.to_string());
                 }
 
-                if canonical.entry_type != Conference || !self.show_url(entry) {
+                if value.entry_type != Conference || !self.show_url(entry) {
                     if let Some(date) = entry.date_any() {
                         res.push(format_date(date, disamb))
                     }
                 }
 
-                if canonical.entry_type == Conference {
+                if value.entry_type == Conference {
                     if let Some(sn) = entry.serial_number() {
                         res.push(format!("Paper {}", sn));
                     }
                 } else {
-                    if let Some(pages) = entry.page_range() {
+                    if let Some(pages) = entry.page_range().cloned() {
                         res.push(format_range("p.", "pp.", pages));
                     }
 
@@ -407,25 +407,23 @@ impl Ieee {
                 let has_url = self.show_url(entry);
                 let date = entry.date_any().map(|date| format_date(date, disamb));
 
-                if let Some(ed) = canonical.edition() {
+                if let Some(ed) = &value.edition {
                     match ed {
-                        NumOrStr::Number(i) => {
-                            if *i > 1 {
-                                res.push(format!("{} ed.", en::get_ordinal(*i)));
-                            }
+                        MaybeTyped::Typed(n)
+                            if n.single_number().map_or(false, |n| n > 1) =>
+                        {
+                            res.push(format!("{} ed.", en::get_ordinal(n)));
                         }
-                        NumOrStr::Str(s) => res.push(s.clone()),
+                        _ => res.push(ed.to_string()),
                     }
                 }
 
                 if !has_url {
-                    if let Some(publisher) =
-                        canonical.organization().or_else(|| canonical.publisher().value())
-                    {
-                        res.push(publisher.into());
+                    if let Some(publisher) = value.organization().or(value.publisher()) {
+                        res.push(publisher.to_string());
 
-                        if let Some(loc) = canonical.location() {
-                            res.push(loc.value.clone());
+                        if let Some(loc) = &value.location {
+                            res.push(loc.value.to_string());
                         }
                     }
 
@@ -434,32 +432,29 @@ impl Ieee {
                     }
 
                     if let Some(pages) = entry.page_range() {
-                        res.push(format_range("p.", "pp.", pages));
+                        res.push(format_range("p.", "pp.", pages.clone()));
                     }
                 } else if let Some(date) = date {
                     res.push(format!("({})", date));
                 }
             }
             (_, Repository) => {
-                if let Some(sn) = canonical.serial_number() {
+                if let Some(sn) = &value.serial_number {
                     res.push(format!("(version {})", sn));
-                } else if let Some(date) = canonical.date().or_else(|| entry.date_any()) {
+                } else if let Some(date) = value.date().or_else(|| entry.date_any()) {
                     res.push(format!("({})", date.year));
                 }
 
-                if let Some(publisher) =
-                    canonical.publisher().value().or_else(|| canonical.organization())
-                {
+                if let Some(publisher) = value.publisher().or(value.organization()) {
                     let mut publ = String::new();
-                    if let Some(location) = canonical.location() {
-                        publ += &location.value;
+                    if let Some(location) = &value.location {
+                        write!(publ, "{}: ", location.value).unwrap();
                         publ += ": ";
                     }
 
-                    publ += publisher;
+                    write!(publ, "{}", publisher.value).unwrap();
 
-                    if let Some(lang) = entry.language().or_else(|| canonical.language())
-                    {
+                    if let Some(lang) = entry.language().or(value.language()) {
                         publ += " (in ";
                         publ += Language::from_639_1(lang.language.as_str())
                             .unwrap()
@@ -471,21 +466,20 @@ impl Ieee {
                 }
             }
             (_, Video) => {
-                if let Some(date) = canonical.date().or_else(|| entry.date_any()) {
+                if let Some(date) = value.date().or_else(|| entry.date_any()) {
                     res.push(format!("({})", date.year));
                 }
             }
             (_, Patent) => {
                 let mut start = String::new();
-                if let Some(location) = canonical.location() {
-                    start += &location.value;
-                    start.push(' ');
+                if let Some(location) = &value.location {
+                    write!(start, "{} ", location.value).unwrap();
                 }
 
                 start += "Patent";
 
-                if let Some(sn) = canonical.serial_number() {
-                    start += &format!(" {}", sn);
+                if let Some(sn) = &value.serial_number {
+                    write!(start, " {}", sn).unwrap();
                 }
 
                 if self.show_url(entry) {
@@ -520,15 +514,15 @@ impl Ieee {
                 }
             }
             (_, Periodical) => {
-                if let Some(vols) = canonical.volume() {
+                if let Some(vols) = value.volume.clone() {
                     res.push(format_range("vol.", "vols.", vols));
                 }
 
-                if let Some(iss) = canonical.issue() {
+                if let Some(iss) = &value.issue {
                     res.push(format!("no. {}", iss));
                 }
 
-                let pages = if let Some(pages) = entry.page_range() {
+                let pages = if let Some(pages) = entry.page_range().cloned() {
                     res.push(format_range("p.", "pp.", pages));
                     true
                 } else {
@@ -550,17 +544,15 @@ impl Ieee {
                 }
             }
             (_, Report) => {
-                if let Some(publisher) =
-                    canonical.organization().or_else(|| canonical.publisher().value())
-                {
-                    res.push(publisher.into());
+                if let Some(publisher) = value.organization().or(value.publisher()) {
+                    res.push(publisher.to_string());
 
-                    if let Some(location) = canonical.location() {
-                        res.push(location.value.clone());
+                    if let Some(location) = &value.location {
+                        res.push(location.value.to_string());
                     }
                 }
 
-                if let Some(sn) = canonical.serial_number() {
+                if let Some(sn) = &value.serial_number {
                     res.push(format!("Rep. {}", sn));
                 }
 
@@ -572,11 +564,11 @@ impl Ieee {
                     }
                 }
 
-                if let Some(vols) = canonical.volume().or_else(|| entry.volume()) {
-                    res.push(format_range("vol.", "vols.", vols));
+                if let Some(vols) = value.volume().or(entry.volume()) {
+                    res.push(format_range("vol.", "vols.", vols.clone()));
                 }
 
-                if let Some(iss) = canonical.issue() {
+                if let Some(iss) = &value.issue {
                     res.push(format!("no. {}", iss));
                 }
 
@@ -588,15 +580,15 @@ impl Ieee {
             }
             (_, Thesis) => {
                 res.push("Thesis".to_string());
-                if let Some(org) = canonical.organization() {
+                if let Some(org) = &value.organization {
                     res.push(if self.abbreviate_journals {
-                        abbreviations::abbreviate_journal(org)
+                        abbreviations::abbreviate_journal(&org.to_string())
                     } else {
                         org.to_string()
                     });
 
-                    if let Some(location) = canonical.location() {
-                        res.push(location.value.clone());
+                    if let Some(location) = &value.location {
+                        res.push(location.value.to_string());
                     }
                 }
 
@@ -625,8 +617,9 @@ impl Ieee {
                             .map_or(false, |h| h.as_str() == "arxiv.org");
 
                         let has_parent = parent
-                            .title()
-                            .map(|e| e.canonical.value.to_lowercase())
+                            .title
+                            .as_ref()
+                            .map(|e| e.value.to_lowercase())
                             .map_or(false, |v| v.as_str() == "arxiv");
 
                         if !has_arxiv_serial && (has_url || has_parent) {
@@ -638,10 +631,8 @@ impl Ieee {
                         serial.to_string()
                     };
 
-                    if let Some(al) = entry.archive().or_else(|| parent.archive()) {
-                        sn += " [";
-                        sn += &al.value;
-                        sn += "]";
+                    if let Some(al) = entry.archive().or(parent.archive()) {
+                        write!(sn, " [{}]", al.value).unwrap();
                     }
 
                     res.push(sn);
@@ -652,32 +643,27 @@ impl Ieee {
                 }
             }
             (Web, _) | (Blog, _) => {
-                if let Some(publisher) = entry
-                    .publisher()
-                    .map(|publ| publ.value.as_str())
-                    .or_else(|| entry.organization())
-                {
-                    res.push(publisher.into());
+                if let Some(publisher) = entry.publisher().or(entry.organization()) {
+                    res.push(publisher.to_string());
                 }
             }
             _ if web_parented.is_some() => {
                 let parent = web_parented.unwrap().remove("p").unwrap();
                 if let Some(publisher) = parent
-                    .title()
-                    .map(|t| &t.canonical)
-                    .or_else(|| parent.publisher())
-                    .or_else(|| entry.publisher())
-                    .value()
-                    .or_else(|| parent.organization())
-                    .or_else(|| entry.organization())
+                    .title
+                    .as_ref()
+                    .or(parent.publisher())
+                    .or(entry.publisher())
+                    .or(parent.organization())
+                    .or(entry.organization())
                 {
-                    res.push(publisher.into());
+                    res.push(publisher.to_string());
                 }
             }
             _ => {
                 if let (Some(_), Some(eds)) = (
                     entry.authors().unwrap_or_default().get(0),
-                    entry.editors().or_else(|| canonical.editors()),
+                    entry.editors().or(value.editors()),
                 ) {
                     let mut al = self.and_list(name_list_straight(eds));
                     if eds.len() > 1 {
@@ -688,34 +674,31 @@ impl Ieee {
                     res.push(al);
                 }
 
-                if let Some(vols) = entry.volume().or_else(|| canonical.volume()) {
-                    res.push(format_range("vol.", "vols.", vols));
+                if let Some(vols) = entry.volume().or(value.volume()) {
+                    res.push(format_range("vol.", "vols.", vols.clone()));
                 }
 
-                if let Some(ed) = canonical.edition() {
+                if let Some(ed) = &value.edition {
                     match ed {
-                        NumOrStr::Number(i) => {
-                            if *i > 1 {
-                                res.push(format!("{} ed.", en::get_ordinal(*i)));
-                            }
+                        MaybeTyped::Typed(n)
+                            if n.single_number().map_or(false, |n| n > 1) =>
+                        {
+                            res.push(format!("{} ed.", en::get_ordinal(n)));
                         }
-                        NumOrStr::Str(s) => res.push(s.clone()),
+
+                        _ => res.push(ed.to_string()),
                     }
                 }
 
-                if let Some(publisher) =
-                    canonical.publisher().value().or_else(|| canonical.organization())
-                {
+                if let Some(publisher) = value.publisher().or(value.organization()) {
                     let mut publ = String::new();
-                    if let Some(location) = canonical.location() {
-                        publ += &location.value;
-                        publ += ": ";
+                    if let Some(location) = &value.location {
+                        write!(publ, "{}: ", location).unwrap();
                     }
 
-                    publ += publisher;
+                    write!(publ, "{}", publisher).unwrap();
 
-                    if let Some(lang) = entry.language().or_else(|| canonical.language())
-                    {
+                    if let Some(lang) = entry.language().or(value.language()) {
                         publ += " (in ";
                         publ += Language::from_639_1(lang.language.as_str())
                             .unwrap()
@@ -726,7 +709,7 @@ impl Ieee {
                     res.push(publ);
                 }
 
-                if let Some(date) = canonical.date_any() {
+                if let Some(date) = value.date_any() {
                     res.push(date.display_year());
                 }
 
@@ -739,7 +722,7 @@ impl Ieee {
                 }
 
                 if let Some(pages) = entry.page_range() {
-                    res.push(format_range("p.", "pp.", pages));
+                    res.push(format_range("p.", "pp.", pages.clone()));
                 }
             }
         }
@@ -752,7 +735,7 @@ impl Ieee {
         record: &Record<'a>,
     ) -> (DisplayReference<'a>, Vec<Person>) {
         let mut entry = record.entry;
-        let mut parent = entry.parents().and_then(|v| v.first());
+        let mut parent = entry.parents().first();
         let mut sn_stack = vec![];
         while entry.title().is_none() && select!(Chapter | Scene).matches(entry) {
             if let Some(sn) = entry.serial_number() {
@@ -760,7 +743,7 @@ impl Ieee {
             }
             if let Some(p) = parent {
                 entry = p;
-                parent = entry.parents().and_then(|v| v.first());
+                parent = entry.parents().first();
             } else {
                 break;
             }
@@ -774,7 +757,7 @@ impl Ieee {
 
         let secs = sn_stack
             .into_iter()
-            .map(str::parse)
+            .map(|s| s.parse())
             .filter_map(Result::ok)
             .collect::<Vec<u32>>();
 
@@ -783,35 +766,34 @@ impl Ieee {
 
         let url = self.show_url(entry);
 
-        let parent = get_canonical_parent(entry);
-        let canonical = parent.unwrap_or(entry);
+        let parent = get_value_parent(entry);
+        let value = parent.unwrap_or(entry);
 
-        let (authors, al) = self.get_author(entry, canonical);
-        let title = self.get_title_element(entry, canonical);
+        let (authors, al) = self.get_author(entry, value);
+        let title = self.get_title_element(entry, value);
         let addons =
-            self.get_addons(entry, canonical, chapter, section, record.disambiguation);
+            self.get_addons(entry, value, chapter, section, record.disambiguation);
 
         let mut res = DisplayString::from_string(authors);
 
-        if canonical.entry_type == Legislation {
-            if let Some(NumOrStr::Str(session)) = entry.edition() {
+        if value.entry_type == Legislation {
+            if let Some(MaybeTyped::String(session)) = entry.edition() {
                 if !res.is_empty() {
                     res += ". ";
                 }
-                res += session;
+                write!(res.value, "{}", session).unwrap();
             }
         }
 
-        if canonical.entry_type == Video {
-            if let Some(location) = canonical.location() {
+        if value.entry_type == Video {
+            if let Some(location) = &value.location {
                 if !res.is_empty() {
                     res += ", ";
                 }
-                res += &location.value;
+                write!(res.value, "{}", location).unwrap();
             }
-        } else if canonical.entry_type == Legislation
-            || ((canonical.entry_type == Conference || canonical.entry_type == Patent)
-                && url)
+        } else if value.entry_type == Legislation
+            || ((value.entry_type == Conference || value.entry_type == Patent) && url)
         {
             if let Some(date) = entry.date_any() {
                 if !res.is_empty() {
@@ -824,11 +806,9 @@ impl Ieee {
         }
 
         if !res.is_empty() && !title.is_empty() {
-            if canonical.entry_type == Legislation
-                || canonical.entry_type == Video
-                || ((canonical.entry_type == Conference
-                    || canonical.entry_type == Patent)
-                    && url)
+            if value.entry_type == Legislation
+                || value.entry_type == Video
+                || ((value.entry_type == Conference || value.entry_type == Patent) && url)
             {
                 res += ". ";
             } else {
@@ -868,12 +848,12 @@ impl Ieee {
                     res += " ";
                 }
 
-                if canonical.entry_type != Web && canonical.entry_type != Blog {
+                if value.entry_type != Web && value.entry_type != Blog {
                     if let Some(date) = &url.visit_date {
-                        res += &format!("Accessed: {}. ", format_date(date, None));
+                        write!(res, "Accessed: {}. ", format_date(date, None)).unwrap();
                     }
 
-                    if canonical.entry_type == Video {
+                    if value.entry_type == Video {
                         res += "[Online Video]";
                     } else {
                         res += "[Online]";
@@ -889,7 +869,7 @@ impl Ieee {
                     res.commit_formats();
 
                     if let Some(date) = &url.visit_date {
-                        res += &format!(" (accessed: {}).", format_date(date, None));
+                        write!(res, " (accessed: {}).", format_date(date, None)).unwrap();
                     }
                 }
             }
@@ -900,7 +880,7 @@ impl Ieee {
                 res += " ";
             }
 
-            res += &format!("({})", note);
+            write!(res, "({})", note).unwrap();
         }
 
         (

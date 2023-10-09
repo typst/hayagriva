@@ -65,10 +65,10 @@ crazy-rich:
 
 // Parse a bibliography
 let bib = from_yaml_str(yaml).unwrap();
-assert_eq!(bib[0].date().unwrap().year, 2014);
+assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 
 // Format the reference
-let db = Database::from_entries(bib.iter());
+let db = bib.database();
 let mut mla = Mla::new();
 let reference = db.bibliography(&mut mla, None);
 assert_eq!(reference[0].display.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
@@ -133,7 +133,7 @@ quantized-vortex:
 
 let entries = from_yaml_str(yaml).unwrap();
 let journal = select!((Article["date"]) > ("journal":Periodical));
-assert!(journal.matches(&entries[0]));
+assert!(journal.matches(entries.nth(0).unwrap()));
 ```
 
 There are two ways to check if a selector matches an entry.

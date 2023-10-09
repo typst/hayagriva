@@ -6,12 +6,15 @@ use super::{
     and_list, entry_date, format_date, get_chunk_title, get_creators, get_info_element,
     get_title, AuthorRole, ChicagoConfig, DateMode, Mode,
 };
+use crate::style::FmtOptionExt;
 use crate::style::{
     abbreviate_publisher, alph_designator, chicago::web_creator, delegate_titled_entry,
     format_range, push_comma_quote_aware, DisplayString, Formatting,
 };
-use crate::types::{EntryType::*, FmtOptionExt, Person};
+use crate::types::{EntryType::*, Person};
 use crate::Entry;
+
+use std::fmt::Write;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -40,8 +43,8 @@ impl Bibliography {
         let authors = authors.into_iter().enumerate().map(|(i, p)| {
             let name =
                 if i == 0 { p.name_first(false, true) } else { p.given_first(false) };
-            if entry.entry_type == Tweet {
-                if let Some(pseud) = entry.twitter_handle(i) {
+            if entry.entry_type == Post {
+                if let Some(pseud) = entry.social_handle(i) {
                     format!("{} ({})", name, pseud)
                 } else {
                     name
@@ -86,7 +89,7 @@ impl Bibliography {
                 )
             {
                 if let Some(org) = entry.organization() {
-                    res += org
+                    write!(res, "{}", org).unwrap();
                 }
             }
         }
@@ -102,14 +105,15 @@ impl Bibliography {
         let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if conference.is_none() {
             if let Some(loc) = entry
-                .location()
+                .location
+                .as_ref()
                 .or_else(|| published_entry.and_then(|e| e.location()))
             {
                 if !res.is_empty() {
                     res += ", ";
                 }
-                res += &loc.value;
-            } else if matches!(&entry.entry_type, Book | Anthology)
+                write!(res, "{}", loc).unwrap();
+            } else if matches!(entry.entry_type(), Book | Anthology)
                 && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
             {
                 if !res.is_empty() {
@@ -119,7 +123,7 @@ impl Bibliography {
             }
         }
 
-        if entry.entry_type == Tweet {
+        if entry.entry_type == Post {
             if let Some(host) = entry
                 .url_any()
                 .and_then(|u| u.value.host_str())
@@ -160,22 +164,22 @@ impl Bibliography {
                 res += "Conference presentation";
             }
 
-            if let Some(org) = conf.organization() {
+            if let Some(org) = &conf.organization {
                 res += ", ";
-                res += org;
+                write!(res, "{}", org).unwrap();
             }
 
-            if let Some(loc) = conf.location() {
+            if let Some(loc) = &conf.location {
                 res += ", ";
-                res += &loc.value;
+                write!(res, "{}", loc).unwrap();
             }
         } else if let Some(publisher) = entry
-            .publisher()
-            .value()
-            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
+            .publisher
+            .as_ref()
+            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
             .or_else(|| {
-                if matches!(&entry.entry_type, Report | Thesis)
-                    || (matches!(&entry.entry_type, Case | Legislation)
+                if matches!(entry.entry_type(), Report | Thesis)
+                    || (matches!(entry.entry_type(), Case | Legislation)
                         && entry.serial_number().is_some())
                 {
                     entry.organization()
@@ -183,7 +187,7 @@ impl Bibliography {
                     None
                 }
             })
-            .map(Into::into)
+            .map(|p| p.to_string())
             .or_else(|| {
                 if entry.entry_type == Reference && entry.volume().is_none() {
                     entry.authors().map(|a| {
@@ -207,7 +211,7 @@ impl Bibliography {
 
         let journal = select!((Article | Entry) > Periodical).matches(entry);
         let date = if self.mode == Mode::NotesAndBibliography
-            || select!((* > Newspaper) | Tweet | Thread | (* > Thread)).matches(entry)
+            || select!((* > Newspaper) | Post | Thread | (* > Thread)).matches(entry)
         {
             entry_date(entry, false)
         } else {
@@ -225,21 +229,23 @@ impl Bibliography {
         if entry.entry_type == Artwork {
             let mut items: Vec<String> = vec![];
 
-            items.extend(entry.note().map(Into::into));
+            items.extend(entry.note().value());
 
             let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
-                    .organization()
-                    .or_else(|| entry.publisher().value())
+                    .organization
+                    .as_ref()
+                    .or(entry.publisher())
                     .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher().value()))
-                    .map(Into::into),
+                    .or_else(|| parent.and_then(|p| p.publisher()))
+                    .map(|p| p.to_string()),
             );
 
             items.extend(
                 entry
-                    .location()
+                    .location
+                    .as_ref()
                     .or_else(|| parent.and_then(|p| p.location()))
                     .value()
                     .map(Into::into),
@@ -379,7 +385,7 @@ impl Bibliography {
             res += get_chunk_title(entry, false, true, &self.config);
         }
 
-        if let Some(pr) = entry.page_range() {
+        if let Some(pr) = entry.page_range().cloned() {
             if !res.is_empty() {
                 if colon {
                     res.push(':');
@@ -402,7 +408,7 @@ impl Bibliography {
                     res.push(' ');
                 }
 
-                res += sn;
+                write!(res, "no. {}", sn).unwrap();
             }
         }
 
@@ -417,7 +423,8 @@ impl Bibliography {
             let mut res = DisplayString::new();
             if let Some(date) = qurl.visit_date.as_ref() {
                 if database.is_none() && self.config.url_access_date.needs_date(entry) {
-                    res += &format!("accessed {}, ", format_date(date, DateMode::Day));
+                    write!(res, "accessed {}, ", format_date(date, DateMode::Day))
+                        .unwrap();
                 }
             }
 
@@ -437,7 +444,7 @@ impl Bibliography {
             let mut brack_content = get_chunk_title(entry, false, false, &self.config);
             if let Some(sn) = entry.serial_number() {
                 push_comma_quote_aware(&mut brack_content.value, ',', true);
-                brack_content += sn;
+                write!(brack_content, "no. {}", sn).unwrap();
             }
             if self.config.url_access_date.needs_date(entry) {
                 if let Some(date) = entry.url_any().and_then(|u| u.visit_date.as_ref()) {
@@ -471,11 +478,10 @@ impl Bibliography {
             if let Some(archive) = entry.archive() {
                 push_comma_quote_aware(&mut res.value, ',', true);
 
-                res += &archive.value;
+                write!(res, ", {}", archive).unwrap();
 
                 if let Some(al) = entry.archive_location() {
-                    res += ", ";
-                    res += &al.value;
+                    write!(res, ", {}", al).unwrap();
                 }
             }
         }

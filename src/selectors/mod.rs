@@ -169,7 +169,7 @@ impl Selector {
             }),
 
             Self::Attr(expr, attributes) => expr.apply(entry).and_then(|bound| {
-                if attributes.iter().all(|arg| entry.get(arg.as_ref()).is_some()) {
+                if attributes.iter().all(|arg| entry.has(arg.as_ref())) {
                     Some(bound)
                 } else {
                     None
@@ -189,7 +189,7 @@ impl Selector {
             Self::Multi(_) => None,
 
             Self::Ancestrage(lhs, rhs) => lhs.apply(entry).and_then(|mut bound| {
-                let parents = entry.parents().unwrap_or_default();
+                let parents = &entry.parents;
                 if let Some((other, _)) = rhs.apply_any(parents) {
                     bound.extend(other);
                     Some(bound)
@@ -238,9 +238,10 @@ impl Selector {
             Self::Attr(expr, attributes) => {
                 expr.apply_any(entries).and_then(|(bound, es)| {
                     if !es.is_empty() {
-                        if es.iter().any(|e| {
-                            attributes.iter().all(|arg| e.get(arg.as_ref()).is_some())
-                        }) {
+                        if es
+                            .iter()
+                            .any(|e| attributes.iter().all(|arg| e.has(arg.as_ref())))
+                        {
                             Some((bound, es))
                         } else {
                             None

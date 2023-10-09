@@ -5,15 +5,18 @@ pub mod author_date;
 mod bibliography;
 pub mod notes;
 
+use std::fmt::Write;
+
 use isolang::Language;
 
 use super::{
     format_range, omit_initial_articles, push_comma_quote_aware, DisplayString,
-    Formatting,
+    FmtOptionExt, Formatting,
 };
-use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCaseConf, TitleCaseConf};
+use crate::lang::{en::get_month_name, en::get_ordinal, SentenceCase, TitleCase};
 use crate::types::{
-    Date, EntryType::*, FmtOptionExt, FmtString, NumOrStr, Person, PersonRole, Title,
+    ChunkedString, Date, EntryType::*, FormatString, MaybeTyped, Numeric, Person,
+    PersonRole,
 };
 use crate::Entry;
 
@@ -124,9 +127,9 @@ pub struct ChicagoConfig {
     /// When to print URL access dates.
     pub url_access_date: ChicagoAccessDateVisibility,
     /// The title case configuration.
-    pub title_case: TitleCaseConf,
+    pub title_case: TitleCase,
     /// The sentence case configuration.
-    pub sentence_case: SentenceCaseConf,
+    pub sentence_case: SentenceCase,
 }
 
 impl Default for ChicagoConfig {
@@ -134,8 +137,8 @@ impl Default for ChicagoConfig {
         Self {
             et_al_limit: Some(4),
             url_access_date: ChicagoAccessDateVisibility::default(),
-            title_case: TitleCaseConf::new(),
-            sentence_case: SentenceCaseConf::new(),
+            title_case: TitleCase::new(),
+            sentence_case: SentenceCase::new(),
         }
     }
 }
@@ -294,7 +297,7 @@ fn get_title(
             if chapter.is_some() {
                 if let Some(sn) = entry.serial_number() {
                     if sn.chars().all(char::is_numeric) {
-                        res += &format!("chap. {} ", sn);
+                        write!(res, "chap. {} ", sn).unwrap();
                     } else {
                         res += sn;
                         res.push(' ');
@@ -309,8 +312,8 @@ fn get_title(
             }
             res += get_chunk_title(parent, false, true, common);
 
-            if parent.authors().is_none() {
-                if let Some(eds) = parent.editors() {
+            if parent.authors.is_none() {
+                if let Some(eds) = &parent.editors {
                     let ed_names =
                         eds.iter().map(|p| p.given_first(false)).collect::<Vec<_>>();
 
@@ -362,7 +365,9 @@ pub(super) fn get_chunk_title(
 ) -> DisplayString {
     let mut res = DisplayString::new();
 
-    if entry.title().value() == Some("Wikipedia") || entry.entry_type == Repository {
+    if entry.title().value() == Some("Wikipedia".to_string())
+        || entry.entry_type == Repository
+    {
         fmt = false;
     }
     let sc = fmt && self_contained(entry);
@@ -378,15 +383,15 @@ pub(super) fn get_chunk_title(
     if short {
         if let Some(title) = entry.title().map(shorthand) {
             res += &if entry.entry_type == Entry {
-                title.value
+                title.to_string()
             } else {
                 title.format_title_case(common.title_case)
             };
         }
     } else if let Some(title) = entry.title() {
-        let tc = title.canonical.format_title_case(common.title_case);
+        let tc = title.value.format_title_case(common.title_case);
         res += &if entry.entry_type == Entry {
-            title.canonical.value.clone()
+            title.value.to_string()
         } else if entry.entry_type == Case {
             tc.replace("V.", "v.")
         } else {
@@ -402,22 +407,6 @@ pub(super) fn get_chunk_title(
         res.commit_formats();
     } else if fmt {
         res += "”";
-    }
-
-    if !short {
-        if let Some(translation) = entry
-            .title()
-            .and_then(|title| title.translated.as_ref())
-            .map(|transl| transl.format_sentence_case(common.sentence_case))
-        {
-            if !res.is_empty() {
-                res.push(' ');
-            }
-
-            res.push('[');
-            res += &translation;
-            res.push(']');
-        }
     }
 
     if !short && entry.entry_type == Blog {
@@ -460,21 +449,11 @@ fn self_contained(entry: &Entry) -> bool {
         .matches(entry))
 }
 
-fn shorthand(title: &Title) -> FmtString {
-    if let Some(sh) = title.shorthand.as_ref() {
-        sh.clone()
+fn shorthand(title: &FormatString) -> &ChunkedString {
+    if let Some(sh) = title.short.as_ref() {
+        sh
     } else {
-        let mut fmt = FmtString::new(omit_initial_articles(&title.canonical.value))
-            .verbatim(title.canonical.verbatim);
-
-        if let Some(tc) = title.canonical.title_case.as_ref() {
-            fmt = fmt.title_case(omit_initial_articles(tc))
-        }
-        if let Some(sc) = title.canonical.sentence_case.as_ref() {
-            fmt = fmt.sentence_case(omit_initial_articles(sc))
-        }
-
-        fmt
+        &title.value
     }
 }
 
@@ -486,7 +465,7 @@ fn web_creator(
     let web_thing = select!(Web | ((Misc | Web) > ("p": Web))).apply(entry);
     web_thing.map(|wt| {
         if let Some(org) = entry.organization() {
-            org.into()
+            org.to_string()
         } else if wt.get("p").and_then(|e| e.authors()).is_some() {
             let authors =
                 get_creators(wt.get("p").unwrap()).0.into_iter().enumerate().map(
@@ -501,7 +480,7 @@ fn web_creator(
 
             and_list(authors, invert_first, et_al_limit)
         } else if let Some(org) = wt.get("p").and_then(|e| e.organization()) {
-            org.into()
+            org.to_string()
         } else {
             "".into()
         }
@@ -549,17 +528,13 @@ fn get_info_element(
     .matches(entry);
 
     let prepend = if let Some(lang) = entry.language() {
-        if entry.title().and_then(|t| t.translated.as_ref()).is_none() {
-            let mut lingo = if capitals { "[In " } else { "[in " }.to_string();
-            lingo += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
-            if capitals {
-                lingo.push('.');
-            }
-            lingo += "]";
-            lingo
-        } else {
-            String::new()
+        let mut lingo = if capitals { "[In " } else { "[in " }.to_string();
+        lingo += Language::from_639_1(lang.language.as_str()).unwrap().to_name();
+        if capitals {
+            lingo.push('.');
         }
+        lingo += "]";
+        lingo
     } else {
         String::new()
     };
@@ -648,37 +623,39 @@ fn get_info_element(
     }
 
     if let Some(journal) = journal {
-        if let Some(volume) = entry.volume() {
+        if let Some(volume) = entry.volume().cloned() {
             res.push(format_range("pt.", "pts.", volume).into());
         }
 
         let mut local = get_chunk_title(journal, false, true, common);
 
         if let Some(paper) = newspaper {
-            if let Some(location) = paper.location() {
+            if let Some(location) = &paper.location {
                 if !local.is_empty() {
                     local.push(' ');
                 }
 
-                local.push('(');
-                local += &location.value;
-                local.push(')');
+                write!(local, "({})", location.value).unwrap();
             }
         }
 
-        if let Some(ed) = journal.edition() {
+        if let Some(ed) = &journal.edition {
             let applied = match ed {
-                NumOrStr::Number(n) if *n > 1 => format!("{} ser.", get_ordinal(*n)),
-                NumOrStr::Str(s) => {
-                    let mut s =
-                        s.to_lowercase().replace("new", "n.").replace("series", "s.");
+                MaybeTyped::Typed(n) if n.single_number().map_or(false, |n| n > 1) => {
+                    format!("{} ser.", get_ordinal(n))
+                }
+                _ => {
+                    let mut s = ed
+                        .to_str()
+                        .to_lowercase()
+                        .replace("new", "n.")
+                        .replace("series", "s.");
                     if s.trim() == "n. s." {
                         s = "n.s.".into()
                     };
 
                     s
                 }
-                _ => String::new(),
             };
 
             if !applied.is_empty() {
@@ -688,27 +665,27 @@ fn get_info_element(
 
                 local += &applied;
 
-                if journal.volume().is_some() {
+                if journal.volume.is_some() {
                     local.push(',')
                 }
             }
         }
 
-        if let Some(vol) = journal.volume() {
+        if let Some(vol) = journal.volume.clone() {
             if !local.is_empty() {
                 local.push(' ');
             }
             local += &format_range("", "", vol);
         }
 
-        if let Some(iss) = journal.issue() {
+        if let Some(iss) = &journal.issue {
             if !local.is_empty() {
                 local += ", ";
             }
 
             local += &match iss {
-                NumOrStr::Number(i) => format!("no. {}", i),
-                NumOrStr::Str(s) => s.clone(),
+                MaybeTyped::Typed(i) => format!("no. {}", i),
+                MaybeTyped::String(s) => s.clone(),
             };
         }
         res.push(local);
@@ -737,9 +714,9 @@ fn get_info_element(
 
     if let Some(edition) = entry.edition() {
         match edition {
-            NumOrStr::Number(i) if *i <= 1 => {}
-            NumOrStr::Number(i) => res.push(format!("{} ed.", get_ordinal(*i)).into()),
-            NumOrStr::Str(s) => {
+            MaybeTyped::Typed(i) if i.single_number().map_or(false, |n| n <= 1) => {}
+            MaybeTyped::Typed(i) => res.push(format!("{} ed.", get_ordinal(i)).into()),
+            MaybeTyped::String(s) => {
                 res.push(
                     s.split(' ')
                         .flat_map(|i| {
@@ -758,7 +735,7 @@ fn get_info_element(
     }
 
     if journal.is_none() {
-        if let Some(vols) = orig_entry.volume() {
+        if let Some(vols) = orig_entry.volume().cloned() {
             if series {
                 res.push(format_range("season", "seasons", vols).into())
             } else {
@@ -766,8 +743,8 @@ fn get_info_element(
             }
         }
 
-        if let Some(&vtotal) = orig_entry.volume_total() {
-            if vtotal > 1 {
+        if let Some(vtotal) = &orig_entry.volume_total {
+            if vtotal.single_number().map_or(true, |n| n > 1) {
                 if series {
                     res.push(format!("{} seasons", vtotal).into())
                 } else {
@@ -777,10 +754,10 @@ fn get_info_element(
         }
 
         if series {
-            if let Some(eps) = orig_entry.issue() {
+            if let Some(eps) = &orig_entry.issue {
                 match eps {
-                    NumOrStr::Str(s) => res.push(s.clone().into()),
-                    NumOrStr::Number(n) => res.push(format!("ep. {}", n).into()),
+                    MaybeTyped::String(s) => res.push(s.clone().into()),
+                    MaybeTyped::Typed(n) => res.push(format!("ep. {}", n).into()),
                 }
             }
         }
@@ -788,10 +765,10 @@ fn get_info_element(
         if mv_title.is_some() {
             let mut title = DisplayString::new();
             title.start_format(Formatting::Italic);
-            if let Some(own_title) = orig_entry.title() {
-                title += &own_title.canonical.format_title_case(common.title_case);
+            if let Some(own_title) = &orig_entry.title {
+                title += &own_title.value.format_title_case(common.title_case);
             }
-            if let Some(eds) = orig_entry.editors() {
+            if let Some(eds) = &orig_entry.editors {
                 push_comma_quote_aware(&mut title.value, ',', true);
                 title.commit_formats();
                 let ed_names =
@@ -828,24 +805,32 @@ fn get_info_element(
             let mut title = get_chunk_title(par_anth, false, false, common).value.into();
 
             let issue = par_anth.issue().map(|issue| match issue {
-                NumOrStr::Str(s) => (s.clone(), None),
-                NumOrStr::Number(i) => (
+                MaybeTyped::String(s) => (s.clone(), None),
+                MaybeTyped::Typed(i) => (
                     if series { format!("ep. {}", i) } else { format!("no. {}", i) },
-                    Some(*i),
+                    i.single_number(),
                 ),
             });
 
-            let volume = par_anth.volume().map(|v| {
-                let val = if v.start == v.end { Some(v.start) } else { None };
-                (
-                    if capitals {
-                        format_range("Vol.", "Vols.", v)
-                    } else {
-                        format_range("vol.", "vols.", v)
-                    },
-                    val,
-                )
-            });
+            let volume = par_anth
+                .volume
+                .as_ref()
+                .and_then(|v| {
+                    let MaybeTyped::Typed(num) = v else { return None };
+                    num.range()
+                })
+                .map(|v| {
+                    let val = if v.start == v.end { Some(v.start) } else { None };
+                    let n = Numeric::from_range(v);
+                    (
+                        if capitals {
+                            format_range("Vol.", "Vols.", n.clone())
+                        } else {
+                            format_range("vol.", "vols.", n)
+                        },
+                        val,
+                    )
+                });
 
             if let (Some(issue), Some(volume)) = (&issue, &volume) {
                 res.push(title);
@@ -854,8 +839,7 @@ fn get_info_element(
             } else {
                 let item = issue.or(volume);
                 if let Some((_, Some(v))) = item {
-                    title.push(' ');
-                    title += &v.to_string();
+                    write!(title, " {}", v).unwrap();
                     res.push(title);
                 } else if let Some((s, _)) = item {
                     res.push(title);
@@ -868,11 +852,15 @@ fn get_info_element(
     }
 
     if entry.entry_type == Reference {
-        if let Some(sn) = entry.serial_number() {
+        if let Some(sn) = entry.serial_number().cloned() {
             res.push(sn.into());
         }
     } else if entry.entry_type == Case || entry.entry_type == Legislation {
-        if let Some(org) = entry.serial_number().or_else(|| entry.organization()) {
+        if let Some(org) = entry
+            .serial_number()
+            .cloned()
+            .or_else(|| entry.organization().value())
+        {
             res.push(org.into());
         }
     }
@@ -917,7 +905,7 @@ fn entry_date(entry: &Entry, force_year: bool) -> String {
 
         format_date(date, mode)
     } else if force_year
-        || (matches!(&entry.entry_type, Book | Anthology)
+        || (matches!(entry.entry_type(), Book | Anthology)
             && entry.url_any().and_then(|url| url.visit_date.as_ref()).is_none())
     {
         "n.d.".to_string()

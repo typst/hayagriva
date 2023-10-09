@@ -75,11 +75,12 @@ impl ChicagoAuthorDate {
         let mut unique = Uniqueness::Full;
         for other in total_authors {
             if other.name == author.name {
-                let mut buf_a = String::new();
-                let mut buf_b = String::new();
-                other.initials(&mut buf_a, None, true);
-                author.initials(&mut buf_b, None, true);
-                if buf_a == buf_b {
+                let mut buf1 = String::new();
+                let mut buf2 = String::new();
+                other.initials(&mut buf1, None, true).unwrap();
+                author.initials(&mut buf2, None, true).unwrap();
+
+                if buf1 == buf2 {
                     return Uniqueness::None;
                 } else {
                     unique = Uniqueness::Initials;
@@ -178,7 +179,7 @@ impl<'a> CitationStyle<'a> for ChicagoAuthorDate {
                 Report | Patent | Legislation | Conference | Exhibition
             ) {
                 if let Some(org) = entry.organization() {
-                    org.into()
+                    org.to_string().into()
                 } else {
                     DisplayString::new()
                 }
@@ -293,21 +294,21 @@ impl<'a> BibliographyStyle<'a> for ChicagoAuthorDate {
 #[cfg(test)]
 mod tests {
     use crate::style::Database;
-    use crate::types::{Date, EntryType, Person, Title};
+    use crate::types::{Date, EntryType, FormatString, Person};
     use crate::{style::Citation, Entry};
 
     use super::ChicagoAuthorDate;
 
     fn date_author_entry(key: &str, authors: Vec<Person>, year: i32) -> Entry {
         let mut e = Entry::new(key, EntryType::Article);
-        e.set_authors(authors);
-        e.set_date(Date::from_year(year));
+        e.authors = Some(authors);
+        e.date = Some(Date::from_year(year));
         e
     }
 
     #[allow(non_snake_case)]
     fn A(given: &str, family: &str) -> Person {
-        Person::from_strings(&[family, given]).unwrap()
+        Person::from_strings(vec![family, given]).unwrap()
     }
 
     #[allow(non_snake_case)]
@@ -444,8 +445,9 @@ mod tests {
     #[test]
     fn no_author() {
         let mut e = Entry::new("report", EntryType::Report);
-        e.set_date(Date::from_year(1999));
-        e.set_title(Title::new("Third International Report on Reporting"));
+        e.date = Some(Date::from_year(1999));
+        e.title =
+            Some(FormatString::with_value("Third International Report on Reporting"));
         let es = vec![e];
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);
@@ -458,7 +460,7 @@ mod tests {
     #[test]
     fn no_date() {
         let mut e = Entry::new("report", EntryType::Report);
-        e.set_authors(vec![A("John", "Doe")]);
+        e.authors = Some(vec![A("John", "Doe")]);
         let es = vec![e];
         let mut formatter = ChicagoAuthorDate::default();
         let (citations, mut database) = Cs(&es);

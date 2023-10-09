@@ -9,10 +9,12 @@ use crate::style::{
     abbreviate_publisher, delegate_titled_entry, format_range, push_comma_quote_aware,
     sorted_bibliography, BibliographyOrdering, BibliographyStyle, Brackets, Citation,
     CitationStyle, Database, DisplayCitation, DisplayReference, DisplayString,
-    Formatting, Record,
+    FmtOptionExt, Formatting, Record,
 };
-use crate::types::{EntryType::*, FmtOptionExt};
+use crate::types::EntryType::*;
 use crate::Entry;
+
+use std::fmt::Write;
 
 /// Verbosity of Chicago _Notes_.
 ///
@@ -109,7 +111,7 @@ impl<'a> ChicagoNotes<'a> {
     ///
     /// Does not affect references and is only applicable if the note type
     /// is [`Automatic`](ChicagoNoteStyle::Automatic).
-    pub fn reset_shortening(&mut self) {
+    pub fn set_reshortening(&mut self) {
         self.cited.clear();
     }
 
@@ -137,8 +139,8 @@ impl<'a> ChicagoNotes<'a> {
                 .enumerate()
                 .map(|(i, p)| {
                     let name = p.given_first(false);
-                    if entry.entry_type == Tweet {
-                        if let Some(pseud) = entry.twitter_handle(i) {
+                    if entry.entry_type == Post {
+                        if let Some(pseud) = entry.social_handle(i) {
                             format!("{} ({})", name, pseud)
                         } else {
                             name
@@ -192,14 +194,15 @@ impl<'a> ChicagoNotes<'a> {
 
         let published_entry = select!(* > ("p":(*["publisher"]))).bound(entry, "p");
         if let Some(loc) = entry
-            .location()
+            .location
+            .as_ref()
             .or_else(|| published_entry.and_then(|e| e.location()))
         {
             if !res.is_empty() {
                 res += ", ";
             }
-            res += &loc.value;
-        } else if matches!(&entry.entry_type, Book | Anthology)
+            write!(res, "{}", loc).unwrap();
+        } else if matches!(entry.entry_type(), Book | Anthology)
             && entry.date_any().map(|d| d.year).unwrap_or(2020) < 1981
         {
             if !res.is_empty() {
@@ -208,7 +211,7 @@ impl<'a> ChicagoNotes<'a> {
             res += "n.p.";
         }
 
-        if entry.entry_type == Tweet {
+        if entry.entry_type == Post {
             if let Some(host) = entry
                 .url_any()
                 .and_then(|u| u.value.host_str())
@@ -242,9 +245,8 @@ impl<'a> ChicagoNotes<'a> {
         } else if entry.entry_type == Artwork {
             // Intentionally empty: We do the publisher stuff later
         } else if let Some(conf) = conference {
-            if let Some(org) = conf.organization() {
-                res += ", ";
-                res += org;
+            if let Some(org) = &conf.organization {
+                write!(res, ", {}", org).unwrap();
             }
 
             let conf_name = get_chunk_title(conf, false, false, &self.config).value;
@@ -253,17 +255,16 @@ impl<'a> ChicagoNotes<'a> {
                 res += &conf_name;
             }
 
-            if let Some(loc) = conf.location() {
-                res += ", ";
-                res += &loc.value;
+            if let Some(loc) = &conf.location {
+                write!(res, ", {}", loc).unwrap();
             }
         } else if let Some(publisher) = entry
-            .publisher()
-            .value()
-            .or_else(|| published_entry.map(|e| e.publisher().value().unwrap()))
+            .publisher
+            .as_ref()
+            .or_else(|| published_entry.map(|e| e.publisher().unwrap()))
             .or_else(|| {
-                if matches!(&entry.entry_type, Report | Thesis)
-                    || (matches!(&entry.entry_type, Case | Legislation)
+                if matches!(entry.entry_type(), Report | Thesis)
+                    || (matches!(entry.entry_type(), Case | Legislation)
                         && entry.serial_number().is_some())
                 {
                     entry.organization()
@@ -271,7 +272,7 @@ impl<'a> ChicagoNotes<'a> {
                     None
                 }
             })
-            .map(Into::into)
+            .map(|x| x.to_string())
             .or_else(|| {
                 if entry.entry_type == Reference && entry.volume().is_none() {
                     entry.authors().map(|a| {
@@ -309,21 +310,23 @@ impl<'a> ChicagoNotes<'a> {
         if entry.entry_type == Artwork {
             let mut items: Vec<String> = vec![];
 
-            items.extend(entry.note().map(Into::into));
+            items.extend(entry.note().value());
 
             let parent = select!(* > ("p":Exhibition)).bound(entry, "p");
             items.extend(
                 entry
-                    .organization()
-                    .or_else(|| entry.publisher().value())
+                    .organization
+                    .as_ref()
+                    .or(entry.publisher())
                     .or_else(|| parent.and_then(|p| p.organization()))
-                    .or_else(|| parent.and_then(|p| p.publisher().value()))
-                    .map(Into::into),
+                    .or_else(|| parent.and_then(|p| p.publisher()))
+                    .value(),
             );
 
             items.extend(
                 entry
-                    .location()
+                    .location
+                    .as_ref()
                     .or_else(|| parent.and_then(|p| p.location()))
                     .value()
                     .map(Into::into),
@@ -441,7 +444,7 @@ impl<'a> ChicagoNotes<'a> {
 
             if !publ.is_empty() {
                 if brackets {
-                    res += &format!("({})", publ);
+                    write!(res, "({})", publ).unwrap();
                 } else {
                     res += &publ;
                 }
@@ -453,7 +456,7 @@ impl<'a> ChicagoNotes<'a> {
         } else if database.is_some() {
             let title = get_chunk_title(entry, true, false, &self.config).value;
             let db_entry = if title.is_empty() {
-                entry.serial_number().unwrap_or_default().into()
+                entry.serial_number().map(|s| s.as_str()).unwrap_or_default().into()
             } else {
                 title
             };
@@ -480,7 +483,7 @@ impl<'a> ChicagoNotes<'a> {
             }
 
             res += supplement;
-        } else if let Some(pr) = entry.page_range() {
+        } else if let Some(pr) = entry.page_range().cloned() {
             if !res.is_empty() {
                 if colon {
                     res.push(':');
@@ -503,7 +506,7 @@ impl<'a> ChicagoNotes<'a> {
                     res.push(' ');
                 }
 
-                res += sn;
+                write!(res, "{}", sn).unwrap();
             }
         }
 
@@ -542,15 +545,19 @@ impl<'a> ChicagoNotes<'a> {
                     get_chunk_title(entry, false, false, &self.config);
                 if let Some(sn) = entry.serial_number() {
                     push_comma_quote_aware(&mut brack_content.value, ',', true);
-                    brack_content += sn;
+                    write!(brack_content, "{}", sn).unwrap();
                 }
                 if self.config.url_access_date.needs_date(entry) {
                     if let Some(date) =
                         entry.url_any().and_then(|u| u.visit_date.as_ref())
                     {
                         push_comma_quote_aware(&mut brack_content.value, ';', true);
-                        brack_content +=
-                            &format!("accessed {}", format_date(date, DateMode::Day));
+                        write!(
+                            brack_content,
+                            "accessed {}",
+                            format_date(date, DateMode::Day)
+                        )
+                        .unwrap();
                     }
                 }
                 if !brack_content.is_empty() {
@@ -578,11 +585,10 @@ impl<'a> ChicagoNotes<'a> {
                 if let Some(archive) = entry.archive() {
                     push_comma_quote_aware(&mut res.value, ',', true);
 
-                    res += &archive.value;
+                    write!(res, "{}", archive.value).unwrap();
 
                     if let Some(al) = entry.archive_location() {
-                        res += ", ";
-                        res += &al.value;
+                        write!(res, ", {}", al).unwrap();
                     }
                 }
             }

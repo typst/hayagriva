@@ -10,11 +10,7 @@ use tex::{
 };
 use url::Url;
 
-use crate::lang::{Case, CaseFolder, TitleCaseConf};
-
-use super::types::{
-    Date, EntryType, FmtString, NumOrStr, Person, PersonRole, QualifiedUrl, Title,
-};
+use super::types::*;
 use super::Entry;
 
 macro_rules! tex_kinds {
@@ -65,7 +61,8 @@ impl From<&tex::Person> for Person {
 
 impl From<tex::Date> for Date {
     fn from(date: tex::Date) -> Self {
-        let approximate = date.approximate || date.uncertain;
+        let approximate = date.uncertain || date.approximate;
+
         match date.value {
             DateValue::At(x) | DateValue::After(x) | DateValue::Before(x) => Date {
                 year: x.year,
@@ -83,71 +80,38 @@ impl From<tex::Date> for Date {
     }
 }
 
-impl From<&[Spanned<Chunk>]> for FmtString {
+impl From<&[Spanned<Chunk>]> for ChunkedString {
     fn from(chunks: &[Spanned<Chunk>]) -> Self {
-        let mut fmt = Self::new(chunks.format_verbatim());
-        let verbatim = chunks.iter().all(|chunk| match &chunk.v {
-            Chunk::Normal(s) => s.chars().all(char::is_whitespace),
-            _ => true,
-        });
-
-        fmt = fmt.verbatim(verbatim);
-        if !verbatim {
-            if chunks.iter().any(|chunk| matches!(chunk.v, Chunk::Verbatim(_))) {
-                fmt = fmt.title_case(format_title_case(chunks));
+        let mut res = Self::new();
+        for chunk in chunks {
+            match &chunk.v {
+                Chunk::Normal(s) => res.push_str(s, ChunkKind::Normal),
+                Chunk::Verbatim(s) => res.push_str(s, ChunkKind::Verbatim),
+                Chunk::Math(s) => res.push_str(s, ChunkKind::Math),
             }
-            fmt = fmt.sentence_case(chunks.format_sentence());
         }
-
-        fmt
+        res
     }
 }
 
-fn format_title_case(chunks: &[Spanned<Chunk>]) -> String {
-    let mut out = CaseFolder::from_config(Case::NoTransform);
-    for chunk in chunks {
-        match &chunk.v {
-            Chunk::Normal(s) => {
-                out.config(
-                    TitleCaseConf {
-                        trim_end: false,
-                        trim_start: false,
-                        always_capitalize_last_word: false,
-                        ..Default::default()
-                    }
-                    .into(),
-                );
-                out.push_str(s)
-            }
-            Chunk::Verbatim(s) => {
-                out.config(Case::NoTransform);
-                out.push_str(s)
-            }
-            Chunk::Math(s) => {
-                out.config(Case::NoTransform);
-                write!(out, "${}$", s).unwrap();
-            }
-        }
+impl From<&[Spanned<Chunk>]> for FormatString {
+    fn from(chunks: &[Spanned<Chunk>]) -> Self {
+        Self { value: chunks.into(), short: None }
     }
-
-    out.finish()
 }
 
-impl From<&[Spanned<Chunk>]> for NumOrStr {
+impl From<&[Spanned<Chunk>]> for MaybeTyped<Numeric> {
     fn from(chunks: &[Spanned<Chunk>]) -> Self {
         let verb = chunks.format_verbatim();
-        match verb.parse() {
-            Ok(i) => NumOrStr::Number(i),
-            Err(_) => NumOrStr::Str(verb),
-        }
+        MaybeTyped::infallible_from_str(&verb)
     }
 }
 
-impl From<&PermissiveType<i64>> for NumOrStr {
+impl From<&PermissiveType<i64>> for MaybeTyped<Numeric> {
     fn from(edition: &PermissiveType<i64>) -> Self {
         match edition {
-            PermissiveType::Typed(i) => Self::Number(*i),
-            PermissiveType::Chunks(c) => Self::Str(c.format_verbatim()),
+            PermissiveType::Typed(i) => Self::Typed(Numeric::new(*i as i32)),
+            PermissiveType::Chunks(c) => Self::infallible_from_str(&c.format_verbatim()),
         }
     }
 }
@@ -167,7 +131,7 @@ fn ed_role(role: EditorType) -> Option<PersonRole> {
 
 fn book(item: &mut Entry, parent: bool) -> Option<&mut Entry> {
     if parent {
-        item.parents_mut().and_then(|p| p.get_mut(0))
+        item.parents_mut().get_mut(0)
     } else {
         None
     }
@@ -175,13 +139,9 @@ fn book(item: &mut Entry, parent: bool) -> Option<&mut Entry> {
 
 fn mv(item: &mut Entry, parent: bool, mv_parent: bool) -> Option<&mut Entry> {
     if parent && mv_parent {
-        item.parents_mut()
-            .and_then(|p| p.get_mut(0))
-            .unwrap()
-            .parents_mut()
-            .and_then(|p| p.get_mut(0))
+        item.parents_mut().get_mut(0).unwrap().parents_mut().get_mut(0)
     } else if mv_parent {
-        item.parents_mut().and_then(|p| p.get_mut(0))
+        item.parents_mut().get_mut(0)
     } else {
         None
     }
@@ -251,9 +211,10 @@ impl TryFrom<&tex::Entry> for Entry {
             let ptype = ed_role(role);
             match ptype {
                 None => eds.extend(editors.iter().map(Into::into)),
-                Some(role) => {
-                    collaborators.push((editors.iter().map(Into::into).collect(), role))
-                }
+                Some(role) => collaborators.push(PersonsWithRoles::new(
+                    editors.iter().map(Into::into).collect(),
+                    role,
+                )),
             }
         }
 
@@ -261,7 +222,7 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_editors(eds);
         }
         if !collaborators.is_empty() {
-            item.set_affiliated_persons(collaborators);
+            item.set_affiliated(collaborators);
         }
 
         if let Some(a) =
@@ -296,7 +257,7 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
-        // TODO: entry.orig_language into item.set_language()
+        // TODO: entry.orig_language into item.language = Some()
 
         if let Some(a) =
             map_res(entry.afterword())?.map(|a| a.iter().map(Into::into).collect())
@@ -316,24 +277,24 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Introduction));
         }
 
-        if let Some(title) = map_res(entry.title())?.map(Title::new) {
+        if let Some(title) = map_res(entry.title())?.map(Into::into) {
             item.set_title(title);
         }
 
         // NOTE: Ignoring subtitle and titleaddon for now
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(title) = map_res(entry.main_title())?.map(Title::new) {
+            if let Some(title) = map_res(entry.main_title())?.map(Into::into) {
                 parent.set_title(title);
             }
         }
 
         if let Some(parent) = book(&mut item, parent) {
             if entry.entry_type == tex::EntryType::Article {
-                if let Some(title) = map_res(entry.journal_title())?.map(Title::new) {
+                if let Some(title) = map_res(entry.journal_title())?.map(Into::into) {
                     parent.set_title(title);
                 }
-            } else if let Some(title) = map_res(entry.book_title())?.map(Title::new) {
+            } else if let Some(title) = map_res(entry.book_title())?.map(Into::into) {
                 parent.set_title(title);
             }
         }
@@ -358,7 +319,7 @@ impl TryFrom<&tex::Entry> for Entry {
             {
                 conference.set_date(event_date);
             }
-            if let Some(title) = map_res(entry.eventtitle())?.map(Title::new) {
+            if let Some(title) = map_res(entry.eventtitle())?.map(Into::into) {
                 conference.set_title(title);
             }
             if let Some(venue) = map_res(entry.venue())?.map(|d| d.into()) {
@@ -397,7 +358,7 @@ impl TryFrom<&tex::Entry> for Entry {
                     item.set_issue(issue);
                 }
             }
-            if let Some(ititle) = map_res(entry.issue_title())?.map(Title::new) {
+            if let Some(ititle) = map_res(entry.issue_title())?.map(Into::into) {
                 if let Some(parent) = book(&mut item, parent) {
                     parent.set_title(ititle);
                 } else {
@@ -415,16 +376,17 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(PermissiveType::Typed(volume)) = map_res(entry.volume())? {
+            let val = Numeric::new(volume as i32).into();
             if let Some(parent) = book(&mut item, parent) {
-                parent.set_volume(volume..volume);
+                parent.set_volume(val);
             } else {
-                item.set_volume(volume..volume);
+                item.set_volume(val);
             }
         }
 
         if let Some(parent) = mv(&mut item, parent, mv_parent) {
             if let Some(volumes) = map_res(entry.volumes())? {
-                parent.set_volume_total(volumes);
+                parent.set_volume_total(Numeric::new(volumes as i32));
             }
         }
 
@@ -448,7 +410,7 @@ impl TryFrom<&tex::Entry> for Entry {
             .or_else(|| entry.ismn().ok())
             .or_else(|| entry.iswc().ok())
         {
-            if item.serial_number().is_none() {
+            if item.serial_number.is_none() {
                 item.set_serial_number(sn.format_verbatim());
             }
         }
@@ -471,22 +433,8 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(publisher) = map_res(entry.publisher())?.map(|d| {
-            let mut format = FmtString::new_empty(false, true, false);
-            let comma = FmtString {
-                value: ", ".into(),
-                sentence_case: Some(", ".into()),
-                title_case: None,
-                verbatim: false,
-            };
-            for (i, item) in d.iter().enumerate() {
-                if i != 0 {
-                    format.extend(comma.clone());
-                }
-                format.extend(item.as_slice().into());
-            }
-            format
-        }) {
+        if let Some(publisher) = map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
+        {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_publisher(publisher);
             } else {
@@ -494,25 +442,15 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(organization) = map_res(entry.organization())?.map(|d| {
-            let mut format = String::new();
-            let comma = ", ";
-            for (i, item) in d.iter().enumerate() {
-                if i != 0 {
-                    format += comma;
-                }
-                format += &item.format_verbatim();
-            }
-            format
-        }) {
+        if let Some(organization) =
+            map_res(entry.organization())?.map(|orgs| comma_list(&orgs))
+        {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_organization(organization);
             } else {
                 item.set_organization(organization);
             }
-        } else if let Some(organization) =
-            map_res(entry.institution())?.map(|d| d.format_verbatim())
-        {
+        } else if let Some(organization) = map_res(entry.institution())?.map(Into::into) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_organization(organization);
             } else {
@@ -520,7 +458,7 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(note) = map_res(entry.how_published())?.map(|d| d.format_verbatim()) {
+        if let Some(note) = map_res(entry.how_published())?.map(Into::into) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_note(note);
             } else {
@@ -535,7 +473,8 @@ impl TryFrom<&tex::Entry> for Entry {
             })
             .and_then(|p| p.get(0).cloned())
         {
-            item.set_page_range((pages.start as i64)..(pages.end as i64));
+            item.page_range =
+                Some(Numeric::from_range((pages.start as i32)..(pages.end as i32)));
         }
 
         if let Some(ptotal) =
@@ -552,15 +491,16 @@ impl TryFrom<&tex::Entry> for Entry {
             .or_else(|| entry.addendum().ok())
             .map(|d| d.format_verbatim())
         {
-            if item.note().is_none() {
-                item.set_note(note);
+            if item.note.is_none() {
+                item.set_note(note.into());
             }
         }
 
         if let Some(series) = map_res(entry.series())? {
-            let title = Title::new(series);
+            let title: FormatString = series.into();
             let mut new = Entry::new(&entry.key, item.entry_type);
             new.set_title(title);
+
             if let Some(parent) = mv(&mut item, parent, mv_parent) {
                 new.entry_type = parent.entry_type;
                 parent.add_parent(new);
@@ -576,12 +516,26 @@ impl TryFrom<&tex::Entry> for Entry {
             map_res(entry.chapter())?.or_else(|| map_res(entry.part()).ok().flatten())
         {
             let mut new = Entry::new(&entry.key, EntryType::Chapter);
-            new.set_title(Title::new(chapter));
+            new.set_title(chapter.into());
             let temp = item;
-            new.set_parents(vec![temp]);
+            new.parents.push(temp);
             item = new;
         }
 
         Ok(item)
     }
+}
+
+fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
+    let mut value = ChunkedString::new();
+    for (i, entity) in items.iter().enumerate() {
+        if i != 0 {
+            value.push_str(", ", ChunkKind::Normal);
+        }
+
+        let chunked = ChunkedString::from(entity.as_slice());
+        value.extend(chunked);
+    }
+
+    FormatString { value, short: None }
 }
