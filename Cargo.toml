@@ -33,3 +33,6 @@ serde_yaml = "0.9.25"
 [[bin]]
 name = "hayagriva"
 required-features = ["cli"]
+
+[patch.crates-io]
+biblatex = { git = "https://github.com/typst/biblatex" }
