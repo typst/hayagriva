@@ -2,11 +2,11 @@ use std::borrow::Cow;
 use std::str::FromStr;
 
 use crate::types::{
-    ChunkedString, Date, MaybeTyped, Numeric, Person, PersonRole, StringChunk,
+    ChunkedString, Date, EntryType, MaybeTyped, Numeric, Person, PersonRole, StringChunk,
 };
 use crate::Entry;
 use citationberg::taxonomy::{
-    DateVariable, NameVariable, NumberVariable, StandardVariable,
+    DateVariable, Kind, NameVariable, NumberVariable, StandardVariable,
 };
 use citationberg::{taxonomy, LongShortForm};
 use unic_langid::LanguageIdentifier;
@@ -340,7 +340,176 @@ pub(crate) fn matches_entry_type(
     entry: &Entry,
     kind: citationberg::taxonomy::Kind,
 ) -> bool {
-    todo!()
+    // Each match arm contains mutually exclusive entry kinds.
+    match kind {
+        Kind::Article
+        | Kind::ArticleMagazine
+        | Kind::ArticleNewspaper
+        | Kind::ArticleJournal
+        | Kind::PaperConference
+        | Kind::Report
+        | Kind::Thesis
+        | Kind::Manuscript => {
+            if kind == Kind::ArticleMagazine {
+                // TODO: Hayagriva does not differentiate between scientific and
+                // non-scientific magazines. Could disambiguate via presence of
+                // DOI or similar.
+                return false;
+            }
+
+            let is_journal = select!(Article > Periodical).matches(entry);
+            if kind == Kind::ArticleJournal {
+                return is_journal;
+            }
+
+            let is_news = select!(Article > Newspaper).matches(entry);
+            if kind == Kind::ArticleNewspaper {
+                return is_news;
+            }
+
+            let is_conference = select!(Article > Proceedings).matches(entry);
+            if kind == Kind::PaperConference {
+                return is_conference;
+            }
+
+            let is_report = select!((* > Report) | Report).matches(entry);
+            if kind == Kind::Report {
+                return is_report;
+            }
+
+            let is_thesis = select!((* > Thesis) | Thesis).matches(entry);
+            if kind == Kind::Thesis {
+                return is_thesis;
+            }
+
+            let is_manuscript = entry.entry_type() == &EntryType::Manuscript;
+            if kind == Kind::Manuscript {
+                return is_manuscript;
+            }
+
+            entry.entry_type() == &EntryType::Article
+                && !select!(* > Blog).matches(entry)
+                && !(is_journal
+                    || is_news
+                    || is_conference
+                    || is_report
+                    || is_thesis
+                    || is_manuscript)
+        }
+        Kind::Book | Kind::Classic | Kind::Periodical | Kind::Collection => {
+            if !select!(Book | Anthology | Proceedings).matches(entry) {
+                return false;
+            }
+
+            if kind == Kind::Classic {
+                // TODO: Hayagriva does not support indicating something is a
+                // classic.
+                return false;
+            }
+
+            let is_periodical = select!((Book > Periodical) | Periodical).matches(entry);
+            if kind == Kind::Periodical {
+                return is_periodical;
+            }
+
+            let is_collection = entry.entry_type() == &EntryType::Anthology;
+            if kind == Kind::Collection {
+                return is_collection;
+            }
+
+            !(is_periodical || is_collection)
+        }
+        Kind::Chapter => {
+            select!(Chapter > (Book | Anthology | Proceedings)).matches(entry)
+        }
+        Kind::Entry | Kind::EntryDictionary | Kind::EntryEncyclopedia => {
+            if kind == Kind::EntryDictionary {
+                // TODO: We do not differentiate between dictionaries and other
+                // references.
+                return false;
+            }
+
+            let is_encyclopedia = select!(* > Reference).matches(entry);
+            if kind == Kind::EntryEncyclopedia {
+                return is_encyclopedia;
+            }
+
+            entry.entry_type() == &EntryType::Entry && !is_encyclopedia
+        }
+        Kind::Event => entry.entry_type() == &EntryType::Exhibition,
+        Kind::Hearing | Kind::Interview | Kind::Performance | Kind::Speech => false,
+        Kind::Broadcast | Kind::MotionPicture | Kind::MusicalScore | Kind::Song => {
+            let is_music_score =
+                select!(Audio > (Book | Periodical | Reference | Misc | Blog | Web))
+                    .matches(entry);
+            if kind == Kind::MusicalScore {
+                return is_music_score;
+            }
+
+            let is_motion_picture =
+                entry.entry_type() == &EntryType::Video && entry.parents().is_empty();
+            if kind == Kind::MotionPicture {
+                return is_motion_picture;
+            }
+
+            let is_song =
+                entry.entry_type() == &EntryType::Audio && entry.parents().is_empty();
+            if kind == Kind::Song {
+                return is_song;
+            }
+
+            matches!(entry.entry_type(), EntryType::Audio | EntryType::Video)
+                && !(is_music_score || is_motion_picture || is_song)
+        }
+        Kind::Legislation | Kind::Bill => {
+            if entry.entry_type() != &EntryType::Legislation {
+                return false;
+            }
+
+            let is_published = entry.publisher().is_some();
+            if kind == Kind::Bill {
+                return !is_published;
+            }
+
+            is_published
+        }
+        Kind::LegalCase => entry.entry_type() == &EntryType::Case,
+        Kind::Regulation | Kind::Standard | Kind::Treaty => return false,
+        Kind::Patent => entry.entry_type() == &EntryType::Patent,
+        Kind::Webpage | Kind::PostWeblog | Kind::Post => {
+            let is_blogpost = select!(* > Blog).matches(entry);
+            if kind == Kind::PostWeblog {
+                return is_blogpost;
+            }
+
+            let is_post = select!(Post | (* > Thread)).matches(entry);
+            if kind == Kind::Post {
+                return is_post;
+            }
+
+            select!((Misc["url"]) | (* > (Web | Blog)) | Web | Blog | Thread)
+                .matches(entry)
+                && !(is_blogpost || is_post)
+        }
+        Kind::Dataset => false,
+        Kind::Figure | Kind::Graphic | Kind::Map => {
+            let is_figure = select!(Artwork > Article).matches(entry);
+            if kind == Kind::Figure {
+                return is_figure;
+            }
+
+            if kind == Kind::Map {
+                return false;
+            }
+
+            entry.entry_type() == &EntryType::Artwork && !is_figure
+        }
+        Kind::Pamphlet => false,
+        Kind::PersonalCommunication => false,
+        Kind::Review | Kind::ReviewBook => false,
+        Kind::Software => entry.entry_type() == &EntryType::Repository,
+        Kind::Document => entry.entry_type() == &EntryType::Misc,
+    }
 }
 
 pub(crate) fn csl_language(lang_id: &LanguageIdentifier) -> String {
