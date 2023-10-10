@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
-use crate::types::{Date, MaybeTyped, Numeric, Person};
+use crate::types::{ChunkedString, Date, MaybeTyped, Numeric, Person};
 use crate::Entry;
 use citationberg::taxonomy::{Locator, NameVariable};
 use citationberg::{taxonomy as csl_taxonomy, ToFormatting};
@@ -521,7 +521,7 @@ impl<'a> Context<'a> {
     fn resolve_number_variable(
         &self,
         variable: csl_taxonomy::NumberVariable,
-    ) -> Option<MaybeTyped<Numeric>> {
+    ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
         self.prepare_variable_query(variable)?;
         let res = resolve_number_variable(self.entry, variable);
 
@@ -538,7 +538,7 @@ impl<'a> Context<'a> {
         &self,
         form: LongShortForm,
         variable: csl_taxonomy::StandardVariable,
-    ) -> Option<&'a str> {
+    ) -> Option<Cow<'a, ChunkedString>> {
         self.prepare_variable_query(variable)?;
         let res = resolve_standard_variable(self.entry, form, variable);
 
@@ -554,7 +554,7 @@ impl<'a> Context<'a> {
     fn resolve_date_variable(
         &self,
         variable: csl_taxonomy::DateVariable,
-    ) -> Option<Date> {
+    ) -> Option<&'a Date> {
         self.prepare_variable_query(variable)?;
         let res = resolve_date_variable(self.entry, variable);
 
@@ -570,11 +570,14 @@ impl<'a> Context<'a> {
     fn resolve_name_variable(
         &self,
         variable: csl_taxonomy::NameVariable,
-    ) -> Option<Vec<&'a Person>> {
-        self.prepare_variable_query(variable)?;
+    ) -> Vec<&'a Person> {
+        if self.prepare_variable_query(variable).is_none() {
+            return Vec::new();
+        }
+
         let res = resolve_name_variable(self.entry, variable);
 
-        if res.is_some() {
+        if !res.is_empty() {
             self.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
         }
         res
@@ -828,18 +831,16 @@ impl RenderCsl for citationberg::Text {
         match &self.target {
             TextTarget::Variable { var, form } => ctx.push_str(
                 match var {
-                    Variable::Standard(var) => {
-                        ctx.resolve_standard_variable(*form, *var).map(Cow::Borrowed)
-                    }
+                    Variable::Standard(var) => ctx.resolve_standard_variable(*form, *var),
                     Variable::Number(var) => match ctx.resolve_number_variable(*var) {
-                        Some(MaybeTyped::String(s)) => Some(Cow::Owned(s)),
-                        Some(MaybeTyped::Typed(n)) => Some(Cow::Owned(n.to_string())),
+                        Some(t) => Some(Cow::Owned(t.to_chunked_string())),
                         None => None,
                     },
                     _ => None,
                 }
                 .unwrap_or_default()
-                .as_ref(),
+                .to_string()
+                .as_str(),
             ),
             TextTarget::Macro { name } => {
                 let len = ctx.len();
@@ -890,7 +891,7 @@ impl RenderCsl for citationberg::Number {
         let value = ctx.resolve_number_variable(self.variable);
         match value {
             Some(MaybeTyped::Typed(num)) if num.will_transform() => {
-                num.with_form(ctx, self.form, ctx.ordinal_lookup()).unwrap();
+                num.as_ref().with_form(ctx, self.form, ctx.ordinal_lookup()).unwrap();
             }
             Some(MaybeTyped::Typed(num)) => write!(ctx, "{}", num).unwrap(),
             Some(MaybeTyped::String(s)) => ctx.push_str(&s),
@@ -1136,29 +1137,24 @@ impl RenderCsl for Names {
             let editors = ctx.resolve_name_variable(NameVariable::Editor);
             let translators = ctx.resolve_name_variable(NameVariable::Translator);
 
-            match (editors, translators) {
-                (Some(editors), Some(translators)) if editors == translators => {
-                    vec![(editors, NameVariable::EditorTranslator.into())]
+            let mut res = Vec::new();
+            if !editors.is_empty() && editors == translators {
+                res.push((editors, NameVariable::EditorTranslator.into()))
+            } else {
+                if !editors.is_empty() {
+                    res.push((editors, NameVariable::Editor.into()));
                 }
-                (editors, translators) => {
-                    let mut res = Vec::new();
-                    if let Some(editors) = editors {
-                        res.push((editors, NameVariable::Editor.into()));
-                    }
 
-                    if let Some(translators) = translators {
-                        res.push((translators, NameVariable::Translator.into()));
-                    }
-
-                    res
+                if !translators.is_empty() {
+                    res.push((translators, NameVariable::Translator.into()));
                 }
             }
+
+            res
         } else {
             self.variable
                 .iter()
-                .map(|v| {
-                    (ctx.resolve_name_variable(*v).unwrap_or_default(), Term::from(*v))
-                })
+                .map(|v| (ctx.resolve_name_variable(*v), Term::from(*v)))
                 .collect()
         };
 
@@ -1716,7 +1712,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                         Variable::Standard(var) => self
                             .ctx
                             .resolve_standard_variable(LongShortForm::default(), var)
-                            .map(|v| Numeric::from_str(v).is_ok())
+                            .map(|v| Numeric::from_str(&v.to_string()).is_ok())
                             .unwrap_or_default(),
                         Variable::Number(var) => matches!(
                             self.ctx.resolve_number_variable(var),
@@ -1830,17 +1826,18 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                             let val = self
                                 .ctx
                                 .resolve_standard_variable(LongShortForm::default(), s);
-                            val.map_or(false, |s| !s.chars().all(char::is_whitespace))
+                            val.map_or(false, |s| {
+                                !s.to_string().chars().all(char::is_whitespace)
+                            })
                         }
                         Variable::Number(n) => {
                             let val = self.ctx.resolve_number_variable(n);
                             val.is_some()
                         }
                         Variable::Date(d) => self.ctx.resolve_date_variable(d).is_some(),
-                        Variable::Name(n) => self
-                            .ctx
-                            .resolve_name_variable(n)
-                            .map_or(false, |n| !n.is_empty()),
+                        Variable::Name(n) => {
+                            !self.ctx.resolve_name_variable(n).is_empty()
+                        }
                     })
                 } else {
                     None

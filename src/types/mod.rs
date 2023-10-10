@@ -296,6 +296,16 @@ pub enum MaybeTyped<T> {
     String(String),
 }
 
+impl<T: ToOwned> MaybeTyped<T> {
+    /// Wrap the typed value in a [`Cow`]'s borrowed variant.
+    pub fn to_cow(&self) -> MaybeTyped<Cow<T>> {
+        match self {
+            MaybeTyped::Typed(t) => MaybeTyped::Typed(Cow::Borrowed(t)),
+            MaybeTyped::String(s) => MaybeTyped::String(s.clone()),
+        }
+    }
+}
+
 impl<T: Display> Display for MaybeTyped<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -311,6 +321,14 @@ impl<T: ToString> MaybeTyped<T> {
         match self {
             MaybeTyped::Typed(t) => Cow::Owned(t.to_string()),
             MaybeTyped::String(s) => Cow::Borrowed(s),
+        }
+    }
+
+    /// Convert to a [`ChunkedString`].
+    pub(crate) fn to_chunked_string(&self) -> ChunkedString {
+        match self {
+            MaybeTyped::Typed(t) => StringChunk::verbatim(t.to_string()).into(),
+            MaybeTyped::String(s) => StringChunk::normal(s.clone()).into(),
         }
     }
 }

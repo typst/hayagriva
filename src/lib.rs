@@ -523,14 +523,13 @@ entry! {
 impl Entry {
     /// Get and parse the `affiliated` field and only return persons of a given
     /// [role](PersonRole).
-    pub(crate) fn affiliated_with_role(&self, role: PersonRole) -> Vec<Person> {
+    pub(crate) fn affiliated_with_role(&self, role: PersonRole) -> Vec<&Person> {
         self.affiliated
             .iter()
             .flatten()
-            .cloned()
             .filter_map(
                 |PersonsWithRoles { names, role: r }| {
-                    if r == role {
+                    if r == &role {
                         Some(names)
                     } else {
                         None

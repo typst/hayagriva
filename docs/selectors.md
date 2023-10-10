@@ -93,7 +93,7 @@ This selects a chapter in a monograph (a long-form text on a subject published i
 _Less interesting for CLI users._
 
 Once you know that a matching entry has some parents, you might need to access their fields. You can be sure you got the right parent with bindings.
-Create a binding using the `:`-operator. To the left of the selector, you provide a name which you can freely choose. The parent (or the top-level entry) that matches the selector to the right will then appear in the resulting map under the key that you have chosen.
+Create a binding using the `:` operator. To the left of the selector, you provide a name which you can freely choose. The parent (or the top-level entry) that matches the selector to the right will then appear in the resulting map under the key that you have chosen.
 
 | Variant     | Example                                              |
 |-------------|------------------------------------------------------|

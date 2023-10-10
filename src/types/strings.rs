@@ -3,6 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
+use citationberg::LongShortForm;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
@@ -130,6 +131,14 @@ impl FormatString {
     pub fn format_sentence_case(&self, props: SentenceCase) -> String {
         self.value.format_sentence_case(props)
     }
+
+    /// Returns the right variant for the given form.
+    pub fn select(&self, form: LongShortForm) -> &ChunkedString {
+        match form {
+            LongShortForm::Long => &self.value,
+            LongShortForm::Short => self.short.as_deref().unwrap_or(&self.value),
+        }
+    }
 }
 
 impl fmt::Display for FormatString {
@@ -141,6 +150,12 @@ impl fmt::Display for FormatString {
 impl From<String> for FormatString {
     fn from(s: String) -> Self {
         Self::with_value(s)
+    }
+}
+
+impl From<StringChunk> for FormatString {
+    fn from(chunk: StringChunk) -> Self {
+        Self { value: chunk.into(), short: None }
     }
 }
 
