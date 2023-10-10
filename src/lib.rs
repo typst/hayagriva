@@ -29,7 +29,6 @@ Language Association-style citation.
 
 ```rust
 use hayagriva::io::from_yaml_str;
-use hayagriva::style::{Database, Mla};
 
 let yaml = r#"
 crazy-rich:
@@ -46,10 +45,7 @@ let bib = from_yaml_str(yaml).unwrap();
 assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 
 // Format the reference
-let db = bib.database();
-let mut mla = Mla::new();
-let reference = db.bibliography(&mut mla, None);
-assert_eq!(reference[0].display.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
+// TODO
 ```
 
 Formatting for in-text citations is available through implementors of the
@@ -133,7 +129,6 @@ mod interop;
 mod csl;
 pub mod io;
 pub mod lang;
-pub mod style;
 pub mod types;
 mod util;
 
@@ -192,11 +187,6 @@ impl Library {
     /// Check whether the library is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
-    }
-
-    /// Get the bibliography as a [`style::Database`].
-    pub fn database(&self) -> style::Database {
-        style::Database::from_entries(self.iter())
     }
 
     /// Get the nth entry in the library.
@@ -612,46 +602,6 @@ impl Entry {
     pub fn url_any(&self) -> Option<&QualifiedUrl> {
         self.map(|e| e.url.as_ref())
     }
-
-    /// Extract the social media handle for the nth author from their alias.
-    /// Will make sure the handle starts with `@`.
-    ///
-    /// If the `user_index` is 0, the function will try to extract
-    /// the handle from the URL.
-    pub(crate) fn social_handle(&self, user_index: usize) -> Option<String> {
-        if self.entry_type != EntryType::Post {
-            return None;
-        }
-
-        let authors = self.authors.as_deref().unwrap_or_default();
-
-        if user_index > 0 && user_index >= authors.len() {
-            return None;
-        }
-
-        if let Some(alias) = &authors[user_index].alias {
-            return if alias.starts_with('@') {
-                Some(alias.clone())
-            } else {
-                Some(format!("@{}", alias))
-            };
-        }
-
-        if user_index == 0 {
-            if let Some(url) = self.url.as_ref().map(|u| &u.value) {
-                if !matches!(url.host(), Some(url::Host::Domain("twitter.com" | "x.com")))
-                {
-                    return None;
-                }
-
-                if let Some(handle) = url.path_segments().and_then(|mut c| c.next()) {
-                    return Some(format!("@{}", handle));
-                }
-            }
-        }
-
-        None
-    }
 }
 
 #[cfg(feature = "biblatex")]
@@ -684,72 +634,8 @@ impl Entry {
 mod tests {
     use std::fs;
 
-    use style::Citation;
-
     use super::*;
     use crate::io::from_yaml_str;
-    use crate::style::{Apa, ChicagoNotes, Ieee, Mla};
-
-    #[test]
-    fn apa() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = from_yaml_str(&contents).unwrap();
-        let apa = Apa::new();
-
-        let db = entries.database();
-        for reference in db.bibliography(&apa, None) {
-            println!("{:#}", reference.display);
-        }
-    }
-
-    #[test]
-    fn ieee() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = from_yaml_str(&contents).unwrap();
-        let ieee = Ieee::new();
-
-        let db = entries.database();
-        for reference in db.bibliography(&ieee, None) {
-            println!("{:#}", reference.display);
-        }
-    }
-
-    #[test]
-    fn mla() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = from_yaml_str(&contents).unwrap();
-        let mla = Mla::new();
-
-        let db = entries.database();
-        for reference in db.bibliography(&mla, None) {
-            println!("{:#}", reference.display);
-        }
-    }
-
-    #[test]
-    fn chicago_n() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = from_yaml_str(&contents).unwrap();
-        let mut chicago = ChicagoNotes::default();
-
-        let mut db = entries.database();
-        for entry in entries.iter() {
-            let citation = Citation::new(entry, None);
-            println!("{:#}", db.citation(&mut chicago, &[citation]).display);
-        }
-    }
-
-    #[test]
-    fn chicago_b() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
-        let entries = from_yaml_str(&contents).unwrap();
-        let chicago = ChicagoNotes::default();
-
-        let db = entries.database();
-        for reference in db.bibliography(&chicago, None) {
-            println!("{:#}", reference.display);
-        }
-    }
 
     macro_rules! select_all {
         ($select:expr, $entries:tt, [$($key:expr),* $(,)*] $(,)*) => {

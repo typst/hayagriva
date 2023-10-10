@@ -288,7 +288,7 @@ pub(crate) fn resolve_name_variable(
                 entry
                     .editors()
                     .unwrap_or_default()
-                    .into_iter()
+                    .iter()
                     .filter(|e| translator.contains(e))
                     .collect(),
             )
@@ -474,7 +474,7 @@ pub(crate) fn matches_entry_type(
             is_published
         }
         Kind::LegalCase => entry.entry_type() == &EntryType::Case,
-        Kind::Regulation | Kind::Standard | Kind::Treaty => return false,
+        Kind::Regulation | Kind::Standard | Kind::Treaty => false,
         Kind::Patent => entry.entry_type() == &EntryType::Patent,
         Kind::Webpage | Kind::PostWeblog | Kind::Post => {
             let is_blogpost = select!(* > Blog).matches(entry);

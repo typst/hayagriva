@@ -19,7 +19,6 @@ biblatex = { version = "0.8", optional = true }
 citationberg = { path = "../citationberg" }
 clap = { version = "3.1", optional = true, features = ["cargo"] }
 # Needed for legacy styles
-isolang = "2.1"
 strum = { version = "0.24", features = ["derive"], optional = true }
 thiserror = "1.0.48"
 unic-langid = { version = "0.9.0", features = ["serde"] }
