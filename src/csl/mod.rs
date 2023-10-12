@@ -626,7 +626,7 @@ impl<'a> Context<'a> {
         self.save_to_block();
         let pos = self.elem_stack.len().get() - 1;
         let children = &self.elem_stack.last().children;
-        let mut child_pos = children.len().saturating_sub(1);
+        let child_pos = children.len().saturating_sub(1);
         let child_inner_pos = if let Some(ElemChild::Text(t)) = children.last() {
             Some(t.text.len())
         } else {
@@ -664,7 +664,7 @@ impl<'a> Context<'a> {
                 }
                 (None, _) => unreachable!(),
                 // Elements cannot be partially removed.
-                (Some(ElemChild::Elem(e)), _) => true,
+                (Some(ElemChild::Elem(_)), _) => true,
             };
 
             if pop {

@@ -2,12 +2,12 @@ use std::borrow::Cow;
 use std::fmt::Write;
 use std::str::FromStr;
 
-use citationberg::taxonomy::{NameVariable, OtherTerm, Term, Variable};
+use citationberg::taxonomy::{NameVariable, NumberVariable, OtherTerm, Term, Variable};
 use citationberg::{
     ChooseBranch, DateDayForm, DateMonthForm, DatePartName, DateParts, DateStrongAnyForm,
-    DelimiterBehavior, DemoteNonDroppingParticle, InheritableNameOptions, LabelPluralize,
-    LayoutRenderingElement, LongShortForm, NameAnd, NameAsSortOrder, NameForm, Names,
-    TestPosition, TextCase, ToAffixes, ToFormatting,
+    DelimiterBehavior, DemoteNonDroppingParticle, LabelPluralize, LayoutRenderingElement,
+    LongShortForm, NameAnd, NameAsSortOrder, NameForm, Names, NumberForm, TestPosition,
+    TextCase, ToAffixes, ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
@@ -90,7 +90,34 @@ impl RenderCsl for citationberg::Number {
         let value = ctx.resolve_number_variable(self.variable);
         match value {
             Some(MaybeTyped::Typed(num)) if num.will_transform() => {
-                num.as_ref().with_form(ctx, self.form, ctx.ordinal_lookup()).unwrap();
+                let normal_num = if self.form == NumberForm::Numeric
+                    && self.variable == NumberVariable::Page
+                {
+                    if let Some(range) = num.range() {
+                        ctx.settings
+                            .page_range_format
+                            .unwrap_or_default()
+                            .format(
+                                range,
+                                ctx,
+                                ctx.term(
+                                    OtherTerm::PageRangeDelimiter.into(),
+                                    TermForm::default(),
+                                    false,
+                                ),
+                            )
+                            .unwrap();
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+
+                if normal_num {
+                    num.as_ref().with_form(ctx, self.form, ctx.ordinal_lookup()).unwrap();
+                }
             }
             Some(MaybeTyped::Typed(num)) => write!(ctx, "{}", num).unwrap(),
             Some(MaybeTyped::String(s)) => ctx.push_str(&s),

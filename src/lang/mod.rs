@@ -5,7 +5,7 @@ pub(crate) mod name;
 
 use std::{fmt::Write, mem};
 
-use crate::types::{ChunkKind, ChunkedString, StringChunk};
+use crate::types::{ChunkKind, StringChunk};
 
 /// Rules for the title case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
