@@ -5,9 +5,9 @@ use std::str::FromStr;
 use citationberg::taxonomy::{NameVariable, OtherTerm, Term, Variable};
 use citationberg::{
     ChooseBranch, DateDayForm, DateMonthForm, DatePartName, DateParts, DateStrongAnyForm,
-    DelimiterBehavior, DemoteNonDroppingParticle, LabelPluralize, LayoutRenderingElement,
-    LongShortForm, NameAnd, NameAsSortOrder, NameForm, Names, TestPosition, TextCase,
-    ToAffixes, ToFormatting,
+    DelimiterBehavior, DemoteNonDroppingParticle, InheritableNameOptions, LabelPluralize,
+    LayoutRenderingElement, LongShortForm, NameAnd, NameAsSortOrder, NameForm, Names,
+    TestPosition, TextCase, ToAffixes, ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
@@ -339,6 +339,8 @@ impl RenderCsl for Names {
                 .collect()
         };
 
+        ctx.push_name_options(&self.options);
+
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
         if is_empty {
             if let Some(substitute) = &self.substitute {
@@ -355,6 +357,8 @@ impl RenderCsl for Names {
 
                 ctx.stop_suppressing_queried_variables();
             }
+
+            ctx.pop_name_options();
             return;
         }
 
@@ -374,14 +378,17 @@ impl RenderCsl for Names {
             }
 
             if i > 0 {
-                if let Some(delim) = &self.delimiter {
-                    ctx.push_str(delim);
+                let delim = self.delimiter(ctx.name_options.last());
+                if !delim.is_empty() {
+                    let delim = delim.to_string();
+                    ctx.push_str(&delim);
                 }
             }
         }
 
         ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.pop_elem(idx);
+        ctx.pop_name_options();
     }
 }
 
@@ -410,6 +417,7 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
         ctx.settings.demote_non_dropping_particle,
         DemoteNonDroppingParticle::DisplayAndSort
     );
+    let name_opts = names.name.options(&names.options);
 
     for (i, name) in persons.iter().take(take).enumerate() {
         let last = i + 1 == take;
@@ -433,7 +441,7 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
             }
 
             match delim {
-                EndDelim::Delim => ctx.push_str(&names.name.delimiter),
+                EndDelim::Delim => ctx.push_str(name_opts.delimiter),
                 EndDelim::And(and) => {
                     ctx.push_str(" ");
                     ctx.push_str(match and {
@@ -445,7 +453,7 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
                     ctx.push_str(" ");
                 }
                 EndDelim::DelimAnd(and) => {
-                    ctx.push_str(&names.name.delimiter);
+                    ctx.push_str(name_opts.delimiter);
                     ctx.push_str(match and {
                         NameAnd::Text => ctx
                             .term(Term::Other(OtherTerm::And), TermForm::default(), false)
@@ -463,26 +471,19 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
             _ => false,
         };
 
-        write_name(
-            name,
-            ctx,
-            names.name.form == NameForm::Long,
-            inverted,
-            reverse,
-            names,
-        );
+        write_name(name, ctx, name_opts.form == NameForm::Long, inverted, reverse, names);
 
         last_inverted = inverted;
     }
 
     if et_al_use_last {
         if let Some(name) = persons.last() {
-            ctx.push_str(&names.name.delimiter);
+            ctx.push_str(name_opts.delimiter);
             ctx.push_str("… ");
             write_name(
                 name,
                 ctx,
-                names.name.form == NameForm::Long,
+                name_opts.form == NameForm::Long,
                 matches!(names.options.name_as_sort_order, Some(NameAsSortOrder::All)),
                 reverse,
                 names,
@@ -499,7 +500,7 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
             };
 
             if delim {
-                ctx.push_str(&names.name.delimiter);
+                ctx.push_str(name_opts.delimiter);
             }
 
             let idx = ctx.push_format(names.et_al.formatting);

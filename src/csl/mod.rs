@@ -7,7 +7,8 @@ use std::num::NonZeroUsize;
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, CslMacro, Display, FontStyle, FontVariant,
-    FontWeight, Locale, LocaleCode, Style, TermForm, TextDecoration, VerticalAlign,
+    FontWeight, InheritableNameOptions, Locale, LocaleCode, Style, TermForm,
+    TextDecoration, VerticalAlign,
 };
 use citationberg::{
     DateForm, IndependentStyleSettings, LongShortForm, OrdinalLookup, TextCase,
@@ -65,6 +66,8 @@ pub(crate) struct Context<'a> {
     strip_periods: bool,
     /// Whether to add queried variables to the suppression list.
     suppress_queried_variables: bool,
+    /// Inheritable name options.
+    name_options: NonEmptyStack<InheritableNameOptions>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,12 +115,13 @@ impl<'a> Context<'a> {
             pull_punctuation: false,
             inner_quotes: false,
             strip_periods: false,
-            settings,
             cases: NonEmptyStack::new(None),
             cite_props,
             suppressed_variables: RefCell::new(Vec::new()),
             suppress_queried_variables: false,
             usage_info: RefCell::new(NonEmptyStack::new(UsageInfo::new())),
+            name_options: NonEmptyStack::new(settings.options.clone()),
+            settings,
         })
     }
 
@@ -254,6 +258,16 @@ impl<'a> Context<'a> {
         if let Some(mark) = mark {
             self.push_str(mark);
         }
+    }
+
+    /// Push an item on the name options stack.
+    pub fn push_name_options(&mut self, options: &InheritableNameOptions) {
+        self.name_options.push(self.name_options.last().apply(options));
+    }
+
+    /// Pop an item from the name options stack.
+    pub fn pop_name_options(&mut self) {
+        self.name_options.pop();
     }
 
     /// Pull punctuation into a quote if applicable
@@ -1041,8 +1055,10 @@ mod tests {
                 None,
             )
             .unwrap();
+            let cit_style = style.citation.as_ref().unwrap();
+            ctx.push_name_options(&cit_style.name_options);
 
-            style.citation.as_ref().unwrap().layout.render(&mut ctx);
+            cit_style.layout.render(&mut ctx);
             let mut buf = String::new();
             ctx.flush().to_string(&mut buf).unwrap();
             eprintln!("{}", buf);
