@@ -195,6 +195,15 @@ impl Library {
     }
 }
 
+impl<'a> IntoIterator for &'a Library {
+    type Item = &'a Entry;
+    type IntoIter = indexmap::map::Values<'a, String, Entry>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.values()
+    }
+}
+
 impl IntoIterator for Library {
     type Item = Entry;
     type IntoIter = std::iter::Map<

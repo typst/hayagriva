@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::fmt::Write;
+use std::fmt::{self, Write};
 use std::mem;
 use std::num::NonZeroUsize;
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
-    taxonomy as csl_taxonomy, CslMacro, Display, FontStyle, FontVariant, FontWeight,
-    Locale, LocaleCode, TermForm, TextDecoration, VerticalAlign,
+    taxonomy as csl_taxonomy, Affixes, CslMacro, Display, FontStyle, FontVariant,
+    FontWeight, Locale, LocaleCode, Style, TermForm, TextDecoration, VerticalAlign,
 };
 use citationberg::{
     DateForm, IndependentStyleSettings, LongShortForm, OrdinalLookup, TextCase,
@@ -15,7 +15,7 @@ use citationberg::{
 
 use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::CaseFolder;
-use crate::types::{ChunkedString, Date, MaybeTyped, Numeric, Person};
+use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
 use crate::Entry;
 
 mod rendering;
@@ -90,15 +90,17 @@ impl<'a> Context<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         entry: &'a Entry,
+        style: &'a Style,
         locale: LocaleCode,
-        macros: &'a [CslMacro],
-        style_locales: Vec<&'a Locale>,
         locale_file: Vec<&'a Locale>,
         root_format: citationberg::Formatting,
-        settings: &'a IndependentStyleSettings,
         cite_props: Option<CiteProperties<'a>>,
-    ) -> Self {
-        Self {
+    ) -> Option<Self> {
+        let macros = &style.macros;
+        let style_locales: Vec<&Locale> = style.locale.iter().collect();
+        let settings = style.independant_settings.as_ref()?;
+
+        Some(Self {
             entry,
             buf: CaseFolder::new(),
             locale,
@@ -116,7 +118,7 @@ impl<'a> Context<'a> {
             suppressed_variables: RefCell::new(Vec::new()),
             suppress_queried_variables: false,
             usage_info: RefCell::new(NonEmptyStack::new(UsageInfo::new())),
-        }
+        })
     }
 
     /// Retrieve the current formatting.
@@ -254,8 +256,8 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Add a string to the buffer.
-    fn push_str(&mut self, mut s: &str) {
+    /// Pull punctuation into a quote if applicable
+    fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
         if self.pull_punctuation && s.starts_with(['.', ',']) {
             let close_quote =
                 self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
@@ -296,6 +298,13 @@ impl<'a> Context<'a> {
             }
         }
 
+        s
+    }
+
+    /// Add a string to the buffer.
+    fn push_str(&mut self, s: &str) {
+        let s = self.do_pull_punctuation(s);
+
         self.buf
             .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
 
@@ -315,6 +324,19 @@ impl<'a> Context<'a> {
         }
 
         self.pull_punctuation = false;
+    }
+
+    /// Push a chunked string to the buffer.
+    pub fn push_chunked(&mut self, chunked: &ChunkedString) {
+        for chunk in &chunked.0 {
+            match chunk.kind {
+                ChunkKind::Normal => self.push_str(&chunk.value),
+                _ => {
+                    self.buf.push_chunk(chunk);
+                    self.pull_punctuation = false;
+                }
+            }
+        }
     }
 
     /// Ensure that the buffer is either empty or the last character is a space.
@@ -588,9 +610,9 @@ impl<'a> Context<'a> {
     /// Retrieve a length that can be used to delete the following elements.
     fn deletable_len(&mut self) -> ElemLoc {
         self.save_to_block();
-        let pos = self.elem_stack.len();
+        let pos = self.elem_stack.len().get() - 1;
         let children = &self.elem_stack.last().children;
-        let child_pos = children.len();
+        let mut child_pos = children.len().saturating_sub(1);
         let child_inner_pos = if let Some(ElemChild::Text(t)) = children.last() {
             Some(t.text.len())
         } else {
@@ -603,14 +625,117 @@ impl<'a> Context<'a> {
     /// Delete the elements after the position.
     fn delete_with_loc(&mut self, loc: ElemLoc) {
         self.save_to_block();
-        self.elem_stack.drain(loc.stack_pos).for_each(drop);
-        let elem = self.elem_stack.last_mut();
-        elem.children.drain(loc.child_pos..);
-        if let (Some(pos), Some(ElemChild::Text(t))) =
-            (loc.child_inner_pos, elem.children.last_mut())
-        {
-            t.text.truncate(pos);
+
+        // Drop items after the stack position.
+        if loc.stack_pos + 1 < self.elem_stack.len().get() {
+            self.elem_stack
+                .drain(NonZeroUsize::new(loc.stack_pos + 1).unwrap())
+                .for_each(drop);
         }
+
+        let elem = self.elem_stack.last_mut();
+        // Remove any element after the position, we always want to vacate them.
+        if loc.child_pos + 1 < elem.children.len() {
+            elem.children.drain(loc.child_pos + 1..).for_each(drop);
+        }
+
+        if loc.child_pos < elem.children.len() {
+            let pop = match (elem.children.last_mut(), loc.child_inner_pos) {
+                // Remove empty text elements.
+                (Some(ElemChild::Text(_)), Some(0) | None) => true,
+                // Truncate non-empty text elements.
+                (Some(ElemChild::Text(t)), Some(idx)) => {
+                    t.text.truncate(idx);
+                    false
+                }
+                (None, _) => unreachable!(),
+                // Elements cannot be partially removed.
+                (Some(ElemChild::Elem(e)), _) => true,
+            };
+
+            if pop {
+                elem.children.pop();
+            }
+        }
+    }
+
+    /// Check whether the location wasn't only followed by whitespace.
+    fn has_content_between(&self, loc: ElemLoc) -> bool {
+        if !self.buf.is_whitespace() {
+            return true;
+        }
+
+        // We need to investigate the current element, it may have interesting
+        // children.
+        for e in self.elem_stack.iter().skip(loc.stack_pos) {
+            for (i, b) in e.children.iter().skip(loc.child_pos).enumerate() {
+                let first = i == 0;
+
+                match b {
+                    ElemChild::Text(t) => {
+                        let idx = if first {
+                            loc.child_inner_pos.unwrap_or_default()
+                        } else {
+                            0
+                        };
+
+                        if idx >= t.text.len() {
+                            continue;
+                        }
+
+                        if t.text[idx..].chars().any(|c| !c.is_whitespace()) {
+                            return true;
+                        }
+                    }
+                    ElemChild::Elem(e) => {
+                        if !e.is_whitespace() {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Apply a prefix, but return a tuple that allows us to undo it if it
+    /// wasn't followed by anything.
+    fn apply_prefix(&mut self, affixes: &Affixes) -> (Option<ElemLoc>, ElemLoc) {
+        let loc_before = if let Some(prefix) = &affixes.prefix {
+            let loc = self.deletable_len();
+            self.push_str(prefix);
+            Some(loc)
+        } else {
+            None
+        };
+
+        let loc_after = self.deletable_len();
+        (loc_before, loc_after)
+    }
+
+    /// Apply a suffix, but only if the location was followed by something.
+    /// Delete any prefix if not.
+    fn apply_suffix(&mut self, affixes: &Affixes, loc: (Option<ElemLoc>, ElemLoc)) {
+        if self.has_content_between(loc.1) {
+            if let Some(suffix) = &affixes.suffix {
+                self.push_str(suffix);
+            }
+        } else if let Some(loc) = loc.0 {
+            self.delete_with_loc(loc);
+        }
+    }
+
+    /// Get a representation of the current progress as a string.
+    fn dbg_string(&self) {
+        let mut w = String::with_capacity(self.len());
+        for e in self.elem_stack.iter() {
+            e.to_string(&mut w).unwrap();
+        }
+
+        w.write_str(&self.buf.clone().finish()).unwrap();
+
+        eprintln!("{}\n", w);
     }
 }
 
@@ -635,18 +760,15 @@ struct CaseIdx(NonZeroUsize);
 #[must_use = "usage info stack must be popped"]
 struct UsageInfoIdx(NonZeroUsize);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ElemLoc {
-    stack_pos: NonZeroUsize,
+    stack_pos: usize,
     child_pos: usize,
     child_inner_pos: Option<usize>,
 }
 
 impl ElemLoc {
-    fn new(
-        stack_pos: NonZeroUsize,
-        child_pos: usize,
-        child_inner_pos: Option<usize>,
-    ) -> Self {
+    fn new(stack_pos: usize, child_pos: usize, child_inner_pos: Option<usize>) -> Self {
         Self { stack_pos, child_pos, child_inner_pos }
     }
 }
@@ -677,6 +799,32 @@ impl Elem {
                 ElemChild::Elem(e) => e.str_len(),
             })
             .sum()
+    }
+
+    fn to_string(&self, w: &mut impl fmt::Write) -> Result<(), fmt::Error> {
+        if self.display == Some(Display::Block) {
+            w.write_char('\n')?;
+        }
+
+        for child in &self.children {
+            match child {
+                ElemChild::Text(t) => w.write_str(&t.text)?,
+                ElemChild::Elem(e) => e.to_string(w)?,
+            }
+        }
+
+        if self.display == Some(Display::Block) {
+            w.write_char('\n')?;
+        }
+
+        Ok(())
+    }
+
+    fn is_whitespace(&self) -> bool {
+        self.children.iter().all(|c| match c {
+            ElemChild::Text(t) => t.text.chars().all(char::is_whitespace),
+            ElemChild::Elem(e) => e.is_whitespace(),
+        })
     }
 }
 
@@ -857,5 +1005,47 @@ impl<T> NonEmptyStack<T> {
         }
 
         self.last
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use citationberg::{LocaleFile, Style};
+
+    use super::rendering::RenderCsl;
+    use crate::io::from_yaml_str;
+
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_csl() {
+        let style = fs::read_to_string("tests/art-history.csl").unwrap();
+        let style = Style::from_xml(&style).unwrap();
+        let locale = LocaleCode::en_us();
+
+        let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
+        let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
+
+        let yaml = fs::read_to_string("tests/basic.yml").unwrap();
+        let bib = from_yaml_str(&yaml).unwrap();
+        let en_locale = en_locale.into();
+
+        for entry in &bib {
+            let mut ctx = Context::new(
+                entry,
+                &style,
+                locale.clone(),
+                vec![&en_locale],
+                citationberg::Formatting::default(),
+                None,
+            )
+            .unwrap();
+
+            style.citation.as_ref().unwrap().layout.render(&mut ctx);
+            let mut buf = String::new();
+            ctx.flush().to_string(&mut buf).unwrap();
+            eprintln!("{}", buf);
+        }
     }
 }

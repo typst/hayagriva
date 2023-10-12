@@ -291,6 +291,24 @@ impl ChunkedString {
         Ok(())
     }
 
+    /// Check whether the string starts with a string.
+    fn starts_with(&self, pat: &str) -> bool {
+        self.0
+            .iter()
+            .find(|s| !s.value.is_empty())
+            .map(|c| c.value.starts_with(pat))
+            .unwrap_or_else(|| pat.is_empty())
+    }
+
+    /// Check whether the string starts with any of these characters.
+    fn starts_with_char(&self, pats: &[char]) -> bool {
+        self.0
+            .iter()
+            .find(|s| !s.value.is_empty())
+            .map(|c| c.value.starts_with(pats))
+            .unwrap_or(false)
+    }
+
     /// Return the length of the string.
     pub fn len(&self) -> usize {
         self.0.iter().map(|c| c.len()).sum()

@@ -7,7 +7,7 @@ use citationberg::{
     ChooseBranch, DateDayForm, DateMonthForm, DatePartName, DateParts, DateStrongAnyForm,
     DelimiterBehavior, DemoteNonDroppingParticle, LabelPluralize, LayoutRenderingElement,
     LongShortForm, NameAnd, NameAsSortOrder, NameForm, Names, TestPosition, TextCase,
-    ToFormatting,
+    ToAffixes, ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
@@ -17,7 +17,7 @@ use crate::types::{Date, MaybeTyped, Numeric, Person};
 use super::taxonomy::matches_entry_type;
 use super::Context;
 
-trait RenderCsl {
+pub(crate) trait RenderCsl {
     fn render(&self, ctx: &mut Context);
 }
 
@@ -25,9 +25,7 @@ impl RenderCsl for citationberg::Text {
     fn render(&self, ctx: &mut Context) {
         let depth = ctx.push_elem(self.display, self.formatting);
 
-        if let Some(prefix) = &self.affixes.prefix {
-            ctx.push_str(prefix);
-        }
+        let affix_loc = ctx.apply_prefix(&self.affixes);
 
         if self.quotes {
             ctx.push_quotes();
@@ -37,7 +35,7 @@ impl RenderCsl for citationberg::Text {
         let cidx = ctx.push_case(self.text_case);
 
         match &self.target {
-            TextTarget::Variable { var, form } => ctx.push_str(
+            TextTarget::Variable { var, form } => ctx.push_chunked(
                 match var {
                     Variable::Standard(var) => ctx.resolve_standard_variable(*form, *var),
                     Variable::Number(var) => ctx
@@ -46,8 +44,7 @@ impl RenderCsl for citationberg::Text {
                     _ => None,
                 }
                 .unwrap_or_default()
-                .to_string()
-                .as_str(),
+                .as_ref(),
             ),
             TextTarget::Macro { name } => {
                 let len = ctx.len();
@@ -77,10 +74,7 @@ impl RenderCsl for citationberg::Text {
             ctx.may_pull_punctuation();
         }
 
-        if let Some(suffix) = &self.affixes.suffix {
-            ctx.push_str(suffix);
-        }
-
+        ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.pop_elem(depth);
     }
 }
@@ -89,9 +83,7 @@ impl RenderCsl for citationberg::Number {
     fn render(&self, ctx: &mut Context) {
         let depth = ctx.push_elem(self.display, self.formatting);
 
-        if let Some(prefix) = &self.affixes.prefix {
-            ctx.push_str(prefix);
-        }
+        let affix_loc = ctx.apply_prefix(&self.affixes);
 
         let cidx = ctx.push_case(self.text_case);
 
@@ -106,11 +98,7 @@ impl RenderCsl for citationberg::Number {
         }
 
         ctx.pop_case(cidx);
-
-        if let Some(suffix) = &self.affixes.suffix {
-            ctx.push_str(suffix);
-        }
-
+        ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.pop_elem(depth);
     }
 }
@@ -145,12 +133,14 @@ fn render_label_with_var(
     ctx: &mut Context,
     content: &str,
 ) {
+    if content.is_empty() {
+        return;
+    }
+
     let idx = ctx.push_format(label.formatting);
 
     let affixes = &label.affixes;
-    if let Some(prefix) = &affixes.prefix {
-        ctx.push_str(prefix);
-    }
+    let affix_loc = ctx.apply_prefix(affixes);
 
     ctx.may_strip_periods(label.strip_periods);
     let cidx = ctx.push_case(label.text_case);
@@ -159,11 +149,7 @@ fn render_label_with_var(
 
     ctx.pop_case(cidx);
     ctx.stop_stripping_periods();
-
-    if let Some(suffix) = &affixes.suffix {
-        ctx.push_str(suffix);
-    }
-
+    ctx.apply_suffix(affixes, affix_loc);
     ctx.pop_format(idx);
 }
 
@@ -184,9 +170,7 @@ impl RenderCsl for citationberg::Date {
             .unwrap_or(self.formatting);
         let depth = ctx.push_elem(self.display, formatting);
 
-        if let Some(prefix) = &self.affixes.prefix {
-            ctx.push_str(prefix);
-        }
+        let affix_loc = ctx.apply_prefix(&self.affixes);
 
         let cidx = ctx.push_case(self.text_case.or(base.and_then(|b| b.text_case)));
 
@@ -222,11 +206,7 @@ impl RenderCsl for citationberg::Date {
         }
 
         ctx.pop_case(cidx);
-
-        if let Some(suffix) = &self.affixes.suffix {
-            ctx.push_str(suffix);
-        }
-
+        ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.pop_elem(depth);
     }
 }
@@ -238,8 +218,8 @@ fn render_date_part(
     over_ride: Option<&citationberg::DatePart>,
 ) {
     let Some(val) = (match date_part.name {
-        DatePartName::Day => date.day.map(|i| i as i32),
-        DatePartName::Month => date.month.map(|i| i as i32),
+        DatePartName::Day => date.day.map(|i| i as i32 + 1),
+        DatePartName::Month => date.month.map(|i| i as i32 + 1),
         DatePartName::Year => Some(date.year),
     }) else {
         return;
@@ -252,10 +232,7 @@ fn render_date_part(
     let idx = ctx.push_format(formatting);
 
     let affixes = &date_part.affixes;
-
-    if let Some(prefix) = &affixes.prefix {
-        ctx.push_str(prefix);
-    }
+    let affix_loc = ctx.apply_prefix(affixes);
 
     let cidx = ctx.push_case(over_ride.and_then(|o| o.text_case).or(date_part.text_case));
 
@@ -293,7 +270,7 @@ fn render_date_part(
         }
         DateStrongAnyForm::Month(DateMonthForm::Long) => {
             if let Some(month) = ctx.term(
-                OtherTerm::month(val as u8).unwrap().into(),
+                OtherTerm::month((val - 1) as u8).unwrap().into(),
                 TermForm::Long,
                 false,
             ) {
@@ -304,7 +281,7 @@ fn render_date_part(
         }
         DateStrongAnyForm::Month(DateMonthForm::Short) => {
             if let Some(month) = ctx.term(
-                OtherTerm::month(val as u8).unwrap().into(),
+                OtherTerm::month((val - 1) as u8).unwrap().into(),
                 TermForm::Short,
                 false,
             ) {
@@ -327,10 +304,7 @@ fn render_date_part(
         }
     }
 
-    if let Some(suffix) = &affixes.suffix {
-        ctx.push_str(suffix);
-    }
-
+    ctx.apply_suffix(affixes, affix_loc);
     ctx.pop_case(cidx);
     ctx.pop_format(idx);
 }
@@ -385,10 +359,7 @@ impl RenderCsl for Names {
         }
 
         let idx = ctx.push_elem(self.display, self.formatting);
-
-        if let Some(prefix) = &self.affixes.prefix {
-            ctx.push_str(prefix);
-        }
+        let affix_loc = ctx.apply_prefix(&self.affixes);
 
         for (i, (persons, term)) in people.into_iter().enumerate() {
             let plural = persons.len() != 1;
@@ -409,10 +380,7 @@ impl RenderCsl for Names {
             }
         }
 
-        if let Some(suffix) = &self.affixes.suffix {
-            ctx.push_str(suffix);
-        }
-
+        ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.pop_elem(idx);
     }
 }
@@ -801,15 +769,18 @@ fn render_with_delimiter(
     ctx: &mut Context,
 ) {
     let mut last_empty = true;
+    let mut loc = None;
 
     for child in children {
         if !last_empty {
+            loc = Some(ctx.deletable_len());
             if let Some(delim) = delimiter {
                 ctx.push_str(delim);
             }
         }
 
-        let pos = ctx.len();
+        let pos = ctx.deletable_len();
+
         match child {
             LayoutRenderingElement::Text(text) => text.render(ctx),
             LayoutRenderingElement::Number(num) => num.render(ctx),
@@ -820,7 +791,13 @@ fn render_with_delimiter(
             LayoutRenderingElement::Group(_group) => _group.render(ctx),
         }
 
-        last_empty = pos == ctx.len();
+        last_empty = !ctx.has_content_between(pos);
+    }
+
+    if let Some(loc) = loc {
+        if last_empty {
+            ctx.delete_with_loc(loc);
+        }
     }
 }
 
@@ -1059,17 +1036,13 @@ impl RenderCsl for citationberg::Group {
         let remove_pos = ctx.deletable_len();
         let info = ctx.push_usage_info();
         let idx = ctx.push_elem(self.display, self.to_formatting());
+        let affixes = self.to_affixes();
 
-        if let Some(prefix) = &self.prefix {
-            ctx.push_str(prefix);
-        }
+        let affix_loc = ctx.apply_prefix(&affixes);
 
         render_with_delimiter(&self.children, self.delimiter.as_deref(), ctx);
 
-        if let Some(suffix) = &self.suffix {
-            ctx.push_str(suffix);
-        }
-
+        ctx.apply_suffix(&affixes, affix_loc);
         ctx.pop_elem(idx);
 
         let info = ctx.pop_usage_info(info);
@@ -1103,16 +1076,12 @@ impl RenderCsl for citationberg::Layout {
     fn render(&self, ctx: &mut Context) {
         let fidx = ctx.push_format(self.to_formatting());
 
-        if let Some(prefix) = &self.prefix {
-            ctx.push_str(prefix);
-        }
+        let affixes = self.to_affixes();
+        let affix_pos = ctx.apply_prefix(&affixes);
 
         render_with_delimiter(&self.elements, self.delimiter.as_deref(), ctx);
 
-        if let Some(suffix) = &self.suffix {
-            ctx.push_str(suffix);
-        }
-
+        ctx.apply_suffix(&affixes, affix_pos);
         ctx.pop_format(fidx);
     }
 }

@@ -3,7 +3,9 @@
 pub(crate) mod en;
 pub(crate) mod name;
 
-use std::fmt::Write;
+use std::{fmt::Write, mem};
+
+use crate::types::{ChunkKind, ChunkedString, StringChunk};
 
 /// Rules for the title case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -203,7 +205,7 @@ impl CharClass {
 }
 
 /// Buffer that adjusts word case on the fly.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CaseFolder {
     case: Case,
     /// Only true if the only characters after a configuration change were
@@ -370,6 +372,21 @@ impl CaseFolder {
         }
 
         self.pristine = false;
+    }
+
+    /// Add a string chunk to the buffer.
+    pub fn push_chunk(&mut self, chunk: &StringChunk) {
+        match chunk.kind {
+            ChunkKind::Verbatim => {
+                let conf = mem::replace(&mut self.case, Case::NoTransform);
+                self.last_reconfig = self.buf.len();
+                self.push_str(&chunk.value);
+                self.last_reconfig = self.buf.len();
+                self.case = conf;
+            }
+            ChunkKind::Math => todo!(),
+            ChunkKind::Normal => self.push_str(&chunk.value),
+        }
     }
 
     /// Add a character to the buffer.
@@ -620,6 +637,11 @@ impl CaseFolder {
     /// Return the length of the buffer.
     pub fn len(&self) -> usize {
         self.buf.len()
+    }
+
+    /// Whether the buffer contains only whitespace.
+    pub fn is_whitespace(&self) -> bool {
+        self.buf.chars().all(char::is_whitespace)
     }
 
     /// Yield the buffer as a mutable string. Must call [`Self::mark_changed`]
