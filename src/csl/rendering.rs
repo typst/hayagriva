@@ -1204,7 +1204,9 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 impl RenderCsl for citationberg::Layout {
     fn render(&self, ctx: &mut Context) {
         let fidx = ctx.push_format(self.to_formatting());
-        render_with_delimiter(&self.elements, self.delimiter.as_deref(), ctx);
+        for e in &self.elements {
+            e.render(ctx);
+        }
         ctx.pop_format(fidx);
     }
 }

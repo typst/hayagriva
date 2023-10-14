@@ -8,7 +8,7 @@ use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, Bibliography, Citation, CslMacro, Display,
     FontStyle, FontVariant, FontWeight, InheritableNameOptions, Locale, LocaleCode,
-    Style, TermForm, TextDecoration, ToFormatting, VerticalAlign,
+    Style, TermForm, TextDecoration, ToAffixes, ToFormatting, VerticalAlign,
 };
 use citationberg::{
     DateForm, IndependentStyleSettings, LongShortForm, OrdinalLookup, TextCase,
@@ -110,35 +110,58 @@ impl<'a> StyleContext<'a> {
 
     pub fn citation(&self, items: &mut [CitationItem<'_>]) -> Vec<ElemChild> {
         self.sort(items, self.citation.sort.as_ref());
-        let mut res = Vec::new();
+
+        let mut root_ctx = WritingContext::default();
+        let affixes = self.citation.layout.to_affixes();
+        let affix_loc = root_ctx.apply_prefix(&affixes);
+        let mut last_empty = true;
+        let mut loc = None;
 
         for CitationItem(entry, locator) in items.iter() {
+            if !last_empty {
+                let prev_loc = std::mem::take(&mut loc);
+
+                if let Some(prev_loc) = prev_loc {
+                    root_ctx.commit_elem(prev_loc, None);
+                }
+
+                loc = Some(root_ctx.push_elem(citationberg::Formatting::default()));
+                root_ctx.buf.push_str(
+                    self.citation
+                        .layout
+                        .delimiter
+                        .as_deref()
+                        .unwrap_or(Citation::DEFAULT_CITE_GROUP_DELIMITER),
+                );
+            }
+
+            let pos = root_ctx.push_elem(citationberg::Formatting::default());
+
             let mut ctx = self.ctx(entry, CiteProperties::with_locator(*locator));
             ctx.writing.push_name_options(&self.citation.name_options);
             self.citation.layout.render(&mut ctx);
-            res.extend(ctx.flush());
+            root_ctx.save_to_block();
+            root_ctx.elem_stack.last_mut().extend(ctx.flush());
+
+            last_empty = root_ctx.last_is_empty();
+            if last_empty {
+                root_ctx.discard_elem(pos);
+            } else {
+                root_ctx.commit_elem(pos, None);
+            }
         }
 
-        if res.iter().all(|c| !c.has_content()) {
-            return Vec::new();
+        if let Some(loc) = loc {
+            if last_empty {
+                root_ctx.discard_elem(loc);
+            } else {
+                root_ctx.commit_elem(loc, None);
+            }
         }
 
-        let root_fmt = Formatting::default().apply(self.citation.layout.to_formatting());
-        if let Some(prefix) = &self.citation.layout.prefix {
-            res.insert(
-                0,
-                ElemChild::Text(Formatted { text: prefix.clone(), formatting: root_fmt }),
-            );
-        }
+        root_ctx.apply_suffix(&affixes, affix_loc);
 
-        if let Some(suffix) = &self.citation.layout.suffix {
-            res.push(ElemChild::Text(Formatted {
-                text: suffix.clone(),
-                formatting: root_fmt,
-            }));
-        }
-
-        simplify_children(res)
+        simplify_children(root_ctx.flush())
     }
 }
 
@@ -323,6 +346,45 @@ impl WritingContext {
 
         self.save_to_block();
         self.elem_stack.drain(loc.0).for_each(drop);
+    }
+
+    fn has_content_since(&mut self, loc: &(DisplayLoc, usize)) -> bool {
+        self.save_to_block();
+        let children = self.elem_stack.last();
+        let has_content = match children.first() {
+            Some(ElemChild::Text(t)) if loc.1 < t.text.len() => {
+                t.text[loc.1..].chars().any(|c| !c.is_whitespace())
+            }
+            Some(ElemChild::Text(_)) => false,
+            Some(ElemChild::Elem(e)) => e.has_content(),
+            None => false,
+        };
+
+        has_content || children.iter().skip(1).any(ElemChild::has_content)
+    }
+
+    /// Apply a prefix, but return a tuple that allows us to undo it if it
+    /// wasn't followed by anything.
+    fn apply_prefix(&mut self, affixes: &Affixes) -> (DisplayLoc, usize) {
+        let pos = self.push_elem(citationberg::Formatting::default());
+        if let Some(prefix) = &affixes.prefix {
+            self.buf.push_str(prefix);
+        };
+
+        (pos, affixes.prefix.as_ref().map(|p| p.len()).unwrap_or_default())
+    }
+
+    /// Apply a suffix, but only if the location was followed by something.
+    /// Delete any prefix if not.
+    fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
+        if !self.has_content_since(&loc) {
+            self.discard_elem(loc.0);
+        } else {
+            if let Some(suffix) = &affixes.suffix {
+                self.buf.push_str(suffix);
+            }
+            self.commit_elem(loc.0, None);
+        }
     }
 
     /// Nest the last subtree into its ancestor. If the `display` argument is
@@ -838,39 +900,13 @@ impl<'a> Context<'a> {
     /// Apply a prefix, but return a tuple that allows us to undo it if it
     /// wasn't followed by anything.
     fn apply_prefix(&mut self, affixes: &Affixes) -> (DisplayLoc, usize) {
-        let pos = self.push_elem(citationberg::Formatting::default());
-        if let Some(prefix) = &affixes.prefix {
-            self.push_str(prefix);
-        };
-
-        (pos, affixes.prefix.as_ref().map(|p| p.len()).unwrap_or_default())
+        self.writing.apply_prefix(affixes)
     }
 
     /// Apply a suffix, but only if the location was followed by something.
     /// Delete any prefix if not.
     fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
-        self.writing.save_to_block();
-        let children = self.writing.elem_stack.last();
-        let has_content = match children.first() {
-            Some(ElemChild::Text(t)) if loc.1 < t.text.len() => {
-                t.text[loc.1..].chars().any(|c| !c.is_whitespace())
-            }
-            Some(ElemChild::Text(_)) => false,
-            Some(ElemChild::Elem(e)) => e.has_content(),
-            None => false,
-        };
-
-        let has_content =
-            has_content || children.iter().skip(1).any(ElemChild::has_content);
-
-        if !has_content {
-            self.discard_elem(loc.0);
-        } else {
-            if let Some(suffix) = &affixes.suffix {
-                self.push_str(suffix);
-            }
-            self.commit_elem(loc.0, None);
-        }
+        self.writing.apply_suffix(affixes, loc)
     }
 }
 
@@ -1320,7 +1356,6 @@ impl<T: Default> Default for NonEmptyStack<T> {
 mod tests {
     use citationberg::{LocaleFile, Style};
 
-    use super::rendering::RenderCsl;
     use crate::io::from_yaml_str;
 
     use super::*;
@@ -1341,8 +1376,11 @@ mod tests {
 
         let style_ctx = StyleContext::new(&style, locale, &en_locale).unwrap();
 
-        for entry in &bib {
-            let mut item = [CitationItem(entry, None)];
+        for n in (0..bib.len()).step_by(2) {
+            let mut item = [
+                CitationItem(bib.nth(n).unwrap(), None),
+                CitationItem(bib.nth(n + 1).unwrap(), None),
+            ];
             let citation = style_ctx.citation(&mut item);
             let mut buf = String::new();
 
