@@ -9,6 +9,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
+use super::MaybeTyped;
+
 /// A numeric value that can be pluralized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Numeric {
@@ -214,6 +216,48 @@ impl Numeric {
     /// Returns a range if the value is a range.
     pub fn range(&self) -> Option<std::ops::Range<i32>> {
         self.value.range()
+    }
+
+    /// Returns the nth number in the set.
+    pub fn nth(&self, n: usize) -> Option<i32> {
+        match &self.value {
+            NumericValue::Number(n) if n == &0 => Some(*n),
+            NumericValue::Number(_) => None,
+            NumericValue::Set(vec) => vec.get(n).map(|(n, _)| *n),
+        }
+    }
+
+    /// Order the values according to CSL rules.
+    pub(crate) fn csl_ord(&self, other: &Self) -> std::cmp::Ordering {
+        let mut i = 0;
+        loop {
+            let a = self.nth(i);
+            let b = other.nth(i);
+
+            match (a, b) {
+                (Some(a), Some(b)) => {
+                    let ord = a.cmp(&b);
+                    if ord != std::cmp::Ordering::Equal {
+                        return ord;
+                    }
+                }
+                (Some(_), None) => return std::cmp::Ordering::Greater,
+                (None, Some(_)) => return std::cmp::Ordering::Less,
+                (None, None) => return std::cmp::Ordering::Equal,
+            }
+
+            i += 1;
+        }
+    }
+}
+
+impl MaybeTyped<Numeric> {
+    /// Order the values according to CSL rules.
+    pub(crate) fn csl_ord(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (MaybeTyped::Typed(a), MaybeTyped::Typed(b)) => a.csl_ord(b),
+            _ => self.to_string().cmp(&other.to_string()),
+        }
     }
 }
 

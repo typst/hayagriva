@@ -99,6 +99,61 @@ impl<'de> Deserialize<'de> for Date {
     }
 }
 
+impl PartialOrd for Date {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let ord = self.year.cmp(&other.year);
+        if ord != std::cmp::Ordering::Equal {
+            return Some(ord);
+        }
+
+        match (self.month, other.month) {
+            (Some(a), Some(b)) => {
+                let ord = a.cmp(&b);
+                if ord != std::cmp::Ordering::Equal {
+                    return Some(ord);
+                }
+            }
+            (None, None) => {
+                // Approximate dates are lesser.
+                return Some(self.approximate.cmp(&other.approximate));
+            }
+            _ => return None,
+        }
+
+        match (self.day, other.day) {
+            (Some(a), Some(b)) => {
+                let ord = a.cmp(&b);
+                if ord != std::cmp::Ordering::Equal {
+                    return Some(ord);
+                }
+            }
+            (None, None) => {
+                return Some(self.approximate.cmp(&other.approximate));
+            }
+            _ => return None,
+        }
+
+        Some(std::cmp::Ordering::Equal)
+    }
+}
+
+impl Date {
+    /// Order two dates according to the CSL specification.
+    pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let ord_fn = |a: Option<u8>, b: Option<u8>| match (a, b) {
+            (Some(a), Some(b)) => a.cmp(&b),
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => self.approximate.cmp(&other.approximate),
+        };
+
+        self.year
+            .cmp(&other.year)
+            .then_with(|| ord_fn(self.month, other.month))
+            .then_with(|| ord_fn(self.day, other.day))
+    }
+}
+
 /// This error can occur when trying to get a date from a string.
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
 pub enum DateError {
