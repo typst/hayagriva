@@ -6,25 +6,25 @@ use std::num::NonZeroUsize;
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, CslMacro, Display, FontStyle, FontVariant,
-    FontWeight, InheritableNameOptions, Locale, LocaleCode, Style, TermForm,
-    TextDecoration, VerticalAlign,
+    taxonomy as csl_taxonomy, Affixes, Bibliography, Citation, CslMacro, Display,
+    FontStyle, FontVariant, FontWeight, InheritableNameOptions, Locale, LocaleCode,
+    Style, TermForm, TextDecoration, ToFormatting, VerticalAlign,
 };
 use citationberg::{
     DateForm, IndependentStyleSettings, LongShortForm, OrdinalLookup, TextCase,
 };
 
+use crate::csl::rendering::RenderCsl;
 use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
 use crate::Entry;
 
 mod rendering;
+mod sort;
 mod taxonomy;
 
-use taxonomy::{
-    resolve_date_variable, resolve_number_variable, resolve_standard_variable,
-};
+use taxonomy::{resolve_date_variable, resolve_standard_variable};
 
 /// A context that contains all information related to rendering a single entry.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,6 +62,10 @@ pub(crate) struct StyleContext<'a> {
     locale_file: &'a [Locale],
     /// Which locale we're using.
     locale: LocaleCode,
+    /// Citation style.
+    citation: &'a Citation,
+    /// Bibliography layout.
+    bibliography: Option<&'a Bibliography>,
 }
 
 impl<'a> StyleContext<'a> {
@@ -79,6 +83,8 @@ impl<'a> StyleContext<'a> {
             locale,
             style_locales: style.locale.as_slice(),
             locale_file,
+            citation: style.citation.as_ref()?,
+            bibliography: style.bibliography.as_ref(),
         })
     }
 
@@ -101,7 +107,42 @@ impl<'a> StyleContext<'a> {
             writing: WritingContext::new(),
         }
     }
+
+    pub fn citation(&self, items: &mut [CitationItem<'_>]) -> Vec<ElemChild> {
+        self.sort(items, self.citation.sort.as_ref());
+        let mut res = Vec::new();
+
+        for CitationItem(entry, locator) in items.iter() {
+            let mut ctx = self.ctx(entry, CiteProperties::with_locator(*locator));
+            ctx.writing.push_name_options(&self.citation.name_options);
+            self.citation.layout.render(&mut ctx);
+            res.extend(ctx.flush());
+        }
+
+        if res.iter().all(|c| !c.has_content()) {
+            return Vec::new();
+        }
+
+        let root_fmt = Formatting::default().apply(self.citation.layout.to_formatting());
+        if let Some(prefix) = &self.citation.layout.prefix {
+            res.insert(
+                0,
+                ElemChild::Text(Formatted { text: prefix.clone(), formatting: root_fmt }),
+            );
+        }
+
+        if let Some(suffix) = &self.citation.layout.suffix {
+            res.push(ElemChild::Text(Formatted {
+                text: suffix.clone(),
+                formatting: root_fmt,
+            }));
+        }
+
+        simplify_children(res)
+    }
 }
+
+pub struct CitationItem<'a>(&'a Entry, Option<SpecificLocator<'a>>);
 
 impl<'a> StyleContext<'a> {
     /// Retrieve a macro.
@@ -335,7 +376,7 @@ impl WritingContext {
             self.format_stack.len()
         );
 
-        simplify_children(self.elem_stack.finish())
+        self.elem_stack.finish()
     }
 
     /// Note that we have used a macro that had non-empty content.
@@ -480,8 +521,30 @@ pub struct CiteProperties<'a> {
     /// if not disambiguated by `choose`.
     pub is_disambiguation: bool,
     /// Locator with its type.
-    pub locator: Option<(Locator, &'a str)>,
+    pub locator: Option<SpecificLocator<'a>>,
 }
+
+impl<'a> CiteProperties<'a> {
+    fn with_locator(locator: Option<SpecificLocator<'a>>) -> Option<Self> {
+        Some(Self { locator, ..Self::default() })
+    }
+}
+
+impl<'a> Default for CiteProperties<'a> {
+    fn default() -> CiteProperties<'static> {
+        CiteProperties {
+            is_near_note: false,
+            is_ibid: false,
+            is_ibid_with_locator: false,
+            is_first: true,
+            is_disambiguation: false,
+            locator: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpecificLocator<'a>(Locator, &'a str);
 
 impl<'a> Context<'a> {
     /// Push a format on top of the stack if it is not empty.
@@ -712,7 +775,7 @@ impl<'a> Context<'a> {
         variable: csl_taxonomy::NumberVariable,
     ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
         self.writing.prepare_variable_query(variable)?;
-        let res = resolve_number_variable(self.instance.entry, variable);
+        let res = self.instance.resolve_number_variable(variable);
 
         if res.is_some() {
             self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
@@ -1279,14 +1342,11 @@ mod tests {
         let style_ctx = StyleContext::new(&style, locale, &en_locale).unwrap();
 
         for entry in &bib {
-            let mut ctx = style_ctx.ctx(entry, None);
-            let cit_style = style.citation.as_ref().unwrap();
-            ctx.writing.push_name_options(&cit_style.name_options);
-
-            cit_style.layout.render(&mut ctx);
+            let mut item = [CitationItem(entry, None)];
+            let citation = style_ctx.citation(&mut item);
             let mut buf = String::new();
 
-            for e in dbg!(ctx.flush()) {
+            for e in citation {
                 e.write_buf(&mut buf, BufWriteFormat::VT100).unwrap();
             }
 

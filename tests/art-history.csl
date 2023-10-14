@@ -82,7 +82,7 @@
     <text variable="page" />
   </macro>
   <macro name="pageref">
-    <!-- <text variable="locator"/> -->
+    <text variable="locator" />
   </macro>
   <macro name="volref">
     <group delimiter=": ">

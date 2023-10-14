@@ -11,83 +11,103 @@ use citationberg::taxonomy::{
 use citationberg::{taxonomy, LongShortForm};
 use unic_langid::LanguageIdentifier;
 
-pub(crate) fn resolve_number_variable(
-    entry: &Entry,
-    variable: NumberVariable,
-) -> Option<MaybeTyped<Cow<Numeric>>> {
-    match variable {
-        NumberVariable::ChapterNumber => entry
-            .bound_select(
-                &select!(
-                    (("e":Anthos) > ("p":Anthology)) |
-                    (("e":*) > ("p":Reference)) |
-                    (("e":Article) > ("p":Proceedings)) |
-                    (("e":*) > ("p":Book))
-                ),
-                "e",
-            )
-            .and_then(Entry::volume)
-            .map(MaybeTyped::to_cow),
-        NumberVariable::CitationNumber => todo!("that's for us to do baby"),
-        NumberVariable::CollectionNumber => entry
-            .bound_select(
-                &select!(
-                    (* > ("p":(Book | Anthology | Proceedings)))
-                ),
-                "p",
-            )
-            .and_then(Entry::volume)
-            .map(MaybeTyped::to_cow),
-        NumberVariable::Edition => entry.map(|e| e.edition()).map(MaybeTyped::to_cow),
-        NumberVariable::FirstReferenceNoteNumber => todo!("you guessed it, baybee"),
-        NumberVariable::Issue => entry.map(|e| e.issue()).map(MaybeTyped::to_cow),
-        NumberVariable::Locator => todo!("boy oh boy"),
-        NumberVariable::Number => {
-            return entry.serial_number().map(|s| {
-                Numeric::from_str(s)
-                    .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                    .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
-            })
+use super::InstanceContext;
+
+impl<'a> InstanceContext<'a> {
+    pub(super) fn resolve_number_variable(
+        &self,
+        variable: NumberVariable,
+    ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
+        match variable {
+            NumberVariable::ChapterNumber => self
+                .entry
+                .bound_select(
+                    &select!(
+                        (("e":Anthos) > ("p":Anthology)) |
+                        (("e":*) > ("p":Reference)) |
+                        (("e":Article) > ("p":Proceedings)) |
+                        (("e":*) > ("p":Book))
+                    ),
+                    "e",
+                )
+                .and_then(Entry::volume)
+                .map(MaybeTyped::to_cow),
+            NumberVariable::CitationNumber => todo!("that's for us to do baby"),
+            NumberVariable::CollectionNumber => self
+                .entry
+                .bound_select(
+                    &select!(
+                        (* > ("p":(Book | Anthology | Proceedings)))
+                    ),
+                    "p",
+                )
+                .and_then(Entry::volume)
+                .map(MaybeTyped::to_cow),
+            NumberVariable::Edition => {
+                self.entry.map(|e| e.edition()).map(MaybeTyped::to_cow)
+            }
+            NumberVariable::FirstReferenceNoteNumber => todo!("you guessed it, baybee"),
+            NumberVariable::Issue => {
+                self.entry.map(|e| e.issue()).map(MaybeTyped::to_cow)
+            }
+            NumberVariable::Locator => {
+                let l = self.cite_props?.locator?.1;
+                Some(
+                    Numeric::from_str(l)
+                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                        .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
+                )
+            }
+            NumberVariable::Number => {
+                return self.entry.serial_number().map(|s| {
+                    Numeric::from_str(s)
+                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                        .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
+                })
+            }
+            NumberVariable::NumberOfPages => {
+                self.entry.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
+            }
+            NumberVariable::NumberOfVolumes => {
+                self.entry.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
+            }
+            NumberVariable::Page => {
+                self.entry.page_range().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
+            }
+            NumberVariable::PageFirst => self
+                .entry
+                .page_range()
+                .and_then(|r| r.range())
+                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start)))),
+            NumberVariable::PartNumber => self
+                .entry
+                .bound_select(
+                    &select!(
+                        (("e":*) > (Article | Blog | Book | Legislation))
+                    ),
+                    "e",
+                )
+                .and_then(Entry::volume)
+                .map(MaybeTyped::to_cow),
+            NumberVariable::PrintingNumber => None,
+            NumberVariable::Section => None,
+            NumberVariable::SupplementNumber => None,
+            NumberVariable::Version => self
+                .entry
+                .bound_select(&select!(("e":Repository)), "e")
+                .and_then(Entry::serial_number)
+                .map(|s| {
+                    Numeric::from_str(s)
+                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                        .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
+                }),
+            NumberVariable::Volume => self.entry.volume().map(MaybeTyped::to_cow),
         }
-        NumberVariable::NumberOfPages => {
-            entry.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
-        }
-        NumberVariable::NumberOfVolumes => {
-            entry.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
-        }
-        NumberVariable::Page => {
-            entry.page_range().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
-        }
-        NumberVariable::PageFirst => entry
-            .page_range()
-            .and_then(|r| r.range())
-            .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start)))),
-        NumberVariable::PartNumber => entry
-            .bound_select(
-                &select!(
-                    (("e":*) > (Article | Blog | Book | Legislation))
-                ),
-                "e",
-            )
-            .and_then(Entry::volume)
-            .map(MaybeTyped::to_cow),
-        NumberVariable::PrintingNumber => None,
-        NumberVariable::Section => None,
-        NumberVariable::SupplementNumber => None,
-        NumberVariable::Version => entry
-            .bound_select(&select!(("e":Repository)), "e")
-            .and_then(Entry::serial_number)
-            .map(|s| {
-                Numeric::from_str(s)
-                    .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                    .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
-            }),
-        NumberVariable::Volume => entry.volume().map(MaybeTyped::to_cow),
     }
 }
 
 // Number variables are standard variables.
-pub(crate) fn resolve_standard_variable(
+pub(super) fn resolve_standard_variable(
     entry: &Entry,
     form: LongShortForm,
     variable: StandardVariable,
@@ -212,7 +232,7 @@ pub(crate) fn resolve_standard_variable(
     }
 }
 
-pub(crate) fn resolve_date_variable(
+pub(super) fn resolve_date_variable(
     entry: &Entry,
     variable: DateVariable,
 ) -> Option<&Date> {
@@ -229,7 +249,7 @@ pub(crate) fn resolve_date_variable(
     }
 }
 
-pub(crate) fn resolve_name_variable(
+pub(super) fn resolve_name_variable(
     entry: &Entry,
     variable: taxonomy::NameVariable,
 ) -> Vec<&Person> {
@@ -336,7 +356,7 @@ pub(crate) fn resolve_name_variable(
     .unwrap_or_default()
 }
 
-pub(crate) fn matches_entry_type(
+pub(super) fn matches_entry_type(
     entry: &Entry,
     kind: citationberg::taxonomy::Kind,
 ) -> bool {
@@ -512,7 +532,7 @@ pub(crate) fn matches_entry_type(
     }
 }
 
-pub(crate) fn csl_language(lang_id: &LanguageIdentifier) -> String {
+pub(super) fn csl_language(lang_id: &LanguageIdentifier) -> String {
     let mut buf = String::with_capacity(if lang_id.region.is_some() { 5 } else { 2 });
     buf.push_str(lang_id.language.as_str());
     if let Some(region) = lang_id.region {

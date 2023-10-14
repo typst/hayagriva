@@ -84,13 +84,18 @@ impl RenderCsl for citationberg::Text {
 
 impl RenderCsl for citationberg::Number {
     fn render(&self, ctx: &mut Context) {
+        let value = ctx.resolve_number_variable(self.variable);
+        if ctx.instance.sorting {
+            if let Some(MaybeTyped::Typed(n)) = value {
+                n.fmt_value(ctx, true).unwrap();
+                return;
+            }
+        }
+
         let depth = ctx.push_elem(self.formatting);
-
         let affix_loc = ctx.apply_prefix(&self.affixes);
-
         let cidx = ctx.push_case(self.text_case);
 
-        let value = ctx.resolve_number_variable(self.variable);
         match value {
             Some(MaybeTyped::Typed(num)) if num.will_transform() => {
                 let normal_num = if self.form == NumberForm::Numeric
@@ -188,6 +193,51 @@ impl RenderCsl for citationberg::Date {
     fn render(&self, ctx: &mut Context) {
         let Some(variable) = self.variable else { return };
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
+
+        if ctx.instance.sorting {
+            let year;
+            let mut month = false;
+            let mut day = false;
+
+            if self.is_localized() {
+                match self.parts {
+                    Some(DateParts::Year) => year = true,
+                    Some(DateParts::YearMonth) => {
+                        year = true;
+                        month = true;
+                    }
+                    Some(DateParts::YearMonthDay) | None => {
+                        year = true;
+                        month = true;
+                        day = true;
+                    }
+                }
+            } else {
+                year = self.date_part.iter().any(|i| i.name == DatePartName::Year);
+                month = self.date_part.iter().any(|i| i.name == DatePartName::Month);
+                day = self.date_part.iter().any(|i| i.name == DatePartName::Day);
+            };
+
+            if year {
+                write!(ctx, "{:04}", date.year).unwrap();
+            }
+
+            if month {
+                write!(
+                    ctx,
+                    "{:02}",
+                    date.month.map(|m| m as i32 + 1).unwrap_or_default()
+                )
+                .unwrap();
+            }
+
+            if day {
+                write!(ctx, "{:02}", date.day.map(|d| d as i32 + 1).unwrap_or_default())
+                    .unwrap();
+            }
+
+            return;
+        }
 
         let base = if let Some(form) = self.form {
             let Some(base) = ctx.localized_date(form) else { return };
@@ -401,12 +451,14 @@ impl RenderCsl for Names {
             let plural = persons.len() != 1;
             add_names(self, ctx, persons);
 
-            if let Some(label) = &self.label {
-                render_label_with_var(
-                    label,
-                    ctx,
-                    ctx.term(term, label.form, plural).unwrap_or_default(),
-                )
+            if !ctx.instance.sorting {
+                if let Some(label) = &self.label {
+                    render_label_with_var(
+                        label,
+                        ctx,
+                        ctx.term(term, label.form, plural).unwrap_or_default(),
+                    )
+                }
             }
 
             if i > 0 {
@@ -445,10 +497,13 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
     let et_al_use_last =
         names.options.et_al_use_last.unwrap_or_default() && take + 2 <= persons.len();
     let mut last_inverted = false;
-    let demote_non_dropping = matches!(
-        ctx.style.settings.demote_non_dropping_particle,
-        DemoteNonDroppingParticle::DisplayAndSort
-    );
+
+    let demote_non_dropping = match ctx.style.settings.demote_non_dropping_particle {
+        DemoteNonDroppingParticle::Never => false,
+        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting,
+        DemoteNonDroppingParticle::DisplayAndSort => true,
+    };
+
     let name_opts = names.name.options(&names.options);
 
     for (i, name) in persons.iter().take(take).enumerate() {
@@ -506,8 +561,7 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
         write_name(
             name,
             ctx,
-            false,
-            name_opts.form == NameForm::Long,
+            name_opts.form == NameForm::Long || ctx.instance.sorting,
             reverse,
             demote_non_dropping,
             names,
@@ -523,7 +577,6 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
             write_name(
                 name,
                 ctx,
-                false,
                 name_opts.form == NameForm::Long,
                 matches!(names.options.name_as_sort_order, Some(NameAsSortOrder::All)),
                 demote_non_dropping,
@@ -554,7 +607,6 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
 fn write_name(
     name: &Person,
     ctx: &mut Context,
-    sorting: bool,
     long: bool,
     reverse: bool,
     demote_non_dropping: bool,
@@ -718,7 +770,7 @@ fn write_name(
     };
 
     match (long, reverse, demote_non_dropping) {
-        _ if name.is_institutional() && sorting => {
+        _ if name.is_institutional() && ctx.instance.sorting => {
             let idx = ctx.push_format(family_format);
             let cidx = ctx.push_case(family_case);
             // TODO make locale aware
@@ -752,8 +804,9 @@ fn write_name(
                 }
             }
         }
-        (true, _, false) if sorting => reverse_keep_particle(ctx),
-        (true, _, true) if sorting => reverse_demote_particle(ctx),
+        // Always reverse when sorting.
+        (true, _, false) if ctx.instance.sorting => reverse_keep_particle(ctx),
+        (true, _, true) if ctx.instance.sorting => reverse_demote_particle(ctx),
         (true, true, false) => reverse_keep_particle(ctx),
         (true, true, true) => reverse_demote_particle(ctx),
         (true, false, _) => {
@@ -1151,13 +1204,7 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 impl RenderCsl for citationberg::Layout {
     fn render(&self, ctx: &mut Context) {
         let fidx = ctx.push_format(self.to_formatting());
-
-        let affixes = self.to_affixes();
-        let affix_pos = ctx.apply_prefix(&affixes);
-
         render_with_delimiter(&self.elements, self.delimiter.as_deref(), ctx);
-
-        ctx.apply_suffix(&affixes, affix_pos);
         ctx.pop_format(fidx);
     }
 }

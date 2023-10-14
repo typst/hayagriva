@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 use std::fmt::{self, Display};
@@ -228,7 +229,7 @@ impl Numeric {
     }
 
     /// Order the values according to CSL rules.
-    pub(crate) fn csl_ord(&self, other: &Self) -> std::cmp::Ordering {
+    pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
         let mut i = 0;
         loop {
             let a = self.nth(i);
@@ -251,11 +252,11 @@ impl Numeric {
     }
 }
 
-impl MaybeTyped<Numeric> {
+impl<'a> MaybeTyped<Cow<'a, Numeric>> {
     /// Order the values according to CSL rules.
-    pub(crate) fn csl_ord(&self, other: &Self) -> std::cmp::Ordering {
+    pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            (MaybeTyped::Typed(a), MaybeTyped::Typed(b)) => a.csl_ord(b),
+            (MaybeTyped::Typed(a), MaybeTyped::Typed(b)) => a.csl_cmp(b),
             _ => self.to_string().cmp(&other.to_string()),
         }
     }
