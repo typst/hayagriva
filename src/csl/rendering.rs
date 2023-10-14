@@ -17,7 +17,10 @@ use crate::types::{Date, MaybeTyped, Numeric, Person};
 use super::taxonomy::matches_entry_type;
 use super::Context;
 
+/// All rendering elements implement this trait. It allows you to format an
+/// [`Entry`] with them.
 pub(crate) trait RenderCsl {
+    /// Render the element given the context's Entry into the context's buffer.
     fn render(&self, ctx: &mut Context);
 }
 
@@ -47,16 +50,16 @@ impl RenderCsl for citationberg::Text {
                 .as_ref(),
             ),
             TextTarget::Macro { name } => {
-                let len = ctx.len();
-                let mac = ctx.get_macro(name);
+                let len = ctx.writing.len();
+                let mac = ctx.style.get_macro(name);
 
                 if let Some(mac) = &mac {
                     for child in &mac.children {
                         child.render(ctx);
                     }
 
-                    if len < ctx.len() {
-                        ctx.printed_non_empty_macro();
+                    if len < ctx.writing.len() {
+                        ctx.writing.printed_non_empty_macro();
                     }
                 }
             }
@@ -94,7 +97,8 @@ impl RenderCsl for citationberg::Number {
                     && self.variable == NumberVariable::Page
                 {
                     if let Some(range) = num.range() {
-                        ctx.settings
+                        ctx.style
+                            .settings
                             .page_range_format
                             .unwrap_or_default()
                             .format(
@@ -216,7 +220,7 @@ impl RenderCsl for citationberg::Date {
                 _ => {}
             }
 
-            let cursor = ctx.len();
+            let cursor = ctx.writing.len();
             if !last_was_empty {
                 if let Some(delim) = &self.delimiter {
                     ctx.push_str(delim);
@@ -229,7 +233,7 @@ impl RenderCsl for citationberg::Date {
                 .flatten();
 
             render_date_part(part, date, ctx, over_ride);
-            last_was_empty = cursor == ctx.len();
+            last_was_empty = cursor == ctx.writing.len();
         }
 
         ctx.pop_case(cidx);
@@ -274,6 +278,7 @@ fn render_date_part(
         DateStrongAnyForm::Day(DateDayForm::Ordinal)
             if val != 1
                 || !ctx
+                    .style
                     .lookup_locale(|l| {
                         Some(
                             l.style_options
@@ -366,26 +371,26 @@ impl RenderCsl for Names {
                 .collect()
         };
 
-        ctx.push_name_options(&self.options);
+        ctx.writing.push_name_options(&self.options);
 
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
         if is_empty {
             if let Some(substitute) = &self.substitute {
-                ctx.start_suppressing_queried_variables();
+                ctx.writing.start_suppressing_queried_variables();
 
                 for child in &substitute.children {
-                    let len = ctx.len();
+                    let len = ctx.writing.len();
                     // TODO deal with name shorthand
                     child.render(ctx);
-                    if len < ctx.len() {
+                    if len < ctx.writing.len() {
                         break;
                     }
                 }
 
-                ctx.stop_suppressing_queried_variables();
+                ctx.writing.stop_suppressing_queried_variables();
             }
 
-            ctx.pop_name_options();
+            ctx.writing.pop_name_options();
             return;
         }
 
@@ -405,7 +410,7 @@ impl RenderCsl for Names {
             }
 
             if i > 0 {
-                let delim = self.delimiter(ctx.name_options.last());
+                let delim = self.delimiter(ctx.writing.name_options.last());
                 if !delim.is_empty() {
                     let delim = delim.to_string();
                     ctx.push_str(&delim);
@@ -415,7 +420,7 @@ impl RenderCsl for Names {
 
         ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.commit_elem(depth, self.display);
-        ctx.pop_name_options();
+        ctx.writing.pop_name_options();
     }
 }
 
@@ -440,8 +445,8 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
     let et_al_use_last =
         names.options.et_al_use_last.unwrap_or_default() && take + 2 <= persons.len();
     let mut last_inverted = false;
-    let reverse = matches!(
-        ctx.settings.demote_non_dropping_particle,
+    let demote_non_dropping = matches!(
+        ctx.style.settings.demote_non_dropping_particle,
         DemoteNonDroppingParticle::DisplayAndSort
     );
     let name_opts = names.name.options(&names.options);
@@ -492,15 +497,23 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
             }
         }
 
-        let inverted = match names.options.name_as_sort_order {
+        let reverse = match names.options.name_as_sort_order {
             Some(NameAsSortOrder::First) if i == 0 => true,
             Some(NameAsSortOrder::All) => true,
             _ => false,
         };
 
-        write_name(name, ctx, name_opts.form == NameForm::Long, inverted, reverse, names);
+        write_name(
+            name,
+            ctx,
+            false,
+            name_opts.form == NameForm::Long,
+            reverse,
+            demote_non_dropping,
+            names,
+        );
 
-        last_inverted = inverted;
+        last_inverted = reverse;
     }
 
     if et_al_use_last {
@@ -510,9 +523,10 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
             write_name(
                 name,
                 ctx,
+                false,
                 name_opts.form == NameForm::Long,
                 matches!(names.options.name_as_sort_order, Some(NameAsSortOrder::All)),
-                reverse,
+                demote_non_dropping,
                 names,
             );
         }
@@ -540,12 +554,13 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
 fn write_name(
     name: &Person,
     ctx: &mut Context,
+    sorting: bool,
     long: bool,
     reverse: bool,
     demote_non_dropping: bool,
     names: &citationberg::Names,
 ) {
-    let hyphen_init = ctx.settings.initialize_with_hyphen;
+    let hyphen_init = ctx.style.settings.initialize_with_hyphen;
     let initialize = names.options.initialize.unwrap_or(true);
     let initialize_with = names.options.initialize_with.as_deref();
     let sort_sep = names.options.sort_separator.as_deref().unwrap_or(", ");
@@ -597,7 +612,120 @@ fn write_name(
         }
     };
 
+    let reverse_keep_particle = |ctx: &mut Context<'_>| {
+        let idx = ctx.push_format(family_format);
+        let cidx = ctx.push_case(family_case);
+
+        if let Some(prefix) = family_affixes[0] {
+            ctx.push_str(prefix);
+        }
+
+        ctx.push_str(&name.name);
+
+        ctx.pop_case(cidx);
+        ctx.pop_format(idx);
+
+        if let Some(suffix) = family_affixes[1] {
+            ctx.push_str(suffix);
+        }
+
+        if name.given_name.is_some() {
+            ctx.push_str(sort_sep);
+            ctx.ensure_space();
+
+            let idx = ctx.push_format(first_format);
+            let cidx = ctx.push_case(first_case);
+
+            if let Some(prefix) = first_affixes[0] {
+                ctx.push_str(prefix);
+            }
+
+            first_name(ctx);
+
+            if let Some(prefix) = &name.prefix {
+                ctx.ensure_space();
+                ctx.push_str(prefix);
+            }
+
+            ctx.pop_case(cidx);
+            ctx.pop_format(idx);
+
+            if let Some(suffix) = first_affixes[1] {
+                ctx.push_str(suffix);
+            }
+        }
+
+        if let Some(suffix) = &name.suffix {
+            ctx.push_str(sort_sep);
+            ctx.ensure_space();
+            ctx.push_str(suffix);
+        }
+    };
+
+    let reverse_demote_particle = |ctx: &mut Context<'_>| {
+        let idx = ctx.push_format(family_format);
+        let cidx = ctx.push_case(family_case);
+
+        if let Some(prefix) = family_affixes[0] {
+            ctx.push_str(prefix);
+        }
+
+        ctx.push_str(name.name_without_particle());
+
+        ctx.pop_case(cidx);
+        ctx.pop_format(idx);
+
+        if let Some(suffix) = family_affixes[1] {
+            ctx.push_str(suffix);
+        }
+
+        if name.given_name.is_some() {
+            ctx.push_str(sort_sep);
+            ctx.ensure_space();
+
+            let idx = ctx.push_format(first_format);
+            let cidx = ctx.push_case(first_case);
+
+            if let Some(prefix) = first_affixes[0] {
+                ctx.push_str(prefix);
+            }
+
+            first_name(ctx);
+
+            if let Some(prefix) = &name.prefix {
+                ctx.ensure_space();
+                ctx.push_str(prefix);
+            }
+
+            ctx.pop_case(cidx);
+            ctx.pop_format(idx);
+
+            if let Some(particle) = &name.name_particle() {
+                ctx.ensure_space();
+                ctx.push_str(particle);
+            }
+
+            if let Some(suffix) = first_affixes[1] {
+                ctx.push_str(suffix);
+            }
+        }
+
+        if let Some(suffix) = &name.suffix {
+            ctx.push_str(sort_sep);
+            ctx.ensure_space();
+            ctx.push_str(suffix);
+        }
+    };
+
     match (long, reverse, demote_non_dropping) {
+        _ if name.is_institutional() && sorting => {
+            let idx = ctx.push_format(family_format);
+            let cidx = ctx.push_case(family_case);
+            // TODO make locale aware
+            ctx.push_str(name.name_without_article());
+            ctx.pop_case(cidx);
+            ctx.pop_format(idx);
+        }
         _ if name.is_institutional() => simple(ctx),
         (true, _, _) if name.is_cjk() => {
             let idx = ctx.push_format(family_format);
@@ -624,6 +752,10 @@ fn write_name(
                 }
             }
         }
+        (true, _, false) if sorting => reverse_keep_particle(ctx),
+        (true, _, true) if sorting => reverse_demote_particle(ctx),
+        (true, true, false) => reverse_keep_particle(ctx),
+        (true, true, true) => reverse_demote_particle(ctx),
         (true, false, _) => {
             let idx = ctx.push_format(first_format);
             let cidx = ctx.push_case(first_case);
@@ -664,109 +796,6 @@ fn write_name(
             }
 
             if let Some(suffix) = family_affixes[1] {
-                ctx.push_str(suffix);
-            }
-        }
-        (true, true, false) => {
-            let idx = ctx.push_format(family_format);
-            let cidx = ctx.push_case(family_case);
-
-            if let Some(prefix) = family_affixes[0] {
-                ctx.push_str(prefix);
-            }
-
-            ctx.push_str(&name.name);
-
-            ctx.pop_case(cidx);
-            ctx.pop_format(idx);
-
-            if let Some(suffix) = family_affixes[1] {
-                ctx.push_str(suffix);
-            }
-
-            if name.given_name.is_some() {
-                ctx.push_str(sort_sep);
-                ctx.ensure_space();
-
-                let idx = ctx.push_format(first_format);
-                let cidx = ctx.push_case(first_case);
-
-                if let Some(prefix) = first_affixes[0] {
-                    ctx.push_str(prefix);
-                }
-
-                first_name(ctx);
-
-                if let Some(prefix) = &name.prefix {
-                    ctx.ensure_space();
-                    ctx.push_str(prefix);
-                }
-
-                ctx.pop_case(cidx);
-                ctx.pop_format(idx);
-
-                if let Some(suffix) = first_affixes[1] {
-                    ctx.push_str(suffix);
-                }
-            }
-
-            if let Some(suffix) = &name.suffix {
-                ctx.push_str(sort_sep);
-                ctx.ensure_space();
-                ctx.push_str(suffix);
-            }
-        }
-        (true, true, true) => {
-            let idx = ctx.push_format(family_format);
-            let cidx = ctx.push_case(family_case);
-
-            if let Some(prefix) = family_affixes[0] {
-                ctx.push_str(prefix);
-            }
-
-            ctx.push_str(name.name_without_particle());
-
-            ctx.pop_case(cidx);
-            ctx.pop_format(idx);
-
-            if let Some(suffix) = family_affixes[1] {
-                ctx.push_str(suffix);
-            }
-
-            if name.given_name.is_some() {
-                ctx.push_str(sort_sep);
-                ctx.ensure_space();
-
-                let idx = ctx.push_format(first_format);
-                let cidx = ctx.push_case(first_case);
-
-                if let Some(prefix) = first_affixes[0] {
-                    ctx.push_str(prefix);
-                }
-
-                first_name(ctx);
-
-                if let Some(prefix) = &name.prefix {
-                    ctx.ensure_space();
-                    ctx.push_str(prefix);
-                }
-
-                ctx.pop_case(cidx);
-                ctx.pop_format(idx);
-
-                if let Some(particle) = &name.name_particle() {
-                    ctx.ensure_space();
-                    ctx.push_str(particle);
-                }
-
-                if let Some(suffix) = first_affixes[1] {
-                    ctx.push_str(suffix);
-                }
-            }
-
-            if let Some(suffix) = &name.suffix {
-                ctx.push_str(sort_sep);
-                ctx.ensure_space();
                 ctx.push_str(suffix);
             }
         }
@@ -825,7 +854,7 @@ fn render_with_delimiter(
             LayoutRenderingElement::Group(_group) => _group.render(ctx),
         }
 
-        last_empty = ctx.last_is_empty();
+        last_empty = ctx.writing.last_is_empty();
         if last_empty {
             ctx.discard_elem(pos);
         } else {
@@ -918,7 +947,13 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
             BranchConditionPos::Disambiguate => {
                 self.pos.next();
                 if let Some(d) = self.cond.disambiguate {
-                    Some(d == self.ctx.cite_props.map_or(false, |p| p.is_disambiguation))
+                    Some(
+                        d == self
+                            .ctx
+                            .instance
+                            .cite_props
+                            .map_or(false, |p| p.is_disambiguation),
+                    )
                 } else {
                     self.next()
                 }
@@ -982,6 +1017,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
 
                     Some(
                         self.ctx
+                            .instance
                             .cite_props
                             .and_then(|c| c.locator)
                             .map(|l| l.0)
@@ -1002,7 +1038,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                     let spec_pos = pos[self.idx];
                     self.idx += 1;
 
-                    let Some(props) = self.ctx.cite_props else {
+                    let Some(props) = self.ctx.instance.cite_props else {
                         self.next_case();
                         return Some(false);
                     };
@@ -1031,7 +1067,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                     let kind = kind[self.idx];
                     self.idx += 1;
 
-                    Some(matches_entry_type(self.ctx.entry, kind))
+                    Some(matches_entry_type(self.ctx.instance.entry, kind))
                 } else {
                     self.next_case();
                     self.next()
@@ -1074,7 +1110,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
 
 impl RenderCsl for citationberg::Group {
     fn render(&self, ctx: &mut Context) {
-        let info = ctx.push_usage_info();
+        let info = ctx.writing.push_usage_info();
         let idx = ctx.push_elem(self.to_formatting());
         let affixes = self.to_affixes();
 
@@ -1084,7 +1120,7 @@ impl RenderCsl for citationberg::Group {
 
         ctx.apply_suffix(&affixes, affix_loc);
 
-        let info = ctx.pop_usage_info(info);
+        let info = ctx.writing.pop_usage_info(info);
         if info.has_vars
             && (!info.has_non_empty_vars
                 && !info.has_used_macros
@@ -1093,7 +1129,7 @@ impl RenderCsl for citationberg::Group {
             ctx.discard_elem(idx);
         } else {
             ctx.commit_elem(idx, self.display);
-            ctx.printed_non_empty_group()
+            ctx.writing.printed_non_empty_group()
         }
     }
 }

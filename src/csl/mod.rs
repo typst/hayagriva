@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::fmt::{self, Write};
+use std::mem;
 use std::num::NonZeroUsize;
-use std::{default, mem};
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
@@ -26,13 +26,31 @@ use taxonomy::{
     resolve_date_variable, resolve_number_variable, resolve_standard_variable,
 };
 
-pub(crate) struct Context<'a> {
+/// A context that contains all information related to rendering a single entry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct InstanceContext<'a> {
     // Entry-dependent data.
     /// The current entry.
     pub entry: &'a Entry,
     /// The position of this citation in the list of citations.
     pub cite_props: Option<CiteProperties<'a>>,
+    /// Whether we are sorting or formatting right now.
+    pub sorting: bool,
+}
 
+impl<'a> InstanceContext<'a> {
+    fn new(
+        entry: &'a Entry,
+        cite_props: Option<CiteProperties<'a>>,
+        sorting: bool,
+    ) -> Self {
+        Self { entry, cite_props, sorting }
+    }
+}
+
+/// A context that contains information about the style we are using to render.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StyleContext<'a> {
     // Settings from the style.
     /// The settings of the style.
     pub settings: &'a IndependentStyleSettings,
@@ -44,7 +62,102 @@ pub(crate) struct Context<'a> {
     locale_file: &'a [Locale],
     /// Which locale we're using.
     locale: LocaleCode,
+}
 
+impl<'a> StyleContext<'a> {
+    fn new(
+        style: &'a Style,
+        locale: LocaleCode,
+        locale_file: &'a [Locale],
+    ) -> Option<Self> {
+        let macros = &style.macros;
+        let settings = style.independant_settings.as_ref()?;
+
+        Some(Self {
+            settings,
+            macros,
+            locale,
+            style_locales: style.locale.as_slice(),
+            locale_file,
+        })
+    }
+
+    fn ctx<'b>(
+        &'b self,
+        entry: &'b Entry,
+        cite_props: Option<CiteProperties<'a>>,
+    ) -> Context<'b> {
+        Context {
+            instance: InstanceContext::new(entry, cite_props, false),
+            style: self,
+            writing: WritingContext::new(),
+        }
+    }
+
+    fn sorting_ctx<'b>(&'b self, entry: &'b Entry) -> Context<'b> {
+        Context {
+            instance: InstanceContext::new(entry, None, true),
+            style: self,
+            writing: WritingContext::new(),
+        }
+    }
+}
+
+impl<'a> StyleContext<'a> {
+    /// Retrieve a macro.
+    fn get_macro(&self, name: &str) -> Option<&'a CslMacro> {
+        self.macros.iter().find(|m| m.name == name)
+    }
+
+    /// Get the locale for the given language in the style.
+    fn lookup_locale<F, R>(&self, mut f: F) -> Option<R>
+    where
+        F: FnMut(&'a Locale) -> Option<R>,
+    {
+        let mut lookup = |file: &'a [Locale], lang| {
+            #[allow(clippy::redundant_closure)]
+            file.iter().find(|l| l.lang.as_ref() == lang).and_then(|l| f(l))
+        };
+
+        let fallback = self.locale.fallback();
+        let en_us = LocaleCode::en_us();
+
+        for (i, resource) in
+            [self.style_locales, self.locale_file].into_iter().enumerate()
+        {
+            if let Some(output) = lookup(resource, Some(&self.locale)) {
+                return Some(output);
+            }
+
+            if fallback.is_some() {
+                if let Some(output) = lookup(resource, fallback.as_ref()) {
+                    return Some(output);
+                }
+            }
+
+            if i == 0 {
+                if let Some(output) = lookup(resource, None) {
+                    return Some(output);
+                }
+            } else if let Some(output) = lookup(resource, Some(&en_us)) {
+                return Some(output);
+            }
+        }
+
+        None
+    }
+
+    /// Check whether to do punctuation in quotes.
+    fn punctuation_in_quotes(&self) -> bool {
+        self.lookup_locale(|f| f.style_options?.punctuation_in_quote)
+            .unwrap_or_default()
+    }
+}
+
+/// This struct contains all information needed to render a single entry. It
+/// contains buffers and is mutable.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct WritingContext {
     // Dynamic settings that change while rendering.
     /// Whether to watch out for punctuation that should be pulled inside the
     /// preceeding quoted content.
@@ -80,62 +193,16 @@ pub(crate) struct Context<'a> {
     elem_stack: NonEmptyStack<Vec<ElemChild>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CiteProperties<'a> {
-    /// Whether this citation is in a note and within `near-note-distance` to
-    /// the previous citation of the same item.
-    pub is_near_note: bool,
-    /// Whether this citation is a duplicate of the previous citation.
-    pub is_ibid: bool,
-    /// Whether this directly follows another citation to the same item with a
-    /// different locator.
-    pub is_ibid_with_locator: bool,
-    /// Whether this is the first citation of the entry.
-    pub is_first: bool,
-    /// Whether this is a citation that would be identical to another citation
-    /// if not disambiguated by `choose`.
-    pub is_disambiguation: bool,
-    /// Locator with its type.
-    pub locator: Option<(Locator, &'a str)>,
-}
+impl WritingContext {
+    fn new() -> Self {
+        Self::default()
+    }
 
-impl<'a> Context<'a> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        entry: &'a Entry,
-        style: &'a Style,
-        locale: LocaleCode,
-        locale_file: &'a [Locale],
-        root_format: citationberg::Formatting,
-        cite_props: Option<CiteProperties<'a>>,
-    ) -> Option<Self> {
-        let macros = &style.macros;
-        let settings = style.independant_settings.as_ref()?;
-
-        Some(Self {
-            entry,
-            cite_props,
-
-            settings,
-            macros,
-            locale,
-            style_locales: style.locale.as_slice(),
-            locale_file,
-
-            pull_punctuation: false,
-            inner_quotes: false,
-            strip_periods: false,
-            suppress_queried_variables: false,
-            suppressed_variables: RefCell::new(Vec::new()),
-
-            format_stack: NonEmptyStack::new(Formatting::default().apply(root_format)),
-            cases: NonEmptyStack::new(None),
-            name_options: NonEmptyStack::new(settings.options.clone()),
-            usage_info: RefCell::new(NonEmptyStack::new(UsageInfo::new())),
-
-            buf: CaseFolder::new(),
-            elem_stack: NonEmptyStack::new(Vec::new()),
-        })
+    fn with_formatting(formatting: citationberg::Formatting) -> Self {
+        Self {
+            format_stack: NonEmptyStack::new(Formatting::default().apply(formatting)),
+            ..Self::default()
+        }
     }
 
     /// Retrieve the current formatting.
@@ -240,46 +307,6 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Add the appropriate opening quotation marks.
-    fn push_quotes(&mut self) {
-        let mark = self.term(
-            if self.inner_quotes {
-                OtherTerm::OpenInnerQuote
-            } else {
-                OtherTerm::OpenQuote
-            }
-            .into(),
-            TermForm::default(),
-            false,
-        );
-
-        if let Some(mark) = mark {
-            self.push_str(mark);
-        }
-
-        self.inner_quotes = !self.inner_quotes;
-    }
-
-    /// Add the appropriate closing quotation marks.
-    fn pop_quotes(&mut self) {
-        self.inner_quotes = !self.inner_quotes;
-
-        let mark = self.term(
-            if self.inner_quotes {
-                OtherTerm::CloseInnerQuote
-            } else {
-                OtherTerm::CloseQuote
-            }
-            .into(),
-            TermForm::default(),
-            false,
-        );
-
-        if let Some(mark) = mark {
-            self.push_str(mark);
-        }
-    }
-
     /// Push an item on the name options stack.
     pub fn push_name_options(&mut self, options: &InheritableNameOptions) {
         self.name_options.push(self.name_options.last().apply(options));
@@ -288,89 +315,6 @@ impl<'a> Context<'a> {
     /// Pop an item from the name options stack.
     pub fn pop_name_options(&mut self) {
         self.name_options.pop();
-    }
-
-    /// Pull punctuation into a quote if applicable
-    fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
-        if self.pull_punctuation && s.starts_with(['.', ',']) {
-            let close_quote =
-                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
-            let close_inner_quote =
-                self.term(OtherTerm::CloseInnerQuote.into(), TermForm::default(), false);
-
-            let mut used_buf = false;
-            let buf = if self.buf.is_empty() {
-                match self.elem_stack.last_mut().last_mut() {
-                    Some(ElemChild::Text(f)) => &mut f.text,
-                    _ => {
-                        used_buf = true;
-                        self.buf.as_string_mut()
-                    }
-                }
-            } else {
-                used_buf = true;
-                self.buf.as_string_mut()
-            };
-
-            for quote in [close_quote, close_inner_quote].iter().flatten() {
-                // Check if buf ends with a close quote.
-                // If it does, replace it with the punctuation.
-                if let Some(head) = buf.strip_suffix(quote) {
-                    buf.truncate(head.len());
-
-                    let punctuation = s.chars().next().unwrap();
-                    s = &s[punctuation.len_utf8()..];
-                    buf.push(punctuation);
-                    buf.push_str(quote);
-
-                    if used_buf {
-                        self.buf.mark_changed();
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        s
-    }
-
-    /// Add a string to the buffer.
-    fn push_str(&mut self, s: &str) {
-        let s = self.do_pull_punctuation(s);
-
-        self.buf
-            .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
-
-        if self.strip_periods {
-            // Replicate citeproc.js behavior: remove a period if the
-            // preceeding character in the original string is not a period.
-            let mut last_period = false;
-            for c in s.chars() {
-                let is_period = c == '.';
-                if !is_period || last_period {
-                    self.buf.push(c);
-                }
-                last_period = is_period;
-            }
-        } else {
-            self.buf.push_str(s);
-        }
-
-        self.pull_punctuation = false;
-    }
-
-    /// Push a chunked string to the buffer.
-    pub fn push_chunked(&mut self, chunked: &ChunkedString) {
-        for chunk in &chunked.0 {
-            match chunk.kind {
-                ChunkKind::Normal => self.push_str(&chunk.value),
-                _ => {
-                    self.buf.push_chunk(chunk);
-                    self.pull_punctuation = false;
-                }
-            }
-        }
     }
 
     /// Ensure that the buffer is either empty or the last character is a space.
@@ -394,12 +338,6 @@ impl<'a> Context<'a> {
         simplify_children(self.elem_stack.finish())
     }
 
-    /// Retrieve a macro.
-    fn get_macro(&self, name: &str) -> Option<&'a CslMacro> {
-        let res = self.macros.iter().find(|m| m.name == name);
-        res
-    }
-
     /// Note that we have used a macro that had non-empty content.
     fn printed_non_empty_macro(&mut self) {
         self.usage_info.get_mut().last_mut().has_used_macros = true;
@@ -408,84 +346,6 @@ impl<'a> Context<'a> {
     /// Note that we have used a group that had non-empty content.
     fn printed_non_empty_group(&mut self) {
         self.usage_info.get_mut().last_mut().has_non_empty_group = true;
-    }
-
-    /// Get the locale for the given language in the style.
-    fn lookup_locale<F, R>(&self, mut f: F) -> Option<R>
-    where
-        F: FnMut(&'a Locale) -> Option<R>,
-    {
-        let mut lookup = |file: &'a [Locale], lang| {
-            #[allow(clippy::redundant_closure)]
-            file.iter().find(|l| l.lang.as_ref() == lang).and_then(|l| f(l))
-        };
-
-        let fallback = self.locale.fallback();
-        let en_us = LocaleCode::en_us();
-
-        for (i, resource) in
-            [self.style_locales, self.locale_file].into_iter().enumerate()
-        {
-            if let Some(output) = lookup(resource, Some(&self.locale)) {
-                return Some(output);
-            }
-
-            if fallback.is_some() {
-                if let Some(output) = lookup(resource, fallback.as_ref()) {
-                    return Some(output);
-                }
-            }
-
-            if i == 0 {
-                if let Some(output) = lookup(resource, None) {
-                    return Some(output);
-                }
-            } else if let Some(output) = lookup(resource, Some(&en_us)) {
-                return Some(output);
-            }
-        }
-
-        None
-    }
-
-    /// Get a term from the style.
-    fn term(&self, term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
-        let mut form = Some(form);
-        while let Some(current_form) = form {
-            if let Some(localization) = self.lookup_locale(|l| {
-                let term = l.term(term, current_form)?;
-                Some(if plural { term.multiple() } else { term.single() })
-            }) {
-                return localization;
-            }
-
-            form = current_form.fallback();
-        }
-
-        None
-    }
-
-    /// Get a localized date format.
-    fn localized_date(&self, form: DateForm) -> Option<&'a citationberg::Date> {
-        self.lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)))
-    }
-
-    /// Get the ordinal lookup object.
-    fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
-        self.lookup_locale(|l| l.ordinals())
-            .unwrap_or_else(OrdinalLookup::empty)
-    }
-
-    /// Check whether to do punctuation in quotes.
-    fn punctuation_in_quotes(&self) -> bool {
-        self.lookup_locale(|f| f.style_options?.punctuation_in_quote)
-            .unwrap_or_default()
-    }
-
-    /// Pull the next punctuation character into the preceeding quoted content
-    /// if appropriate for the locale.
-    fn may_pull_punctuation(&mut self) {
-        self.pull_punctuation |= self.punctuation_in_quotes();
     }
 
     /// Set whether to strip periods.
@@ -569,6 +429,281 @@ impl<'a> Context<'a> {
         Some(general)
     }
 
+    /// Return the sum of the lengths of strings in the finished elements. This
+    /// may not monotonoically increase.
+    fn len(&self) -> usize {
+        self.buf.len()
+            + self
+                .elem_stack
+                .iter()
+                .flat_map(|e| e.iter().map(ElemChild::str_len))
+                .sum::<usize>()
+    }
+
+    /// Check if the last subtree is empty.
+    fn last_is_empty(&self) -> bool {
+        !self.buf.has_content() && self.elem_stack.last().iter().all(|c| !c.has_content())
+    }
+
+    /// Get a representation of the current progress as a string.
+    fn dbg_string(&self) {
+        let mut w = String::with_capacity(self.len());
+        for e in self.elem_stack.iter().flat_map(IntoIterator::into_iter) {
+            e.write_buf(&mut w, BufWriteFormat::default()).unwrap();
+        }
+
+        w.write_str(&self.buf.clone().finish()).unwrap();
+
+        eprintln!("{}\n", w);
+    }
+}
+
+pub(crate) struct Context<'a> {
+    instance: InstanceContext<'a>,
+    style: &'a StyleContext<'a>,
+    writing: WritingContext,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CiteProperties<'a> {
+    /// Whether this citation is in a note and within `near-note-distance` to
+    /// the previous citation of the same item.
+    pub is_near_note: bool,
+    /// Whether this citation is a duplicate of the previous citation.
+    pub is_ibid: bool,
+    /// Whether this directly follows another citation to the same item with a
+    /// different locator.
+    pub is_ibid_with_locator: bool,
+    /// Whether this is the first citation of the entry.
+    pub is_first: bool,
+    /// Whether this is a citation that would be identical to another citation
+    /// if not disambiguated by `choose`.
+    pub is_disambiguation: bool,
+    /// Locator with its type.
+    pub locator: Option<(Locator, &'a str)>,
+}
+
+impl<'a> Context<'a> {
+    /// Push a format on top of the stack if it is not empty.
+    fn push_format(&mut self, format: citationberg::Formatting) -> FormatIdx {
+        self.writing.push_format(format)
+    }
+
+    /// Pop a format from the stack if it is not empty.
+    fn pop_format(&mut self, pos: FormatIdx) {
+        self.writing.pop_format(pos)
+    }
+
+    /// Add another subtree to the children element. This must be done to
+    /// include a new element or to check that the subtree is empty.
+    fn push_elem(&mut self, format: citationberg::Formatting) -> DisplayLoc {
+        self.writing.push_elem(format)
+    }
+
+    /// Remove the last subtree and discard it.
+    ///
+    /// Will panic if the location does not match.
+    fn discard_elem(&mut self, loc: DisplayLoc) {
+        self.writing.discard_elem(loc)
+    }
+
+    /// Nest the last subtree into its ancestor. If the `display` argument is
+    /// some, a new element child will be created there. Otherwise, we will
+    /// append the children of the last subtree to the children of its ancestor.
+    fn commit_elem(&mut self, loc: DisplayLoc, display: Option<Display>) {
+        self.writing.commit_elem(loc, display)
+    }
+
+    /// Ensure that the buffer is either empty or the last character is a space.
+    pub fn ensure_space(&mut self) {
+        self.writing.ensure_space()
+    }
+
+    /// Add the appropriate opening quotation marks.
+    fn push_quotes(&mut self) {
+        let mark = self.term(
+            if self.writing.inner_quotes {
+                OtherTerm::OpenInnerQuote
+            } else {
+                OtherTerm::OpenQuote
+            }
+            .into(),
+            TermForm::default(),
+            false,
+        );
+
+        if let Some(mark) = mark {
+            self.push_str(mark);
+        }
+
+        self.writing.inner_quotes = !self.writing.inner_quotes;
+    }
+
+    /// Add the appropriate closing quotation marks.
+    fn pop_quotes(&mut self) {
+        self.writing.inner_quotes = !self.writing.inner_quotes;
+
+        let mark = self.term(
+            if self.writing.inner_quotes {
+                OtherTerm::CloseInnerQuote
+            } else {
+                OtherTerm::CloseQuote
+            }
+            .into(),
+            TermForm::default(),
+            false,
+        );
+
+        if let Some(mark) = mark {
+            self.push_str(mark);
+        }
+    }
+
+    /// Pull punctuation into a quote if applicable
+    fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
+        if self.writing.pull_punctuation && s.starts_with(['.', ',']) {
+            let close_quote =
+                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
+            let close_inner_quote =
+                self.term(OtherTerm::CloseInnerQuote.into(), TermForm::default(), false);
+
+            let mut used_buf = false;
+            let buf = if self.writing.buf.is_empty() {
+                match self.writing.elem_stack.last_mut().last_mut() {
+                    Some(ElemChild::Text(f)) => &mut f.text,
+                    _ => {
+                        used_buf = true;
+                        self.writing.buf.as_string_mut()
+                    }
+                }
+            } else {
+                used_buf = true;
+                self.writing.buf.as_string_mut()
+            };
+
+            for quote in [close_quote, close_inner_quote].iter().flatten() {
+                // Check if buf ends with a close quote.
+                // If it does, replace it with the punctuation.
+                if let Some(head) = buf.strip_suffix(quote) {
+                    buf.truncate(head.len());
+
+                    let punctuation = s.chars().next().unwrap();
+                    s = &s[punctuation.len_utf8()..];
+                    buf.push(punctuation);
+                    buf.push_str(quote);
+
+                    if used_buf {
+                        self.writing.buf.mark_changed();
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        s
+    }
+
+    /// Add a string to the buffer.
+    fn push_str(&mut self, s: &str) {
+        let s = self.do_pull_punctuation(s);
+
+        self.writing.buf.reconfigure(
+            (*self.writing.cases.last()).map(Into::into).unwrap_or_default(),
+        );
+
+        if self.writing.strip_periods {
+            // Replicate citeproc.js behavior: remove a period if the
+            // preceeding character in the original string is not a period.
+            let mut last_period = false;
+            for c in s.chars() {
+                let is_period = c == '.';
+                if !is_period || last_period {
+                    self.writing.buf.push(c);
+                }
+                last_period = is_period;
+            }
+        } else {
+            self.writing.buf.push_str(s);
+        }
+
+        self.writing.pull_punctuation = false;
+    }
+
+    /// Push a chunked string to the buffer.
+    pub fn push_chunked(&mut self, chunked: &ChunkedString) {
+        for chunk in &chunked.0 {
+            match chunk.kind {
+                ChunkKind::Normal => self.push_str(&chunk.value),
+                _ => {
+                    self.writing.buf.push_chunk(chunk);
+                    self.writing.pull_punctuation = false;
+                }
+            }
+        }
+    }
+
+    /// Folds all remaining elements into the first element and returns it.
+    fn flush(mut self) -> Vec<ElemChild> {
+        self.writing.flush()
+    }
+
+    /// Get a term from the style.
+    fn term(&self, term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
+        let mut form = Some(form);
+        while let Some(current_form) = form {
+            if let Some(localization) = self.style.lookup_locale(|l| {
+                let term = l.term(term, current_form)?;
+                Some(if plural { term.multiple() } else { term.single() })
+            }) {
+                return localization;
+            }
+
+            form = current_form.fallback();
+        }
+
+        None
+    }
+
+    /// Get a localized date format.
+    fn localized_date(&self, form: DateForm) -> Option<&'a citationberg::Date> {
+        self.style
+            .lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)))
+    }
+
+    /// Get the ordinal lookup object.
+    fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
+        self.style
+            .lookup_locale(|l| l.ordinals())
+            .unwrap_or_else(OrdinalLookup::empty)
+    }
+
+    /// Pull the next punctuation character into the preceeding quoted content
+    /// if appropriate for the locale.
+    fn may_pull_punctuation(&mut self) {
+        self.writing.pull_punctuation |= self.style.punctuation_in_quotes();
+    }
+
+    /// Set whether to strip periods.
+    fn may_strip_periods(&mut self, strip: bool) {
+        self.writing.may_strip_periods(strip)
+    }
+
+    /// Stop stripping periods.
+    fn stop_stripping_periods(&mut self) {
+        self.writing.stop_stripping_periods()
+    }
+
+    /// Set the case of the next text.
+    fn push_case(&mut self, case: Option<TextCase>) -> CaseIdx {
+        self.writing.push_case(case)
+    }
+
+    /// Clear the case of the next text.
+    fn pop_case(&mut self, idx: CaseIdx) {
+        self.writing.pop_case(idx)
+    }
+
     /// Resolve a number variable.
     ///
     /// Honors suppressions.
@@ -576,11 +711,11 @@ impl<'a> Context<'a> {
         &self,
         variable: csl_taxonomy::NumberVariable,
     ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
-        self.prepare_variable_query(variable)?;
-        let res = resolve_number_variable(self.entry, variable);
+        self.writing.prepare_variable_query(variable)?;
+        let res = resolve_number_variable(self.instance.entry, variable);
 
         if res.is_some() {
-            self.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
+            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
         }
         res
     }
@@ -593,11 +728,11 @@ impl<'a> Context<'a> {
         form: LongShortForm,
         variable: csl_taxonomy::StandardVariable,
     ) -> Option<Cow<'a, ChunkedString>> {
-        self.prepare_variable_query(variable)?;
-        let res = resolve_standard_variable(self.entry, form, variable);
+        self.writing.prepare_variable_query(variable)?;
+        let res = resolve_standard_variable(self.instance.entry, form, variable);
 
         if res.is_some() {
-            self.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
+            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
         }
         res
     }
@@ -609,11 +744,11 @@ impl<'a> Context<'a> {
         &self,
         variable: csl_taxonomy::DateVariable,
     ) -> Option<&'a Date> {
-        self.prepare_variable_query(variable)?;
-        let res = resolve_date_variable(self.entry, variable);
+        self.writing.prepare_variable_query(variable)?;
+        let res = resolve_date_variable(self.instance.entry, variable);
 
         if res.is_some() {
-            self.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
+            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
         }
         res
     }
@@ -625,27 +760,16 @@ impl<'a> Context<'a> {
         &self,
         variable: csl_taxonomy::NameVariable,
     ) -> Vec<&'a Person> {
-        if self.prepare_variable_query(variable).is_none() {
+        if self.writing.prepare_variable_query(variable).is_none() {
             return Vec::new();
         }
 
-        let res = resolve_name_variable(self.entry, variable);
+        let res = resolve_name_variable(self.instance.entry, variable);
 
         if !res.is_empty() {
-            self.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
+            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
         }
         res
-    }
-
-    /// Return the sum of the lengths of strings in the finished elements. This
-    /// may not monotonoically increase.
-    fn len(&self) -> usize {
-        self.buf.len()
-            + self
-                .elem_stack
-                .iter()
-                .flat_map(|e| e.iter().map(ElemChild::str_len))
-                .sum::<usize>()
     }
 
     /// Apply a prefix, but return a tuple that allows us to undo it if it
@@ -662,8 +786,8 @@ impl<'a> Context<'a> {
     /// Apply a suffix, but only if the location was followed by something.
     /// Delete any prefix if not.
     fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
-        self.save_to_block();
-        let children = self.elem_stack.last();
+        self.writing.save_to_block();
+        let children = self.writing.elem_stack.last();
         let has_content = match children.first() {
             Some(ElemChild::Text(t)) if loc.1 < t.text.len() => {
                 t.text[loc.1..].chars().any(|c| !c.is_whitespace())
@@ -684,23 +808,6 @@ impl<'a> Context<'a> {
             }
             self.commit_elem(loc.0, None);
         }
-    }
-
-    /// Check if the last subtree is empty.
-    fn last_is_empty(&self) -> bool {
-        !self.buf.has_content() && self.elem_stack.last().iter().all(|c| !c.has_content())
-    }
-
-    /// Get a representation of the current progress as a string.
-    fn dbg_string(&self) {
-        let mut w = String::with_capacity(self.len());
-        for e in self.elem_stack.iter().flat_map(IntoIterator::into_iter) {
-            e.write_buf(&mut w, BufWriteFormat::default()).unwrap();
-        }
-
-        w.write_str(&self.buf.clone().finish()).unwrap();
-
-        eprintln!("{}\n", w);
     }
 }
 
@@ -1140,6 +1247,12 @@ impl<T> NonEmptyStack<T> {
     }
 }
 
+impl<T: Default> Default for NonEmptyStack<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use citationberg::{LocaleFile, Style};
@@ -1163,18 +1276,12 @@ mod tests {
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 
+        let style_ctx = StyleContext::new(&style, locale, &en_locale).unwrap();
+
         for entry in &bib {
-            let mut ctx = Context::new(
-                entry,
-                &style,
-                locale.clone(),
-                &en_locale,
-                citationberg::Formatting::default(),
-                None,
-            )
-            .unwrap();
+            let mut ctx = style_ctx.ctx(entry, None);
             let cit_style = style.citation.as_ref().unwrap();
-            ctx.push_name_options(&cit_style.name_options);
+            ctx.writing.push_name_options(&cit_style.name_options);
 
             cit_style.layout.render(&mut ctx);
             let mut buf = String::new();

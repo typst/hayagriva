@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::str::FromStr;
 
+use citationberg::LongShortForm;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -403,6 +405,18 @@ impl Person {
         }
     }
 
+    /// Get only the dropping and non-dropping particle of the family name.
+    pub fn name_particles(&self) -> Option<Cow<str>> {
+        match (&self.prefix, self.name_particle()) {
+            (Some(dropping), Some(non_dropping)) => {
+                Some(Cow::Owned(format!("{} {}", dropping, non_dropping)))
+            }
+            (Some(dropping), None) => Some(Cow::Borrowed(dropping.as_str())),
+            (None, Some(non_dropping)) => Some(Cow::Borrowed(non_dropping)),
+            (None, None) => None,
+        }
+    }
+
     /// Whether to treat this as an institutional name.
     pub fn is_institutional(&self) -> bool {
         self.given_name.is_none() && self.suffix.is_none() && self.prefix.is_none()
@@ -418,13 +432,54 @@ impl Person {
     pub fn name_without_article(&self) -> &str {
         let space_idx = self.name.find(' ');
         if let Some(space_idx) = space_idx {
-            if ARTICLES.binary_search(&&self.name[0..space_idx]).is_ok() {
+            if space_idx + 1 != self.name.len()
+                && ARTICLES.binary_search(&&self.name[0..space_idx]).is_ok()
+            {
                 &self.name[space_idx + 1..]
             } else {
                 self.name.as_str()
             }
         } else {
             self.name.as_str()
+        }
+    }
+
+    /// Order according to the CSL specification.
+    pub(crate) fn csl_cmp(
+        &self,
+        other: &Self,
+        form: LongShortForm,
+        demote_particle: bool,
+    ) -> std::cmp::Ordering {
+        let self_cjk = self.is_cjk();
+        let other_cjk = other.is_cjk();
+
+        if self_cjk != other_cjk {
+            // Put CJK names last.
+            return self_cjk.cmp(&other_cjk);
+        } else if self_cjk && other_cjk {
+            // Apply special CJK rules.
+            return match form {
+                LongShortForm::Long => self
+                    .name
+                    .cmp(&other.name)
+                    .then_with(|| self.given_name.cmp(&other.given_name)),
+                LongShortForm::Short => self.name.cmp(&other.name),
+            };
+        }
+
+        if demote_particle {
+            self.name_without_particle()
+                .cmp(other.name_without_particle())
+                .then_with(|| self.name_particles().cmp(&other.name_particles()))
+                .then_with(|| self.given_name.cmp(&other.given_name))
+                .then_with(|| self.suffix.cmp(&other.suffix))
+        } else {
+            self.name
+                .cmp(&other.name)
+                .then_with(|| self.prefix.cmp(&other.prefix))
+                .then_with(|| self.given_name.cmp(&other.given_name))
+                .then_with(|| self.suffix.cmp(&other.suffix))
         }
     }
 }
