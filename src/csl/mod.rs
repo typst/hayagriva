@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::fmt::{self, Write};
-use std::mem;
 use std::num::NonZeroUsize;
+use std::{default, mem};
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
@@ -27,36 +27,25 @@ use taxonomy::{
 };
 
 pub(crate) struct Context<'a> {
-    /// The settings of the style.
-    pub settings: &'a IndependentStyleSettings,
+    // Entry-dependent data.
     /// The current entry.
     pub entry: &'a Entry,
-    /// The buffer we're writing to. If block-level or formatting changes, we
-    /// flush the buffer to the last [`Elem`] in the finished list.
-    pub buf: CaseFolder,
     /// The position of this citation in the list of citations.
     pub cite_props: Option<CiteProperties<'a>>,
-    /// Suppressed variables that must not be rendered.
-    suppressed_variables: RefCell<Vec<Variable>>,
-    /// Which locale we're using.
-    locale: LocaleCode,
+
+    // Settings from the style.
+    /// The settings of the style.
+    pub settings: &'a IndependentStyleSettings,
     /// A list of CSL macros.
     macros: &'a [CslMacro],
     /// A list of locales defined in the style.
-    style_locales: Vec<&'a Locale>,
+    style_locales: &'a [Locale],
     /// A list of locales defined in their respective locale file.
-    locale_file: Vec<&'a Locale>,
-    /// A stack of formatting. Always contains the format of the root layout
-    /// element at the bottom. Each element with a formatting may push and, if
-    /// it did push, must remove. Its formatting shall apply for it and its
-    /// children.
-    format_stack: NonEmptyStack<Formatting>,
-    /// Finished elements. The last element may be unfinished.
-    elem_stack: NonEmptyStack<Elem>,
-    /// Text cases.
-    cases: NonEmptyStack<Option<TextCase>>,
-    /// Usage info for the current nesting level.
-    usage_info: RefCell<NonEmptyStack<UsageInfo>>,
+    locale_file: &'a [Locale],
+    /// Which locale we're using.
+    locale: LocaleCode,
+
+    // Dynamic settings that change while rendering.
     /// Whether to watch out for punctuation that should be pulled inside the
     /// preceeding quoted content.
     pull_punctuation: bool,
@@ -66,8 +55,29 @@ pub(crate) struct Context<'a> {
     strip_periods: bool,
     /// Whether to add queried variables to the suppression list.
     suppress_queried_variables: bool,
+    /// Suppressed variables that must not be rendered.
+    suppressed_variables: RefCell<Vec<Variable>>,
+
+    // Inheritable settings.
+    /// A stack of formatting. Always contains the format of the root layout
+    /// element at the bottom. Each element with a formatting may push and, if
+    /// it did push, must remove. Its formatting shall apply for it and its
+    /// children.
+    format_stack: NonEmptyStack<Formatting>,
+    /// Text cases.
+    cases: NonEmptyStack<Option<TextCase>>,
     /// Inheritable name options.
     name_options: NonEmptyStack<InheritableNameOptions>,
+    /// Usage info for the current nesting level.
+    usage_info: RefCell<NonEmptyStack<UsageInfo>>,
+
+    // Buffers.
+    /// The buffer we're writing to. If block-level or formatting changes, we
+    /// flush the buffer to the last [`Elem`] in the elem stack.
+    buf: CaseFolder,
+    /// A list of in-progress subtrees. Elements that are to be nested are
+    /// pushed and then either popped or inserted at the end of their ancestor.
+    elem_stack: NonEmptyStack<Vec<ElemChild>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,67 +105,42 @@ impl<'a> Context<'a> {
         entry: &'a Entry,
         style: &'a Style,
         locale: LocaleCode,
-        locale_file: Vec<&'a Locale>,
+        locale_file: &'a [Locale],
         root_format: citationberg::Formatting,
         cite_props: Option<CiteProperties<'a>>,
     ) -> Option<Self> {
         let macros = &style.macros;
-        let style_locales: Vec<&Locale> = style.locale.iter().collect();
         let settings = style.independant_settings.as_ref()?;
 
         Some(Self {
             entry,
-            buf: CaseFolder::new(),
-            locale,
+            cite_props,
+
+            settings,
             macros,
-            style_locales,
+            locale,
+            style_locales: style.locale.as_slice(),
             locale_file,
-            format_stack: NonEmptyStack::new(Formatting::default().apply(root_format)),
-            elem_stack: NonEmptyStack::new(Elem::new(None)),
+
             pull_punctuation: false,
             inner_quotes: false,
             strip_periods: false,
-            cases: NonEmptyStack::new(None),
-            cite_props,
-            suppressed_variables: RefCell::new(Vec::new()),
             suppress_queried_variables: false,
-            usage_info: RefCell::new(NonEmptyStack::new(UsageInfo::new())),
+            suppressed_variables: RefCell::new(Vec::new()),
+
+            format_stack: NonEmptyStack::new(Formatting::default().apply(root_format)),
+            cases: NonEmptyStack::new(None),
             name_options: NonEmptyStack::new(settings.options.clone()),
-            settings,
+            usage_info: RefCell::new(NonEmptyStack::new(UsageInfo::new())),
+
+            buf: CaseFolder::new(),
+            elem_stack: NonEmptyStack::new(Vec::new()),
         })
     }
 
     /// Retrieve the current formatting.
     fn formatting(&self) -> &Formatting {
         self.format_stack.last()
-    }
-
-    /// Saves the current buffer to the last element in the finished list. This
-    /// must happen if [`Display`] or formatting changes, as well as when we're
-    /// done with an element.
-    fn save_to_block(&mut self) {
-        if self.buf.is_empty() {
-            return;
-        }
-
-        let format = *self.formatting();
-
-        // Append to last child if formats match.
-        if let Some(child) = self
-            .elem_stack
-            .last_mut()
-            .children
-            .last_mut()
-            .and_then(|c| if let ElemChild::Text(c) = c { Some(c) } else { None })
-        {
-            if format == child.formatting {
-                child.text.push_str(&mem::take(&mut self.buf).finish());
-                return;
-            }
-        }
-
-        let formatted = format.add_text(mem::take(&mut self.buf).finish());
-        self.elem_stack.last_mut().children.push(ElemChild::Text(formatted))
     }
 
     /// Push a format on top of the stack if it is not empty.
@@ -180,43 +165,78 @@ impl<'a> Context<'a> {
         self.format_stack.drain(pos.0).for_each(drop);
     }
 
-    /// Push on the element stack if the current element has some [`Display`].
-    /// Also apply formatting. Return the index of the current element, so that,
-    /// at the end of writing, all following elements can be popped and added as
-    /// children.
-    fn push_elem(
-        &mut self,
-        display: Option<Display>,
-        format: citationberg::Formatting,
-    ) -> DisplayLoc {
-        let idx = match display {
-            Some(_) => {
-                self.save_to_block();
-                let len = self.elem_stack.len();
-                self.elem_stack.push(Elem::new(display));
-                len
-            }
-            None => self.elem_stack.len(),
-        };
+    /// Saves the current buffer to the last element in the finished list. This
+    /// must happen if [`Display`] or formatting changes, as well as when we're
+    /// done with an element.
+    fn save_to_block(&mut self) {
+        if self.buf.is_empty() {
+            return;
+        }
 
-        let format_idx = self.push_format(format);
-        DisplayLoc::new(idx, format_idx)
+        let format = *self.formatting();
+
+        // Append to last child if formats match.
+        if let Some(child) = self.elem_stack.last_mut().last_mut().and_then(|c| {
+            if let ElemChild::Text(c) = c {
+                Some(c)
+            } else {
+                None
+            }
+        }) {
+            if format == child.formatting {
+                child.text.push_str(&mem::take(&mut self.buf).finish());
+                return;
+            }
+        }
+
+        let formatted = format.add_text(mem::take(&mut self.buf).finish());
+        self.elem_stack.last_mut().push(ElemChild::Text(formatted))
     }
 
-    /// Pop from the element stack if the current element has some [`Display`].
-    /// Also pop formatting.
-    fn pop_elem(&mut self, loc: DisplayLoc) {
-        self.pop_format(loc.format_idx);
+    /// Add another subtree to the children element. This must be done to
+    /// include a new element or to check that the subtree is empty.
+    fn push_elem(&mut self, format: citationberg::Formatting) -> DisplayLoc {
+        self.save_to_block();
+        let pos = self.elem_stack.len();
+        self.elem_stack.push(Vec::new());
+        DisplayLoc::new(pos, self.push_format(format))
+    }
 
-        if loc.display_idx != self.elem_stack.len() {
-            self.save_to_block();
-            let mut children = self
-                .elem_stack
-                .drain(loc.display_idx)
-                .map(ElemChild::Elem)
-                .collect::<Vec<_>>();
-            let elem = self.elem_stack.last_mut();
-            elem.children.append(&mut children);
+    /// Remove the last subtree and discard it.
+    ///
+    /// Will panic if the location does not match.
+    fn discard_elem(&mut self, loc: DisplayLoc) {
+        assert_eq!(
+            self.elem_stack.len().get(),
+            loc.0.get() + 1,
+            "stack location does not match"
+        );
+        self.pop_format(loc.1);
+
+        self.save_to_block();
+        self.elem_stack.drain(loc.0).for_each(drop);
+    }
+
+    /// Nest the last subtree into its ancestor. If the `display` argument is
+    /// some, a new element child will be created there. Otherwise, we will
+    /// append the children of the last subtree to the children of its ancestor.
+    fn commit_elem(&mut self, loc: DisplayLoc, display: Option<Display>) {
+        assert_eq!(
+            self.elem_stack.len().get(),
+            loc.0.get() + 1,
+            "stack location does not match"
+        );
+        self.pop_format(loc.1);
+
+        self.save_to_block();
+        let children = self.elem_stack.pop().unwrap();
+        match display {
+            Some(display) => {
+                self.elem_stack.last_mut().push(Elem { children, display }.into());
+            }
+            None => {
+                self.elem_stack.last_mut().extend(children);
+            }
         }
     }
 
@@ -280,7 +300,7 @@ impl<'a> Context<'a> {
 
             let mut used_buf = false;
             let buf = if self.buf.is_empty() {
-                match self.elem_stack.last_mut().children.last_mut() {
+                match self.elem_stack.last_mut().last_mut() {
                     Some(ElemChild::Text(f)) => &mut f.text,
                     _ => {
                         used_buf = true;
@@ -361,7 +381,7 @@ impl<'a> Context<'a> {
     }
 
     /// Folds all remaining elements into the first element and returns it.
-    fn flush(mut self) -> Elem {
+    fn flush(mut self) -> Vec<ElemChild> {
         self.save_to_block();
 
         assert_eq!(
@@ -371,7 +391,7 @@ impl<'a> Context<'a> {
             self.format_stack.len()
         );
 
-        self.elem_stack.finish()
+        simplify_children(self.elem_stack.finish())
     }
 
     /// Retrieve a macro.
@@ -395,15 +415,16 @@ impl<'a> Context<'a> {
     where
         F: FnMut(&'a Locale) -> Option<R>,
     {
-        let mut lookup = |file: &[&'a Locale], lang| {
-            file.iter().find(|l| l.lang.as_ref() == lang).and_then(|&l| f(l))
+        let mut lookup = |file: &'a [Locale], lang| {
+            #[allow(clippy::redundant_closure)]
+            file.iter().find(|l| l.lang.as_ref() == lang).and_then(|l| f(l))
         };
 
         let fallback = self.locale.fallback();
         let en_us = LocaleCode::en_us();
 
         for (i, resource) in
-            [&self.style_locales, &self.locale_file].into_iter().enumerate()
+            [self.style_locales, self.locale_file].into_iter().enumerate()
         {
             if let Some(output) = lookup(resource, Some(&self.locale)) {
                 return Some(output);
@@ -616,135 +637,65 @@ impl<'a> Context<'a> {
         res
     }
 
-    /// Return the sum of the lengths of strings in the finished elements.
+    /// Return the sum of the lengths of strings in the finished elements. This
+    /// may not monotonoically increase.
     fn len(&self) -> usize {
-        self.buf.len() + self.elem_stack.iter().map(|e| e.str_len()).sum::<usize>()
-    }
-
-    /// Retrieve a length that can be used to delete the following elements.
-    fn deletable_len(&mut self) -> ElemLoc {
-        self.save_to_block();
-        let pos = self.elem_stack.len().get() - 1;
-        let children = &self.elem_stack.last().children;
-        let child_pos = children.len().saturating_sub(1);
-        let child_inner_pos = if let Some(ElemChild::Text(t)) = children.last() {
-            Some(t.text.len())
-        } else {
-            None
-        };
-
-        ElemLoc::new(pos, child_pos, child_inner_pos)
-    }
-
-    /// Delete the elements after the position.
-    fn delete_with_loc(&mut self, loc: ElemLoc) {
-        self.save_to_block();
-
-        // Drop items after the stack position.
-        if loc.stack_pos + 1 < self.elem_stack.len().get() {
-            self.elem_stack
-                .drain(NonZeroUsize::new(loc.stack_pos + 1).unwrap())
-                .for_each(drop);
-        }
-
-        let elem = self.elem_stack.last_mut();
-        // Remove any element after the position, we always want to vacate them.
-        if loc.child_pos + 1 < elem.children.len() {
-            elem.children.drain(loc.child_pos + 1..).for_each(drop);
-        }
-
-        if loc.child_pos < elem.children.len() {
-            let pop = match (elem.children.last_mut(), loc.child_inner_pos) {
-                // Remove empty text elements.
-                (Some(ElemChild::Text(_)), Some(0) | None) => true,
-                // Truncate non-empty text elements.
-                (Some(ElemChild::Text(t)), Some(idx)) => {
-                    t.text.truncate(idx);
-                    false
-                }
-                (None, _) => unreachable!(),
-                // Elements cannot be partially removed.
-                (Some(ElemChild::Elem(_)), _) => true,
-            };
-
-            if pop {
-                elem.children.pop();
-            }
-        }
-    }
-
-    /// Check whether the location wasn't only followed by whitespace.
-    fn has_content_between(&self, loc: ElemLoc) -> bool {
-        if !self.buf.is_whitespace() {
-            return true;
-        }
-
-        // We need to investigate the current element, it may have interesting
-        // children.
-        for e in self.elem_stack.iter().skip(loc.stack_pos) {
-            for (i, b) in e.children.iter().skip(loc.child_pos).enumerate() {
-                let first = i == 0;
-
-                match b {
-                    ElemChild::Text(t) => {
-                        let idx = if first {
-                            loc.child_inner_pos.unwrap_or_default()
-                        } else {
-                            0
-                        };
-
-                        if idx >= t.text.len() {
-                            continue;
-                        }
-
-                        if t.text[idx..].chars().any(|c| !c.is_whitespace()) {
-                            return true;
-                        }
-                    }
-                    ElemChild::Elem(e) => {
-                        if !e.is_whitespace() {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        false
+        self.buf.len()
+            + self
+                .elem_stack
+                .iter()
+                .flat_map(|e| e.iter().map(ElemChild::str_len))
+                .sum::<usize>()
     }
 
     /// Apply a prefix, but return a tuple that allows us to undo it if it
     /// wasn't followed by anything.
-    fn apply_prefix(&mut self, affixes: &Affixes) -> (Option<ElemLoc>, ElemLoc) {
-        let loc_before = if let Some(prefix) = &affixes.prefix {
-            let loc = self.deletable_len();
+    fn apply_prefix(&mut self, affixes: &Affixes) -> (DisplayLoc, usize) {
+        let pos = self.push_elem(citationberg::Formatting::default());
+        if let Some(prefix) = &affixes.prefix {
             self.push_str(prefix);
-            Some(loc)
-        } else {
-            None
         };
 
-        let loc_after = self.deletable_len();
-        (loc_before, loc_after)
+        (pos, affixes.prefix.as_ref().map(|p| p.len()).unwrap_or_default())
     }
 
     /// Apply a suffix, but only if the location was followed by something.
     /// Delete any prefix if not.
-    fn apply_suffix(&mut self, affixes: &Affixes, loc: (Option<ElemLoc>, ElemLoc)) {
-        if self.has_content_between(loc.1) {
+    fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
+        self.save_to_block();
+        let children = self.elem_stack.last();
+        let has_content = match children.first() {
+            Some(ElemChild::Text(t)) if loc.1 < t.text.len() => {
+                t.text[loc.1..].chars().any(|c| !c.is_whitespace())
+            }
+            Some(ElemChild::Text(_)) => false,
+            Some(ElemChild::Elem(e)) => e.has_content(),
+            None => false,
+        };
+
+        let has_content =
+            has_content || children.iter().skip(1).any(ElemChild::has_content);
+
+        if !has_content {
+            self.discard_elem(loc.0);
+        } else {
             if let Some(suffix) = &affixes.suffix {
                 self.push_str(suffix);
             }
-        } else if let Some(loc) = loc.0 {
-            self.delete_with_loc(loc);
+            self.commit_elem(loc.0, None);
         }
+    }
+
+    /// Check if the last subtree is empty.
+    fn last_is_empty(&self) -> bool {
+        !self.buf.has_content() && self.elem_stack.last().iter().all(|c| !c.has_content())
     }
 
     /// Get a representation of the current progress as a string.
     fn dbg_string(&self) {
         let mut w = String::with_capacity(self.len());
-        for e in self.elem_stack.iter() {
-            e.to_string(&mut w).unwrap();
+        for e in self.elem_stack.iter().flat_map(IntoIterator::into_iter) {
+            e.write_buf(&mut w, BufWriteFormat::default()).unwrap();
         }
 
         w.write_str(&self.buf.clone().finish()).unwrap();
@@ -757,14 +708,11 @@ impl<'a> Context<'a> {
 struct FormatIdx(NonZeroUsize);
 
 #[must_use = "element stack must be popped"]
-struct DisplayLoc {
-    display_idx: NonZeroUsize,
-    format_idx: FormatIdx,
-}
+struct DisplayLoc(NonZeroUsize, FormatIdx);
 
 impl DisplayLoc {
-    fn new(display_idx: NonZeroUsize, format_idx: FormatIdx) -> Self {
-        Self { display_idx, format_idx }
+    fn new(pos: NonZeroUsize, format_idx: FormatIdx) -> Self {
+        Self(pos, format_idx)
     }
 }
 
@@ -773,19 +721,6 @@ struct CaseIdx(NonZeroUsize);
 
 #[must_use = "usage info stack must be popped"]
 struct UsageInfoIdx(NonZeroUsize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ElemLoc {
-    stack_pos: usize,
-    child_pos: usize,
-    child_inner_pos: Option<usize>,
-}
-
-impl ElemLoc {
-    fn new(stack_pos: usize, child_pos: usize, child_inner_pos: Option<usize>) -> Self {
-        Self { stack_pos, child_pos, child_inner_pos }
-    }
-}
 
 impl Write for Context<'_> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
@@ -797,11 +732,11 @@ impl Write for Context<'_> {
 #[derive(Debug, Clone)]
 pub struct Elem {
     pub children: Vec<ElemChild>,
-    pub display: Option<Display>,
+    pub display: Display,
 }
 
 impl Elem {
-    fn new(display: Option<Display>) -> Self {
+    fn new(display: Display) -> Self {
         Self { children: Vec::new(), display }
     }
 
@@ -815,31 +750,84 @@ impl Elem {
             .sum()
     }
 
-    fn to_string(&self, w: &mut impl fmt::Write) -> Result<(), fmt::Error> {
-        if self.display == Some(Display::Block) {
-            w.write_char('\n')?;
+    fn write_buf(
+        &self,
+        w: &mut impl fmt::Write,
+        format: BufWriteFormat,
+    ) -> Result<(), fmt::Error> {
+        match (format, self.display) {
+            (BufWriteFormat::HTML, Display::Block) => w.write_str("<div>")?,
+            (BufWriteFormat::HTML, Display::Indent) => {
+                w.write_str("<div style=\"padding-left: 4em;\">")?
+            }
+            (BufWriteFormat::HTML, Display::LeftMargin) => {
+                w.write_str("<div style=\"float: left;\">")?
+            }
+            (BufWriteFormat::HTML, Display::RightInline) => {
+                w.write_str("<div style=\"float: right; clear: both;\">")?
+            }
+            (_, Display::Block) => w.write_char('\n')?,
+            (_, _) => {}
         }
 
         for child in &self.children {
-            match child {
-                ElemChild::Text(t) => w.write_str(&t.text)?,
-                ElemChild::Elem(e) => e.to_string(w)?,
-            }
+            child.write_buf(w, format)?;
         }
 
-        if self.display == Some(Display::Block) {
+        if self.display == Display::Block {
             w.write_char('\n')?;
+        }
+
+        match (format, self.display) {
+            (BufWriteFormat::HTML, _) => w.write_str("</div>")?,
+            (_, Display::Block) => w.write_char('\n')?,
+            (_, _) => {}
         }
 
         Ok(())
     }
 
-    fn is_whitespace(&self) -> bool {
-        self.children.iter().all(|c| match c {
-            ElemChild::Text(t) => t.text.chars().all(char::is_whitespace),
-            ElemChild::Elem(e) => e.is_whitespace(),
-        })
+    fn is_empty(&self) -> bool {
+        if self.children.is_empty() {
+            true
+        } else if self.children.len() == 1 {
+            match &self.children[0] {
+                ElemChild::Text(t) => t.text.is_empty(),
+                ElemChild::Elem(e) => e.is_empty(),
+            }
+        } else {
+            false
+        }
     }
+
+    fn has_content(&self) -> bool {
+        self.children.iter().any(ElemChild::has_content)
+    }
+
+    fn simplify(self) -> Self {
+        Self { children: simplify_children(self.children), ..self }
+    }
+}
+
+/// Merge adjacent text nodes with the same formatting.
+fn simplify_children(children: Vec<ElemChild>) -> Vec<ElemChild> {
+    children.into_iter().fold(Vec::new(), |mut acc, child| {
+        match (child, acc.last_mut()) {
+            (ElemChild::Text(t), Some(ElemChild::Text(last)))
+                if last.formatting == t.formatting =>
+            {
+                last.text.push_str(&t.text);
+                return acc;
+            }
+            (ElemChild::Elem(e), _) => {
+                acc.push(ElemChild::Elem(e.simplify()));
+            }
+            (child, _) => {
+                acc.push(child);
+            }
+        }
+        acc
+    })
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -873,6 +861,74 @@ pub enum ElemChild {
     Elem(Elem),
 }
 
+impl ElemChild {
+    fn write_buf(
+        &self,
+        w: &mut impl fmt::Write,
+        format: BufWriteFormat,
+    ) -> Result<(), fmt::Error> {
+        match self {
+            ElemChild::Text(t) if format == BufWriteFormat::HTML => {
+                let is_default = t.formatting == Formatting::default();
+                if !is_default {
+                    w.write_str("<span style=\"")?;
+                    t.formatting.write_css(w)?;
+                    w.write_str("\">")?;
+                }
+                w.write_str(&t.text)?;
+                if !is_default {
+                    w.write_str("</span>")?;
+                }
+                Ok(())
+            }
+            ElemChild::Text(t) if format == BufWriteFormat::VT100 => {
+                t.formatting.write_vt100(w)?;
+                w.write_str(&t.text)?;
+                w.write_str("\x1b[0m")
+            }
+            ElemChild::Text(t) => w.write_str(&t.text),
+            ElemChild::Elem(e) => e.write_buf(w, format),
+        }
+    }
+
+    fn str_len(&self) -> usize {
+        match self {
+            ElemChild::Text(t) => t.text.len(),
+            ElemChild::Elem(e) => e.str_len(),
+        }
+    }
+
+    fn has_content(&self) -> bool {
+        match self {
+            ElemChild::Text(t) => t.text.chars().any(|c| !c.is_whitespace()),
+            ElemChild::Elem(e) => e.has_content(),
+        }
+    }
+}
+
+impl From<Elem> for ElemChild {
+    fn from(e: Elem) -> Self {
+        ElemChild::Elem(e)
+    }
+}
+
+impl From<Formatted> for ElemChild {
+    fn from(f: Formatted) -> Self {
+        ElemChild::Text(f)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BufWriteFormat {
+    /// Just write text.
+    #[default]
+    Plain,
+    /// Write with terminal colors.
+    VT100,
+    /// Write HTML.
+    HTML,
+}
+
 #[derive(Debug, Clone)]
 pub struct Formatted {
     pub text: String,
@@ -884,7 +940,7 @@ impl Formatted {
         Self { text, formatting: Formatting::new() }
     }
 
-    fn elem(self, display: Option<Display>) -> Elem {
+    fn elem(self, display: Display) -> Elem {
         Elem { children: vec![ElemChild::Text(self)], display }
     }
 }
@@ -966,6 +1022,52 @@ impl Formatting {
 
         false
     }
+
+    fn write_vt100(&self, buf: &mut impl fmt::Write) -> Result<(), fmt::Error> {
+        if self.font_style == FontStyle::Italic {
+            buf.write_str("\x1b[3m")?;
+        }
+
+        if self.font_weight == FontWeight::Bold {
+            buf.write_str("\x1b[1m")?;
+        } else if self.font_weight == FontWeight::Light {
+            buf.write_str("\x1b[2m")?;
+        }
+
+        if self.text_decoration == TextDecoration::Underline {
+            buf.write_str("\x1b[4m")?;
+        }
+
+        Ok(())
+    }
+
+    fn write_css(&self, buf: &mut impl fmt::Write) -> Result<(), fmt::Error> {
+        if self.font_style == FontStyle::Italic {
+            buf.write_str("font-style: italic;")?;
+        }
+
+        match self.font_weight {
+            FontWeight::Bold => buf.write_str("font-weight: bold;")?,
+            FontWeight::Light => buf.write_str("font-weight: lighter;")?,
+            _ => {}
+        }
+
+        if self.text_decoration == TextDecoration::Underline {
+            buf.write_str("text-decoration: underline;")?;
+        }
+
+        if self.font_variant == FontVariant::SmallCaps {
+            buf.write_str("font-variant: small-caps;")?;
+        }
+
+        match self.vertical_align {
+            VerticalAlign::Sub => buf.write_str("vertical-align: sub;")?,
+            VerticalAlign::Sup => buf.write_str("vertical-align: super;")?,
+            _ => {}
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -985,6 +1087,22 @@ impl<T> NonEmptyStack<T> {
 
     fn last_mut(&mut self) -> &mut T {
         &mut self.last
+    }
+
+    fn get(&self, idx: usize) -> Option<&T> {
+        if idx == self.head.len() {
+            Some(&self.last)
+        } else {
+            self.head.get(idx)
+        }
+    }
+
+    fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
+        if idx == self.head.len() {
+            Some(&mut self.last)
+        } else {
+            self.head.get_mut(idx)
+        }
     }
 
     fn len(&self) -> NonZeroUsize {
@@ -1043,14 +1161,14 @@ mod tests {
 
         let yaml = fs::read_to_string("tests/basic.yml").unwrap();
         let bib = from_yaml_str(&yaml).unwrap();
-        let en_locale = en_locale.into();
+        let en_locale = [en_locale.into()];
 
         for entry in &bib {
             let mut ctx = Context::new(
                 entry,
                 &style,
                 locale.clone(),
-                vec![&en_locale],
+                &en_locale,
                 citationberg::Formatting::default(),
                 None,
             )
@@ -1060,7 +1178,11 @@ mod tests {
 
             cit_style.layout.render(&mut ctx);
             let mut buf = String::new();
-            ctx.flush().to_string(&mut buf).unwrap();
+
+            for e in dbg!(ctx.flush()) {
+                e.write_buf(&mut buf, BufWriteFormat::VT100).unwrap();
+            }
+
             eprintln!("{}", buf);
         }
     }

@@ -23,7 +23,7 @@ pub(crate) trait RenderCsl {
 
 impl RenderCsl for citationberg::Text {
     fn render(&self, ctx: &mut Context) {
-        let depth = ctx.push_elem(self.display, self.formatting);
+        let depth = ctx.push_elem(self.formatting);
 
         let affix_loc = ctx.apply_prefix(&self.affixes);
 
@@ -75,13 +75,13 @@ impl RenderCsl for citationberg::Text {
         }
 
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.pop_elem(depth);
+        ctx.commit_elem(depth, self.display);
     }
 }
 
 impl RenderCsl for citationberg::Number {
     fn render(&self, ctx: &mut Context) {
-        let depth = ctx.push_elem(self.display, self.formatting);
+        let depth = ctx.push_elem(self.formatting);
 
         let affix_loc = ctx.apply_prefix(&self.affixes);
 
@@ -126,7 +126,7 @@ impl RenderCsl for citationberg::Number {
 
         ctx.pop_case(cidx);
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.pop_elem(depth);
+        ctx.commit_elem(depth, self.display);
     }
 }
 
@@ -195,7 +195,7 @@ impl RenderCsl for citationberg::Date {
         let formatting = base
             .map(|b| self.formatting.apply(b.formatting))
             .unwrap_or(self.formatting);
-        let depth = ctx.push_elem(self.display, formatting);
+        let depth = ctx.push_elem(formatting);
 
         let affix_loc = ctx.apply_prefix(&self.affixes);
 
@@ -234,7 +234,7 @@ impl RenderCsl for citationberg::Date {
 
         ctx.pop_case(cidx);
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.pop_elem(depth);
+        ctx.commit_elem(depth, self.display);
     }
 }
 
@@ -389,7 +389,7 @@ impl RenderCsl for Names {
             return;
         }
 
-        let idx = ctx.push_elem(self.display, self.formatting);
+        let depth = ctx.push_elem(self.formatting);
         let affix_loc = ctx.apply_prefix(&self.affixes);
 
         for (i, (persons, term)) in people.into_iter().enumerate() {
@@ -414,7 +414,7 @@ impl RenderCsl for Names {
         }
 
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.pop_elem(idx);
+        ctx.commit_elem(depth, self.display);
         ctx.pop_name_options();
     }
 }
@@ -801,13 +801,19 @@ fn render_with_delimiter(
 
     for child in children {
         if !last_empty {
-            loc = Some(ctx.deletable_len());
             if let Some(delim) = delimiter {
+                let prev_loc = std::mem::take(&mut loc);
+
+                if let Some(prev_loc) = prev_loc {
+                    ctx.commit_elem(prev_loc, None);
+                }
+
+                loc = Some(ctx.push_elem(citationberg::Formatting::default()));
                 ctx.push_str(delim);
             }
         }
 
-        let pos = ctx.deletable_len();
+        let pos = ctx.push_elem(citationberg::Formatting::default());
 
         match child {
             LayoutRenderingElement::Text(text) => text.render(ctx),
@@ -819,12 +825,19 @@ fn render_with_delimiter(
             LayoutRenderingElement::Group(_group) => _group.render(ctx),
         }
 
-        last_empty = !ctx.has_content_between(pos);
+        last_empty = ctx.last_is_empty();
+        if last_empty {
+            ctx.discard_elem(pos);
+        } else {
+            ctx.commit_elem(pos, None);
+        }
     }
 
     if let Some(loc) = loc {
         if last_empty {
-            ctx.delete_with_loc(loc);
+            ctx.discard_elem(loc);
+        } else {
+            ctx.commit_elem(loc, None);
         }
     }
 }
@@ -1061,9 +1074,8 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
 
 impl RenderCsl for citationberg::Group {
     fn render(&self, ctx: &mut Context) {
-        let remove_pos = ctx.deletable_len();
         let info = ctx.push_usage_info();
-        let idx = ctx.push_elem(self.display, self.to_formatting());
+        let idx = ctx.push_elem(self.to_formatting());
         let affixes = self.to_affixes();
 
         let affix_loc = ctx.apply_prefix(&affixes);
@@ -1071,7 +1083,6 @@ impl RenderCsl for citationberg::Group {
         render_with_delimiter(&self.children, self.delimiter.as_deref(), ctx);
 
         ctx.apply_suffix(&affixes, affix_loc);
-        ctx.pop_elem(idx);
 
         let info = ctx.pop_usage_info(info);
         if info.has_vars
@@ -1079,8 +1090,9 @@ impl RenderCsl for citationberg::Group {
                 && !info.has_used_macros
                 && !info.has_non_empty_group)
         {
-            ctx.delete_with_loc(remove_pos);
+            ctx.discard_elem(idx);
         } else {
+            ctx.commit_elem(idx, self.display);
             ctx.printed_non_empty_group()
         }
     }

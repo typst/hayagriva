@@ -640,8 +640,8 @@ impl CaseFolder {
     }
 
     /// Whether the buffer contains only whitespace.
-    pub fn is_whitespace(&self) -> bool {
-        self.buf.chars().all(char::is_whitespace)
+    pub fn has_content(&self) -> bool {
+        !self.buf.chars().all(char::is_whitespace)
     }
 
     /// Yield the buffer as a mutable string. Must call [`Self::mark_changed`]
