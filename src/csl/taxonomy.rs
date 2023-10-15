@@ -104,131 +104,134 @@ impl<'a> InstanceContext<'a> {
             NumberVariable::Volume => self.entry.volume().map(MaybeTyped::to_cow),
         }
     }
-}
 
-// Number variables are standard variables.
-pub(super) fn resolve_standard_variable(
-    entry: &Entry,
-    form: LongShortForm,
-    variable: StandardVariable,
-) -> Option<Cow<ChunkedString>> {
-    match variable {
-        StandardVariable::Abstract => None,
-        StandardVariable::Annote => None,
-        StandardVariable::Archive => {
-            entry.map(|e| e.archive()).map(|f| f.select(form)).map(Cow::Borrowed)
-        }
-        StandardVariable::ArchiveCollection => None,
-        StandardVariable::ArchiveLocation => {
-            entry.archive_location().map(|f| f.select(form)).map(Cow::Borrowed)
-        }
-        StandardVariable::ArchivePlace => None,
-        StandardVariable::Authority => {
-            entry.organization().map(|f| f.select(form)).map(Cow::Borrowed)
-        }
-        StandardVariable::CallNumber => {
-            entry.call_number().map(|f| f.select(form)).map(Cow::Borrowed)
-        }
-        StandardVariable::CitationKey => {
-            Some(Cow::Owned(StringChunk::verbatim(&entry.key).into()))
-        }
-        // The spec tells us that the CSL processor may assign this, we do not.
-        StandardVariable::CitationLabel => None,
-        // Get third-order title first, then second-order title.
-        StandardVariable::CollectionTitle => entry
-            .parents()
-            .iter()
-            .find_map(|p| p.map_parents(|e| e.title()))
-            .or_else(|| entry.map_parents(|e| e.title()))
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::ContainerTitle => entry
-            .map_parents(|e| e.title())
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::ContainerTitleShort => entry
-            .map_parents(|e| e.title())
-            .map(|f| f.select(LongShortForm::Short))
-            .map(Cow::Borrowed),
-        StandardVariable::Dimensions => entry
-            .runtime()
-            .map(|r| Cow::Owned(StringChunk::normal(r.to_string()).into())),
-        StandardVariable::Division => None,
-        StandardVariable::DOI => {
-            entry.doi().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
-        }
-        StandardVariable::Event | StandardVariable::EventTitle => entry
-            .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
-            .and_then(Entry::title)
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::EventPlace => entry
-            .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
-            .and_then(Entry::location)
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::Genre => None,
-        StandardVariable::ISBN => {
-            entry.isbn().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
-        }
-        StandardVariable::ISSN => {
-            entry.issn().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
-        }
-        StandardVariable::Jurisdiction => None,
-        StandardVariable::Keyword => None,
-        StandardVariable::Language => entry
-            .map(|e| e.language())
-            .map(|l| Cow::Owned(StringChunk::normal(csl_language(l)).into())),
-        StandardVariable::License => None,
-        StandardVariable::Medium => None,
-        StandardVariable::Note => entry.note().map(|f| f.select(form)).map(Cow::Borrowed),
-        // TODO: Find out how to express original publisher.
-        StandardVariable::OriginalPublisher => None,
-        StandardVariable::OriginalPublisherPlace => None,
-        StandardVariable::OriginalTitle => None,
-        StandardVariable::PartTitle => None,
-        // TODO: Accomodate more serial numbers
-        StandardVariable::PMCID => None,
-        StandardVariable::PMID => None,
-        StandardVariable::Publisher => entry
-            .map(|e| e.publisher())
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::PublisherPlace => None,
-        StandardVariable::References => None,
-        StandardVariable::ReviewedGenre => None,
-        StandardVariable::ReviewedTitle => entry
-            .map_parents(|e| e.title())
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::Scale => None,
-        StandardVariable::Source => entry
-            .bound_select(&select!(* > ("p":Repository)), "p")
-            .and_then(Entry::title)
-            .map(|f| f.select(form))
-            .map(Cow::Borrowed),
-        StandardVariable::Status => None,
-        StandardVariable::Title => {
-            entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
-        }
-        StandardVariable::TitleShort => None,
-        StandardVariable::URL => entry
-            .map(|e| e.url())
-            .map(|d| Cow::Owned(StringChunk::verbatim(d.to_string()).into())),
-        StandardVariable::VolumeTitle => {
-            let selector = select!(
-                (Anthos > ("p":Anthology)) |
-                (Entry  > ("p":*)) |
-                (* > ("p":Reference)) |
-                (Article > ("p":Proceedings))
-            );
-            entry
-                .bound_select(&selector, "p")
+    // Number variables are standard variables.
+    pub(super) fn resolve_standard_variable(
+        &self,
+        form: LongShortForm,
+        variable: StandardVariable,
+    ) -> Option<Cow<'a, ChunkedString>> {
+        let entry = self.entry;
+        match variable {
+            StandardVariable::Abstract => None,
+            StandardVariable::Annote => None,
+            StandardVariable::Archive => {
+                entry.map(|e| e.archive()).map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::ArchiveCollection => None,
+            StandardVariable::ArchiveLocation => {
+                entry.archive_location().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::ArchivePlace => None,
+            StandardVariable::Authority => {
+                entry.organization().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::CallNumber => {
+                entry.call_number().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::CitationKey => {
+                Some(Cow::Owned(StringChunk::verbatim(&entry.key).into()))
+            }
+            // The spec tells us that the CSL processor may assign this, we do not.
+            StandardVariable::CitationLabel => None,
+            // Get third-order title first, then second-order title.
+            StandardVariable::CollectionTitle => entry
+                .parents()
+                .iter()
+                .find_map(|p| p.map_parents(|e| e.title()))
+                .or_else(|| entry.map_parents(|e| e.title()))
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::ContainerTitle => entry
+                .map_parents(|e| e.title())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::ContainerTitleShort => entry
+                .map_parents(|e| e.title())
+                .map(|f| f.select(LongShortForm::Short))
+                .map(Cow::Borrowed),
+            StandardVariable::Dimensions => entry
+                .runtime()
+                .map(|r| Cow::Owned(StringChunk::normal(r.to_string()).into())),
+            StandardVariable::Division => None,
+            StandardVariable::DOI => {
+                entry.doi().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
+            }
+            StandardVariable::Event | StandardVariable::EventTitle => entry
+                .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
                 .and_then(Entry::title)
                 .map(|f| f.select(form))
-                .map(Cow::Borrowed)
+                .map(Cow::Borrowed),
+            StandardVariable::EventPlace => entry
+                .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
+                .and_then(Entry::location)
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::Genre => None,
+            StandardVariable::ISBN => {
+                entry.isbn().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
+            }
+            StandardVariable::ISSN => {
+                entry.issn().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
+            }
+            StandardVariable::Jurisdiction => None,
+            StandardVariable::Keyword => None,
+            StandardVariable::Language => entry
+                .map(|e| e.language())
+                .map(|l| Cow::Owned(StringChunk::normal(csl_language(l)).into())),
+            StandardVariable::License => None,
+            StandardVariable::Medium => None,
+            StandardVariable::Note => {
+                entry.note().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            // TODO: Find out how to express original publisher.
+            StandardVariable::OriginalPublisher => None,
+            StandardVariable::OriginalPublisherPlace => None,
+            StandardVariable::OriginalTitle => None,
+            StandardVariable::PartTitle => None,
+            // TODO: Accomodate more serial numbers
+            StandardVariable::PMCID => None,
+            StandardVariable::PMID => None,
+            StandardVariable::Publisher => entry
+                .map(|e| e.publisher())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::PublisherPlace => None,
+            StandardVariable::References => None,
+            StandardVariable::ReviewedGenre => None,
+            StandardVariable::ReviewedTitle => entry
+                .map_parents(|e| e.title())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::Scale => None,
+            StandardVariable::Source => entry
+                .bound_select(&select!(* > ("p":Repository)), "p")
+                .and_then(Entry::title)
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::Status => None,
+            StandardVariable::Title => {
+                entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::TitleShort => None,
+            StandardVariable::URL => entry
+                .map(|e| e.url())
+                .map(|d| Cow::Owned(StringChunk::verbatim(d.to_string()).into())),
+            StandardVariable::VolumeTitle => {
+                let selector = select!(
+                    (Anthos > ("p":Anthology)) |
+                    (Entry  > ("p":*)) |
+                    (* > ("p":Reference)) |
+                    (Article > ("p":Proceedings))
+                );
+                entry
+                    .bound_select(&selector, "p")
+                    .and_then(Entry::title)
+                    .map(|f| f.select(form))
+                    .map(Cow::Borrowed)
+            }
+            StandardVariable::YearSuffix => todo!("we actually have to generate this"),
         }
-        StandardVariable::YearSuffix => todo!("we actually have to generate this"),
     }
 }
 

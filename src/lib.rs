@@ -132,6 +132,7 @@ pub mod lang;
 pub mod types;
 mod util;
 
+pub use csl::BibliographyDriver;
 use indexmap::IndexMap;
 pub use selectors::{Selector, SelectorError};
 

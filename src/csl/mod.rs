@@ -1,30 +1,152 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::fmt::{self, Write};
+use std::fmt::Write;
 use std::mem;
 use std::num::NonZeroUsize;
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, Bibliography, Citation, CslMacro, Display,
-    FontStyle, FontVariant, FontWeight, InheritableNameOptions, Locale, LocaleCode,
-    Style, TermForm, TextDecoration, ToAffixes, ToFormatting, VerticalAlign,
+    InheritableNameOptions, Locale, LocaleCode, Style, TermForm, ToFormatting,
 };
 use citationberg::{
     DateForm, IndependentStyleSettings, LongShortForm, OrdinalLookup, TextCase,
 };
 
+use crate::csl::elem::{BufWriteFormat, Elem, Formatted};
 use crate::csl::rendering::RenderCsl;
 use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
 use crate::Entry;
 
+mod elem;
 mod rendering;
 mod sort;
 mod taxonomy;
 
-use taxonomy::{resolve_date_variable, resolve_standard_variable};
+use taxonomy::resolve_date_variable;
+
+use self::elem::{
+    simplify_children, ElemChild, ElemChildren, ElemMeta, Formatting, NonEmptyStack,
+};
+
+/// This struct formats a set of citations according to a style.
+#[derive(Debug, Clone)]
+pub struct BibliographyDriver<'a> {
+    /// The style we are using.
+    style: StyleContext<'a>,
+    /// The citations we have seen so far.
+    citations: Vec<CitationMark<'a>>,
+}
+
+impl<'a> BibliographyDriver<'a> {
+    /// Create a new bibliography driver.
+    pub fn new(
+        style: &'a Style,
+        locale: LocaleCode,
+        locale_file: &'a [Locale],
+    ) -> Option<Self> {
+        let style = StyleContext::new(style, locale, locale_file)?;
+        Some(Self { style, citations: vec![] })
+    }
+
+    /// Create a new citation with the given items. Bibliography-wide
+    /// disambiguation will not be applied.
+    pub fn instant_citation(&self, items: &mut [CitationItem<'_>]) -> ElemChildren {
+        self.style.sort(items, self.style.citation.sort.as_ref());
+        let mut res = vec![];
+        for item in items {
+            res.push(self.style.citation(item));
+        }
+
+        let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
+        // TODO in-cite disambiguation.
+
+        let formatting =
+            Formatting::default().apply(self.style.citation.layout.to_formatting());
+        if !non_empty.is_empty() {
+            let mut res = if let Some(prefix) = self.style.citation.layout.prefix.as_ref()
+            {
+                ElemChildren(vec![Formatted { text: prefix.clone(), formatting }.into()])
+            } else {
+                ElemChildren::new()
+            };
+
+            for (i, item) in non_empty.into_iter().enumerate() {
+                let first = i == 0;
+                if !first {
+                    res.0.push(
+                        Formatted {
+                            text: self
+                                .style
+                                .citation
+                                .layout
+                                .delimiter
+                                .as_deref()
+                                .unwrap_or(Citation::DEFAULT_CITE_GROUP_DELIMITER)
+                                .to_string(),
+                            formatting,
+                        }
+                        .into(),
+                    );
+                }
+
+                res.0.extend(item.0)
+            }
+
+            if let Some(suffix) = self.style.citation.layout.suffix.as_ref() {
+                res.0.push(Formatted { text: suffix.clone(), formatting }.into());
+            }
+
+            simplify_children(res)
+        } else {
+            ElemChildren::new()
+        }
+    }
+
+    /// Create a new citation with the given items.
+    pub fn citation(&mut self, citation: &mut [CitationItem<'a>]) {
+        self.style.sort(citation, self.style.citation.sort.as_ref());
+        let mut items: Vec<(CitationItem<'a>, ElemChildren)> =
+            Vec::with_capacity(citation.len());
+
+        for item in citation {
+            items.push((*item, self.style.citation(item)));
+        }
+
+        self.citations.push(CitationMark::Citation {
+            items,
+            affixes: (
+                self.style.citation.layout.prefix.as_deref(),
+                self.style.citation.layout.suffix.as_deref(),
+            ),
+        })
+    }
+
+    /// Skip a number of notes.
+    pub fn skip_notes(&mut self, n: usize) {
+        self.citations.push(CitationMark::SkipNotes(n))
+    }
+
+    /// Reset the note counter.
+    pub fn reset_notes(&mut self, n: usize) {
+        self.citations.push(CitationMark::ResetNotes(n))
+    }
+}
+
+#[derive(Debug, Clone)]
+enum CitationMark<'a> {
+    /// A citation to one or more items.
+    Citation {
+        items: Vec<(CitationItem<'a>, ElemChildren)>,
+        affixes: (Option<&'a str>, Option<&'a str>),
+    },
+    /// Skipping a number of notes.
+    SkipNotes(usize),
+    /// Resetting the note counter.
+    ResetNotes(usize),
+}
 
 /// A context that contains all information related to rendering a single entry.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,6 +167,10 @@ impl<'a> InstanceContext<'a> {
         sorting: bool,
     ) -> Self {
         Self { entry, cite_props, sorting }
+    }
+
+    fn sort_instance(entry: &CitationItem<'a>) -> Self {
+        Self::new(entry.0, CiteProperties::with_locator(entry.1), true)
     }
 }
 
@@ -100,71 +226,27 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    fn sorting_ctx<'b>(&'b self, entry: &'b Entry) -> Context<'b> {
+    fn sorting_ctx<'b>(&'b self, item: &'b CitationItem<'b>) -> Context<'b> {
         Context {
-            instance: InstanceContext::new(entry, None, true),
+            instance: InstanceContext::new(
+                item.0,
+                CiteProperties::with_locator(item.1),
+                true,
+            ),
             style: self,
             writing: WritingContext::new(),
         }
     }
 
-    pub fn citation(&self, items: &mut [CitationItem<'_>]) -> Vec<ElemChild> {
-        self.sort(items, self.citation.sort.as_ref());
-
-        let mut root_ctx = WritingContext::default();
-        let affixes = self.citation.layout.to_affixes();
-        let affix_loc = root_ctx.apply_prefix(&affixes);
-        let mut last_empty = true;
-        let mut loc = None;
-
-        for CitationItem(entry, locator) in items.iter() {
-            if !last_empty {
-                let prev_loc = std::mem::take(&mut loc);
-
-                if let Some(prev_loc) = prev_loc {
-                    root_ctx.commit_elem(prev_loc, None);
-                }
-
-                loc = Some(root_ctx.push_elem(citationberg::Formatting::default()));
-                root_ctx.buf.push_str(
-                    self.citation
-                        .layout
-                        .delimiter
-                        .as_deref()
-                        .unwrap_or(Citation::DEFAULT_CITE_GROUP_DELIMITER),
-                );
-            }
-
-            let pos = root_ctx.push_elem(citationberg::Formatting::default());
-
-            let mut ctx = self.ctx(entry, CiteProperties::with_locator(*locator));
-            ctx.writing.push_name_options(&self.citation.name_options);
-            self.citation.layout.render(&mut ctx);
-            root_ctx.save_to_block();
-            root_ctx.elem_stack.last_mut().extend(ctx.flush());
-
-            last_empty = root_ctx.last_is_empty();
-            if last_empty {
-                root_ctx.discard_elem(pos);
-            } else {
-                root_ctx.commit_elem(pos, None);
-            }
-        }
-
-        if let Some(loc) = loc {
-            if last_empty {
-                root_ctx.discard_elem(loc);
-            } else {
-                root_ctx.commit_elem(loc, None);
-            }
-        }
-
-        root_ctx.apply_suffix(&affixes, affix_loc);
-
-        simplify_children(root_ctx.flush())
+    pub fn citation(&self, item: &CitationItem<'_>) -> ElemChildren {
+        let mut ctx = self.ctx(item.0, CiteProperties::with_locator(item.1));
+        ctx.writing.push_name_options(&self.citation.name_options);
+        self.citation.layout.render(&mut ctx);
+        ctx.flush()
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CitationItem<'a>(&'a Entry, Option<SpecificLocator<'a>>);
 
 impl<'a> StyleContext<'a> {
@@ -254,19 +336,12 @@ pub(crate) struct WritingContext {
     buf: CaseFolder,
     /// A list of in-progress subtrees. Elements that are to be nested are
     /// pushed and then either popped or inserted at the end of their ancestor.
-    elem_stack: NonEmptyStack<Vec<ElemChild>>,
+    elem_stack: NonEmptyStack<ElemChildren>,
 }
 
 impl WritingContext {
     fn new() -> Self {
         Self::default()
-    }
-
-    fn with_formatting(formatting: citationberg::Formatting) -> Self {
-        Self {
-            format_stack: NonEmptyStack::new(Formatting::default().apply(formatting)),
-            ..Self::default()
-        }
     }
 
     /// Retrieve the current formatting.
@@ -307,7 +382,7 @@ impl WritingContext {
         let format = *self.formatting();
 
         // Append to last child if formats match.
-        if let Some(child) = self.elem_stack.last_mut().last_mut().and_then(|c| {
+        if let Some(child) = self.elem_stack.last_mut().0.last_mut().and_then(|c| {
             if let ElemChild::Text(c) = c {
                 Some(c)
             } else {
@@ -321,7 +396,7 @@ impl WritingContext {
         }
 
         let formatted = format.add_text(mem::take(&mut self.buf).finish());
-        self.elem_stack.last_mut().push(ElemChild::Text(formatted))
+        self.elem_stack.last_mut().0.push(ElemChild::Text(formatted))
     }
 
     /// Add another subtree to the children element. This must be done to
@@ -329,7 +404,7 @@ impl WritingContext {
     fn push_elem(&mut self, format: citationberg::Formatting) -> DisplayLoc {
         self.save_to_block();
         let pos = self.elem_stack.len();
-        self.elem_stack.push(Vec::new());
+        self.elem_stack.push(ElemChildren::new());
         DisplayLoc::new(pos, self.push_format(format))
     }
 
@@ -351,7 +426,7 @@ impl WritingContext {
     fn has_content_since(&mut self, loc: &(DisplayLoc, usize)) -> bool {
         self.save_to_block();
         let children = self.elem_stack.last();
-        let has_content = match children.first() {
+        let has_content = match children.0.first() {
             Some(ElemChild::Text(t)) if loc.1 < t.text.len() => {
                 t.text[loc.1..].chars().any(|c| !c.is_whitespace())
             }
@@ -360,7 +435,7 @@ impl WritingContext {
             None => false,
         };
 
-        has_content || children.iter().skip(1).any(ElemChild::has_content)
+        has_content || children.0.iter().skip(1).any(ElemChild::has_content)
     }
 
     /// Apply a prefix, but return a tuple that allows us to undo it if it
@@ -383,14 +458,19 @@ impl WritingContext {
             if let Some(suffix) = &affixes.suffix {
                 self.buf.push_str(suffix);
             }
-            self.commit_elem(loc.0, None);
+            self.commit_elem(loc.0, None, None);
         }
     }
 
     /// Nest the last subtree into its ancestor. If the `display` argument is
     /// some, a new element child will be created there. Otherwise, we will
     /// append the children of the last subtree to the children of its ancestor.
-    fn commit_elem(&mut self, loc: DisplayLoc, display: Option<Display>) {
+    fn commit_elem(
+        &mut self,
+        loc: DisplayLoc,
+        display: Option<Display>,
+        meta: Option<ElemMeta>,
+    ) {
         assert_eq!(
             self.elem_stack.len().get(),
             loc.0.get() + 1,
@@ -400,13 +480,14 @@ impl WritingContext {
 
         self.save_to_block();
         let children = self.elem_stack.pop().unwrap();
-        match display {
-            Some(display) => {
-                self.elem_stack.last_mut().push(Elem { children, display }.into());
-            }
-            None => {
-                self.elem_stack.last_mut().extend(children);
-            }
+
+        if display.is_some() || meta.is_some() {
+            self.elem_stack
+                .last_mut()
+                .0
+                .push(Elem { children, display, meta }.into());
+        } else {
+            self.elem_stack.last_mut().0.extend(children.0);
         }
     }
 
@@ -428,7 +509,7 @@ impl WritingContext {
     }
 
     /// Folds all remaining elements into the first element and returns it.
-    fn flush(mut self) -> Vec<ElemChild> {
+    fn flush(mut self) -> ElemChildren {
         self.save_to_block();
 
         assert_eq!(
@@ -539,25 +620,13 @@ impl WritingContext {
             + self
                 .elem_stack
                 .iter()
-                .flat_map(|e| e.iter().map(ElemChild::str_len))
+                .flat_map(|e| e.0.iter().map(ElemChild::str_len))
                 .sum::<usize>()
     }
 
     /// Check if the last subtree is empty.
     fn last_is_empty(&self) -> bool {
-        !self.buf.has_content() && self.elem_stack.last().iter().all(|c| !c.has_content())
-    }
-
-    /// Get a representation of the current progress as a string.
-    fn dbg_string(&self) {
-        let mut w = String::with_capacity(self.len());
-        for e in self.elem_stack.iter().flat_map(IntoIterator::into_iter) {
-            e.write_buf(&mut w, BufWriteFormat::default()).unwrap();
-        }
-
-        w.write_str(&self.buf.clone().finish()).unwrap();
-
-        eprintln!("{}\n", w);
+        !self.buf.has_content() && !self.elem_stack.last().has_content()
     }
 }
 
@@ -635,8 +704,13 @@ impl<'a> Context<'a> {
     /// Nest the last subtree into its ancestor. If the `display` argument is
     /// some, a new element child will be created there. Otherwise, we will
     /// append the children of the last subtree to the children of its ancestor.
-    fn commit_elem(&mut self, loc: DisplayLoc, display: Option<Display>) {
-        self.writing.commit_elem(loc, display)
+    fn commit_elem(
+        &mut self,
+        loc: DisplayLoc,
+        display: Option<Display>,
+        meta: Option<ElemMeta>,
+    ) {
+        self.writing.commit_elem(loc, display, meta)
     }
 
     /// Ensure that the buffer is either empty or the last character is a space.
@@ -694,7 +768,7 @@ impl<'a> Context<'a> {
 
             let mut used_buf = false;
             let buf = if self.writing.buf.is_empty() {
-                match self.writing.elem_stack.last_mut().last_mut() {
+                match self.writing.elem_stack.last_mut().0.last_mut() {
                     Some(ElemChild::Text(f)) => &mut f.text,
                     _ => {
                         used_buf = true;
@@ -769,7 +843,7 @@ impl<'a> Context<'a> {
     }
 
     /// Folds all remaining elements into the first element and returns it.
-    fn flush(mut self) -> Vec<ElemChild> {
+    fn flush(self) -> ElemChildren {
         self.writing.flush()
     }
 
@@ -854,7 +928,7 @@ impl<'a> Context<'a> {
         variable: csl_taxonomy::StandardVariable,
     ) -> Option<Cow<'a, ChunkedString>> {
         self.writing.prepare_variable_query(variable)?;
-        let res = resolve_standard_variable(self.instance.entry, form, variable);
+        let res = self.instance.resolve_standard_variable(form, variable);
 
         if res.is_some() {
             self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
@@ -935,107 +1009,6 @@ impl Write for Context<'_> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Elem {
-    pub children: Vec<ElemChild>,
-    pub display: Display,
-}
-
-impl Elem {
-    fn new(display: Display) -> Self {
-        Self { children: Vec::new(), display }
-    }
-
-    fn str_len(&self) -> usize {
-        self.children
-            .iter()
-            .map(|c| match c {
-                ElemChild::Text(t) => t.text.len(),
-                ElemChild::Elem(e) => e.str_len(),
-            })
-            .sum()
-    }
-
-    fn write_buf(
-        &self,
-        w: &mut impl fmt::Write,
-        format: BufWriteFormat,
-    ) -> Result<(), fmt::Error> {
-        match (format, self.display) {
-            (BufWriteFormat::HTML, Display::Block) => w.write_str("<div>")?,
-            (BufWriteFormat::HTML, Display::Indent) => {
-                w.write_str("<div style=\"padding-left: 4em;\">")?
-            }
-            (BufWriteFormat::HTML, Display::LeftMargin) => {
-                w.write_str("<div style=\"float: left;\">")?
-            }
-            (BufWriteFormat::HTML, Display::RightInline) => {
-                w.write_str("<div style=\"float: right; clear: both;\">")?
-            }
-            (_, Display::Block) => w.write_char('\n')?,
-            (_, _) => {}
-        }
-
-        for child in &self.children {
-            child.write_buf(w, format)?;
-        }
-
-        if self.display == Display::Block {
-            w.write_char('\n')?;
-        }
-
-        match (format, self.display) {
-            (BufWriteFormat::HTML, _) => w.write_str("</div>")?,
-            (_, Display::Block) => w.write_char('\n')?,
-            (_, _) => {}
-        }
-
-        Ok(())
-    }
-
-    fn is_empty(&self) -> bool {
-        if self.children.is_empty() {
-            true
-        } else if self.children.len() == 1 {
-            match &self.children[0] {
-                ElemChild::Text(t) => t.text.is_empty(),
-                ElemChild::Elem(e) => e.is_empty(),
-            }
-        } else {
-            false
-        }
-    }
-
-    fn has_content(&self) -> bool {
-        self.children.iter().any(ElemChild::has_content)
-    }
-
-    fn simplify(self) -> Self {
-        Self { children: simplify_children(self.children), ..self }
-    }
-}
-
-/// Merge adjacent text nodes with the same formatting.
-fn simplify_children(children: Vec<ElemChild>) -> Vec<ElemChild> {
-    children.into_iter().fold(Vec::new(), |mut acc, child| {
-        match (child, acc.last_mut()) {
-            (ElemChild::Text(t), Some(ElemChild::Text(last)))
-                if last.formatting == t.formatting =>
-            {
-                last.text.push_str(&t.text);
-                return acc;
-            }
-            (ElemChild::Elem(e), _) => {
-                acc.push(ElemChild::Elem(e.simplify()));
-            }
-            (child, _) => {
-                acc.push(child);
-            }
-        }
-        acc
-    })
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct UsageInfo {
     has_vars: bool,
@@ -1061,301 +1034,11 @@ impl UsageInfo {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum ElemChild {
-    Text(Formatted),
-    Elem(Elem),
-}
-
-impl ElemChild {
-    fn write_buf(
-        &self,
-        w: &mut impl fmt::Write,
-        format: BufWriteFormat,
-    ) -> Result<(), fmt::Error> {
-        match self {
-            ElemChild::Text(t) if format == BufWriteFormat::HTML => {
-                let is_default = t.formatting == Formatting::default();
-                if !is_default {
-                    w.write_str("<span style=\"")?;
-                    t.formatting.write_css(w)?;
-                    w.write_str("\">")?;
-                }
-                w.write_str(&t.text)?;
-                if !is_default {
-                    w.write_str("</span>")?;
-                }
-                Ok(())
-            }
-            ElemChild::Text(t) if format == BufWriteFormat::VT100 => {
-                t.formatting.write_vt100(w)?;
-                w.write_str(&t.text)?;
-                w.write_str("\x1b[0m")
-            }
-            ElemChild::Text(t) => w.write_str(&t.text),
-            ElemChild::Elem(e) => e.write_buf(w, format),
-        }
-    }
-
-    fn str_len(&self) -> usize {
-        match self {
-            ElemChild::Text(t) => t.text.len(),
-            ElemChild::Elem(e) => e.str_len(),
-        }
-    }
-
-    fn has_content(&self) -> bool {
-        match self {
-            ElemChild::Text(t) => t.text.chars().any(|c| !c.is_whitespace()),
-            ElemChild::Elem(e) => e.has_content(),
-        }
-    }
-}
-
-impl From<Elem> for ElemChild {
-    fn from(e: Elem) -> Self {
-        ElemChild::Elem(e)
-    }
-}
-
-impl From<Formatted> for ElemChild {
-    fn from(f: Formatted) -> Self {
-        ElemChild::Text(f)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum BufWriteFormat {
-    /// Just write text.
-    #[default]
-    Plain,
-    /// Write with terminal colors.
-    VT100,
-    /// Write HTML.
-    HTML,
-}
-
-#[derive(Debug, Clone)]
-pub struct Formatted {
-    pub text: String,
-    pub formatting: Formatting,
-}
-
-impl Formatted {
-    fn new(text: String) -> Self {
-        Self { text, formatting: Formatting::new() }
-    }
-
-    fn elem(self, display: Display) -> Elem {
-        Elem { children: vec![ElemChild::Text(self)], display }
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Formatting {
-    pub font_style: FontStyle,
-    pub font_variant: FontVariant,
-    pub font_weight: FontWeight,
-    pub text_decoration: TextDecoration,
-    pub vertical_align: VerticalAlign,
-}
-
-impl Formatting {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn add_text(self, text: String) -> Formatted {
-        Formatted { text, formatting: self }
-    }
-
-    /// Apply a partial formatting on top of this formatting.
-    fn apply(mut self, other: citationberg::Formatting) -> Self {
-        if let Some(style) = other.font_style {
-            self.font_style = style;
-        }
-
-        if let Some(variant) = other.font_variant {
-            self.font_variant = variant;
-        }
-
-        if let Some(weight) = other.font_weight {
-            self.font_weight = weight;
-        }
-
-        if let Some(decoration) = other.text_decoration {
-            self.text_decoration = decoration;
-        }
-
-        if let Some(align) = other.vertical_align {
-            self.vertical_align = align;
-        }
-
-        self
-    }
-
-    /// Whether this format will change if a different format is applied on top.
-    fn will_change(&self, other: citationberg::Formatting) -> bool {
-        if let Some(style) = other.font_style {
-            if self.font_style != style {
-                return true;
-            }
-        }
-
-        if let Some(variant) = other.font_variant {
-            if self.font_variant != variant {
-                return true;
-            }
-        }
-
-        if let Some(weight) = other.font_weight {
-            if self.font_weight != weight {
-                return true;
-            }
-        }
-
-        if let Some(decoration) = other.text_decoration {
-            if self.text_decoration != decoration {
-                return true;
-            }
-        }
-
-        if let Some(align) = other.vertical_align {
-            if self.vertical_align != align {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    fn write_vt100(&self, buf: &mut impl fmt::Write) -> Result<(), fmt::Error> {
-        if self.font_style == FontStyle::Italic {
-            buf.write_str("\x1b[3m")?;
-        }
-
-        if self.font_weight == FontWeight::Bold {
-            buf.write_str("\x1b[1m")?;
-        } else if self.font_weight == FontWeight::Light {
-            buf.write_str("\x1b[2m")?;
-        }
-
-        if self.text_decoration == TextDecoration::Underline {
-            buf.write_str("\x1b[4m")?;
-        }
-
-        Ok(())
-    }
-
-    fn write_css(&self, buf: &mut impl fmt::Write) -> Result<(), fmt::Error> {
-        if self.font_style == FontStyle::Italic {
-            buf.write_str("font-style: italic;")?;
-        }
-
-        match self.font_weight {
-            FontWeight::Bold => buf.write_str("font-weight: bold;")?,
-            FontWeight::Light => buf.write_str("font-weight: lighter;")?,
-            _ => {}
-        }
-
-        if self.text_decoration == TextDecoration::Underline {
-            buf.write_str("text-decoration: underline;")?;
-        }
-
-        if self.font_variant == FontVariant::SmallCaps {
-            buf.write_str("font-variant: small-caps;")?;
-        }
-
-        match self.vertical_align {
-            VerticalAlign::Sub => buf.write_str("vertical-align: sub;")?,
-            VerticalAlign::Sup => buf.write_str("vertical-align: super;")?,
-            _ => {}
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NonEmptyStack<T> {
-    head: Vec<T>,
-    last: T,
-}
-
-impl<T> NonEmptyStack<T> {
-    fn new(last: T) -> Self {
-        Self { head: Vec::new(), last }
-    }
-
-    fn last(&self) -> &T {
-        &self.last
-    }
-
-    fn last_mut(&mut self) -> &mut T {
-        &mut self.last
-    }
-
-    fn get(&self, idx: usize) -> Option<&T> {
-        if idx == self.head.len() {
-            Some(&self.last)
-        } else {
-            self.head.get(idx)
-        }
-    }
-
-    fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
-        if idx == self.head.len() {
-            Some(&mut self.last)
-        } else {
-            self.head.get_mut(idx)
-        }
-    }
-
-    fn len(&self) -> NonZeroUsize {
-        NonZeroUsize::new(self.head.len() + 1).unwrap()
-    }
-
-    fn push(&mut self, elem: T) {
-        self.head.push(mem::replace(&mut self.last, elem));
-    }
-
-    fn pop(&mut self) -> Option<T> {
-        let new_last = self.head.pop()?;
-        Some(mem::replace(&mut self.last, new_last))
-    }
-
-    /// Drains all elements including and after the given index.
-    fn drain(&mut self, idx: NonZeroUsize) -> impl Iterator<Item = T> + '_ {
-        let idx = idx.get();
-        mem::swap(&mut self.head[idx - 1], &mut self.last);
-        let mut drain = self.head.drain(idx - 1..);
-        let first = drain.next();
-        drain.chain(first)
-    }
-
-    fn iter(&self) -> impl Iterator<Item = &T> {
-        self.head.iter().chain(std::iter::once(&self.last))
-    }
-
-    fn finish(self) -> T {
-        if !self.head.is_empty() {
-            panic!("NonEmptyStack::finish called with non-empty stack")
-        }
-
-        self.last
-    }
-}
-
-impl<T: Default> Default for NonEmptyStack<T> {
-    fn default() -> Self {
-        Self::new(T::default())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use citationberg::{LocaleFile, Style};
 
+    use crate::csl::elem::BufWriteFormat;
     use crate::io::from_yaml_str;
 
     use super::*;
@@ -1374,17 +1057,17 @@ mod tests {
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 
-        let style_ctx = StyleContext::new(&style, locale, &en_locale).unwrap();
+        let driver = BibliographyDriver::new(&style, locale, &en_locale).unwrap();
 
         for n in (0..bib.len()).step_by(2) {
             let mut item = [
                 CitationItem(bib.nth(n).unwrap(), None),
                 CitationItem(bib.nth(n + 1).unwrap(), None),
             ];
-            let citation = style_ctx.citation(&mut item);
+            let citation = driver.instant_citation(&mut item);
             let mut buf = String::new();
 
-            for e in citation {
+            for e in citation.0 {
                 e.write_buf(&mut buf, BufWriteFormat::VT100).unwrap();
             }
 

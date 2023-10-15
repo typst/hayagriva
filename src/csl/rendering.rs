@@ -15,7 +15,7 @@ use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{Date, MaybeTyped, Numeric, Person};
 
 use super::taxonomy::matches_entry_type;
-use super::Context;
+use super::{Context, ElemMeta};
 
 /// All rendering elements implement this trait. It allows you to format an
 /// [`Entry`] with them.
@@ -78,7 +78,7 @@ impl RenderCsl for citationberg::Text {
         }
 
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.commit_elem(depth, self.display);
+        ctx.commit_elem(depth, self.display, None);
     }
 }
 
@@ -135,7 +135,12 @@ impl RenderCsl for citationberg::Number {
 
         ctx.pop_case(cidx);
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.commit_elem(depth, self.display);
+        ctx.commit_elem(
+            depth,
+            self.display,
+            (self.variable == NumberVariable::CitationNumber)
+                .then_some(ElemMeta::CitationNumber),
+        );
     }
 }
 
@@ -288,7 +293,7 @@ impl RenderCsl for citationberg::Date {
 
         ctx.pop_case(cidx);
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.commit_elem(depth, self.display);
+        ctx.commit_elem(depth, self.display, Some(ElemMeta::Date));
     }
 }
 
@@ -471,7 +476,7 @@ impl RenderCsl for Names {
         }
 
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.commit_elem(depth, self.display);
+        ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
         ctx.writing.pop_name_options();
     }
 }
@@ -887,7 +892,7 @@ fn render_with_delimiter(
                 let prev_loc = std::mem::take(&mut loc);
 
                 if let Some(prev_loc) = prev_loc {
-                    ctx.commit_elem(prev_loc, None);
+                    ctx.commit_elem(prev_loc, None, None);
                 }
 
                 loc = Some(ctx.push_elem(citationberg::Formatting::default()));
@@ -911,7 +916,7 @@ fn render_with_delimiter(
         if last_empty {
             ctx.discard_elem(pos);
         } else {
-            ctx.commit_elem(pos, None);
+            ctx.commit_elem(pos, None, None);
         }
     }
 
@@ -919,7 +924,7 @@ fn render_with_delimiter(
         if last_empty {
             ctx.discard_elem(loc);
         } else {
-            ctx.commit_elem(loc, None);
+            ctx.commit_elem(loc, None, None);
         }
     }
 }
@@ -1181,7 +1186,7 @@ impl RenderCsl for citationberg::Group {
         {
             ctx.discard_elem(idx);
         } else {
-            ctx.commit_elem(idx, self.display);
+            ctx.commit_elem(idx, self.display, None);
             ctx.writing.printed_non_empty_group()
         }
     }
