@@ -15,7 +15,7 @@ use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{Date, MaybeTyped, Numeric, Person};
 
 use super::taxonomy::matches_entry_type;
-use super::{Context, ElemMeta};
+use super::{Context, DisambiguateState, ElemMeta, IbidState};
 
 /// All rendering elements implement this trait. It allows you to format an
 /// [`Entry`] with them.
@@ -103,6 +103,7 @@ impl RenderCsl for citationberg::Number {
                 {
                     if let Some(range) = num.range() {
                         ctx.style
+                            .csl
                             .settings
                             .page_range_format
                             .unwrap_or_default()
@@ -503,7 +504,7 @@ fn add_names(names: &citationberg::Names, ctx: &mut Context, persons: Vec<&Perso
         names.options.et_al_use_last.unwrap_or_default() && take + 2 <= persons.len();
     let mut last_inverted = false;
 
-    let demote_non_dropping = match ctx.style.settings.demote_non_dropping_particle {
+    let demote_non_dropping = match ctx.style.csl.settings.demote_non_dropping_particle {
         DemoteNonDroppingParticle::Never => false,
         DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting,
         DemoteNonDroppingParticle::DisplayAndSort => true,
@@ -617,7 +618,7 @@ fn write_name(
     demote_non_dropping: bool,
     names: &citationberg::Names,
 ) {
-    let hyphen_init = ctx.style.settings.initialize_with_hyphen;
+    let hyphen_init = ctx.style.csl.settings.initialize_with_hyphen;
     let initialize = names.options.initialize.unwrap_or(true);
     let initialize_with = names.options.initialize_with.as_deref();
     let sort_sep = names.options.sort_separator.as_deref().unwrap_or(", ");
@@ -1006,11 +1007,8 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                 self.pos.next();
                 if let Some(d) = self.cond.disambiguate {
                     Some(
-                        d == self
-                            .ctx
-                            .instance
-                            .cite_props
-                            .map_or(false, |p| p.is_disambiguation),
+                        d == (self.ctx.instance.cite_props.speculative.disambiguation
+                            == DisambiguateState::Disambiguation),
                     )
                 } else {
                     self.next()
@@ -1077,7 +1075,8 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                         self.ctx
                             .instance
                             .cite_props
-                            .and_then(|c| c.locator)
+                            .certain
+                            .locator
                             .map(|l| l.0)
                             .map_or(false, |l| l == loc),
                     )
@@ -1096,19 +1095,16 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                     let spec_pos = pos[self.idx];
                     self.idx += 1;
 
-                    let Some(props) = self.ctx.instance.cite_props else {
-                        self.next_case();
-                        return Some(false);
-                    };
+                    let props = self.ctx.instance.cite_props;
 
                     Some(match spec_pos {
-                        TestPosition::First => props.is_first,
-                        TestPosition::Subsequent => !props.is_first,
-                        TestPosition::Ibid => props.is_ibid,
+                        TestPosition::First => props.certain.is_first,
+                        TestPosition::Subsequent => !props.certain.is_first,
+                        TestPosition::Ibid => props.speculative.ibid == IbidState::Ibid,
                         TestPosition::IbidWithLocator => {
-                            props.is_ibid || props.is_ibid_with_locator
+                            props.speculative.ibid.is_ibid_with_locator()
                         }
-                        TestPosition::NearNote => props.is_near_note,
+                        TestPosition::NearNote => props.certain.is_near_note,
                     })
                 } else {
                     self.next_case();

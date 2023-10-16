@@ -14,21 +14,28 @@ use super::{CitationItem, InstanceContext, StyleContext};
 
 impl<'a> StyleContext<'a> {
     /// Retrieve the ordering of two entries according to the given sort key.
-    fn cmp_entries(&self, a: &CitationItem, b: &CitationItem, key: &SortKey) -> Ordering {
+    fn cmp_entries(
+        &self,
+        a: &CitationItem,
+        a_idx: usize,
+        b: &CitationItem,
+        b_idx: usize,
+        key: &SortKey,
+    ) -> Ordering {
         let ordering = match key {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
-                let a = InstanceContext::sort_instance(a)
+                let a = InstanceContext::sort_instance(a, a_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string());
-                let b = InstanceContext::sort_instance(b)
+                let b = InstanceContext::sort_instance(b, b_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string());
 
                 a.cmp(&b)
             }
             SortKey::Variable { variable: Variable::Date(d), .. } => {
-                let a = resolve_date_variable(a.0, *d);
-                let b = resolve_date_variable(b.0, *d);
+                let a = resolve_date_variable(a.entry, *d);
+                let b = resolve_date_variable(b.entry, *d);
 
                 match (a, b) {
                     (Some(a), Some(b)) => a.csl_cmp(b),
@@ -38,14 +45,14 @@ impl<'a> StyleContext<'a> {
                 }
             }
             SortKey::Variable { variable: Variable::Name(n), .. } => {
-                let a = resolve_name_variable(a.0, *n);
-                let b = resolve_name_variable(b.0, *n);
+                let a = resolve_name_variable(a.entry, *n);
+                let b = resolve_name_variable(b.entry, *n);
 
                 for (a_pers, b_pers) in a.iter().zip(b.iter()) {
                     let ord = a_pers.csl_cmp(
                         b_pers,
                         LongShortForm::Long,
-                        self.settings.demote_non_dropping_particle
+                        self.csl.settings.demote_non_dropping_particle
                             != DemoteNonDroppingParticle::Never,
                     );
                     if ord != Ordering::Equal {
@@ -62,8 +69,10 @@ impl<'a> StyleContext<'a> {
                 }
             }
             SortKey::Variable { variable: Variable::Number(n), .. } => {
-                let a = InstanceContext::sort_instance(a).resolve_number_variable(*n);
-                let b = InstanceContext::sort_instance(b).resolve_number_variable(*n);
+                let a =
+                    InstanceContext::sort_instance(a, a_idx).resolve_number_variable(*n);
+                let b =
+                    InstanceContext::sort_instance(b, b_idx).resolve_number_variable(*n);
 
                 match (a, b) {
                     (Some(a), Some(b)) => a.csl_cmp(&b),
@@ -79,8 +88,8 @@ impl<'a> StyleContext<'a> {
                 names_use_last,
                 ..
             } => {
-                let render = |entry: &CitationItem| {
-                    let mut ctx = self.sorting_ctx(entry);
+                let render = |entry: &CitationItem, idx: usize| {
+                    let mut ctx = self.sorting_ctx(entry, idx);
                     ctx.writing.name_options.push(InheritableNameOptions {
                         et_al_min: *names_min,
                         et_al_subsequent_min: *names_min,
@@ -101,8 +110,8 @@ impl<'a> StyleContext<'a> {
                     })
                 };
 
-                let a_rendered = render(a);
-                let b_rendered = render(b);
+                let a_rendered = render(a, a_idx);
+                let b_rendered = render(b, b_idx);
 
                 a_rendered.cmp(&b_rendered)
             }
@@ -121,7 +130,7 @@ impl<'a> StyleContext<'a> {
             cites.sort_by(|a, b| {
                 let mut ordering = Ordering::Equal;
                 for key in &sort.keys {
-                    ordering = self.cmp_entries(a, b, key);
+                    ordering = self.cmp_entries(a, 0, b, 0, key);
                     if ordering != Ordering::Equal {
                         break;
                     }

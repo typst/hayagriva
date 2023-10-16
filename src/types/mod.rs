@@ -124,7 +124,7 @@ use deserialize_from_str;
 use serialize_display;
 
 /// Describes which kind of work a database entry refers to.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 #[serde(rename_all = "kebab-case")]
 pub enum EntryType {
@@ -287,7 +287,7 @@ pub enum DeserializationError {
 }
 
 /// A type that may be a string or a stricly typed value.
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Eq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Eq, Hash)]
 #[serde(untagged)]
 pub enum MaybeTyped<T> {
     /// The typed variant.
@@ -364,7 +364,7 @@ impl<T> From<T> for MaybeTyped<T> {
 
 derive_or_from_str! {
     /// An URL, possibly with a last visited date.
-    #[derive(Clone, Debug, PartialEq, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct QualifiedUrl where "URL string or dictionary with keys \"url\" and \"date\"" {
         /// The [Url].
         pub value: Url,

@@ -433,6 +433,14 @@ impl<T> NonEmptyStack<T> {
         Some(mem::replace(&mut self.last, new_last))
     }
 
+    pub fn get(&self, idx: usize) -> Option<&T> {
+        if idx == self.head.len() {
+            Some(&self.last)
+        } else {
+            self.head.get(idx)
+        }
+    }
+
     /// Drains all elements including and after the given index.
     pub fn drain(&mut self, idx: NonZeroUsize) -> impl Iterator<Item = T> + '_ {
         let idx = idx.get();

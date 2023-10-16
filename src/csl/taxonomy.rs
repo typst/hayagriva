@@ -11,7 +11,7 @@ use citationberg::taxonomy::{
 use citationberg::{taxonomy, LongShortForm};
 use unic_langid::LanguageIdentifier;
 
-use super::InstanceContext;
+use super::{DisambiguateState, InstanceContext};
 
 impl<'a> InstanceContext<'a> {
     pub(super) fn resolve_number_variable(
@@ -32,7 +32,9 @@ impl<'a> InstanceContext<'a> {
                 )
                 .and_then(Entry::volume)
                 .map(MaybeTyped::to_cow),
-            NumberVariable::CitationNumber => todo!("that's for us to do baby"),
+            NumberVariable::CitationNumber => Some(MaybeTyped::Typed(Cow::Owned(
+                Numeric::from(self.cite_props.speculative.citation_number as u32),
+            ))),
             NumberVariable::CollectionNumber => self
                 .entry
                 .bound_select(
@@ -46,12 +48,16 @@ impl<'a> InstanceContext<'a> {
             NumberVariable::Edition => {
                 self.entry.map(|e| e.edition()).map(MaybeTyped::to_cow)
             }
-            NumberVariable::FirstReferenceNoteNumber => todo!("you guessed it, baybee"),
+            NumberVariable::FirstReferenceNoteNumber => self
+                .cite_props
+                .certain
+                .first_note_number
+                .map(|n| MaybeTyped::Typed(Cow::Owned(Numeric::from(n as u32)))),
             NumberVariable::Issue => {
                 self.entry.map(|e| e.issue()).map(MaybeTyped::to_cow)
             }
             NumberVariable::Locator => {
-                let l = self.cite_props?.locator?.1;
+                let l = self.cite_props.certain.locator?.1;
                 Some(
                     Numeric::from_str(l)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
@@ -230,7 +236,15 @@ impl<'a> InstanceContext<'a> {
                     .map(|f| f.select(form))
                     .map(Cow::Borrowed)
             }
-            StandardVariable::YearSuffix => todo!("we actually have to generate this"),
+            StandardVariable::YearSuffix => {
+                if let DisambiguateState::YearSuffix(s) =
+                    self.cite_props.speculative.disambiguation
+                {
+                    Some(Cow::Owned(StringChunk::normal(letter(s)).into()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -543,4 +557,24 @@ pub(super) fn csl_language(lang_id: &LanguageIdentifier) -> String {
         buf.push_str(region.as_str());
     }
     buf
+}
+
+// A function that takes a usize value and returns a String
+fn letter(val: u8) -> String {
+    let mut result = String::with_capacity(1);
+    let mut current = val;
+
+    loop {
+        let remainder = current % 26;
+        let c = (remainder + b'a') as char;
+        result.insert(0, c);
+
+        if current < 26 {
+            break;
+        }
+
+        current = (current - 26) / 26;
+    }
+
+    result
 }

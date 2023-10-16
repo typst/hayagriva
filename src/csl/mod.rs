@@ -1,17 +1,18 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt::Write;
-use std::mem;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroI16, NonZeroUsize};
+use std::{mem, vec};
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, Bibliography, Citation, CslMacro, Display,
-    InheritableNameOptions, Locale, LocaleCode, Style, TermForm, ToFormatting,
+    taxonomy as csl_taxonomy, Affixes, Citation, CslMacro, Display, IndependentStyle,
+    InheritableNameOptions, Locale, LocaleCode, SecondFieldAlign, StyleClass, TermForm,
+    ToFormatting,
 };
-use citationberg::{
-    DateForm, IndependentStyleSettings, LongShortForm, OrdinalLookup, TextCase,
-};
+use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
+use indexmap::IndexSet;
 
 use crate::csl::elem::{BufWriteFormat, Elem, Formatted};
 use crate::csl::rendering::RenderCsl;
@@ -32,54 +33,51 @@ use self::elem::{
 };
 
 /// This struct formats a set of citations according to a style.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default)]
 pub struct BibliographyDriver<'a> {
-    /// The style we are using.
-    style: StyleContext<'a>,
     /// The citations we have seen so far.
-    citations: Vec<CitationMark<'a>>,
+    citations: Vec<CitationRequest<'a>>,
 }
 
 impl<'a> BibliographyDriver<'a> {
     /// Create a new bibliography driver.
-    pub fn new(
-        style: &'a Style,
-        locale: LocaleCode,
-        locale_file: &'a [Locale],
-    ) -> Option<Self> {
-        let style = StyleContext::new(style, locale, locale_file)?;
-        Some(Self { style, citations: vec![] })
+    pub fn new() -> Option<Self> {
+        Some(Self::default())
     }
 
     /// Create a new citation with the given items. Bibliography-wide
     /// disambiguation will not be applied.
-    pub fn instant_citation(&self, items: &mut [CitationItem<'_>]) -> ElemChildren {
-        self.style.sort(items, self.style.citation.sort.as_ref());
+    pub fn instant_citation(&self, mut req: CitationRequest<'_>) -> ElemChildren {
+        let style = req.style();
+        style.sort(&mut req.items, style.csl.citation.sort.as_ref());
         let mut res = vec![];
-        for item in items {
-            res.push(self.style.citation(item));
+        for item in req.items {
+            res.push(
+                style.citation(item.entry, CiteProperties::for_sorting(item.locator, 0)),
+            );
         }
 
         let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
         // TODO in-cite disambiguation.
 
         let formatting =
-            Formatting::default().apply(self.style.citation.layout.to_formatting());
+            Formatting::default().apply(style.csl.citation.layout.to_formatting());
+
         if !non_empty.is_empty() {
-            let mut res = if let Some(prefix) = self.style.citation.layout.prefix.as_ref()
+            let mut res = if let Some(prefix) = style.csl.citation.layout.prefix.as_ref()
             {
                 ElemChildren(vec![Formatted { text: prefix.clone(), formatting }.into()])
             } else {
                 ElemChildren::new()
             };
 
-            for (i, item) in non_empty.into_iter().enumerate() {
+            for (i, elem_children) in non_empty.into_iter().enumerate() {
                 let first = i == 0;
                 if !first {
                     res.0.push(
                         Formatted {
-                            text: self
-                                .style
+                            text: style
+                                .csl
                                 .citation
                                 .layout
                                 .delimiter
@@ -92,10 +90,10 @@ impl<'a> BibliographyDriver<'a> {
                     );
                 }
 
-                res.0.extend(item.0)
+                res.0.extend(elem_children.0)
             }
 
-            if let Some(suffix) = self.style.citation.layout.suffix.as_ref() {
+            if let Some(suffix) = style.csl.citation.layout.suffix.as_ref() {
                 res.0.push(Formatted { text: suffix.clone(), formatting }.into());
             }
 
@@ -106,71 +104,181 @@ impl<'a> BibliographyDriver<'a> {
     }
 
     /// Create a new citation with the given items.
-    pub fn citation(&mut self, citation: &mut [CitationItem<'a>]) {
-        self.style.sort(citation, self.style.citation.sort.as_ref());
-        let mut items: Vec<(CitationItem<'a>, ElemChildren)> =
-            Vec::with_capacity(citation.len());
+    pub fn citation(&mut self, mut req: CitationRequest<'a>) {
+        let style = req.style();
+        style.sort(&mut req.items, style.csl.citation.sort.as_ref());
+        self.citations.push(req);
+    }
+}
 
-        for item in citation {
-            items.push((*item, self.style.citation(item)));
+/// Implementations for finishing the bibliography.
+impl<'a> BibliographyDriver<'a> {
+    /// Render the bibliography.
+    pub fn finish(self, request: BibliographyRequest<'_>) -> Rendered {
+        // 1.  Assign citation numbers by bibliography ordering or by citation
+        //     order.
+        let bib_style = request.style();
+
+        // Only remember each entry once, even if it is cited multiple times.
+        let mut entry_set = IndexSet::new();
+        for req in self.citations.iter() {
+            for item in req.items.iter() {
+                entry_set.insert(item.entry);
+            }
         }
 
-        self.citations.push(CitationMark::Citation {
-            items,
-            affixes: (
-                self.style.citation.layout.prefix.as_deref(),
-                self.style.citation.layout.suffix.as_deref(),
-            ),
-        })
-    }
+        let mut entries: Vec<_> =
+            entry_set.into_iter().map(CitationItem::from_entry).collect();
+        bib_style.sort(
+            &mut entries,
+            bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
+        );
+        let citation_number = |item: &Entry| {
+            entries.iter().position(|e| e.entry == item).expect("entry not found")
+        };
 
-    /// Skip a number of notes.
-    pub fn skip_notes(&mut self, n: usize) {
-        self.citations.push(CitationMark::SkipNotes(n))
-    }
+        #[derive(Debug)]
+        struct SpeculativeItemRender<'a> {
+            rendered: ElemChildren,
+            entry: &'a Entry,
+            cite_props: CiteProperties<'a>,
+        }
 
-    /// Reset the note counter.
-    pub fn reset_notes(&mut self, n: usize) {
-        self.citations.push(CitationMark::ResetNotes(n))
+        #[derive(Debug)]
+        struct SpeculativeCiteRender<'a, 'b> {
+            items: Vec<SpeculativeItemRender<'a>>,
+            request: &'b CitationRequest<'a>,
+        }
+
+        let mut seen: HashSet<&Entry> = HashSet::new();
+        let mut res: Vec<SpeculativeCiteRender> = Vec::new();
+        let mut last_cite: Option<&CitationItem> = None;
+
+        for citation in &self.citations {
+            let items = &citation.items;
+            let style = citation.style();
+
+            let mut renders: Vec<SpeculativeItemRender<'_>> = Vec::new();
+
+            for item in items.iter() {
+                let entry = &item.entry;
+
+                let is_near_note = citation.note_number.map_or(false, |_| {
+                    res.iter()
+                        .rev()
+                        .take(style.csl.citation.near_note_distance as usize)
+                        .any(|cite| {
+                            cite.request.note_number.is_some()
+                                && cite.items.iter().any(|item| &item.entry == entry)
+                        })
+                });
+
+                let first_note_number = citation.note_number.map(|n| {
+                    res.iter()
+                        .find_map(|cite| {
+                            cite.request.note_number.filter(|_| {
+                                cite.items.iter().any(|item| &item.entry == entry)
+                            })
+                        })
+                        .unwrap_or(n)
+                });
+
+                let cite_props = CiteProperties {
+                    certain: CertainCiteProperties {
+                        note_number: citation.note_number,
+                        first_note_number,
+                        is_near_note,
+                        is_first: seen.insert(entry),
+                        locator: item.locator,
+                    },
+                    speculative: SpeculativeCiteProperties::speculate(
+                        citation_number(entry),
+                        IbidState::with_last(item, last_cite),
+                    ),
+                };
+
+                let mut ctx = style.ctx(entry, cite_props);
+                style.csl.citation.layout.render(&mut ctx);
+                renders.push(SpeculativeItemRender {
+                    rendered: ctx.flush(),
+                    entry,
+                    cite_props,
+                });
+
+                last_cite = Some(item);
+            }
+
+            res.push(SpeculativeCiteRender { items: renders, request: citation });
+        }
+
+        // 2.  Disambiguate the citations.
+        // 3.  Group adjacent citations.
+        // 3a. Collapse grouped citations.
+        // 4.  Add affixes.
+
+        todo!()
     }
 }
 
 #[derive(Debug, Clone)]
-enum CitationMark<'a> {
-    /// A citation to one or more items.
-    Citation {
-        items: Vec<(CitationItem<'a>, ElemChildren)>,
-        affixes: (Option<&'a str>, Option<&'a str>),
-    },
-    /// Skipping a number of notes.
-    SkipNotes(usize),
-    /// Resetting the note counter.
-    ResetNotes(usize),
+pub struct Rendered {
+    /// The bibliography items.
+    pub bibliography: RenderedBibliography,
+    /// The citation items.
+    pub citations: RenderedCitation,
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderedBibliography {
+    /// Render the bibliography in a hanging indent.
+    pub hanging_indent: bool,
+    /// When set, the second field is aligned.
+    pub second_field_align: Option<SecondFieldAlign>,
+    /// The line spacing within the bibliography as a multiple of regular line spacing.
+    pub line_spacing: NonZeroI16,
+    /// Extra space between entries as a multiple of line height.
+    pub entry_spacing: i16,
+    /// The bibliography items.
+    pub items: Vec<ElemChildren>,
+}
+
+impl RenderedBibliography {
+    fn new(items: Vec<ElemChildren>, bibliography: &citationberg::Bibliography) -> Self {
+        Self {
+            hanging_indent: bibliography.hanging_indent,
+            second_field_align: bibliography.second_field_align,
+            line_spacing: bibliography.line_spacing,
+            entry_spacing: bibliography.entry_spacing,
+            items,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderedCitation {
+    pub note_number: Option<usize>,
+    pub citation: ElemChildren,
 }
 
 /// A context that contains all information related to rendering a single entry.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct InstanceContext<'a> {
+struct InstanceContext<'a> {
     // Entry-dependent data.
     /// The current entry.
     pub entry: &'a Entry,
     /// The position of this citation in the list of citations.
-    pub cite_props: Option<CiteProperties<'a>>,
+    pub cite_props: CiteProperties<'a>,
     /// Whether we are sorting or formatting right now.
     pub sorting: bool,
 }
 
 impl<'a> InstanceContext<'a> {
-    fn new(
-        entry: &'a Entry,
-        cite_props: Option<CiteProperties<'a>>,
-        sorting: bool,
-    ) -> Self {
+    fn new(entry: &'a Entry, cite_props: CiteProperties<'a>, sorting: bool) -> Self {
         Self { entry, cite_props, sorting }
     }
 
-    fn sort_instance(entry: &CitationItem<'a>) -> Self {
-        Self::new(entry.0, CiteProperties::with_locator(entry.1), true)
+    fn sort_instance(item: &CitationItem<'a>, idx: usize) -> Self {
+        Self::new(item.entry, CiteProperties::for_sorting(item.locator, idx), true)
     }
 }
 
@@ -179,45 +287,26 @@ impl<'a> InstanceContext<'a> {
 pub(crate) struct StyleContext<'a> {
     // Settings from the style.
     /// The settings of the style.
-    pub settings: &'a IndependentStyleSettings,
-    /// A list of CSL macros.
-    macros: &'a [CslMacro],
-    /// A list of locales defined in the style.
-    style_locales: &'a [Locale],
+    pub csl: &'a IndependentStyle,
     /// A list of locales defined in their respective locale file.
-    locale_file: &'a [Locale],
+    locale_files: &'a [Locale],
     /// Which locale we're using.
-    locale: LocaleCode,
-    /// Citation style.
-    citation: &'a Citation,
-    /// Bibliography layout.
-    bibliography: Option<&'a Bibliography>,
+    locale_override: Option<LocaleCode>,
 }
 
 impl<'a> StyleContext<'a> {
     fn new(
-        style: &'a Style,
-        locale: LocaleCode,
-        locale_file: &'a [Locale],
-    ) -> Option<Self> {
-        let macros = &style.macros;
-        let settings = style.independant_settings.as_ref()?;
-
-        Some(Self {
-            settings,
-            macros,
-            locale,
-            style_locales: style.locale.as_slice(),
-            locale_file,
-            citation: style.citation.as_ref()?,
-            bibliography: style.bibliography.as_ref(),
-        })
+        style: &'a IndependentStyle,
+        locale: Option<LocaleCode>,
+        locale_files: &'a [Locale],
+    ) -> Self {
+        Self { csl: style, locale_files, locale_override: locale }
     }
 
     fn ctx<'b>(
         &'b self,
         entry: &'b Entry,
-        cite_props: Option<CiteProperties<'a>>,
+        cite_props: CiteProperties<'a>,
     ) -> Context<'b> {
         Context {
             instance: InstanceContext::new(entry, cite_props, false),
@@ -226,11 +315,11 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    fn sorting_ctx<'b>(&'b self, item: &'b CitationItem<'b>) -> Context<'b> {
+    fn sorting_ctx<'b>(&'b self, item: &'b CitationItem<'b>, idx: usize) -> Context<'b> {
         Context {
             instance: InstanceContext::new(
-                item.0,
-                CiteProperties::with_locator(item.1),
+                item.entry,
+                CiteProperties::for_sorting(item.locator, idx),
                 true,
             ),
             style: self,
@@ -238,21 +327,125 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    pub fn citation(&self, item: &CitationItem<'_>) -> ElemChildren {
-        let mut ctx = self.ctx(item.0, CiteProperties::with_locator(item.1));
-        ctx.writing.push_name_options(&self.citation.name_options);
-        self.citation.layout.render(&mut ctx);
+    fn citation(&self, entry: &Entry, props: CiteProperties<'a>) -> ElemChildren {
+        let mut ctx = self.ctx(entry, props);
+        ctx.writing.push_name_options(&self.csl.citation.name_options);
+        self.csl.citation.layout.render(&mut ctx);
         ctx.flush()
+    }
+
+    fn locale(&self) -> LocaleCode {
+        self.locale_override
+            .clone()
+            .or_else(|| self.csl.default_locale.clone())
+            .unwrap_or_else(LocaleCode::en_us)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CitationItem<'a>(&'a Entry, Option<SpecificLocator<'a>>);
+#[derive(Debug, PartialEq)]
+pub struct CitationRequest<'a> {
+    pub items: Vec<CitationItem<'a>>,
+    style: &'a IndependentStyle,
+    /// The requested locale for the style's terms.
+    ///
+    /// This is also the place to store a locale override from a dependent
+    /// style.
+    pub locale: Option<LocaleCode>,
+    /// The files used to retrieve locale settings and terms if the style does
+    /// not define all neccessary items.
+    pub locale_files: &'a [Locale],
+    /// The number to use for `first-reference-note-number`.
+    ///
+    /// `near-note` will always test false if this is none for the referenced
+    /// note.
+    note_number: Option<usize>,
+    /// Whether to override the default affixes of the style with some brackets.
+    pub affix_override: Option<Brackets>,
+}
+
+impl<'a> CitationRequest<'a> {
+    pub fn new(
+        items: Vec<CitationItem<'a>>,
+        style: &'a IndependentStyle,
+        locale: Option<LocaleCode>,
+        locale_files: &'a [Locale],
+        note_number: Option<usize>,
+        affix_override: Option<Brackets>,
+    ) -> Self {
+        Self {
+            items,
+            style,
+            locale,
+            locale_files,
+            note_number: note_number.filter(|_| style.settings.class == StyleClass::Note),
+            affix_override,
+        }
+    }
+
+    fn style(&self) -> StyleContext<'a> {
+        StyleContext::new(self.style, self.locale.clone(), self.locale_files)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BibliographyRequest<'a> {
+    pub style: &'a IndependentStyle,
+    /// The requested locale for the style's terms.
+    ///
+    /// This is also the place to store a locale override from a dependent
+    /// style.
+    pub locale: Option<LocaleCode>,
+    /// The files used to retrieve locale settings and terms if the style does
+    /// not define all neccessary items.
+    pub locale_files: &'a [Locale],
+}
+
+impl<'a> BibliographyRequest<'a> {
+    pub fn new(
+        style: &'a IndependentStyle,
+        locale: Option<LocaleCode>,
+        locale_files: &'a [Locale],
+    ) -> Self {
+        Self { style, locale, locale_files }
+    }
+
+    fn style(&self) -> StyleContext<'a> {
+        StyleContext::new(self.style, self.locale.clone(), self.locale_files)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CitationItem<'a> {
+    /// The entry to format.
+    pub entry: &'a Entry,
+    /// The locator that specifies where in the entry the item is found.
+    pub locator: Option<SpecificLocator<'a>>,
+    /// A locale code that overrides the assumed locale of the entry. If this is
+    /// none, this will default to [`CitationRequest::locale`] and then
+    /// [`citationberg::Style::default_locale`].
+    pub locale: Option<LocaleCode>,
+    /// Whether this item will be included in the output.
+    pub hide: bool,
+    /// Format the item in a special way.
+    pub kind: Option<SpecialForm>,
+}
+
+impl<'a> CitationItem<'a> {
+    fn from_entry(entry: &'a Entry) -> Self {
+        Self {
+            entry,
+            locator: None,
+            locale: None,
+            hide: false,
+            kind: None,
+        }
+    }
+}
 
 impl<'a> StyleContext<'a> {
     /// Retrieve a macro.
     fn get_macro(&self, name: &str) -> Option<&'a CslMacro> {
-        self.macros.iter().find(|m| m.name == name)
+        self.csl.macros.iter().find(|m| m.name == name)
     }
 
     /// Get the locale for the given language in the style.
@@ -265,13 +458,15 @@ impl<'a> StyleContext<'a> {
             file.iter().find(|l| l.lang.as_ref() == lang).and_then(|l| f(l))
         };
 
-        let fallback = self.locale.fallback();
+        let locale = self.locale();
+        let fallback = locale.fallback();
         let en_us = LocaleCode::en_us();
 
-        for (i, resource) in
-            [self.style_locales, self.locale_file].into_iter().enumerate()
+        for (i, resource) in [self.csl.locale.as_slice(), self.locale_files]
+            .into_iter()
+            .enumerate()
         {
-            if let Some(output) = lookup(resource, Some(&self.locale)) {
+            if let Some(output) = lookup(resource, Some(&locale)) {
                 return Some(output);
             }
 
@@ -637,39 +832,127 @@ pub(crate) struct Context<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CiteProperties<'a> {
-    /// Whether this citation is in a note and within `near-note-distance` to
-    /// the previous citation of the same item.
+struct CiteProperties<'a> {
+    pub certain: CertainCiteProperties<'a>,
+    pub speculative: SpeculativeCiteProperties,
+}
+
+impl<'a> CiteProperties<'a> {
+    fn for_sorting(locator: Option<SpecificLocator<'a>>, citation_number: usize) -> Self {
+        Self {
+            certain: CertainCiteProperties::with_locator(locator),
+            speculative: SpeculativeCiteProperties::speculate(
+                citation_number,
+                IbidState::Different,
+            ),
+        }
+    }
+}
+
+/// Item properties that can be determined before the first render of a
+/// citation or bibliography entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CertainCiteProperties<'a> {
+    /// The number of the footnote this citation appears in.
+    ///
+    /// We can determine this because it depends on citation order only. May be
+    /// none if the current style is in-text.
+    pub note_number: Option<usize>,
+    /// The number of the first footnote this citation appears in.
+    pub first_note_number: Option<usize>,
+    /// Whether the item is within `near-note-distance` to the previous citation
+    /// of the same item.
     pub is_near_note: bool,
-    /// Whether this citation is a duplicate of the previous citation.
-    pub is_ibid: bool,
-    /// Whether this directly follows another citation to the same item with a
-    /// different locator.
-    pub is_ibid_with_locator: bool,
-    /// Whether this is the first citation of the entry.
+    /// Whether this citation is the first citation of the entry.
+    ///
+    /// Only depends on insertion order. The entry cannot be switched with
+    /// itself during cite grouping.
     pub is_first: bool,
-    /// Whether this is a citation that would be identical to another citation
-    /// if not disambiguated by `choose`.
-    pub is_disambiguation: bool,
     /// Locator with its type.
     pub locator: Option<SpecificLocator<'a>>,
 }
 
-impl<'a> CiteProperties<'a> {
-    fn with_locator(locator: Option<SpecificLocator<'a>>) -> Option<Self> {
-        Some(Self { locator, ..Self::default() })
+impl<'a> CertainCiteProperties<'a> {
+    fn with_locator(locator: Option<SpecificLocator<'a>>) -> Self {
+        Self {
+            locator,
+            first_note_number: None,
+            note_number: None,
+            is_near_note: false,
+            is_first: false,
+        }
     }
 }
 
-impl<'a> Default for CiteProperties<'a> {
-    fn default() -> CiteProperties<'static> {
-        CiteProperties {
-            is_near_note: false,
-            is_ibid: false,
-            is_ibid_with_locator: false,
-            is_first: true,
-            is_disambiguation: false,
-            locator: None,
+/// Item properies that can only be determined after one or multiple renders.
+/// These require validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SpeculativeCiteProperties {
+    /// The position the item appears at in the bibliography.
+    ///
+    /// We can determine this using bibliography sort and cite order once we
+    /// have seen all cites.
+    pub citation_number: usize,
+    /// Whether this citation is exactly the same as the previous citation.
+    ///
+    /// Although cite ordering is well-defined, grouping occurs only after the
+    /// first render and can change the order.
+    pub ibid: IbidState,
+    /// Whether this citation is a disambiguation.
+    ///
+    /// Is always false for the first set of renders. Only the rendered entries
+    /// allow us to determine if we need to disambiguate.
+    pub disambiguation: DisambiguateState,
+}
+
+impl SpeculativeCiteProperties {
+    /// We can guess about the [`IbidState`] under the assumption that neither
+    /// this item nor its predecessors will be subject to cite grouping.
+    fn speculate(citation_number: usize, ibid: IbidState) -> Self {
+        Self {
+            citation_number,
+            ibid,
+            disambiguation: DisambiguateState::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisambiguateState {
+    None,
+    Disambiguation,
+    YearSuffix(u8),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IbidState {
+    /// The previous cite referenced another entry.
+    Different,
+    /// The previous cite referenced the same entry, but with a different
+    /// locator.
+    IbidWithLocator,
+    /// The previous cite referenced the same entry with the same locator.
+    Ibid,
+}
+
+impl IbidState {
+    fn is_ibid_with_locator(self) -> bool {
+        matches!(self, Self::IbidWithLocator | Self::Ibid)
+    }
+
+    fn with_last(this: &CitationItem, last: Option<&CitationItem>) -> Self {
+        if let Some(last) = last {
+            if last.entry == this.entry {
+                if last.locator == this.locator {
+                    IbidState::Ibid
+                } else {
+                    IbidState::IbidWithLocator
+                }
+            } else {
+                IbidState::Different
+            }
+        } else {
+            IbidState::Different
         }
     }
 }
@@ -1034,9 +1317,48 @@ impl UsageInfo {
     }
 }
 
+/// Describes the bracket preference of a citation style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Brackets {
+    /// "(...)" Parentheses.
+    Round,
+    /// "[...]" Brackets.
+    Square,
+    /// No brackets.
+    None,
+}
+
+impl Brackets {
+    /// Get the according left bracket.
+    pub fn left(&self) -> Option<char> {
+        match self {
+            Brackets::Round => Some('('),
+            Brackets::Square => Some('['),
+            Brackets::None => None,
+        }
+    }
+
+    /// Get the according right bracket.
+    pub fn right(&self) -> Option<char> {
+        match self {
+            Brackets::Round => Some(')'),
+            Brackets::Square => Some(']'),
+            Brackets::None => None,
+        }
+    }
+}
+
+/// A special citation form to use for the [`CitationItem`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpecialForm {
+    AuthorOnly,
+    SuppressAuthor,
+    Composite(Option<ChunkedString>),
+}
+
 #[cfg(test)]
 mod tests {
-    use citationberg::{LocaleFile, Style};
+    use citationberg::LocaleFile;
 
     use crate::csl::elem::BufWriteFormat;
     use crate::io::from_yaml_str;
@@ -1047,8 +1369,7 @@ mod tests {
     #[test]
     fn test_csl() {
         let style = fs::read_to_string("tests/art-history.csl").unwrap();
-        let style = Style::from_xml(&style).unwrap();
-        let locale = LocaleCode::en_us();
+        let style = IndependentStyle::from_xml(&style).unwrap();
 
         let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
         let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
@@ -1057,21 +1378,29 @@ mod tests {
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 
-        let driver = BibliographyDriver::new(&style, locale, &en_locale).unwrap();
+        let mut driver = BibliographyDriver::new().unwrap();
 
         for n in (0..bib.len()).step_by(2) {
-            let mut item = [
-                CitationItem(bib.nth(n).unwrap(), None),
-                CitationItem(bib.nth(n + 1).unwrap(), None),
+            let mut items = vec![
+                CitationItem::from_entry(bib.nth(n).unwrap()),
+                CitationItem::from_entry(bib.nth(n + 1).unwrap()),
             ];
-            let citation = driver.instant_citation(&mut item);
-            let mut buf = String::new();
+            let citation = driver.citation(CitationRequest::new(
+                items, &style, None, &en_locale, None, None,
+            ));
+            // let mut buf = String::new();
 
-            for e in citation.0 {
-                e.write_buf(&mut buf, BufWriteFormat::VT100).unwrap();
-            }
+            // for e in citation.0 {
+            //     e.write_buf(&mut buf, BufWriteFormat::VT100).unwrap();
+            // }
 
-            eprintln!("{}", buf);
+            // eprintln!("{}", buf);
         }
+
+        driver.finish(BibliographyRequest {
+            style: &style,
+            locale: None,
+            locale_files: &en_locale,
+        });
     }
 }

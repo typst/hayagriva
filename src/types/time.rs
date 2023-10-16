@@ -11,7 +11,7 @@ use unscanny::Scanner;
 use super::{derive_or_from_str, deserialize_from_str, serialize_display};
 
 /// A date that can be as coarse as a year and as fine-grained as a day.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Date {
     /// The year (1 B.C.E. is represented as 0 and so forth).
     pub year: i32,
@@ -313,7 +313,7 @@ impl Serialize for Date {
 }
 
 /// A duration.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Duration {
     /// Days (24 hours).
     pub days: u32,
@@ -457,7 +457,7 @@ impl Ord for Duration {
 }
 
 /// Errors that can occur when parsing a string to a duration
-#[derive(Clone, Copy, Error, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Error, Debug, PartialEq, Eq, Hash)]
 pub enum DurationError {
     /// The string is malformed.
     #[error("duration string malformed")]
@@ -498,7 +498,7 @@ impl Display for Duration {
 
 derive_or_from_str! {
     /// An half-open interval of durations.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct DurationRange where "two durations separated by a hyphen or a map with a `from` and `to` field" {
         /// The start of the interval.
         pub start: Duration,

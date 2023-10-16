@@ -227,7 +227,7 @@ macro_rules! entry {
         // Build the struct and make it serializable.
 
         /// A citable item in a bibliography.
-        #[derive(Debug, Clone, PartialEq, Serialize)]
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Hash)]
         pub struct Entry {
             /// The key of the entry.
             #[serde(skip)]

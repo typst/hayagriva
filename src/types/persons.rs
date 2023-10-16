@@ -16,7 +16,7 @@ use crate::util::{deserialize_one_or_many, serialize_one_or_many};
 use super::derive_or_from_str;
 
 /// A list of persons with a common role.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PersonsWithRoles {
     /// The persons.
     #[serde(serialize_with = "serialize_one_or_many")]
@@ -35,7 +35,7 @@ impl PersonsWithRoles {
 
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 #[serde(rename_all = "kebab-case")]
 pub enum PersonRole {

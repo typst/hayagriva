@@ -13,7 +13,7 @@ use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
 /// A string for presentation.
 ///
 /// It can contain an optional short version and control case folding.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct FormatString {
     /// The canonical version of the string.
     pub value: ChunkedString,
@@ -168,7 +168,7 @@ impl FromStr for FormatString {
 }
 
 /// A string whose elements can set whether they do case folding.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct ChunkedString(pub Vec<StringChunk>);
 
 impl<'de> Deserialize<'de> for ChunkedString {
@@ -459,7 +459,7 @@ impl From<StringChunk> for ChunkedString {
 }
 
 /// A chunk of a string.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringChunk {
     /// The string value.
     pub value: String,
@@ -541,7 +541,7 @@ impl StringChunk {
 }
 
 /// The kind of a string chunk.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum ChunkKind {
     /// Case-folding will be applied.
     #[default]

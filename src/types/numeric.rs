@@ -13,7 +13,7 @@ use unscanny::Scanner;
 use super::MaybeTyped;
 
 /// A numeric value that can be pluralized.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Numeric {
     /// The numeric value.
     pub value: NumericValue,
@@ -362,7 +362,7 @@ impl Display for Numeric {
 }
 
 /// The numeric value.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NumericValue {
     /// A single number.
     Number(i32),
@@ -411,7 +411,7 @@ impl NumericValue {
 }
 
 /// Delimits individual numbers in a numeric value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NumericDelimiter {
     /// A comma.
     Comma,
