@@ -1,6 +1,8 @@
+use core::fmt;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::hash_map::Entry as HmEntry;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
@@ -8,8 +10,8 @@ use std::{mem, vec};
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, Citation, CslMacro, Display, IndependentStyle,
-    InheritableNameOptions, Locale, LocaleCode, SecondFieldAlign, StyleClass, TermForm,
-    ToFormatting,
+    InheritableNameOptions, Locale, LocaleCode, RendersYearSuffix, SecondFieldAlign,
+    StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -31,12 +33,28 @@ use taxonomy::resolve_date_variable;
 use self::elem::{
     simplify_children, ElemChild, ElemChildren, ElemMeta, Formatting, NonEmptyStack,
 };
+use self::rendering::names::NameDisambiguationProperties;
 
 /// This struct formats a set of citations according to a style.
 #[derive(Debug, Default)]
 pub struct BibliographyDriver<'a> {
     /// The citations we have seen so far.
     citations: Vec<CitationRequest<'a>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct SpeculativeItemRender<'a> {
+    rendered: ElemChildren,
+    entry: &'a Entry,
+    cite_props: CiteProperties<'a>,
+    checked_disambiguate: bool,
+    first_name: Option<NameDisambiguationProperties>,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct SpeculativeCiteRender<'a, 'b> {
+    items: Vec<SpeculativeItemRender<'a>>,
+    request: &'b CitationRequest<'a>,
 }
 
 impl<'a> BibliographyDriver<'a> {
@@ -116,7 +134,7 @@ impl<'a> BibliographyDriver<'a> {
     /// Render the bibliography.
     pub fn finish(self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
-        //     order.
+        //     order and render them a first time without their locators.
         let bib_style = request.style();
 
         // Only remember each entry once, even if it is cited multiple times.
@@ -136,19 +154,6 @@ impl<'a> BibliographyDriver<'a> {
         let citation_number = |item: &Entry| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
         };
-
-        #[derive(Debug)]
-        struct SpeculativeItemRender<'a> {
-            rendered: ElemChildren,
-            entry: &'a Entry,
-            cite_props: CiteProperties<'a>,
-        }
-
-        #[derive(Debug)]
-        struct SpeculativeCiteRender<'a, 'b> {
-            items: Vec<SpeculativeItemRender<'a>>,
-            request: &'b CitationRequest<'a>,
-        }
 
         let mut seen: HashSet<&Entry> = HashSet::new();
         let mut res: Vec<SpeculativeCiteRender> = Vec::new();
@@ -189,20 +194,23 @@ impl<'a> BibliographyDriver<'a> {
                         first_note_number,
                         is_near_note,
                         is_first: seen.insert(entry),
-                        locator: item.locator,
                     },
                     speculative: SpeculativeCiteProperties::speculate(
+                        None,
                         citation_number(entry),
                         IbidState::with_last(item, last_cite),
                     ),
                 };
 
-                let mut ctx = style.ctx(entry, cite_props);
+                let mut ctx = style.ctx(entry, cite_props.clone());
+                ctx.writing.push_name_options(&style.csl.citation.name_options);
                 style.csl.citation.layout.render(&mut ctx);
                 renders.push(SpeculativeItemRender {
-                    rendered: ctx.flush(),
                     entry,
                     cite_props,
+                    checked_disambiguate: ctx.writing.checked_disambiguate,
+                    first_name: ctx.writing.first_name.clone(),
+                    rendered: ctx.flush(),
                 });
 
                 last_cite = Some(item);
@@ -212,12 +220,250 @@ impl<'a> BibliographyDriver<'a> {
         }
 
         // 2.  Disambiguate the citations.
+        //
+        // If we have set the disambiguation state for an item, we need to set
+        // the same state for all entries referencing that item.
+        for _ in 0..5 {
+            let ambiguous = find_ambiguous_sets(&res);
+            if ambiguous.is_empty() {
+                break;
+            }
+
+            let mut rerender: HashMap<*const Entry, DisambiguateState> = HashMap::new();
+            let mark = |map: &mut HashMap<*const Entry, DisambiguateState>,
+                        entry: &Entry,
+                        state: DisambiguateState| {
+                map.entry(entry)
+                    .and_modify(|e| *e = e.clone().max(state.clone()))
+                    .or_insert(state);
+            };
+
+            for group in ambiguous.iter() {
+                // 2a. Name Disambiguation loop
+                if bib_style.csl.citation.disambiguate_add_givenname {
+                    disambiguate_names(&res, group, |entry, state| {
+                        mark(&mut rerender, entry, state)
+                    });
+                }
+
+                // Do not try other methods if the previous method succeeded.
+                if !rerender.is_empty() {
+                    continue;
+                }
+
+                // 2b. Disambiguate by allowing `cs:choose` disambiguation.
+                disambiguate_with_choose(&res, group, |entry, state| {
+                    mark(&mut rerender, entry, state)
+                });
+
+                if !rerender.is_empty() {
+                    continue;
+                }
+
+                // 2c. Disambiguate by year-suffix.
+                disambiguate_year_suffix(&res, group, |entry, state| {
+                    mark(&mut rerender, entry, state)
+                });
+            }
+
+            if rerender.is_empty() {
+                break;
+            }
+
+            for cite in res.iter_mut() {
+                let style_ctx = cite.request.style();
+                for item in cite.items.iter_mut() {
+                    if let Some(state) = rerender.get(&(item.entry as _)) {
+                        item.cite_props.speculative.disambiguation = state.clone();
+                        item.rendered =
+                            style_ctx.citation(item.entry, item.cite_props.clone());
+                    }
+                }
+            }
+        }
+
+        for render in res.iter() {
+            print!("{}", render.request.prefix().unwrap_or_default());
+            let mut first = true;
+            for item in render.items.iter() {
+                if !first {
+                    if let Some(delim) = &render.request.style.citation.layout.delimiter {
+                        print!("{}", delim);
+                    }
+                }
+
+                let mut buf = String::new();
+                item.rendered.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
+                print!("{}", buf);
+                first = false;
+            }
+            println!("{}", render.request.suffix().unwrap_or_default());
+        }
+
         // 3.  Group adjacent citations.
         // 3a. Collapse grouped citations.
         // 4.  Add affixes.
 
         todo!()
     }
+}
+
+type AmbiguousGroup = Vec<(usize, usize)>;
+
+/// Progressively transform names to disambiguate them.
+fn disambiguate_names<F>(
+    renders: &[SpeculativeCiteRender<'_, '_>],
+    group: &AmbiguousGroup,
+    mut mark: F,
+) where
+    F: FnMut(&Entry, DisambiguateState),
+{
+    for &(cite_idx, item_idx) in group.iter() {
+        let style = renders[cite_idx].request.style;
+        let item = &renders[cite_idx].items[item_idx];
+
+        if !item.cite_props.speculative.disambiguation.may_disambiguate_names() {
+            continue;
+        }
+
+        if let Some(name_props) = &item.first_name {
+            let mut name_props = name_props.clone();
+            name_props.disambiguate(
+                style.citation.givenname_disambiguation_rule,
+                style.citation.disambiguate_add_names,
+            );
+            mark(item.entry, DisambiguateState::NameDisambiguation(name_props))
+        }
+    }
+}
+
+/// Mark qualifying entries for disambiguation with `cs:choose`.
+fn disambiguate_with_choose<F>(
+    renders: &[SpeculativeCiteRender<'_, '_>],
+    group: &AmbiguousGroup,
+    mut mark: F,
+) where
+    F: FnMut(&Entry, DisambiguateState),
+{
+    if group.iter().any(|&(cite_idx, item_idx)| {
+        renders[cite_idx].items[item_idx].checked_disambiguate
+            && renders[cite_idx].items[item_idx]
+                .cite_props
+                .speculative
+                .disambiguation
+                .may_disambiguate_with_choose()
+    }) {
+        // Do not set this for the first qualifying entry.
+        let mut armed = false;
+
+        for &(cite_idx, item_idx) in group.iter() {
+            let item = &renders[cite_idx].items[item_idx];
+            if item.checked_disambiguate {
+                if armed {
+                    mark(item.entry, DisambiguateState::Choose);
+                } else {
+                    armed = true;
+                }
+            }
+        }
+    }
+}
+
+/// Mark qualifying entries for disambiguation with year suffixes.
+fn disambiguate_year_suffix<F>(
+    renders: &[SpeculativeCiteRender<'_, '_>],
+    group: &AmbiguousGroup,
+    mut mark: F,
+) where
+    F: FnMut(&Entry, DisambiguateState),
+{
+    if group.iter().any(|&(cite_idx, item_idx)| {
+        renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
+            && renders[cite_idx].items[item_idx]
+                .cite_props
+                .speculative
+                .disambiguation
+                .may_disambiguate_with_year_suffix()
+    }) {
+        let mut entries = Vec::new();
+        for &(cite_idx, item_idx) in group.iter() {
+            let item = &renders[cite_idx].items[item_idx];
+            if item
+                .cite_props
+                .speculative
+                .disambiguation
+                .may_disambiguate_with_year_suffix()
+                && !entries.contains(&item.entry)
+            {
+                entries.push(item.entry);
+            }
+        }
+
+        // Assign year suffixes.
+        for (i, entry) in entries.into_iter().enumerate() {
+            mark(entry, DisambiguateState::YearSuffix(i as u8));
+        }
+    }
+}
+
+/// Return a vector of that contains every group of mutually ambiguous items
+/// with cite and item index.
+fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum PotentialDisambiguation {
+        /// Two usizes for an item that produced this string.
+        Single((usize, usize)),
+        /// There were multiple matches. This is the index in the result vector.
+        Match(usize),
+    }
+
+    let mut map: HashMap<String, PotentialDisambiguation> = HashMap::new();
+    let mut res: Vec<Vec<(usize, usize)>> = Vec::new();
+
+    for (i, cite) in cites.iter().enumerate() {
+        for (j, item) in cite.items.iter().enumerate() {
+            if !item
+                .cite_props
+                .speculative
+                .disambiguation
+                .may_disambiguate_with_year_suffix()
+            {
+                // There is nothing we can do.
+                continue;
+            }
+
+            let mut buf = String::new();
+            item.rendered.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
+            match map.entry(buf) {
+                HmEntry::Occupied(entry) => match *entry.get() {
+                    PotentialDisambiguation::Single(pos) => {
+                        *entry.into_mut() = PotentialDisambiguation::Match(res.len());
+                        res.push(vec![pos, (i, j)]);
+                    }
+                    PotentialDisambiguation::Match(idx) => {
+                        res[idx].push((i, j));
+                    }
+                },
+                HmEntry::Vacant(vacant) => {
+                    vacant.insert(PotentialDisambiguation::Single((i, j)));
+                }
+            }
+        }
+    }
+
+    // Only return items if not every item points to the same entry.
+    res.into_iter()
+        .filter(|e| {
+            let Some(first_entry) =
+                e.first().map(|(cite, item)| cites[*cite].items[*item].entry)
+            else {
+                return false;
+            };
+
+            e.iter()
+                .any(|(cite, item)| cites[*cite].items[*item].entry != first_entry)
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -261,7 +507,7 @@ pub struct RenderedCitation {
 }
 
 /// A context that contains all information related to rendering a single entry.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct InstanceContext<'a> {
     // Entry-dependent data.
     /// The current entry.
@@ -327,6 +573,7 @@ impl<'a> StyleContext<'a> {
         }
     }
 
+    /// Render the given item within a citation.
     fn citation(&self, entry: &Entry, props: CiteProperties<'a>) -> ElemChildren {
         let mut ctx = self.ctx(entry, props);
         ctx.writing.push_name_options(&self.csl.citation.name_options);
@@ -334,15 +581,30 @@ impl<'a> StyleContext<'a> {
         ctx.flush()
     }
 
+    /// Return the locale to use for this style.
     fn locale(&self) -> LocaleCode {
         self.locale_override
             .clone()
             .or_else(|| self.csl.default_locale.clone())
             .unwrap_or_else(LocaleCode::en_us)
     }
+
+    /// Checks that neither the bibliography nor the citation layout render the
+    /// year suffix.
+    fn renders_year_suffix_implicitly(&self) -> bool {
+        self.csl.citation.layout.renders_year_suffix(&self.csl.macros)
+            == RendersYearSuffix::No
+            && self
+                .csl
+                .bibliography
+                .as_ref()
+                .map(|b| b.layout.renders_year_suffix(&self.csl.macros))
+                .unwrap_or_default()
+                == RendersYearSuffix::No
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct CitationRequest<'a> {
     pub items: Vec<CitationItem<'a>>,
     style: &'a IndependentStyle,
@@ -385,6 +647,42 @@ impl<'a> CitationRequest<'a> {
     fn style(&self) -> StyleContext<'a> {
         StyleContext::new(self.style, self.locale.clone(), self.locale_files)
     }
+
+    fn prefix(&self) -> Option<CharOrSlice<'a>> {
+        if let Some(o) = self.affix_override {
+            o.left().map(CharOrSlice::Char)
+        } else {
+            self.style.citation.layout.prefix.as_deref().map(CharOrSlice::Slice)
+        }
+    }
+
+    fn suffix(&self) -> Option<CharOrSlice<'a>> {
+        if let Some(o) = self.affix_override {
+            o.right().map(CharOrSlice::Char)
+        } else {
+            self.style.citation.layout.suffix.as_deref().map(CharOrSlice::Slice)
+        }
+    }
+}
+
+enum CharOrSlice<'a> {
+    Char(char),
+    Slice(&'a str),
+}
+
+impl Default for CharOrSlice<'_> {
+    fn default() -> Self {
+        Self::Slice("")
+    }
+}
+
+impl fmt::Display for CharOrSlice<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CharOrSlice::Char(c) => c.fmt(f),
+            CharOrSlice::Slice(s) => s.fmt(f),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -414,7 +712,7 @@ impl<'a> BibliographyRequest<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CitationItem<'a> {
     /// The entry to format.
     pub entry: &'a Entry,
@@ -511,6 +809,11 @@ pub(crate) struct WritingContext {
     suppress_queried_variables: bool,
     /// Suppressed variables that must not be rendered.
     suppressed_variables: RefCell<Vec<Variable>>,
+    /// Whether this render has checked for `disambiguate` in `cs:choose`.
+    checked_disambiguate: bool,
+    /// The disambiguation-relevant properties of the first `cs:name` element.
+    /// This is `None` if no `cs:name` elements were rendered.
+    first_name: Option<NameDisambiguationProperties>,
 
     // Inheritable settings.
     /// A stack of formatting. Always contains the format of the root layout
@@ -698,7 +1001,9 @@ impl WritingContext {
 
     /// Ensure that the buffer is either empty or the last character is a space.
     pub fn ensure_space(&mut self) {
-        if !self.buf.is_empty() && !self.buf.ends_with(' ') {
+        if (!self.buf.is_empty() || self.elem_stack.iter().any(|e| !e.is_empty()))
+            && !self.buf.ends_with(' ')
+        {
             self.buf.push(' ');
         }
     }
@@ -823,6 +1128,21 @@ impl WritingContext {
     fn last_is_empty(&self) -> bool {
         !self.buf.has_content() && !self.elem_stack.last().has_content()
     }
+
+    /// Write the [`NameDisambiguationProperties`] that the first `cs:name`
+    /// element used. Do not change if this is not the first `cs:name` element.
+    /// Returns whether this was the first `cs:name` element.
+    fn first_name_properties<F>(&mut self, f: F) -> bool
+    where
+        F: FnOnce() -> NameDisambiguationProperties,
+    {
+        if self.first_name.is_none() {
+            self.first_name = Some(f());
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub(crate) struct Context<'a> {
@@ -831,17 +1151,18 @@ pub(crate) struct Context<'a> {
     writing: WritingContext,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CiteProperties<'a> {
-    pub certain: CertainCiteProperties<'a>,
-    pub speculative: SpeculativeCiteProperties,
+    pub certain: CertainCiteProperties,
+    pub speculative: SpeculativeCiteProperties<'a>,
 }
 
 impl<'a> CiteProperties<'a> {
     fn for_sorting(locator: Option<SpecificLocator<'a>>, citation_number: usize) -> Self {
         Self {
-            certain: CertainCiteProperties::with_locator(locator),
+            certain: CertainCiteProperties::new(),
             speculative: SpeculativeCiteProperties::speculate(
+                locator,
                 citation_number,
                 IbidState::Different,
             ),
@@ -851,8 +1172,8 @@ impl<'a> CiteProperties<'a> {
 
 /// Item properties that can be determined before the first render of a
 /// citation or bibliography entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CertainCiteProperties<'a> {
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+struct CertainCiteProperties {
     /// The number of the footnote this citation appears in.
     ///
     /// We can determine this because it depends on citation order only. May be
@@ -868,26 +1189,23 @@ struct CertainCiteProperties<'a> {
     /// Only depends on insertion order. The entry cannot be switched with
     /// itself during cite grouping.
     pub is_first: bool,
-    /// Locator with its type.
-    pub locator: Option<SpecificLocator<'a>>,
 }
 
-impl<'a> CertainCiteProperties<'a> {
-    fn with_locator(locator: Option<SpecificLocator<'a>>) -> Self {
-        Self {
-            locator,
-            first_note_number: None,
-            note_number: None,
-            is_near_note: false,
-            is_first: false,
-        }
+impl CertainCiteProperties {
+    fn new() -> Self {
+        Self::default()
     }
 }
 
 /// Item properies that can only be determined after one or multiple renders.
 /// These require validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SpeculativeCiteProperties {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SpeculativeCiteProperties<'a> {
+    /// Locator with its type.
+    ///
+    /// This will be none during the first render because it would interfere
+    /// with disambiguation otherwise.
+    pub locator: Option<SpecificLocator<'a>>,
     /// The position the item appears at in the bibliography.
     ///
     /// We can determine this using bibliography sort and cite order once we
@@ -905,11 +1223,16 @@ struct SpeculativeCiteProperties {
     pub disambiguation: DisambiguateState,
 }
 
-impl SpeculativeCiteProperties {
+impl<'a> SpeculativeCiteProperties<'a> {
     /// We can guess about the [`IbidState`] under the assumption that neither
     /// this item nor its predecessors will be subject to cite grouping.
-    fn speculate(citation_number: usize, ibid: IbidState) -> Self {
+    fn speculate(
+        locator: Option<SpecificLocator<'a>>,
+        citation_number: usize,
+        ibid: IbidState,
+    ) -> Self {
         Self {
+            locator,
             citation_number,
             ibid,
             disambiguation: DisambiguateState::None,
@@ -917,14 +1240,50 @@ impl SpeculativeCiteProperties {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DisambiguateState {
     None,
-    Disambiguation,
+    NameDisambiguation(NameDisambiguationProperties),
+    Choose,
     YearSuffix(u8),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl DisambiguateState {
+    /// Name disambiguation can be iterated upon, so we can stay here.
+    fn may_disambiguate_names(&self) -> bool {
+        matches!(self, Self::None | Self::NameDisambiguation(_))
+    }
+
+    /// We can only disambiguate with choose once.
+    fn may_disambiguate_with_choose(&self) -> bool {
+        matches!(self, Self::None | Self::NameDisambiguation(_))
+    }
+
+    /// We can only disambiguate with year suffix once.
+    fn may_disambiguate_with_year_suffix(&self) -> bool {
+        matches!(self, Self::None | Self::NameDisambiguation(_) | Self::Choose)
+    }
+
+    /// Return the more advanced disambiguation state between the two.
+    fn max(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::None, other) => other,
+            (self_, Self::None) => self_,
+            (Self::NameDisambiguation(a), Self::NameDisambiguation(b)) => {
+                Self::NameDisambiguation(a.max(b))
+            }
+            (Self::NameDisambiguation(_), other) => other,
+            (self_, Self::NameDisambiguation(_)) => self_,
+            (Self::Choose, other) => other,
+            (self_, Self::Choose) => self_,
+            (Self::YearSuffix(a), Self::YearSuffix(b)) => Self::YearSuffix(a.max(b)),
+            (Self::YearSuffix(_), other) => other,
+            (self_, Self::YearSuffix(_)) => self_,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IbidState {
     /// The previous cite referenced another entry.
     Different,
@@ -957,7 +1316,7 @@ impl IbidState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SpecificLocator<'a>(Locator, &'a str);
 
 impl<'a> Context<'a> {
@@ -1193,6 +1552,7 @@ impl<'a> Context<'a> {
         &self,
         variable: csl_taxonomy::NumberVariable,
     ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
+        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_number_variable(variable);
 
@@ -1210,6 +1570,7 @@ impl<'a> Context<'a> {
         form: LongShortForm,
         variable: csl_taxonomy::StandardVariable,
     ) -> Option<Cow<'a, ChunkedString>> {
+        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_standard_variable(form, variable);
 
@@ -1226,6 +1587,7 @@ impl<'a> Context<'a> {
         &self,
         variable: csl_taxonomy::DateVariable,
     ) -> Option<&'a Date> {
+        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         self.writing.prepare_variable_query(variable)?;
         let res = resolve_date_variable(self.instance.entry, variable);
 
@@ -1242,6 +1604,7 @@ impl<'a> Context<'a> {
         &self,
         variable: csl_taxonomy::NameVariable,
     ) -> Vec<&'a Person> {
+        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         if self.writing.prepare_variable_query(variable).is_none() {
             return Vec::new();
         }
@@ -1264,6 +1627,12 @@ impl<'a> Context<'a> {
     /// Delete any prefix if not.
     fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
         self.writing.apply_suffix(affixes, loc)
+    }
+
+    /// Test whether this entry should disambiguate via `cs:choose`.
+    fn should_disambiguate(&mut self) -> bool {
+        self.writing.checked_disambiguate = true;
+        self.instance.cite_props.speculative.disambiguation == DisambiguateState::Choose
     }
 }
 
@@ -1318,7 +1687,7 @@ impl UsageInfo {
 }
 
 /// Describes the bracket preference of a citation style.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Brackets {
     /// "(...)" Parentheses.
     Round,
@@ -1349,7 +1718,7 @@ impl Brackets {
 }
 
 /// A special citation form to use for the [`CitationItem`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SpecialForm {
     AuthorOnly,
     SuppressAuthor,
@@ -1388,6 +1757,12 @@ mod tests {
             let citation = driver.citation(CitationRequest::new(
                 items, &style, None, &en_locale, None, None,
             ));
+
+            // driver.finish(BibliographyRequest {
+            //     style: &style,
+            //     locale: None,
+            //     locale_files: &en_locale,
+            // });
             // let mut buf = String::new();
 
             // for e in citation.0 {

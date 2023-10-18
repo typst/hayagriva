@@ -2,11 +2,12 @@ use std::fmt;
 use std::mem;
 use std::num::NonZeroUsize;
 
+use citationberg::taxonomy::NameVariable;
 use citationberg::{
     Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Elem {
     pub children: ElemChildren,
     pub display: Option<Display>,
@@ -105,7 +106,7 @@ pub(super) fn simplify_children(children: ElemChildren) -> ElemChildren {
 }
 
 /// Which CSL construct created an element.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ElemMeta {
     /// The element is the output of `cs:names`.
     Names,
@@ -113,10 +114,13 @@ pub enum ElemMeta {
     Date,
     /// The element is the output of `cs:number (variable="citation-number")`.
     CitationNumber,
+    /// The element is the output of a single name.
+    /// It notes which name variable was used and the index within the variable.
+    Name(NameVariable, usize),
 }
 
 /// A container for element children with useful methods.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct ElemChildren(pub(super) Vec<ElemChild>);
 
 impl ElemChildren {
@@ -170,9 +174,21 @@ impl ElemChildren {
 
         None
     }
+
+    /// Write the children to the given buffer.
+    pub fn write_buf(
+        &self,
+        w: &mut impl fmt::Write,
+        format: BufWriteFormat,
+    ) -> Result<(), fmt::Error> {
+        for child in &self.0 {
+            child.write_buf(w, format)?;
+        }
+        Ok(())
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ElemChild {
     Text(Formatted),
     Elem(Elem),
@@ -253,7 +269,7 @@ pub enum BufWriteFormat {
     HTML,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Formatted {
     pub text: String,
     pub formatting: Formatting,
@@ -273,7 +289,7 @@ impl Formatted {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Formatting {
     pub font_style: FontStyle,
     pub font_variant: FontVariant,

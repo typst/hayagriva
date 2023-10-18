@@ -57,7 +57,7 @@ impl<'a> InstanceContext<'a> {
                 self.entry.map(|e| e.issue()).map(MaybeTyped::to_cow)
             }
             NumberVariable::Locator => {
-                let l = self.cite_props.certain.locator?.1;
+                let l = self.cite_props.speculative.locator?.1;
                 Some(
                     Numeric::from_str(l)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
