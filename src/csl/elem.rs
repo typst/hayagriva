@@ -181,6 +181,31 @@ impl ElemChildren {
         None
     }
 
+    /// Remove the first child with a matching meta by DFS.
+    pub(super) fn remove_meta(&mut self, meta: ElemMeta) -> bool {
+        for i in 0..self.0.len() {
+            if let ElemChild::Elem(e) = &mut self.0[i] {
+                if e.meta == Some(meta) {
+                    self.0.remove(i);
+                    return true;
+                }
+
+                if e.children.remove_meta(meta) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    pub(super) fn last_text_mut(&mut self) -> Option<&mut String> {
+        self.0.last_mut().and_then(|c| match c {
+            ElemChild::Text(t) => Some(&mut t.text),
+            ElemChild::Elem(e) => e.children.last_text_mut(),
+        })
+    }
+
     /// Write the children to the given buffer.
     pub fn write_buf(
         &self,
@@ -466,6 +491,14 @@ impl<T> NonEmptyStack<T> {
             Some(&self.last)
         } else {
             self.head.get(idx)
+        }
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
+        if idx == self.head.len() {
+            Some(&mut self.last)
+        } else {
+            self.head.get_mut(idx)
         }
     }
 

@@ -9,9 +9,9 @@ use std::{mem, vec};
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, Citation, CslMacro, Display, IndependentStyle,
-    InheritableNameOptions, Locale, LocaleCode, RendersYearSuffix, SecondFieldAlign,
-    StyleClass, TermForm, ToFormatting,
+    taxonomy as csl_taxonomy, Affixes, Citation, Collapse, CslMacro, Display,
+    IndependentStyle, InheritableNameOptions, Locale, LocaleCode, RendersYearSuffix,
+    SecondFieldAlign, StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -50,6 +50,10 @@ struct SpeculativeItemRender<'a> {
     checked_disambiguate: bool,
     first_name: Option<NameDisambiguationProperties>,
     delim_override: Option<&'a str>,
+    group_idx: Option<usize>,
+    locator: Option<SpecificLocator<'a>>,
+    hidden: bool,
+    locale: Option<LocaleCode>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -155,7 +159,7 @@ impl<'a> BibliographyDriver<'a> {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
         };
 
-        let mut seen: HashSet<&Entry> = HashSet::new();
+        let mut seen: HashSet<*const Entry> = HashSet::new();
         let mut res: Vec<SpeculativeCiteRender> = Vec::new();
         let mut last_cite: Option<&CitationItem> = None;
 
@@ -193,7 +197,7 @@ impl<'a> BibliographyDriver<'a> {
                         note_number: citation.note_number,
                         first_note_number,
                         is_near_note,
-                        is_first: seen.insert(entry),
+                        is_first: seen.insert(*entry),
                     },
                     speculative: SpeculativeCiteProperties::speculate(
                         None,
@@ -202,16 +206,18 @@ impl<'a> BibliographyDriver<'a> {
                     ),
                 };
 
-                let mut ctx = style.ctx(entry, cite_props.clone());
-                ctx.writing.push_name_options(&style.csl.citation.name_options);
-                style.csl.citation.layout.render(&mut ctx);
+                let ctx = style.do_citation(entry, cite_props.clone());
                 renders.push(SpeculativeItemRender {
                     entry,
                     cite_props,
                     checked_disambiguate: ctx.writing.checked_disambiguate,
                     first_name: ctx.writing.first_name.clone(),
                     delim_override: None,
+                    group_idx: None,
+                    locator: item.locator,
                     rendered: ctx.flush(),
+                    hidden: item.hidden,
+                    locale: item.locale.clone(),
                 });
 
                 last_cite = Some(item);
@@ -286,8 +292,10 @@ impl<'a> BibliographyDriver<'a> {
             // This map contains the last index of each entry with this names
             // elem.
             let mut map: HashMap<String, usize> = HashMap::new();
+            let mut group_idx = 0;
 
             for i in 0..cite.items.len() {
+                let group = group_idx;
                 let Some(delim) =
                     cite.request.style.citation.cite_group_delimiter.as_deref().or_else(
                         || {
@@ -316,6 +324,7 @@ impl<'a> BibliographyDriver<'a> {
                     .entry(name_elem)
                     .and_modify(|i| {
                         prev = Some(*i);
+                        group_idx += 1;
                         *i += 1
                     })
                     .or_insert(i);
@@ -327,6 +336,7 @@ impl<'a> BibliographyDriver<'a> {
                 }
 
                 cite.items[target].delim_override = Some(delim);
+                cite.items[target].group_idx = Some(group);
                 if let Some(prev) = prev {
                     cite.items[prev].delim_override = None;
                 }
@@ -334,30 +344,173 @@ impl<'a> BibliographyDriver<'a> {
         }
 
         // 4. Render citations with locator.
-        // 5. Collapse grouped citations.
-        // 6. Add affixes.
-
-        for render in res.iter() {
-            print!("{}", render.request.prefix().unwrap_or_default());
-            for (i, item) in render.items.iter().enumerate() {
-                if i != 0 {
-                    if let Some(delim) = render
-                        .items
-                        .get(i - 1)
-                        .and_then(|i| i.delim_override)
-                        .or(render.request.style.citation.layout.delimiter.as_deref())
-                    {
-                        print!("{}", delim);
-                    }
+        // 4a. Make final calls on all [`SpeculativeCiteProperties`].
+        //     - Re-check for ibid.
+        for i in 0..res.len() {
+            for j in 0..res[i].items.len() {
+                // TODO filter is not hidden
+                let last = if j == 0 && i == 0 {
+                    None
+                } else if j == 0 {
+                    res[i - 1].items.last()
+                } else {
+                    Some(&res[i].items[j - 1])
                 }
+                .map(|l| CitationItem::with_locator(l.entry, l.locator));
 
-                let mut buf = String::new();
-                item.rendered.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
-                print!("{}", buf);
+                res[i].items[j].cite_props.speculative.ibid = IbidState::with_last(
+                    &CitationItem::with_locator(
+                        res[i].items[j].entry,
+                        res[i].items[j].locator,
+                    ),
+                    last.as_ref(),
+                );
+
+                //     - Add final locator
+                res[i].items[j].cite_props.speculative.locator =
+                    mem::take(&mut res[i].items[j].locator);
             }
-            println!("{}", render.request.suffix().unwrap_or_default());
         }
-        todo!()
+
+        //     - Determine final citation number if bibliography does not sort.
+        if bib_style
+            .csl
+            .bibliography
+            .as_ref()
+            .and_then(|b| b.sort.as_ref())
+            .is_none()
+        {
+            let mut seen: HashMap<*const Entry, usize> = HashMap::new();
+            let mut start = 0;
+            for cite in res.iter_mut() {
+                for item in cite.items.iter_mut() {
+                    item.cite_props.speculative.citation_number =
+                        *seen.entry(item.entry as _).or_insert_with(|| {
+                            let num = start;
+                            start += 1;
+                            num
+                        });
+                }
+            }
+        }
+
+        // Rerender.
+        let mut final_citations: Vec<RenderedCitation> = Vec::new();
+        for cite in res.iter_mut() {
+            let style_ctx = cite.request.style();
+            for item in cite.items.iter_mut() {
+                item.rendered = style_ctx.citation(item.entry, item.cite_props.clone());
+            }
+
+            // 5. Collapse grouped citations.
+            group_items(cite);
+
+            // 6. Add affixes.
+            let formatting = Formatting::default()
+                .apply(cite.request.style.citation.layout.to_formatting());
+
+            final_citations.push(RenderedCitation {
+                note_number: cite.request.note_number,
+                citation: {
+                    let mut elem_children: Vec<ElemChild> = Vec::new();
+                    if let Some(prefix) = cite.request.prefix() {
+                        elem_children.push(ElemChild::Text(Formatted {
+                            text: prefix.to_string(),
+                            formatting,
+                        }));
+                    }
+
+                    let mut last = None;
+                    for (i, item) in cite.items.iter().enumerate() {
+                        if item.hidden {
+                            continue;
+                        }
+
+                        if let Some(last) = last {
+                            if let Some(delim) = cite
+                                .items
+                                .get(last)
+                                .and_then(|i: &SpeculativeItemRender| i.delim_override)
+                                .or(cite
+                                    .request
+                                    .style
+                                    .citation
+                                    .layout
+                                    .delimiter
+                                    .as_deref())
+                            {
+                                elem_children.push(ElemChild::Text(Formatted {
+                                    text: delim.to_string(),
+                                    formatting,
+                                }));
+                            }
+                        }
+
+                        elem_children.extend(item.rendered.0.clone());
+                        last = Some(i);
+                    }
+
+                    if let Some(suffix) = cite.request.suffix() {
+                        elem_children.push(ElemChild::Text(Formatted {
+                            text: suffix.to_string(),
+                            formatting,
+                        }));
+                    }
+
+                    simplify_children(ElemChildren(elem_children))
+                },
+            })
+        }
+
+        let bib_render = if let Some(bibliography) = &request.style.bibliography {
+            let mut items = Vec::new();
+            for entry in entries.into_iter() {
+                let cited_item = res
+                    .iter()
+                    .flat_map(|cite| cite.items.iter())
+                    .find(|item| item.entry == entry.entry)
+                    .unwrap();
+
+                items.push(simplify_children(
+                    bib_style
+                        .bibliography(
+                            &entry.entry,
+                            CiteProperties {
+                                certain: cited_item.cite_props.certain.clone(),
+                                speculative: SpeculativeCiteProperties {
+                                    locator: None,
+                                    citation_number: cited_item
+                                        .cite_props
+                                        .speculative
+                                        .citation_number,
+                                    ibid: cited_item.cite_props.speculative.ibid,
+                                    disambiguation: cited_item
+                                        .cite_props
+                                        .speculative
+                                        .disambiguation
+                                        .clone(),
+                                },
+                            },
+                        )
+                        .unwrap(),
+                ))
+            }
+
+            Some(RenderedBibliography {
+                hanging_indent: bibliography.hanging_indent,
+                second_field_align: bibliography.second_field_align,
+                line_spacing: bibliography.line_spacing,
+                entry_spacing: bibliography.entry_spacing,
+                items,
+            })
+        } else {
+            None
+        };
+
+        Rendered {
+            bibliography: bib_render,
+            citations: final_citations,
+        }
     }
 }
 
@@ -528,12 +681,96 @@ fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
         .collect()
 }
 
+fn group_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
+    let style = &cite.request.style;
+
+    let after_collapse_delim = style
+        .citation
+        .after_collapse_delimiter
+        .as_deref()
+        .or(style.citation.layout.delimiter.as_deref());
+
+    match style.citation.collapse {
+        Some(Collapse::CitationNumber) if style.settings.class == StyleClass::InText => {
+            // Option with the start, end of the range and the next expected number.
+            let mut range_start: Option<(usize, usize, usize)> = None;
+
+            let end_range =
+                |items: &mut [SpeculativeItemRender<'a>],
+                 range_start: &mut Option<(usize, usize, usize)>| {
+                    if let &mut Some((start, end, _)) = range_start {
+                        if start < end {
+                            items[start].delim_override = after_collapse_delim;
+
+                            for item in &mut items[start + 1..=end] {
+                                item.hidden = true;
+                            }
+                        }
+                    }
+
+                    *range_start = None;
+                };
+
+            for i in 0..cite.items.len() {
+                if cite.items[i].hidden
+                    || cite.items[i].rendered.get_meta(ElemMeta::CitationNumber).is_none()
+                {
+                    end_range(&mut cite.items, &mut range_start);
+                    continue;
+                }
+
+                match range_start {
+                    Some((start, end, next))
+                        if end + 1 == i
+                            && cite.items[i].cite_props.speculative.citation_number
+                                == next =>
+                    {
+                        // Extend the range.
+                        range_start = Some((start, i, next + 1));
+                    }
+                    _ => {
+                        end_range(&mut cite.items, &mut range_start);
+                        range_start = Some((
+                            i,
+                            i,
+                            cite.items[i].cite_props.speculative.citation_number + 1,
+                        ));
+                    }
+                }
+            }
+        }
+        Some(Collapse::CitationNumber) => {}
+        Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
+            // Index of the group we are currently in.
+            let mut group_idx: Option<(usize, usize)> = None;
+            for i in 0..cite.items.len() {
+                match group_idx {
+                    Some((_, idx)) if Some(idx) == cite.items[i].group_idx => {
+                        // FIXME: Retains delimiter in names.
+                        cite.items[i].rendered.remove_meta(ElemMeta::Names);
+                    }
+                    Some((i, _)) => {
+                        cite.items[i].delim_override = after_collapse_delim;
+                        group_idx = cite.items[i].group_idx.map(|idx| (i, idx));
+                    }
+                    None => {
+                        group_idx = cite.items[i].group_idx.map(|idx| (i, idx));
+                    }
+                }
+            }
+
+            // TODO: Year Suffix and Year Suffix ranged.
+        }
+        None => {}
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Rendered {
     /// The bibliography items.
-    pub bibliography: RenderedBibliography,
+    pub bibliography: Option<RenderedBibliography>,
     /// The citation items.
-    pub citations: RenderedCitation,
+    pub citations: Vec<RenderedCitation>,
 }
 
 #[derive(Debug, Clone)]
@@ -637,10 +874,29 @@ impl<'a> StyleContext<'a> {
 
     /// Render the given item within a citation.
     fn citation(&self, entry: &Entry, props: CiteProperties<'a>) -> ElemChildren {
+        let ctx = self.do_citation(entry, props);
+        ctx.flush()
+    }
+
+    /// Render the given item within a citation.
+    fn do_citation<'b>(
+        &'b self,
+        entry: &'b Entry,
+        props: CiteProperties<'a>,
+    ) -> Context<'b> {
         let mut ctx = self.ctx(entry, props);
         ctx.writing.push_name_options(&self.csl.citation.name_options);
         self.csl.citation.layout.render(&mut ctx);
-        ctx.flush()
+        ctx
+    }
+
+    /// Render the given item within a bibliography.
+    fn bibliography(&self, entry: &Entry, props: CiteProperties) -> Option<ElemChildren> {
+        let mut ctx = self.ctx(entry, props);
+        ctx.writing
+            .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
+        self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
+        Some(ctx.flush())
     }
 
     /// Return the locale to use for this style.
@@ -785,7 +1041,7 @@ pub struct CitationItem<'a> {
     /// [`citationberg::Style::default_locale`].
     pub locale: Option<LocaleCode>,
     /// Whether this item will be included in the output.
-    pub hide: bool,
+    pub hidden: bool,
     /// Format the item in a special way.
     pub kind: Option<SpecialForm>,
 }
@@ -796,7 +1052,17 @@ impl<'a> CitationItem<'a> {
             entry,
             locator: None,
             locale: None,
-            hide: false,
+            hidden: false,
+            kind: None,
+        }
+    }
+
+    fn with_locator(entry: &'a Entry, locator: Option<SpecificLocator<'a>>) -> Self {
+        Self {
+            entry,
+            locator,
+            locale: None,
+            hidden: false,
             kind: None,
         }
     }
@@ -1361,7 +1627,7 @@ impl IbidState {
 
     fn with_last(this: &CitationItem, last: Option<&CitationItem>) -> Self {
         if let Some(last) = last {
-            if last.entry == this.entry {
+            if last.entry == this.entry && !last.hidden {
                 if last.locator == this.locator {
                     IbidState::Ibid
                 } else {
@@ -1809,12 +2075,13 @@ mod tests {
 
         let mut driver = BibliographyDriver::new().unwrap();
 
-        for n in (0..bib.len()).step_by(2) {
+        for n in (0..bib.len()).step_by(3) {
             let mut items = vec![
                 CitationItem::from_entry(bib.nth(n).unwrap()),
                 CitationItem::from_entry(bib.nth(n + 1).unwrap()),
+                CitationItem::from_entry(bib.nth(n + 2).unwrap()),
             ];
-            let citation = driver.citation(CitationRequest::new(
+            driver.citation(CitationRequest::new(
                 items, &style, None, &en_locale, None, None,
             ));
 
@@ -1832,10 +2099,14 @@ mod tests {
             // eprintln!("{}", buf);
         }
 
-        driver.finish(BibliographyRequest {
+        let finished = driver.finish(BibliographyRequest {
             style: &style,
             locale: None,
             locale_files: &en_locale,
         });
+
+        for cite in finished.citations {
+            println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
+        }
     }
 }

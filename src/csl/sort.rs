@@ -10,7 +10,10 @@ use crate::csl::rendering::RenderCsl;
 use crate::csl::taxonomy::{resolve_date_variable, resolve_name_variable};
 use crate::csl::BufWriteFormat;
 
-use super::{CitationItem, InstanceContext, StyleContext};
+use super::{
+    CitationItem, InstanceContext, SpeculativeCiteRender, SpeculativeItemRender,
+    StyleContext,
+};
 
 impl<'a> StyleContext<'a> {
     /// Retrieve the ordering of two entries according to the given sort key.
@@ -131,6 +134,32 @@ impl<'a> StyleContext<'a> {
                 let mut ordering = Ordering::Equal;
                 for key in &sort.keys {
                     ordering = self.cmp_entries(a, 0, b, 0, key);
+                    if ordering != Ordering::Equal {
+                        break;
+                    }
+                }
+                ordering
+            });
+        }
+    }
+
+    /// Sort speculative renders by the style's sort keys.
+    pub(super) fn sort_final(
+        &self,
+        renders: &mut [SpeculativeItemRender],
+        sort: Option<&Sort>,
+    ) {
+        if let Some(sort) = sort {
+            renders.sort_by(|a, b| {
+                let mut ordering = Ordering::Equal;
+                for key in &sort.keys {
+                    ordering = self.cmp_entries(
+                        &CitationItem::from_entry(a.entry),
+                        a.cite_props.speculative.citation_number,
+                        &CitationItem::from_entry(b.entry),
+                        b.cite_props.speculative.citation_number,
+                        key,
+                    );
                     if ordering != Ordering::Equal {
                         break;
                     }
