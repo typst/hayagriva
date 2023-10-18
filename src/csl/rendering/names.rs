@@ -100,24 +100,32 @@ pub struct NameDisambiguationProperties {
 impl NameDisambiguationProperties {
     /// Disambiguate the name further. Return none if the name cannot be
     /// disambiguated further.
-    pub fn disambiguate(&mut self, rule: DisambiguationRule, add_names: bool) -> bool {
+    pub fn disambiguate(
+        &mut self,
+        may_upgrade: bool,
+        rule: DisambiguationRule,
+        add_names: bool,
+    ) -> bool {
         let allow_full_first_name = rule.allows_full_first_names();
 
         for list in self.name_forms.iter_mut() {
             let mut idx = 0;
-            // First try to step an item that is `Some`.
-            for (i, form) in list.iter_mut().enumerate() {
-                if let Some(form) = form {
-                    if let Some(new_form) = form.disambiguate(allow_full_first_name) {
-                        *form = new_form;
-                        return true;
-                    }
 
-                    if !rule.allows_multiple_names() {
-                        return false;
-                    }
+            if may_upgrade {
+                // First try to step an item that is `Some`.
+                for (i, form) in list.iter_mut().enumerate() {
+                    if let Some(form) = form {
+                        if let Some(new_form) = form.disambiguate(allow_full_first_name) {
+                            *form = new_form;
+                            return true;
+                        }
 
-                    idx = i;
+                        if !rule.allows_multiple_names() {
+                            return false;
+                        }
+
+                        idx = i;
+                    }
                 }
             }
 
@@ -133,6 +141,29 @@ impl NameDisambiguationProperties {
         }
 
         false
+    }
+
+    /// Disambuiguate a list of identical names.
+    pub fn disambiguate_list(&mut self, variable: NameVariable, items: &[usize]) -> bool {
+        let mut change = false;
+        for &idx in items {
+            let Some(outer) = self.variables.iter().position(|v| v == &variable) else {
+                continue;
+            };
+
+            let form = &mut self.name_forms[outer][idx];
+            if let Some(form) = form {
+                if let Some(new_form) = form.disambiguate(true) {
+                    *form = new_form;
+                    change = true;
+                }
+            } else {
+                *form = Some(self.default_name_form);
+                change = true;
+            }
+        }
+
+        change
     }
 
     /// Return the more disambiguated form of the name.
@@ -282,6 +313,10 @@ impl RenderCsl for Names {
                 }
             }
         }
+
+        // TODO Compare each elem with a name meta and run
+        // [`NameDisambiguationProperties::disambiguate_list`] on the identical
+        // pairs. Rerender if necessary.
 
         ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));

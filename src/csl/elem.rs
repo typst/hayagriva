@@ -63,6 +63,12 @@ impl Elem {
         Ok(())
     }
 
+    pub(super) fn to_string(&self, format: BufWriteFormat) -> String {
+        let mut buf = String::new();
+        self.write_buf(&mut buf, format).unwrap();
+        buf
+    }
+
     pub(super) fn is_empty(&self) -> bool {
         if self.children.is_empty() {
             true
@@ -185,6 +191,12 @@ impl ElemChildren {
             child.write_buf(w, format)?;
         }
         Ok(())
+    }
+
+    pub(super) fn to_string(&self, format: BufWriteFormat) -> String {
+        let mut buf = String::new();
+        self.write_buf(&mut buf, format).unwrap();
+        buf
     }
 }
 

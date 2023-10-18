@@ -49,6 +49,7 @@ struct SpeculativeItemRender<'a> {
     cite_props: CiteProperties<'a>,
     checked_disambiguate: bool,
     first_name: Option<NameDisambiguationProperties>,
+    delim_override: Option<&'a str>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -76,7 +77,6 @@ impl<'a> BibliographyDriver<'a> {
         }
 
         let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
-        // TODO in-cite disambiguation.
 
         let formatting =
             Formatting::default().apply(style.csl.citation.layout.to_formatting());
@@ -210,6 +210,7 @@ impl<'a> BibliographyDriver<'a> {
                     cite_props,
                     checked_disambiguate: ctx.writing.checked_disambiguate,
                     first_name: ctx.writing.first_name.clone(),
+                    delim_override: None,
                     rendered: ctx.flush(),
                 });
 
@@ -240,11 +241,9 @@ impl<'a> BibliographyDriver<'a> {
 
             for group in ambiguous.iter() {
                 // 2a. Name Disambiguation loop
-                if bib_style.csl.citation.disambiguate_add_givenname {
-                    disambiguate_names(&res, group, |entry, state| {
-                        mark(&mut rerender, entry, state)
-                    });
-                }
+                disambiguate_names(&res, group, |entry, state| {
+                    mark(&mut rerender, entry, state)
+                });
 
                 // Do not try other methods if the previous method succeeded.
                 if !rerender.is_empty() {
@@ -282,12 +281,72 @@ impl<'a> BibliographyDriver<'a> {
             }
         }
 
+        // 3. Group adjacent citations.
+        for cite in res.iter_mut() {
+            // This map contains the last index of each entry with this names
+            // elem.
+            let mut map: HashMap<String, usize> = HashMap::new();
+
+            for i in 0..cite.items.len() {
+                let Some(delim) =
+                    cite.request.style.citation.cite_group_delimiter.as_deref().or_else(
+                        || {
+                            cite.request
+                                .style
+                                .citation
+                                .collapse
+                                .is_some()
+                                .then_some(Citation::DEFAULT_CITE_GROUP_DELIMITER)
+                        },
+                    )
+                else {
+                    continue;
+                };
+
+                let Some(name_elem) = cite.items[i]
+                    .rendered
+                    .get_meta(ElemMeta::Names)
+                    .map(|e| e.to_string(BufWriteFormat::Plain))
+                else {
+                    continue;
+                };
+
+                let mut prev = None;
+                let target = *map
+                    .entry(name_elem)
+                    .and_modify(|i| {
+                        prev = Some(*i);
+                        *i += 1
+                    })
+                    .or_insert(i);
+
+                let mut pos = i;
+                while target < pos {
+                    cite.items.swap(pos, pos - 1);
+                    pos -= 1;
+                }
+
+                cite.items[target].delim_override = Some(delim);
+                if let Some(prev) = prev {
+                    cite.items[prev].delim_override = None;
+                }
+            }
+        }
+
+        // 4. Render citations with locator.
+        // 5. Collapse grouped citations.
+        // 6. Add affixes.
+
         for render in res.iter() {
             print!("{}", render.request.prefix().unwrap_or_default());
-            let mut first = true;
-            for item in render.items.iter() {
-                if !first {
-                    if let Some(delim) = &render.request.style.citation.layout.delimiter {
+            for (i, item) in render.items.iter().enumerate() {
+                if i != 0 {
+                    if let Some(delim) = render
+                        .items
+                        .get(i - 1)
+                        .and_then(|i| i.delim_override)
+                        .or(render.request.style.citation.layout.delimiter.as_deref())
+                    {
                         print!("{}", delim);
                     }
                 }
@@ -295,15 +354,9 @@ impl<'a> BibliographyDriver<'a> {
                 let mut buf = String::new();
                 item.rendered.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
                 print!("{}", buf);
-                first = false;
             }
             println!("{}", render.request.suffix().unwrap_or_default());
         }
-
-        // 3.  Group adjacent citations.
-        // 3a. Collapse grouped citations.
-        // 4.  Add affixes.
-
         todo!()
     }
 }
@@ -326,13 +379,23 @@ fn disambiguate_names<F>(
             continue;
         }
 
-        if let Some(name_props) = &item.first_name {
+        let name_props_slot = if let DisambiguateState::NameDisambiguation(n) =
+            &item.cite_props.speculative.disambiguation
+        {
+            Some(n)
+        } else {
+            item.first_name.as_ref()
+        };
+
+        if let Some(name_props) = name_props_slot {
             let mut name_props = name_props.clone();
-            name_props.disambiguate(
+            if name_props.disambiguate(
+                style.citation.disambiguate_add_givenname,
                 style.citation.givenname_disambiguation_rule,
                 style.citation.disambiguate_add_names,
-            );
-            mark(item.entry, DisambiguateState::NameDisambiguation(name_props))
+            ) {
+                mark(item.entry, DisambiguateState::NameDisambiguation(name_props))
+            }
         }
     }
 }
@@ -432,8 +495,7 @@ fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
                 continue;
             }
 
-            let mut buf = String::new();
-            item.rendered.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
+            let buf = item.rendered.to_string(BufWriteFormat::Plain);
             match map.entry(buf) {
                 HmEntry::Occupied(entry) => match *entry.get() {
                     PotentialDisambiguation::Single(pos) => {
@@ -1277,8 +1339,6 @@ impl DisambiguateState {
             (Self::Choose, other) => other,
             (self_, Self::Choose) => self_,
             (Self::YearSuffix(a), Self::YearSuffix(b)) => Self::YearSuffix(a.max(b)),
-            (Self::YearSuffix(_), other) => other,
-            (self_, Self::YearSuffix(_)) => self_,
         }
     }
 }
