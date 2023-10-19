@@ -378,7 +378,7 @@ impl CaseFolder {
     pub fn push_verbatim(&mut self, value: &str) {
         let conf = mem::replace(&mut self.case, Case::NoTransform);
         self.last_reconfig = self.buf.len();
-        self.push_str(&value);
+        self.push_str(value);
         self.last_reconfig = self.buf.len();
         self.case = conf;
     }

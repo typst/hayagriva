@@ -323,14 +323,6 @@ impl<T: ToString> MaybeTyped<T> {
             MaybeTyped::String(s) => Cow::Borrowed(s),
         }
     }
-
-    /// Convert to a [`ChunkedString`].
-    pub(crate) fn to_chunked_string(&self) -> ChunkedString {
-        match self {
-            MaybeTyped::Typed(t) => StringChunk::verbatim(t.to_string()).into(),
-            MaybeTyped::String(s) => StringChunk::normal(s.clone()).into(),
-        }
-    }
 }
 
 impl<T> MaybeTyped<T>

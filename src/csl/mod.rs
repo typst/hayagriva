@@ -16,12 +16,17 @@ use citationberg::{
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
 
-use crate::csl::elem::{BufWriteFormat, Elem, Formatted};
+use crate::csl::elem::{simplify_children, NonEmptyStack};
+use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::rendering::RenderCsl;
 use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
 use crate::Entry;
+
+pub use self::elem::{
+    BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
+};
 
 mod elem;
 mod rendering;
@@ -29,11 +34,6 @@ mod sort;
 mod taxonomy;
 
 use taxonomy::resolve_date_variable;
-
-use self::elem::{
-    simplify_children, ElemChild, ElemChildren, ElemMeta, Formatting, NonEmptyStack,
-};
-use self::rendering::names::NameDisambiguationProperties;
 
 /// This struct formats a set of citations according to a style.
 #[derive(Debug, Default)]
@@ -65,8 +65,8 @@ struct SpeculativeCiteRender<'a, 'b> {
 
 impl<'a> BibliographyDriver<'a> {
     /// Create a new bibliography driver.
-    pub fn new() -> Option<Self> {
-        Some(Self::default())
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Create a new citation with the given items. Bibliography-wide
@@ -154,7 +154,7 @@ impl<'a> BibliographyDriver<'a> {
         }
 
         let mut entries: Vec<_> =
-            entry_set.into_iter().map(CitationItem::from_entry).collect();
+            entry_set.into_iter().map(CitationItem::with_entry).collect();
         bib_style.sort(
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
@@ -525,7 +525,16 @@ impl<'a> BibliographyDriver<'a> {
                 second_field_align: bibliography.second_field_align,
                 line_spacing: bibliography.line_spacing,
                 entry_spacing: bibliography.entry_spacing,
-                items,
+                items: items
+                    .into_iter()
+                    .map(|mut i| {
+                        if bibliography.second_field_align.is_some() {
+                            (i.remove_any_meta(), i)
+                        } else {
+                            (None, i)
+                        }
+                    })
+                    .collect(),
             })
         } else {
             None
@@ -798,6 +807,7 @@ fn collapse_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
     }
 }
 
+/// The result of [`BibliographyDriver::finish`].
 #[derive(Debug, Clone)]
 pub struct Rendered {
     /// The bibliography items.
@@ -806,6 +816,7 @@ pub struct Rendered {
     pub citations: Vec<RenderedCitation>,
 }
 
+/// A fully rendered bibliography.
 #[derive(Debug, Clone)]
 pub struct RenderedBibliography {
     /// Render the bibliography in a hanging indent.
@@ -816,13 +827,18 @@ pub struct RenderedBibliography {
     pub line_spacing: NonZeroI16,
     /// Extra space between entries as a multiple of line height.
     pub entry_spacing: i16,
-    /// The bibliography items.
-    pub items: Vec<ElemChildren>,
+    /// The bibliography items. The first item may be some if
+    /// [`second_field_align`] is set. Then, it is the first field that must be
+    /// treated specially.
+    pub items: Vec<(Option<ElemChild>, ElemChildren)>,
 }
 
+/// A fully rendered citation.
 #[derive(Debug, Clone)]
 pub struct RenderedCitation {
+    /// The footnote number for this citation.
     pub note_number: Option<usize>,
+    /// The citation.
     pub citation: ElemChildren,
 }
 
@@ -982,9 +998,12 @@ impl<'a> StyleContext<'a> {
     }
 }
 
+/// A citation request. A citation can contain references to multiple items.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct CitationRequest<'a> {
+    /// The items to format.
     pub items: Vec<CitationItem<'a>>,
+    /// Which style to use for the citation.
     style: &'a IndependentStyle,
     /// The requested locale for the style's terms.
     ///
@@ -1004,6 +1023,7 @@ pub struct CitationRequest<'a> {
 }
 
 impl<'a> CitationRequest<'a> {
+    /// Create a new citation request.
     pub fn new(
         items: Vec<CitationItem<'a>>,
         style: &'a IndependentStyle,
@@ -1020,6 +1040,15 @@ impl<'a> CitationRequest<'a> {
             note_number: note_number.filter(|_| style.settings.class == StyleClass::Note),
             affix_override,
         }
+    }
+
+    /// Create a new citation request without a note number.
+    pub fn from_items(
+        items: Vec<CitationItem<'a>>,
+        style: &'a IndependentStyle,
+        locale_files: &'a [Locale],
+    ) -> Self {
+        Self::new(items, style, None, locale_files, None, None)
     }
 
     fn style(&self) -> StyleContext<'a> {
@@ -1063,8 +1092,12 @@ impl fmt::Display for CharOrSlice<'_> {
     }
 }
 
+/// A request to render a bibliography. Use with [`BibliographyDriver::finish`].
 #[derive(Debug, PartialEq)]
 pub struct BibliographyRequest<'a> {
+    /// Which style to use for the bibliography. Some styles do not have a
+    /// bibliography, in which case the field of the [`Rendered`] will be
+    /// `None`.
     pub style: &'a IndependentStyle,
     /// The requested locale for the style's terms.
     ///
@@ -1077,6 +1110,7 @@ pub struct BibliographyRequest<'a> {
 }
 
 impl<'a> BibliographyRequest<'a> {
+    /// Create a new bibliography request.
     pub fn new(
         style: &'a IndependentStyle,
         locale: Option<LocaleCode>,
@@ -1090,6 +1124,7 @@ impl<'a> BibliographyRequest<'a> {
     }
 }
 
+/// A reference to an [`Entry`] within a [`CitationRequest`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CitationItem<'a> {
     /// The entry to format.
@@ -1107,7 +1142,8 @@ pub struct CitationItem<'a> {
 }
 
 impl<'a> CitationItem<'a> {
-    fn from_entry(entry: &'a Entry) -> Self {
+    /// Create a new citation item for the given entry.
+    pub fn with_entry(entry: &'a Entry) -> Self {
         Self {
             entry,
             locator: None,
@@ -1117,7 +1153,8 @@ impl<'a> CitationItem<'a> {
         }
     }
 
-    fn with_locator(entry: &'a Entry, locator: Option<SpecificLocator<'a>>) -> Self {
+    /// Create a new citation item with a locator for the given entry.
+    pub fn with_locator(entry: &'a Entry, locator: Option<SpecificLocator<'a>>) -> Self {
         Self {
             entry,
             locator,
@@ -1127,7 +1164,8 @@ impl<'a> CitationItem<'a> {
         }
     }
 
-    fn kind(mut self, kind: SpecialForm) -> Self {
+    /// Change the `kind` of this item.
+    pub fn kind(mut self, kind: SpecialForm) -> Self {
         self.kind = Some(kind);
         self
     }
@@ -1708,8 +1746,10 @@ impl IbidState {
     }
 }
 
+/// This struct allows to add context to where the information in a cite is
+/// found in the source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SpecificLocator<'a>(Locator, &'a str);
+pub struct SpecificLocator<'a>(pub Locator, pub &'a str);
 
 impl<'a> Context<'a> {
     /// Push a format on top of the stack if it is not empty.
@@ -1922,7 +1962,7 @@ impl<'a> Context<'a> {
         if let Some(localization) =
             self.style.lookup_locale(|l| l.term(term, TermForm::default()))
         {
-            return localization.gender;
+            localization.gender
         } else {
             None
         }
@@ -2157,7 +2197,9 @@ impl Brackets {
 /// A special citation form to use for the [`CitationItem`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpecialForm {
+    /// Only output the author.
     AuthorOnly,
+    /// Output everything but the author.
     SuppressAuthor,
 }
 
@@ -2165,7 +2207,6 @@ pub enum SpecialForm {
 mod tests {
     use citationberg::LocaleFile;
 
-    use crate::csl::elem::BufWriteFormat;
     use crate::io::from_yaml_str;
 
     use super::*;
@@ -2173,9 +2214,6 @@ mod tests {
 
     #[test]
     fn test_csl() {
-        let style = fs::read_to_string("tests/art-history.csl").unwrap();
-        let style = IndependentStyle::from_xml(&style).unwrap();
-
         let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
         let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
 
@@ -2183,39 +2221,55 @@ mod tests {
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 
-        let mut driver = BibliographyDriver::new().unwrap();
+        for style_thing in fs::read_dir("../styles/").unwrap().take(100) {
+            let thing = style_thing.unwrap();
+            if thing.file_type().unwrap().is_dir() {
+                continue;
+            }
 
-        for n in (0..bib.len()).step_by(2) {
-            let items = vec![
-                CitationItem::from_entry(bib.nth(n).unwrap()),
-                CitationItem::from_entry(bib.nth(n + 1).unwrap()),
-            ];
-            driver.citation(CitationRequest::new(
-                items, &style, None, &en_locale, None, None,
-            ));
+            let path = thing.path();
+            let extension = path.extension();
+            if let Some(extension) = extension {
+                if extension.to_str() != Some("csl") {
+                    continue;
+                }
+            } else {
+                continue;
+            }
 
-            // driver.finish(BibliographyRequest {
-            //     style: &style,
-            //     locale: None,
-            //     locale_files: &en_locale,
-            // });
-            // let mut buf = String::new();
+            println!("testing {:?}", path);
+            let style = fs::read_to_string(path).unwrap();
+            let style = IndependentStyle::from_xml(&style).unwrap();
+            let mut driver = BibliographyDriver::new();
 
-            // for e in citation.0 {
-            //     e.write_buf(&mut buf, BufWriteFormat::VT100).unwrap();
+            for n in (0..bib.len()).step_by(2) {
+                let items = vec![
+                    CitationItem::with_entry(bib.nth(n).unwrap()),
+                    CitationItem::with_entry(bib.nth(n + 1).unwrap()),
+                ];
+                driver.citation(CitationRequest::new(
+                    items, &style, None, &en_locale, None, None,
+                ));
+            }
+
+            driver.finish(BibliographyRequest {
+                style: &style,
+                locale: None,
+                locale_files: &en_locale,
+            });
+
+            // for cite in finished.citations {
+            //     println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
             // }
 
-            // eprintln!("{}", buf);
-        }
-
-        let finished = driver.finish(BibliographyRequest {
-            style: &style,
-            locale: None,
-            locale_files: &en_locale,
-        });
-
-        for cite in finished.citations {
-            println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
+            // if let Some(bib) = finished.bibliography {
+            //     for (prefix, item) in bib.items {
+            //         if let Some(prefix) = prefix {
+            //             print!("{} ", prefix.to_string(BufWriteFormat::Plain))
+            //         }
+            //         println!("{}", item.to_string(BufWriteFormat::Html))
+            //     }
+            // }
         }
     }
 }

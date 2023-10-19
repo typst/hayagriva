@@ -78,10 +78,6 @@ impl DisambiguatedNameForm {
         }
     }
 
-    pub fn is_short(self) -> bool {
-        matches!(self, Self::ShortFull | Self::ShortInitialized)
-    }
-
     pub fn is_long(self) -> bool {
         matches!(self, Self::LongFull | Self::LongInitialized)
     }
@@ -144,6 +140,9 @@ impl NameDisambiguationProperties {
     }
 
     /// Disambuiguate a list of identical names.
+    ///
+    /// TODO: Use for disambiguation of identical names.
+    #[allow(dead_code)]
     pub fn disambiguate_list(&mut self, variable: NameVariable, items: &[usize]) -> bool {
         let mut change = false;
         for &idx in items {

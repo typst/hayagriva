@@ -33,7 +33,7 @@ impl<'a> InstanceContext<'a> {
                 .and_then(Entry::volume)
                 .map(MaybeTyped::to_cow),
             NumberVariable::CitationNumber => Some(MaybeTyped::Typed(Cow::Owned(
-                Numeric::from(self.cite_props.speculative.citation_number as u32),
+                Numeric::from(self.cite_props.speculative.citation_number as u32 + 1),
             ))),
             NumberVariable::CollectionNumber => self
                 .entry

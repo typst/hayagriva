@@ -24,34 +24,15 @@ to install and use Hayagriva on your terminal.
 
 ## Supported styles
 
-- Institute of Electrical and Electronics Engineers (IEEE)
-    - References
-    - Numerical citations
-- Modern Language Association (MLA), 8th edition of the MLA Handbook
-    - "Works Cited" references
-- Chicago Manual of Style (CMoS), 17th edition
-    - Notes and Bibliography
-    - Author-Date references and citations
-- American Psychological Association (APA), 7th edition of the APA Publication Manual
-    - References
-- Other in-text citation styles
-    - Alphanumerical (e. g. "Rass97")
-    - Author Title
+Hayagriva supports all styles provided in the
+[official Citation Style Language repository](https://github.com/citation-style-language/styles),
+currently over 2,600. You must provide your own style file, which can be
+obtained there.
 
-## Usage
-
-Add this to your `Cargo.toml`:
-```toml
-[dependencies]
-hayagriva = "0.3"
-```
-
-Below, there is an example of how to parse a YAML database and get a Modern
-Language Association-style citation.
+# Usage
 
 ```rust
 use hayagriva::io::from_yaml_str;
-use hayagriva::style::{Database, Mla};
 
 let yaml = r#"
 crazy-rich:
@@ -68,17 +49,39 @@ let bib = from_yaml_str(yaml).unwrap();
 assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 
 // Format the reference
-let db = bib.database();
-let mut mla = Mla::new();
-let reference = db.bibliography(&mut mla, None);
-assert_eq!(reference[0].display.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
+use std::fs;
+use hayagriva::{
+    BibliographyDriver, BibliographyRequest, BufWriteFormat,
+    CitationItem, CitationRequest, LocaleFile, IndependentStyle
+};
+
+let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
+let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
+
+let style = fs::read_to_string("tests/art-history.csl").unwrap();
+let style = IndependentStyle::from_xml(&style).unwrap();
+
+let mut driver = BibliographyDriver::new();
+
+for entry in bib.iter() {
+    let items = vec![CitationItem::with_entry(entry)];
+    driver.citation(CitationRequest::from_items(items, &style, &locales));
+}
+
+let result = driver.finish(BibliographyRequest {
+    style: &style,
+    locale: None,
+    locale_files: &locales,
+});
+
+for cite in result.citations {
+    println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
+}
 ```
 
-Formatting for in-text citations is available through implementors of the
-`hayagriva::style::CitationStyle` trait whereas bibliographies can be created by
-`hayagriva::style::BibliographyStyle`. Both traits are used through
-`style::Database` which provides methods to format its records as bibliographies
-and citations.
+To format entries, you need to wrap them in a `CitationRequest`. Each of these
+can reference multiple entries in their respective `CitationItem`s.
+Use these with a `BibliographyDriver` to obtain formatted citations and bibliographies.
 
 If the default features are enabled, Hayagriva supports BibTeX and BibLaTeX
 bibliographies. You can use `io::from_biblatex_str` to parse such

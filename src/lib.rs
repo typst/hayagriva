@@ -1,6 +1,6 @@
 /*!
 Hayagriva provides a YAML-backed format and data model for various
-bibliography items as well as formatting for both in-text citations and
+bibliography items as well as a CSL processor formatting both in-text citations and
 reference lists based on these literature databases.
 
 The crate is intended to assist scholarly writing and reference management
@@ -11,19 +11,10 @@ Language Association-style citation.
 
 # Supported styles
 
-- Institute of Electrical and Electronics Engineers (IEEE)
-    - [References](style::Ieee)
-    - [Numerical citations](style::Numerical)
-- Modern Language Association (MLA), 8th edition of the MLA Handbook
-    - ["Works Cited" references](style::Mla)
-- Chicago Manual of Style (CMoS), 17th edition
-    - [Notes and Bibliography](style::ChicagoNotes)
-    - [Author-Date references and citations](style::ChicagoAuthorDate)
-- American Psychological Association (APA), 7th edition of the APA Publication Manual
-    - [References](style::Apa)
-- Other in-text citation styles
-    - [Alphanumerical](style::Alphanumerical) (e. g. "Rass97")
-    - [Author Title](style::AuthorTitle)
+Hayagriva supports all styles provided in the
+[official Citation Style Language repository](https://github.com/citation-style-language/styles),
+currently over 2,600. You must provide your own style file, which can be
+obtained there.
 
 # Usage
 
@@ -45,15 +36,39 @@ let bib = from_yaml_str(yaml).unwrap();
 assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 
 // Format the reference
-// TODO
+use std::fs;
+use hayagriva::{
+    BibliographyDriver, BibliographyRequest, BufWriteFormat,
+    CitationItem, CitationRequest, LocaleFile, IndependentStyle
+};
+
+let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
+let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
+
+let style = fs::read_to_string("tests/art-history.csl").unwrap();
+let style = IndependentStyle::from_xml(&style).unwrap();
+
+let mut driver = BibliographyDriver::new();
+
+for entry in bib.iter() {
+    let items = vec![CitationItem::with_entry(entry)];
+    driver.citation(CitationRequest::from_items(items, &style, &locales));
+}
+
+let result = driver.finish(BibliographyRequest {
+    style: &style,
+    locale: None,
+    locale_files: &locales,
+});
+
+for cite in result.citations {
+    println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
+}
 ```
 
-Formatting for in-text citations is available through implementors of the
-[`style::CitationStyle`] trait whereas bibliographies can be created by
-[`style::BibliographyStyle`]. Both traits are used through a
-[`style::Database`] which provides methods to format its records as
-bibliographies and citations using references to implementors to these
-traits.
+To format entries, you need to wrap them in a [`CitationRequest`]. Each of these
+can reference multiple entries in their respective [`CitationItem`]s.
+Use these with a [`BibliographyDriver`] to obtain formatted citations and bibliographies.
 
 If the default features are enabled, Hayagriva supports BibTeX and BibLaTeX
 bibliographies. You can use [`io::from_biblatex_str`] to parse such
@@ -132,10 +147,15 @@ pub mod lang;
 pub mod types;
 mod util;
 
-pub use csl::BibliographyDriver;
-use indexmap::IndexMap;
+pub use citationberg::{IndependentStyle, LocaleFile};
+pub use csl::{
+    BibliographyDriver, BibliographyRequest, Brackets, BufWriteFormat, CitationItem,
+    CitationRequest, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
+    Rendered, RenderedBibliography, RenderedCitation, SpecialForm, SpecificLocator,
+};
 pub use selectors::{Selector, SelectorError};
 
+use indexmap::IndexMap;
 use paste::paste;
 use serde::{de::Visitor, Deserialize, Serialize};
 use types::*;

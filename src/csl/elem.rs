@@ -7,18 +7,18 @@ use citationberg::{
     Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
 };
 
+/// A container for elements with useful methods.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Elem {
+    /// The children of this element.
     pub children: ElemChildren,
+    /// The inline or block display of this element.
     pub display: Option<Display>,
+    /// The CSL construct that created this element.
     pub meta: Option<ElemMeta>,
 }
 
 impl Elem {
-    pub(super) fn new(display: Option<Display>, meta: Option<ElemMeta>) -> Self {
-        Self { children: ElemChildren::new(), display, meta }
-    }
-
     pub(super) fn str_len(&self) -> usize {
         self.children
             .0
@@ -65,7 +65,8 @@ impl Elem {
         Ok(())
     }
 
-    pub(super) fn to_string(&self, format: BufWriteFormat) -> String {
+    /// Write the element to a string.
+    pub fn to_string(&self, format: BufWriteFormat) -> String {
         let mut buf = String::new();
         self.write_buf(&mut buf, format).unwrap();
         buf
@@ -102,6 +103,9 @@ pub(super) fn simplify_children(children: ElemChildren) -> ElemChildren {
                 last.text.push_str(&t.text);
                 return acc;
             }
+            (ElemChild::Elem(e), _) if e.may_inline() => {
+                acc.extend(e.children.0);
+            }
             (ElemChild::Elem(e), _) => {
                 acc.push(ElemChild::Elem(e.simplify()));
             }
@@ -120,6 +124,12 @@ pub enum ElemMeta {
     Names,
     /// The element is the output of `cs:date`.
     Date,
+    /// The element is the output of `cs:text`.
+    Text,
+    /// The element is the output of `cs:number`.
+    Number,
+    /// The element is the output of `cs:label`.
+    Label,
     /// The element is the output of `cs:number (variable="citation-number")`.
     CitationNumber,
     /// The element is the output of a single name.
@@ -129,7 +139,7 @@ pub enum ElemMeta {
 
 /// A container for element children with useful methods.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
-pub struct ElemChildren(pub(super) Vec<ElemChild>);
+pub struct ElemChildren(pub Vec<ElemChild>);
 
 impl ElemChildren {
     /// Create an empty `ElemChildren`.
@@ -138,7 +148,7 @@ impl ElemChildren {
     }
 
     /// Whether this container is empty.
-    pub(super) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.0.iter().all(|e| e.is_empty())
     }
 
@@ -165,24 +175,6 @@ impl ElemChildren {
         None
     }
 
-    /// Retrieve a mutable reference to the first child with a matching meta by
-    /// DFS.
-    pub(super) fn get_mut_meta(&mut self, meta: ElemMeta) -> Option<&mut Elem> {
-        for child in &mut self.0 {
-            if let ElemChild::Elem(e) = child {
-                if e.meta == Some(meta) {
-                    return Some(e);
-                }
-
-                if let Some(e) = e.children.get_mut_meta(meta) {
-                    return Some(e);
-                }
-            }
-        }
-
-        None
-    }
-
     /// Remove the first child with a matching meta by DFS.
     pub(super) fn remove_meta(&mut self, meta: ElemMeta) -> bool {
         for i in 0..self.0.len() {
@@ -201,12 +193,21 @@ impl ElemChildren {
         false
     }
 
-    pub(super) fn last_text_mut(&mut self) -> Option<&mut String> {
-        self.0.last_mut().and_then(|c| match c {
-            ElemChild::Text(t) => Some(&mut t.text),
-            ElemChild::Elem(e) => e.children.last_text_mut(),
-            ElemChild::Markup(_) | ElemChild::Link { .. } => None,
-        })
+    /// Remove the first child with any meta by DFS.
+    pub(super) fn remove_any_meta(&mut self) -> Option<ElemChild> {
+        for i in 0..self.0.len() {
+            if let ElemChild::Elem(e) = &mut self.0[i] {
+                if e.meta.is_some() {
+                    return Some(self.0.remove(i));
+                }
+
+                if let Some(elem) = e.children.remove_any_meta() {
+                    return Some(elem);
+                }
+            }
+        }
+
+        None
     }
 
     /// Write the children to the given buffer.
@@ -221,13 +222,15 @@ impl ElemChildren {
         Ok(())
     }
 
-    pub(super) fn to_string(&self, format: BufWriteFormat) -> String {
+    /// Write the children to a string.
+    pub fn to_string(&self, format: BufWriteFormat) -> String {
         let mut buf = String::new();
         self.write_buf(&mut buf, format).unwrap();
         buf
     }
 }
 
+/// Various formattable elements.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ElemChild {
     /// This is some text.
@@ -237,7 +240,12 @@ pub enum ElemChild {
     /// This should be processed by Typst.
     Markup(String),
     /// This is a link.
-    Link { text: Formatted, url: String },
+    Link {
+        /// The anchor text.
+        text: Formatted,
+        /// The URL.
+        url: String,
+    },
 }
 
 impl ElemChild {
@@ -270,6 +278,13 @@ impl ElemChild {
                 text.formatting.write_end(w, format)
             }
         }
+    }
+
+    /// Write the element to a string.
+    pub fn to_string(&self, format: BufWriteFormat) -> String {
+        let mut buf = String::new();
+        self.write_buf(&mut buf, format).unwrap();
+        buf
     }
 
     pub(super) fn str_len(&self) -> usize {
@@ -314,6 +329,7 @@ impl From<Formatted> for ElemChild {
     }
 }
 
+/// The format with which to write an [element](Elem).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BufWriteFormat {
     /// Just write text.
@@ -325,40 +341,31 @@ pub enum BufWriteFormat {
     Html,
 }
 
+/// A piece of formatted text.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Formatted {
+    /// The text.
     pub text: String,
+    /// The formatting.
     pub formatting: Formatting,
 }
 
-impl Formatted {
-    fn new(text: String) -> Self {
-        Self { text, formatting: Formatting::new() }
-    }
-
-    fn elem(self, display: Option<Display>, meta: Option<ElemMeta>) -> Elem {
-        Elem {
-            children: ElemChildren(vec![ElemChild::Text(self)]),
-            display,
-            meta,
-        }
-    }
-}
-
+/// Some formatting information.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Formatting {
+    /// Whether the text is italic.
     pub font_style: FontStyle,
+    /// Whether the text is small caps.
     pub font_variant: FontVariant,
+    /// The font weight.
     pub font_weight: FontWeight,
+    /// Whether the text is underlined.
     pub text_decoration: TextDecoration,
+    /// Whether the text is superscript or subscript.
     pub vertical_align: VerticalAlign,
 }
 
 impl Formatting {
-    pub(super) fn new() -> Self {
-        Self::default()
-    }
-
     pub(super) fn add_text(self, text: String) -> Formatted {
         Formatted { text, formatting: self }
     }
@@ -386,41 +393,6 @@ impl Formatting {
         }
 
         self
-    }
-
-    /// Whether this format will change if a different format is applied on top.
-    pub(super) fn will_change(&self, other: citationberg::Formatting) -> bool {
-        if let Some(style) = other.font_style {
-            if self.font_style != style {
-                return true;
-            }
-        }
-
-        if let Some(variant) = other.font_variant {
-            if self.font_variant != variant {
-                return true;
-            }
-        }
-
-        if let Some(weight) = other.font_weight {
-            if self.font_weight != weight {
-                return true;
-            }
-        }
-
-        if let Some(decoration) = other.text_decoration {
-            if self.text_decoration != decoration {
-                return true;
-            }
-        }
-
-        if let Some(align) = other.vertical_align {
-            if self.vertical_align != align {
-                return true;
-            }
-        }
-
-        false
     }
 
     pub(super) fn write_vt100(
@@ -541,22 +513,6 @@ impl<T> NonEmptyStack<T> {
     pub fn pop(&mut self) -> Option<T> {
         let new_last = self.head.pop()?;
         Some(mem::replace(&mut self.last, new_last))
-    }
-
-    pub fn get(&self, idx: usize) -> Option<&T> {
-        if idx == self.head.len() {
-            Some(&self.last)
-        } else {
-            self.head.get(idx)
-        }
-    }
-
-    pub fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
-        if idx == self.head.len() {
-            Some(&mut self.last)
-        } else {
-            self.head.get_mut(idx)
-        }
     }
 
     /// Drains all elements including and after the given index.

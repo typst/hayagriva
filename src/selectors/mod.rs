@@ -137,7 +137,7 @@ impl Selector {
     ///
     /// This can panic if there are resolving entries which do not bind the
     /// argument.
-    pub(crate) fn bound<'s>(&self, entry: &'s Entry, bound: &str) -> Option<&'s Entry> {
+    pub fn bound<'s>(&self, entry: &'s Entry, bound: &str) -> Option<&'s Entry> {
         self.apply(entry).map(|mut hm| hm.remove(bound).unwrap())
     }
 

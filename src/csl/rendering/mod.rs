@@ -110,7 +110,11 @@ impl RenderCsl for citationberg::Text {
         }
 
         ctx.apply_suffix(&self.affixes, affix_loc);
-        ctx.commit_elem(depth, self.display, None);
+        ctx.commit_elem(
+            depth,
+            self.display,
+            matches!(&self.target, TextTarget::Variable { .. }).then_some(ElemMeta::Text),
+        );
     }
 }
 
@@ -179,7 +183,8 @@ impl RenderCsl for citationberg::Number {
             depth,
             self.display,
             (self.variable == NumberVariable::CitationNumber)
-                .then_some(ElemMeta::CitationNumber),
+                .then_some(ElemMeta::CitationNumber)
+                .or(Some(ElemMeta::Number)),
         );
     }
 }
@@ -194,6 +199,7 @@ impl RenderCsl for citationberg::Label {
             return;
         };
 
+        let depth = ctx.push_elem(citationberg::Formatting::default());
         let plural = match self.label.plural {
             LabelPluralize::Always => true,
             LabelPluralize::Never => false,
@@ -209,7 +215,8 @@ impl RenderCsl for citationberg::Label {
             .term(Term::from(self.variable), self.label.form, plural)
             .unwrap_or_default();
 
-        render_label_with_var(&self.label, ctx, content)
+        render_label_with_var(&self.label, ctx, content);
+        ctx.commit_elem(depth, None, Some(ElemMeta::Label));
     }
 }
 

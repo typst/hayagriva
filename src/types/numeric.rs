@@ -225,9 +225,9 @@ impl Numeric {
     /// Returns the nth number in the set.
     pub fn nth(&self, n: usize) -> Option<i32> {
         match &self.value {
-            NumericValue::Number(n) if n == &0 => Some(*n),
+            NumericValue::Number(val) if n == 0 => Some(*val),
             NumericValue::Number(_) => None,
-            NumericValue::Set(vec) => vec.get(n).map(|(n, _)| *n),
+            NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
         }
     }
 
