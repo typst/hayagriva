@@ -54,6 +54,7 @@ struct SpeculativeItemRender<'a> {
     locator: Option<SpecificLocator<'a>>,
     hidden: bool,
     locale: Option<LocaleCode>,
+    kind: Option<SpecialForm>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -75,9 +76,12 @@ impl<'a> BibliographyDriver<'a> {
         style.sort(&mut req.items, style.csl.citation.sort.as_ref());
         let mut res = vec![];
         for item in req.items {
-            res.push(
-                style.citation(item.entry, CiteProperties::for_sorting(item.locator, 0)),
-            );
+            res.push(style.citation(
+                item.entry,
+                CiteProperties::for_sorting(item.locator, 0),
+                req.locale.as_ref(),
+                item.kind,
+            ));
         }
 
         let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
@@ -206,7 +210,12 @@ impl<'a> BibliographyDriver<'a> {
                     ),
                 };
 
-                let ctx = style.do_citation(entry, cite_props.clone());
+                let ctx = style.do_citation(
+                    entry,
+                    cite_props.clone(),
+                    citation.locale.as_ref(),
+                    item.kind,
+                );
                 renders.push(SpeculativeItemRender {
                     entry,
                     cite_props,
@@ -218,6 +227,7 @@ impl<'a> BibliographyDriver<'a> {
                     rendered: ctx.flush(),
                     hidden: item.hidden,
                     locale: item.locale.clone(),
+                    kind: item.kind,
                 });
 
                 last_cite = Some(item);
@@ -280,8 +290,12 @@ impl<'a> BibliographyDriver<'a> {
                 for item in cite.items.iter_mut() {
                     if let Some(state) = rerender.get(&(item.entry as _)) {
                         item.cite_props.speculative.disambiguation = state.clone();
-                        item.rendered =
-                            style_ctx.citation(item.entry, item.cite_props.clone());
+                        item.rendered = style_ctx.citation(
+                            item.entry,
+                            item.cite_props.clone(),
+                            item.locale.as_ref(),
+                            item.kind,
+                        );
                     }
                 }
             }
@@ -295,7 +309,6 @@ impl<'a> BibliographyDriver<'a> {
             let mut group_idx = 0;
 
             for i in 0..cite.items.len() {
-                let group = group_idx;
                 let Some(delim) =
                     cite.request.style.citation.cite_group_delimiter.as_deref().or_else(
                         || {
@@ -324,10 +337,12 @@ impl<'a> BibliographyDriver<'a> {
                     .entry(name_elem)
                     .and_modify(|i| {
                         prev = Some(*i);
-                        group_idx += 1;
                         *i += 1
                     })
-                    .or_insert(i);
+                    .or_insert_with(|| {
+                        group_idx += 1;
+                        i
+                    });
 
                 let mut pos = i;
                 while target < pos {
@@ -336,7 +351,7 @@ impl<'a> BibliographyDriver<'a> {
                 }
 
                 cite.items[target].delim_override = Some(delim);
-                cite.items[target].group_idx = Some(group);
+                cite.items[target].group_idx = Some(group_idx);
                 if let Some(prev) = prev {
                     cite.items[prev].delim_override = None;
                 }
@@ -399,11 +414,18 @@ impl<'a> BibliographyDriver<'a> {
         for cite in res.iter_mut() {
             let style_ctx = cite.request.style();
             for item in cite.items.iter_mut() {
-                item.rendered = style_ctx.citation(item.entry, item.cite_props.clone());
+                item.rendered = style_ctx.citation(
+                    item.entry,
+                    item.cite_props.clone(),
+                    item.locale.as_ref(),
+                    item.kind,
+                );
             }
 
             // 5. Collapse grouped citations.
-            group_items(cite);
+            if cite.request.items.iter().all(|c| c.kind.is_none()) {
+                collapse_items(cite);
+            }
 
             // 6. Add affixes.
             let formatting = Formatting::default()
@@ -474,9 +496,9 @@ impl<'a> BibliographyDriver<'a> {
                 items.push(simplify_children(
                     bib_style
                         .bibliography(
-                            &entry.entry,
+                            entry.entry,
                             CiteProperties {
-                                certain: cited_item.cite_props.certain.clone(),
+                                certain: cited_item.cite_props.certain,
                                 speculative: SpeculativeCiteProperties {
                                     locator: None,
                                     citation_number: cited_item
@@ -491,6 +513,8 @@ impl<'a> BibliographyDriver<'a> {
                                         .clone(),
                                 },
                             },
+                            cited_item.locale.as_ref(),
+                            None,
                         )
                         .unwrap(),
                 ))
@@ -593,14 +617,19 @@ fn disambiguate_year_suffix<F>(
 ) where
     F: FnMut(&Entry, DisambiguateState),
 {
-    if group.iter().any(|&(cite_idx, item_idx)| {
-        renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
-            && renders[cite_idx].items[item_idx]
-                .cite_props
-                .speculative
-                .disambiguation
-                .may_disambiguate_with_year_suffix()
-    }) {
+    if renders
+        .iter()
+        .flat_map(|r| r.items.iter())
+        .any(|i| i.rendered.get_meta(ElemMeta::Date).is_some())
+        && group.iter().any(|&(cite_idx, item_idx)| {
+            renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
+                && renders[cite_idx].items[item_idx]
+                    .cite_props
+                    .speculative
+                    .disambiguation
+                    .may_disambiguate_with_year_suffix()
+        })
+    {
         let mut entries = Vec::new();
         for &(cite_idx, item_idx) in group.iter() {
             let item = &renders[cite_idx].items[item_idx];
@@ -681,7 +710,7 @@ fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
         .collect()
 }
 
-fn group_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
+fn collapse_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
     let style = &cite.request.style;
 
     let after_collapse_delim = style
@@ -741,18 +770,22 @@ fn group_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
         }
         Some(Collapse::CitationNumber) => {}
         Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
-            // Index of the group we are currently in.
+            // Index of where the current group started and the group we are
+            // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
             for i in 0..cite.items.len() {
                 match group_idx {
+                    // This is our group.
                     Some((_, idx)) if Some(idx) == cite.items[i].group_idx => {
                         // FIXME: Retains delimiter in names.
                         cite.items[i].rendered.remove_meta(ElemMeta::Names);
                     }
+                    // This is a different group.
                     Some((i, _)) => {
                         cite.items[i].delim_override = after_collapse_delim;
                         group_idx = cite.items[i].group_idx.map(|idx| (i, idx));
                     }
+                    // We are at the beginning.
                     None => {
                         group_idx = cite.items[i].group_idx.map(|idx| (i, idx));
                     }
@@ -787,18 +820,6 @@ pub struct RenderedBibliography {
     pub items: Vec<ElemChildren>,
 }
 
-impl RenderedBibliography {
-    fn new(items: Vec<ElemChildren>, bibliography: &citationberg::Bibliography) -> Self {
-        Self {
-            hanging_indent: bibliography.hanging_indent,
-            second_field_align: bibliography.second_field_align,
-            line_spacing: bibliography.line_spacing,
-            entry_spacing: bibliography.entry_spacing,
-            items,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct RenderedCitation {
     pub note_number: Option<usize>,
@@ -815,15 +836,31 @@ struct InstanceContext<'a> {
     pub cite_props: CiteProperties<'a>,
     /// Whether we are sorting or formatting right now.
     pub sorting: bool,
+    /// The locale for the content in the entry.
+    pub locale: Option<&'a LocaleCode>,
+    /// Whether this citation should respect a special form.
+    pub kind: Option<SpecialForm>,
 }
 
 impl<'a> InstanceContext<'a> {
-    fn new(entry: &'a Entry, cite_props: CiteProperties<'a>, sorting: bool) -> Self {
-        Self { entry, cite_props, sorting }
+    fn new(
+        entry: &'a Entry,
+        cite_props: CiteProperties<'a>,
+        sorting: bool,
+        locale: Option<&'a LocaleCode>,
+        kind: Option<SpecialForm>,
+    ) -> Self {
+        Self { entry, cite_props, sorting, locale, kind }
     }
 
     fn sort_instance(item: &CitationItem<'a>, idx: usize) -> Self {
-        Self::new(item.entry, CiteProperties::for_sorting(item.locator, idx), true)
+        Self::new(
+            item.entry,
+            CiteProperties::for_sorting(item.locator, idx),
+            true,
+            None,
+            None,
+        )
     }
 }
 
@@ -852,20 +889,29 @@ impl<'a> StyleContext<'a> {
         &'b self,
         entry: &'b Entry,
         cite_props: CiteProperties<'a>,
+        locale: Option<&'b LocaleCode>,
+        kind: Option<SpecialForm>,
     ) -> Context<'b> {
         Context {
-            instance: InstanceContext::new(entry, cite_props, false),
+            instance: InstanceContext::new(entry, cite_props, false, locale, kind),
             style: self,
             writing: WritingContext::new(),
         }
     }
 
-    fn sorting_ctx<'b>(&'b self, item: &'b CitationItem<'b>, idx: usize) -> Context<'b> {
+    fn sorting_ctx<'b>(
+        &'b self,
+        item: &'b CitationItem<'b>,
+        idx: usize,
+        locale: Option<&'b LocaleCode>,
+    ) -> Context<'b> {
         Context {
             instance: InstanceContext::new(
                 item.entry,
                 CiteProperties::for_sorting(item.locator, idx),
                 true,
+                locale,
+                None,
             ),
             style: self,
             writing: WritingContext::new(),
@@ -873,8 +919,14 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Render the given item within a citation.
-    fn citation(&self, entry: &Entry, props: CiteProperties<'a>) -> ElemChildren {
-        let ctx = self.do_citation(entry, props);
+    fn citation(
+        &self,
+        entry: &Entry,
+        props: CiteProperties<'a>,
+        locale: Option<&LocaleCode>,
+        kind: Option<SpecialForm>,
+    ) -> ElemChildren {
+        let ctx = self.do_citation(entry, props, locale, kind);
         ctx.flush()
     }
 
@@ -883,16 +935,24 @@ impl<'a> StyleContext<'a> {
         &'b self,
         entry: &'b Entry,
         props: CiteProperties<'a>,
+        locale: Option<&'b LocaleCode>,
+        kind: Option<SpecialForm>,
     ) -> Context<'b> {
-        let mut ctx = self.ctx(entry, props);
+        let mut ctx = self.ctx(entry, props, locale, kind);
         ctx.writing.push_name_options(&self.csl.citation.name_options);
         self.csl.citation.layout.render(&mut ctx);
         ctx
     }
 
     /// Render the given item within a bibliography.
-    fn bibliography(&self, entry: &Entry, props: CiteProperties) -> Option<ElemChildren> {
-        let mut ctx = self.ctx(entry, props);
+    fn bibliography(
+        &self,
+        entry: &Entry,
+        props: CiteProperties,
+        locale: Option<&LocaleCode>,
+        kind: Option<SpecialForm>,
+    ) -> Option<ElemChildren> {
+        let mut ctx = self.ctx(entry, props, locale, kind);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
         self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
@@ -1065,6 +1125,11 @@ impl<'a> CitationItem<'a> {
             hidden: false,
             kind: None,
         }
+    }
+
+    fn kind(mut self, kind: SpecialForm) -> Self {
+        self.kind = Some(kind);
+        self
     }
 }
 
@@ -1894,7 +1959,22 @@ impl<'a> Context<'a> {
 
     /// Set the case of the next text.
     fn push_case(&mut self, case: Option<TextCase>) -> CaseIdx {
-        self.writing.push_case(case)
+        if self
+            .instance
+            .entry
+            .language()
+            .map(|l| l.language.as_str() == "en")
+            .or_else(|| self.instance.locale.map(LocaleCode::is_english))
+            .or_else(|| {
+                self.style.csl.default_locale.as_ref().map(LocaleCode::is_english)
+            })
+            .unwrap_or(true)
+            || case.map_or(true, |c| c.is_language_independent())
+        {
+            self.writing.push_case(case)
+        } else {
+            self.writing.push_case(None)
+        }
     }
 
     /// Clear the case of the next text.
@@ -2075,11 +2155,10 @@ impl Brackets {
 }
 
 /// A special citation form to use for the [`CitationItem`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpecialForm {
     AuthorOnly,
     SuppressAuthor,
-    Composite(Option<ChunkedString>),
 }
 
 #[cfg(test)]
@@ -2106,11 +2185,10 @@ mod tests {
 
         let mut driver = BibliographyDriver::new().unwrap();
 
-        for n in (0..bib.len()).step_by(3) {
+        for n in (0..bib.len()).step_by(2) {
             let items = vec![
                 CitationItem::from_entry(bib.nth(n).unwrap()),
                 CitationItem::from_entry(bib.nth(n + 1).unwrap()),
-                CitationItem::from_entry(bib.nth(n + 2).unwrap()),
             ];
             driver.citation(CitationRequest::new(
                 items, &style, None, &en_locale, None, None,

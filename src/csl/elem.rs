@@ -38,14 +38,14 @@ impl Elem {
         format: BufWriteFormat,
     ) -> Result<(), fmt::Error> {
         match (format, self.display) {
-            (BufWriteFormat::HTML, Some(Display::Block)) => w.write_str("<div>")?,
-            (BufWriteFormat::HTML, Some(Display::Indent)) => {
+            (BufWriteFormat::Html, Some(Display::Block)) => w.write_str("<div>")?,
+            (BufWriteFormat::Html, Some(Display::Indent)) => {
                 w.write_str("<div style=\"padding-left: 4em;\">")?
             }
-            (BufWriteFormat::HTML, Some(Display::LeftMargin)) => {
+            (BufWriteFormat::Html, Some(Display::LeftMargin)) => {
                 w.write_str("<div style=\"float: left;\">")?
             }
-            (BufWriteFormat::HTML, Some(Display::RightInline)) => {
+            (BufWriteFormat::Html, Some(Display::RightInline)) => {
                 w.write_str("<div style=\"float: right; clear: both;\">")?
             }
             (_, Some(Display::Block)) => w.write_char('\n')?,
@@ -57,7 +57,7 @@ impl Elem {
         }
 
         match (format, self.display) {
-            (BufWriteFormat::HTML, Some(_)) => w.write_str("</div>")?,
+            (BufWriteFormat::Html, Some(_)) => w.write_str("</div>")?,
             (_, Some(Display::Block)) => w.write_char('\n')?,
             (_, _) => {}
         }
@@ -255,7 +255,7 @@ impl ElemChild {
             }
             ElemChild::Elem(e) => e.write_buf(w, format),
             ElemChild::Markup(m) => w.write_str(m),
-            ElemChild::Link { text, url } if format == BufWriteFormat::HTML => {
+            ElemChild::Link { text, url } if format == BufWriteFormat::Html => {
                 w.write_str("<a href=\"")?;
                 w.write_str(url)?;
                 w.write_str("\">")?;
@@ -322,7 +322,7 @@ pub enum BufWriteFormat {
     /// Write with terminal colors.
     VT100,
     /// Write HTML.
-    HTML,
+    Html,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -480,7 +480,7 @@ impl Formatting {
         match format {
             BufWriteFormat::Plain => Ok(()),
             BufWriteFormat::VT100 => self.write_vt100(buf),
-            BufWriteFormat::HTML => {
+            BufWriteFormat::Html => {
                 let is_default = self == &Formatting::default();
                 if !is_default {
                     buf.write_str("<span style=\"")?;
@@ -500,7 +500,7 @@ impl Formatting {
         match format {
             BufWriteFormat::Plain => Ok(()),
             BufWriteFormat::VT100 => buf.write_str("\x1b[0m"),
-            BufWriteFormat::HTML => {
+            BufWriteFormat::Html => {
                 let is_default = self == &Formatting::default();
                 if !is_default {
                     buf.write_str("</span>")?;

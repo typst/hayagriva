@@ -8,7 +8,7 @@ use citationberg::{
 };
 use citationberg::{DisambiguationRule, TermForm};
 
-use crate::csl::{Context, DisambiguateState, ElemMeta};
+use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm};
 use crate::types::Person;
 
 use super::{render_label_with_var, RenderCsl};
@@ -186,6 +186,20 @@ impl NameDisambiguationProperties {
 
 impl RenderCsl for Names {
     fn render(&self, ctx: &mut Context) {
+        match &ctx.instance.kind {
+            Some(SpecialForm::AuthorOnly) => {
+                if self.variable.iter().all(|v| &NameVariable::Author != v) {
+                    return;
+                }
+            }
+            Some(SpecialForm::SuppressAuthor) => {
+                if self.variable.iter().any(|v| &NameVariable::Author == v) {
+                    return;
+                }
+            }
+            None => {}
+        }
+
         let people: Vec<(Vec<&Person>, NameVariable)> = if self.variable.len() == 2
             && self.variable.contains(&NameVariable::Editor)
             && self.variable.contains(&NameVariable::Translator)

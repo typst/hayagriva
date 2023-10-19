@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt::Write;
 use std::str::FromStr;
 
@@ -16,7 +15,7 @@ use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{Date, MaybeTyped, Numeric};
 
 use super::taxonomy::matches_entry_type;
-use super::{Context, ElemMeta, IbidState};
+use super::{Context, ElemMeta, IbidState, SpecialForm};
 
 pub mod names;
 
@@ -29,6 +28,12 @@ pub(crate) trait RenderCsl {
 
 impl RenderCsl for citationberg::Text {
     fn render(&self, ctx: &mut Context) {
+        if ctx.instance.kind == Some(SpecialForm::AuthorOnly)
+            && !matches!(&self.target, TextTarget::Macro { .. })
+        {
+            return;
+        }
+
         let depth = ctx.push_elem(self.formatting);
 
         let affix_loc = ctx.apply_prefix(&self.affixes);
@@ -111,6 +116,10 @@ impl RenderCsl for citationberg::Text {
 
 impl RenderCsl for citationberg::Number {
     fn render(&self, ctx: &mut Context) {
+        if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
+            return;
+        }
+
         let value = ctx.resolve_number_variable(self.variable);
         if ctx.instance.sorting {
             if let Some(MaybeTyped::Typed(n)) = value {
@@ -177,6 +186,10 @@ impl RenderCsl for citationberg::Number {
 
 impl RenderCsl for citationberg::Label {
     fn render(&self, ctx: &mut Context) {
+        if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
+            return;
+        }
+
         let Some(variable) = ctx.resolve_number_variable(self.variable) else {
             return;
         };
@@ -227,6 +240,10 @@ fn render_label_with_var(
 
 impl RenderCsl for citationberg::Date {
     fn render(&self, ctx: &mut Context) {
+        if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
+            return;
+        }
+
         let Some(variable) = self.variable else { return };
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
