@@ -4,7 +4,7 @@ use std::fmt::Write;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use citationberg::{NumberForm, OrdinalLookup};
+use citationberg::{GrammarGender, NumberForm, OrdinalLookup};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -159,6 +159,7 @@ impl Numeric {
         &self,
         buf: &mut T,
         form: NumberForm,
+        gender: Option<GrammarGender>,
         ords: OrdinalLookup<'_>,
     ) -> std::fmt::Result
     where
@@ -167,11 +168,13 @@ impl Numeric {
         let format = |n: i32, buf: &mut T| -> std::fmt::Result {
             match form {
                 NumberForm::Ordinal => {
-                    write!(buf, "{}{}", n, ords.lookup(n).unwrap_or_default())
+                    write!(buf, "{}{}", n, ords.lookup(n, gender).unwrap_or_default())
                 }
                 NumberForm::LongOrdinal => match ords.lookup_long(n) {
                     Some(str) => buf.write_str(str),
-                    None => write!(buf, "{}{}", n, ords.lookup(n).unwrap_or_default()),
+                    None => {
+                        write!(buf, "{}{}", n, ords.lookup(n, gender).unwrap_or_default())
+                    }
                 },
                 NumberForm::Roman if n > 0 && n <= i16::MAX as i32 => {
                     write!(buf, "{:x}", numerals::roman::Roman::from(n as i16))

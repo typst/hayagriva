@@ -171,6 +171,24 @@ impl FromStr for FormatString {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct ChunkedString(pub Vec<StringChunk>);
 
+/// A string whose elements can set whether they do case folding.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct FoldableChunkedString(pub Vec<FoldableStringChunk>);
+
+impl TryFrom<ChunkedString> for FoldableChunkedString {
+    type Error = ();
+
+    fn try_from(value: ChunkedString) -> Result<Self, Self::Error> {
+        Ok(Self(value.0.into_iter().map(TryInto::try_into).collect::<Result<_, _>>()?))
+    }
+}
+
+impl From<FoldableChunkedString> for ChunkedString {
+    fn from(value: FoldableChunkedString) -> Self {
+        Self(value.0.into_iter().map(Into::into).collect())
+    }
+}
+
 impl<'de> Deserialize<'de> for ChunkedString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -467,6 +485,29 @@ pub struct StringChunk {
     pub kind: ChunkKind,
 }
 
+/// A chunk of a string.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FoldableStringChunk {
+    /// The string value.
+    pub value: String,
+    /// Whether the chunk is subject to case folding or contains math.
+    pub kind: FoldableKind,
+}
+
+impl TryFrom<StringChunk> for FoldableStringChunk {
+    type Error = ();
+
+    fn try_from(value: StringChunk) -> Result<Self, Self::Error> {
+        Ok(Self { value: value.value, kind: value.kind.try_into()? })
+    }
+}
+
+impl From<FoldableStringChunk> for StringChunk {
+    fn from(value: FoldableStringChunk) -> Self {
+        Self { value: value.value, kind: value.kind.into() }
+    }
+}
+
 impl StringChunk {
     /// Creates a new `StrChunk` from a string and a kind.
     pub fn new(value: impl Into<String>, kind: ChunkKind) -> Self {
@@ -551,4 +592,35 @@ pub enum ChunkKind {
     /// The contained markup is expected to be evaluated using
     /// [Typst](https://typst.app/).
     Math,
+}
+
+/// The kind of a string chunk for use with the case folder.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum FoldableKind {
+    /// Case-folding will be applied.
+    #[default]
+    Normal,
+    /// Case-folding will not be applied.
+    Verbatim,
+}
+
+impl TryFrom<ChunkKind> for FoldableKind {
+    type Error = ();
+
+    fn try_from(value: ChunkKind) -> Result<Self, Self::Error> {
+        match value {
+            ChunkKind::Normal => Ok(Self::Normal),
+            ChunkKind::Verbatim => Ok(Self::Verbatim),
+            ChunkKind::Math => Err(()),
+        }
+    }
+}
+
+impl From<FoldableKind> for ChunkKind {
+    fn from(value: FoldableKind) -> Self {
+        match value {
+            FoldableKind::Normal => Self::Normal,
+            FoldableKind::Verbatim => Self::Verbatim,
+        }
+    }
 }

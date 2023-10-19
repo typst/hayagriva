@@ -41,17 +41,41 @@ impl RenderCsl for citationberg::Text {
         let cidx = ctx.push_case(self.text_case);
 
         match &self.target {
-            TextTarget::Variable { var, form } => ctx.push_chunked(
-                match var {
-                    Variable::Standard(var) => ctx.resolve_standard_variable(*form, *var),
-                    Variable::Number(var) => ctx
-                        .resolve_number_variable(*var)
-                        .map(|t| Cow::Owned(t.to_chunked_string())),
-                    _ => None,
+            TextTarget::Variable { var: Variable::Standard(var), form } => {
+                if let Some(val) = ctx.resolve_standard_variable(*form, *var) {
+                    match var {
+                        StandardVariable::URL => {
+                            let str = val.to_string();
+                            ctx.push_link(&val, str);
+                        }
+                        StandardVariable::DOI => {
+                            let url = format!("https://doi.org/{}", val.to_str());
+                            ctx.push_link(&val, url);
+                        }
+                        StandardVariable::PMID => {
+                            let url = format!(
+                                "https://www.ncbi.nlm.nih.gov/pubmed/{}",
+                                val.to_str()
+                            );
+                            ctx.push_link(&val, url);
+                        }
+                        StandardVariable::PMCID => {
+                            let url = format!(
+                                "https://www.ncbi.nlm.nih.gov/pmc/articles/{}",
+                                val.to_str()
+                            );
+                            ctx.push_link(&val, url);
+                        }
+                        _ => ctx.push_chunked(&val),
+                    }
                 }
-                .unwrap_or_default()
-                .as_ref(),
-            ),
+            }
+            TextTarget::Variable { var: Variable::Number(var), .. } => {
+                if let Some(n) = ctx.resolve_number_variable(*var) {
+                    ctx.push_str(&n.to_str())
+                }
+            }
+            TextTarget::Variable { .. } => {}
             TextTarget::Macro { name } => {
                 let len = ctx.writing.len();
                 let mac = ctx.style.get_macro(name);
@@ -98,6 +122,7 @@ impl RenderCsl for citationberg::Number {
         let depth = ctx.push_elem(self.formatting);
         let affix_loc = ctx.apply_prefix(&self.affixes);
         let cidx = ctx.push_case(self.text_case);
+        let gender = ctx.gender(self.variable.into());
 
         match value {
             Some(MaybeTyped::Typed(num)) if num.will_transform() => {
@@ -129,7 +154,9 @@ impl RenderCsl for citationberg::Number {
                 };
 
                 if normal_num {
-                    num.as_ref().with_form(ctx, self.form, ctx.ordinal_lookup()).unwrap();
+                    num.as_ref()
+                        .with_form(ctx, self.form, gender, ctx.ordinal_lookup())
+                        .unwrap();
                 }
             }
             Some(MaybeTyped::Typed(num)) => write!(ctx, "{}", num).unwrap(),
@@ -348,11 +375,16 @@ fn render_date_part(
                     })
                     .unwrap_or_default() =>
         {
+            let gender = date
+                .month
+                .and_then(OtherTerm::month)
+                .and_then(|m| ctx.gender(m.into()));
+
             write!(
                 ctx,
                 "{}{}",
                 val,
-                ctx.ordinal_lookup().lookup(val).unwrap_or_default()
+                ctx.ordinal_lookup().lookup(val, gender).unwrap_or_default()
             )
             .unwrap();
         }

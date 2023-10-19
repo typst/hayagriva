@@ -10,8 +10,8 @@ use std::{mem, vec};
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, Citation, Collapse, CslMacro, Display,
-    IndependentStyle, InheritableNameOptions, Locale, LocaleCode, RendersYearSuffix,
-    SecondFieldAlign, StyleClass, TermForm, ToFormatting,
+    GrammarGender, IndependentStyle, InheritableNameOptions, Locale, LocaleCode,
+    RendersYearSuffix, SecondFieldAlign, StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -1258,6 +1258,7 @@ impl WritingContext {
             }
             Some(ElemChild::Text(_)) => false,
             Some(ElemChild::Elem(e)) => e.has_content(),
+            Some(ElemChild::Markup(_) | ElemChild::Link { .. }) => true,
             None => false,
         };
 
@@ -1802,12 +1803,31 @@ impl<'a> Context<'a> {
         for chunk in &chunked.0 {
             match chunk.kind {
                 ChunkKind::Normal => self.push_str(&chunk.value),
-                _ => {
-                    self.writing.buf.push_chunk(chunk);
+                ChunkKind::Verbatim => {
+                    self.writing.buf.push_verbatim(&chunk.value);
                     self.writing.pull_punctuation = false;
+                }
+                ChunkKind::Math => {
+                    self.writing.save_to_block();
+                    self.writing
+                        .elem_stack
+                        .last_mut()
+                        .0
+                        .push(ElemChild::Markup(chunk.value.clone()))
                 }
             }
         }
+    }
+
+    /// Push a link into the buffer.
+    pub fn push_link(&mut self, chunked: &ChunkedString, url: String) {
+        let format = *self.writing.formatting();
+        self.writing.save_to_block();
+        self.writing
+            .elem_stack
+            .last_mut()
+            .0
+            .push(ElemChild::Link { text: format.add_text(chunked.to_string()), url })
     }
 
     /// Folds all remaining elements into the first element and returns it.
@@ -1830,6 +1850,17 @@ impl<'a> Context<'a> {
         }
 
         None
+    }
+
+    /// Get the gender of a term.
+    fn gender(&self, term: Term) -> Option<GrammarGender> {
+        if let Some(localization) =
+            self.style.lookup_locale(|l| l.term(term, TermForm::default()))
+        {
+            return localization.gender;
+        } else {
+            None
+        }
     }
 
     /// Get a localized date format.
@@ -2076,7 +2107,7 @@ mod tests {
         let mut driver = BibliographyDriver::new().unwrap();
 
         for n in (0..bib.len()).step_by(3) {
-            let mut items = vec![
+            let items = vec![
                 CitationItem::from_entry(bib.nth(n).unwrap()),
                 CitationItem::from_entry(bib.nth(n + 1).unwrap()),
                 CitationItem::from_entry(bib.nth(n + 2).unwrap()),

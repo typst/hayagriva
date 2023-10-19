@@ -5,7 +5,7 @@ pub(crate) mod name;
 
 use std::{fmt::Write, mem};
 
-use crate::types::{ChunkKind, StringChunk};
+use crate::types::{FoldableKind, FoldableStringChunk};
 
 /// Rules for the title case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -375,17 +375,20 @@ impl CaseFolder {
     }
 
     /// Add a string chunk to the buffer.
-    pub fn push_chunk(&mut self, chunk: &StringChunk) {
+    pub fn push_verbatim(&mut self, value: &str) {
+        let conf = mem::replace(&mut self.case, Case::NoTransform);
+        self.last_reconfig = self.buf.len();
+        self.push_str(&value);
+        self.last_reconfig = self.buf.len();
+        self.case = conf;
+    }
+    /// Add a string chunk to the buffer.
+    pub fn push_chunk(&mut self, chunk: &FoldableStringChunk) {
         match chunk.kind {
-            ChunkKind::Verbatim => {
-                let conf = mem::replace(&mut self.case, Case::NoTransform);
-                self.last_reconfig = self.buf.len();
-                self.push_str(&chunk.value);
-                self.last_reconfig = self.buf.len();
-                self.case = conf;
+            FoldableKind::Verbatim => {
+                self.push_verbatim(&chunk.value);
             }
-            ChunkKind::Math => todo!(),
-            ChunkKind::Normal => self.push_str(&chunk.value),
+            FoldableKind::Normal => self.push_str(&chunk.value),
         }
     }
 

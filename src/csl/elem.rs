@@ -26,6 +26,8 @@ impl Elem {
             .map(|c| match c {
                 ElemChild::Text(t) => t.text.len(),
                 ElemChild::Elem(e) => e.str_len(),
+                ElemChild::Markup(m) => m.len(),
+                ElemChild::Link { text, .. } => text.text.len(),
             })
             .sum()
     }
@@ -203,6 +205,7 @@ impl ElemChildren {
         self.0.last_mut().and_then(|c| match c {
             ElemChild::Text(t) => Some(&mut t.text),
             ElemChild::Elem(e) => e.children.last_text_mut(),
+            ElemChild::Markup(_) | ElemChild::Link { .. } => None,
         })
     }
 
@@ -227,8 +230,14 @@ impl ElemChildren {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ElemChild {
+    /// This is some text.
     Text(Formatted),
+    /// A child element.
     Elem(Elem),
+    /// This should be processed by Typst.
+    Markup(String),
+    /// This is a link.
+    Link { text: Formatted, url: String },
 }
 
 impl ElemChild {
@@ -238,26 +247,28 @@ impl ElemChild {
         format: BufWriteFormat,
     ) -> Result<(), fmt::Error> {
         match self {
-            ElemChild::Text(t) if format == BufWriteFormat::HTML => {
-                let is_default = t.formatting == Formatting::default();
-                if !is_default {
-                    w.write_str("<span style=\"")?;
-                    t.formatting.write_css(w)?;
-                    w.write_str("\">")?;
-                }
+            ElemChild::Text(t) => {
+                t.formatting.write_start(w, format)?;
                 w.write_str(&t.text)?;
-                if !is_default {
-                    w.write_str("</span>")?;
-                }
+                t.formatting.write_end(w, format)?;
                 Ok(())
             }
-            ElemChild::Text(t) if format == BufWriteFormat::VT100 => {
-                t.formatting.write_vt100(w)?;
-                w.write_str(&t.text)?;
-                w.write_str("\x1b[0m")
-            }
-            ElemChild::Text(t) => w.write_str(&t.text),
             ElemChild::Elem(e) => e.write_buf(w, format),
+            ElemChild::Markup(m) => w.write_str(m),
+            ElemChild::Link { text, url } if format == BufWriteFormat::HTML => {
+                w.write_str("<a href=\"")?;
+                w.write_str(url)?;
+                w.write_str("\">")?;
+                text.formatting.write_start(w, format)?;
+                w.write_str(&text.text)?;
+                text.formatting.write_end(w, format)?;
+                w.write_str("</a>")
+            }
+            ElemChild::Link { text, .. } => {
+                text.formatting.write_start(w, format)?;
+                w.write_str(&text.text)?;
+                text.formatting.write_end(w, format)
+            }
         }
     }
 
@@ -265,20 +276,28 @@ impl ElemChild {
         match self {
             ElemChild::Text(t) => t.text.len(),
             ElemChild::Elem(e) => e.str_len(),
+            ElemChild::Markup(m) => m.len(),
+            ElemChild::Link { text, .. } => text.text.len(),
         }
     }
 
     pub(super) fn has_content(&self) -> bool {
         match self {
-            ElemChild::Text(t) => t.text.chars().any(|c| !c.is_whitespace()),
+            ElemChild::Text(Formatted { text, .. }) | ElemChild::Markup(text) => {
+                text.chars().any(|c| !c.is_whitespace())
+            }
             ElemChild::Elem(e) => e.has_content(),
+            ElemChild::Link { .. } => true,
         }
     }
 
     pub(super) fn is_empty(&self) -> bool {
         match self {
-            ElemChild::Text(t) => t.text.is_empty(),
+            ElemChild::Text(Formatted { text, .. }) | ElemChild::Markup(text) => {
+                text.is_empty()
+            }
             ElemChild::Elem(e) => e.is_empty(),
+            ElemChild::Link { text, .. } => text.text.is_empty(),
         }
     }
 }
@@ -451,6 +470,44 @@ impl Formatting {
         }
 
         Ok(())
+    }
+
+    pub(super) fn write_start(
+        &self,
+        buf: &mut impl fmt::Write,
+        format: BufWriteFormat,
+    ) -> Result<(), fmt::Error> {
+        match format {
+            BufWriteFormat::Plain => Ok(()),
+            BufWriteFormat::VT100 => self.write_vt100(buf),
+            BufWriteFormat::HTML => {
+                let is_default = self == &Formatting::default();
+                if !is_default {
+                    buf.write_str("<span style=\"")?;
+                    self.write_css(buf)?;
+                    buf.write_str("\">")?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    pub(super) fn write_end(
+        &self,
+        buf: &mut impl fmt::Write,
+        format: BufWriteFormat,
+    ) -> Result<(), fmt::Error> {
+        match format {
+            BufWriteFormat::Plain => Ok(()),
+            BufWriteFormat::VT100 => buf.write_str("\x1b[0m"),
+            BufWriteFormat::HTML => {
+                let is_default = self == &Formatting::default();
+                if !is_default {
+                    buf.write_str("</span>")?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
