@@ -390,7 +390,7 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(version) = map_res(entry.version())? {
-            item.set_serial_number(version.format_verbatim());
+            item.set_keyed_serial_number("version", version.format_verbatim());
         }
 
         if let Some(doi) = map_res(entry.doi())? {
@@ -405,13 +405,16 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_issn(issn.format_verbatim());
         }
 
-        if let Some(sn) = map_res(entry.isan())?
-            .or_else(|| entry.ismn().ok())
-            .or_else(|| entry.iswc().ok())
-        {
-            if item.serial_number.is_none() {
-                item.set_serial_number(sn.format_verbatim());
-            }
+        if let Some(isan) = map_res(entry.isan())? {
+            item.set_keyed_serial_number("isan", isan.format_verbatim());
+        }
+
+        if let Some(ismn) = map_res(entry.ismn())? {
+            item.set_keyed_serial_number("ismn", ismn.format_verbatim());
+        }
+
+        if let Some(iswc) = map_res(entry.iswc())? {
+            item.set_keyed_serial_number("iswc", iswc.format_verbatim());
         }
 
         if let Some(url) = map_res(entry.url())?.and_then(|s| Url::parse(&s).ok()) {

@@ -147,6 +147,8 @@ pub mod lang;
 pub mod types;
 mod util;
 
+use std::collections::BTreeMap;
+
 pub use citationberg::{IndependentStyle, LocaleFile};
 pub use csl::{
     BibliographyDriver, BibliographyRequest, Brackets, BufWriteFormat, CitationItem,
@@ -518,16 +520,10 @@ entry! {
     "runtime" => runtime: MaybeTyped<Duration>,
     /// Canonical public URL of the item, can have access date.
     "url" => url: QualifiedUrl,
-    /// The Digital Object Identifier of the item.
-    "doi" => doi: String,
     /// Any serial number or version describing the item that is not appropriate
     /// for the fields doi, edition, isbn or issn (may be assigned by the author
     /// of the item; especially useful for preprint archives).
-    "serial-number" => serial_number: String,
-    /// International Standard Book Number (ISBN), prefer ISBN-13.
-    "isbn" => isbn: String,
-    /// International Standard Serial Number (ISSN).
-    "issn" => issn: String,
+    "serial-number" => serial_number: SerialNumber,
     /// The language of the item.
     "language" => language: LanguageIdentifier,
     /// Name of the institution/collection where the item is kept.
@@ -632,13 +628,183 @@ impl Entry {
     pub fn url_any(&self) -> Option<&QualifiedUrl> {
         self.map(|e| e.url.as_ref())
     }
+
+    /// Retrieve a keyed serial number.
+    pub fn keyed_serial_number(&self, key: &str) -> Option<&str> {
+        self.serial_number
+            .as_ref()
+            .and_then(|s| s.0.get(key).map(|s| s.as_str()))
+    }
+
+    /// Set a keyed serial number.
+    pub fn set_keyed_serial_number(&mut self, key: &str, value: String) {
+        if let Some(serials) = &mut self.serial_number {
+            serials.0.insert(key.to_owned(), value);
+        } else {
+            let mut map = BTreeMap::new();
+            map.insert(key.to_owned(), value);
+            self.serial_number = Some(SerialNumber(map));
+        }
+    }
+
+    /// The Digital Object Identifier of the item.
+    pub fn doi(&self) -> Option<&str> {
+        self.keyed_serial_number("doi")
+    }
+
+    /// Set the `doi` field.
+    pub fn set_doi(&mut self, doi: String) {
+        self.set_keyed_serial_number("doi", doi);
+    }
+
+    /// International Standard Book Number (ISBN), prefer ISBN-13.
+    pub fn isbn(&self) -> Option<&str> {
+        self.keyed_serial_number("isbn")
+    }
+
+    /// Set the `isbn` field.
+    pub fn set_isbn(&mut self, isbn: String) {
+        self.set_keyed_serial_number("isbn", isbn);
+    }
+
+    /// International Standard Serial Number (ISSN).
+    pub fn issn(&self) -> Option<&str> {
+        self.keyed_serial_number("issn")
+    }
+
+    /// Set the `issn` field.
+    pub fn set_issn(&mut self, issn: String) {
+        self.set_keyed_serial_number("issn", issn);
+    }
+
+    /// PubMed Identifier (PMID).
+    pub fn pmid(&self) -> Option<&str> {
+        self.keyed_serial_number("pmid")
+    }
+
+    /// Set the `pmid` field.
+    pub fn set_pmid(&mut self, pmid: String) {
+        self.set_keyed_serial_number("pmid", pmid);
+    }
+
+    /// PubMed Central Identifier (PMCID).
+    pub fn pmcid(&self) -> Option<&str> {
+        self.keyed_serial_number("pmcid")
+    }
+
+    /// Set the `pmcid` field.
+    pub fn set_pmcid(&mut self, pmcid: String) {
+        self.set_keyed_serial_number("pmcid", pmcid);
+    }
+
+    /// ArXiv identifier.
+    pub fn arxiv(&self) -> Option<&str> {
+        self.keyed_serial_number("arxiv")
+    }
+
+    /// Set the `arxiv` field.
+    pub fn set_arxiv(&mut self, arxiv: String) {
+        self.set_keyed_serial_number("arxiv", arxiv);
+    }
+
+    /// Get the container of an entry like CSL defines it.
+    pub(crate) fn get_container(&self) -> Option<&Self> {
+        let retrieve_container = |possible: &[EntryType]| {
+            for possibility in possible {
+                if let Some(container) =
+                    self.parents.iter().find(|e| e.entry_type == *possibility)
+                {
+                    return Some(container);
+                }
+            }
+
+            None
+        };
+
+        match &self.entry_type {
+            EntryType::Article => retrieve_container(&[
+                EntryType::Book,
+                EntryType::Periodical,
+                EntryType::Newspaper,
+                EntryType::Blog,
+                EntryType::Reference,
+                EntryType::Web,
+            ]),
+            EntryType::Chapter => retrieve_container(&[
+                EntryType::Book,
+                EntryType::Anthology,
+                EntryType::Reference,
+                EntryType::Report,
+            ]),
+            EntryType::Report => {
+                retrieve_container(&[EntryType::Book, EntryType::Anthology])
+            }
+            EntryType::Web => retrieve_container(&[EntryType::Web]),
+            EntryType::Scene => retrieve_container(&[
+                EntryType::Audio,
+                EntryType::Video,
+                EntryType::Performance,
+                EntryType::Artwork,
+            ]),
+            EntryType::Case => retrieve_container(&[
+                EntryType::Book,
+                EntryType::Anthology,
+                EntryType::Reference,
+                EntryType::Report,
+            ]),
+            EntryType::Post => {
+                retrieve_container(&[EntryType::Thread, EntryType::Blog, EntryType::Web])
+            }
+            EntryType::Thread => {
+                retrieve_container(&[EntryType::Thread, EntryType::Web, EntryType::Blog])
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the collection of an entry like CSL defines it.
+    pub(crate) fn get_collection(&self) -> Option<&Self> {
+        match &self.entry_type {
+            EntryType::Anthology
+            | EntryType::Newspaper
+            | EntryType::Performance
+            | EntryType::Periodical
+            | EntryType::Proceedings
+            | EntryType::Book
+            | EntryType::Reference
+            | EntryType::Exhibition => self.parents.iter().find(|e| {
+                e.entry_type == self.entry_type || e.entry_type == EntryType::Anthology
+            }),
+            _ => self.parents.iter().find_map(|e| e.get_collection()),
+        }
+    }
+
+    /// Search a parent by DFS.
+    pub(crate) fn dfs_parent(&self, kind: EntryType) -> Option<&Self> {
+        if self.entry_type == kind {
+            return Some(self);
+        }
+
+        for parent in &self.parents {
+            if let Some(entry) = parent.dfs_parent(kind) {
+                return Some(entry);
+            }
+        }
+
+        None
+    }
+
+    /// Get the original entry.
+    pub(crate) fn get_original(&self) -> Option<&Self> {
+        self.dfs_parent(EntryType::Original)
+    }
 }
 
 #[cfg(feature = "biblatex")]
 impl Entry {
     /// Adds a parent to the current entry. The parent
     /// list will be created if there is none.
-    pub(crate) fn add_parent(&mut self, entry: Entry) {
+    pub(crate) fn add_parent(&mut self, entry: Self) {
         self.parents.push(entry);
     }
 
@@ -655,7 +821,7 @@ impl Entry {
         }
     }
 
-    pub(crate) fn parents_mut(&mut self) -> &mut [Entry] {
+    pub(crate) fn parents_mut(&mut self) -> &mut [Self] {
         &mut self.parents
     }
 }

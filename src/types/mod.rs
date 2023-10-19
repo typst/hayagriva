@@ -1,6 +1,7 @@
 //! Base types for the bibliography items and their content.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -177,8 +178,7 @@ pub enum EntryType {
     /// enacted into binding law.
     #[serde(alias = "Legislation")]
     Legislation,
-    /// Legal document or draft thereof that is, is to be, or was to be enacted
-    /// into binding law.
+    /// A document that is not yet published.
     #[serde(alias = "Manuscript")]
     Manuscript,
     /// A post on a social media platform.
@@ -187,6 +187,9 @@ pub enum EntryType {
     /// Items that do not match any of the other Entry type composites.
     #[serde(alias = "Misc")]
     Misc,
+    /// A live performance.
+    #[serde(alias = "Performance")]
+    Performance,
     /// A publication that periodically publishes issues with unique content.
     /// This includes scientific journals and news magazines.
     #[serde(alias = "Periodical")]
@@ -230,6 +233,9 @@ pub enum EntryType {
     /// A curated set of artworks.
     #[serde(alias = "Exhibition")]
     Exhibition,
+    /// A prior publication of the same item.
+    #[serde(alias = "Original")]
+    Original,
 }
 
 impl EntryType {
@@ -400,6 +406,56 @@ impl FromStr for QualifiedUrl {
 impl Display for QualifiedUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.value.fmt(f)
+    }
+}
+
+/// A set of serial numbers like DOIs, ISBNs, or ISSNs.
+/// Keys should be lowercase.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Hash)]
+#[serde(transparent)]
+pub struct SerialNumber(pub BTreeMap<String, String>);
+
+impl<'de> Deserialize<'de> for SerialNumber {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Choice {
+            Map(BTreeMap<String, StringOrNumber>),
+            Other(StringOrNumber),
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNumber {
+            String(String),
+            Number(i64),
+            UnsignedNumber(u64),
+            Float(f64),
+        }
+
+        impl ToString for StringOrNumber {
+            fn to_string(&self) -> String {
+                match self {
+                    Self::String(s) => s.clone(),
+                    Self::Number(n) => n.to_string(),
+                    Self::UnsignedNumber(n) => n.to_string(),
+                    Self::Float(f) => f.to_string(),
+                }
+            }
+        }
+
+        Choice::deserialize(deserializer).map(|choice| match choice {
+            Choice::Other(text) => SerialNumber(BTreeMap::from_iter(vec![(
+                "serial".to_owned(),
+                text.to_string(),
+            )])),
+            Choice::Map(map) => {
+                SerialNumber(map.into_iter().map(|(k, v)| (k, v.to_string())).collect())
+            }
+        })
     }
 }
 

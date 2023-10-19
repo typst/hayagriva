@@ -37,12 +37,7 @@ impl<'a> InstanceContext<'a> {
             ))),
             NumberVariable::CollectionNumber => self
                 .entry
-                .bound_select(
-                    &select!(
-                        (* > ("p":(Book | Anthology | Proceedings)))
-                    ),
-                    "p",
-                )
+                .get_collection()
                 .and_then(Entry::volume)
                 .map(MaybeTyped::to_cow),
             NumberVariable::Edition => {
@@ -65,11 +60,13 @@ impl<'a> InstanceContext<'a> {
                 )
             }
             NumberVariable::Number => {
-                return self.entry.serial_number().map(|s| {
-                    Numeric::from_str(s)
-                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                        .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
-                })
+                return self.entry.serial_number().and_then(|s| s.0.get("serial")).map(
+                    |s| {
+                        Numeric::from_str(s)
+                            .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                            .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
+                    },
+                )
             }
             NumberVariable::NumberOfPages => {
                 self.entry.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
@@ -95,13 +92,22 @@ impl<'a> InstanceContext<'a> {
                 )
                 .and_then(Entry::volume)
                 .map(MaybeTyped::to_cow),
-            NumberVariable::PrintingNumber => None,
+            NumberVariable::PrintingNumber => self
+                .entry
+                .map(|e| e.serial_number())
+                .and_then(|s| s.0.get("printing"))
+                .map(|s| {
+                    Numeric::from_str(s)
+                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                        .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
+                }),
             NumberVariable::Section => None,
             NumberVariable::SupplementNumber => None,
             NumberVariable::Version => self
                 .entry
                 .bound_select(&select!(("e":Repository)), "e")
                 .and_then(Entry::serial_number)
+                .and_then(|s| s.0.get("version"))
                 .map(|s| {
                     Numeric::from_str(s)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
@@ -138,22 +144,41 @@ impl<'a> InstanceContext<'a> {
             StandardVariable::CitationKey => {
                 Some(Cow::Owned(StringChunk::verbatim(&entry.key).into()))
             }
-            // The spec tells us that the CSL processor may assign this, we do not.
-            StandardVariable::CitationLabel => None,
+            StandardVariable::CitationLabel => entry
+                .map(|e| e.authors())
+                .and_then(|a| a.first())
+                .map(|n| n.name.chars().take(4).collect::<String>())
+                .or_else(|| {
+                    entry.title().map(|t| {
+                        t.select(LongShortForm::default())
+                            .to_string()
+                            .chars()
+                            .take(4)
+                            .collect::<String>()
+                    })
+                })
+                .map(|s| {
+                    let s = if let Some(date) = entry.date() {
+                        format!("{}{}", s, date.year % 100)
+                    } else {
+                        s
+                    };
+                    Cow::Owned(StringChunk::verbatim(s).into())
+                }),
             // Get third-order title first, then second-order title.
             StandardVariable::CollectionTitle => entry
-                .parents()
-                .iter()
-                .find_map(|p| p.map_parents(|e| e.title()))
-                .or_else(|| entry.map_parents(|e| e.title()))
+                .get_collection()
+                .and_then(|e| e.title())
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::ContainerTitle => entry
-                .map_parents(|e| e.title())
+                .get_container()
+                .and_then(|e| e.title())
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::ContainerTitleShort => entry
-                .map_parents(|e| e.title())
+                .get_container()
+                .and_then(|e| e.title())
                 .map(|f| f.select(LongShortForm::Short))
                 .map(Cow::Borrowed),
             StandardVariable::Dimensions => entry
@@ -190,19 +215,38 @@ impl<'a> InstanceContext<'a> {
             StandardVariable::Note => {
                 entry.note().map(|f| f.select(form)).map(Cow::Borrowed)
             }
-            // TODO: Find out how to express original publisher.
-            StandardVariable::OriginalPublisher => None,
-            StandardVariable::OriginalPublisherPlace => None,
-            StandardVariable::OriginalTitle => None,
+            StandardVariable::OriginalPublisher => entry
+                .get_original()
+                .and_then(|e| e.publisher())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::OriginalPublisherPlace => entry
+                .get_original()
+                .and_then(|e| e.publisher().and_then(|_| e.location()))
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::OriginalTitle => entry
+                .get_original()
+                .and_then(|e| e.title())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
             StandardVariable::PartTitle => None,
             // TODO: Accomodate more serial numbers
-            StandardVariable::PMCID => None,
-            StandardVariable::PMID => None,
+            StandardVariable::PMCID => {
+                entry.pmcid().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
+            }
+            StandardVariable::PMID => {
+                entry.pmid().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
+            }
             StandardVariable::Publisher => entry
                 .map(|e| e.publisher())
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
-            StandardVariable::PublisherPlace => None,
+            StandardVariable::PublisherPlace => entry
+                .map(|e| if e.publisher().is_some() { Some(e) } else { None })
+                .and_then(|e| e.location())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
             StandardVariable::References => None,
             StandardVariable::ReviewedGenre => None,
             StandardVariable::ReviewedTitle => entry
@@ -216,10 +260,13 @@ impl<'a> InstanceContext<'a> {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::Status => None,
-            StandardVariable::Title => {
+            StandardVariable::Title => entry
+                .title()
+                .map(|f| f.select(LongShortForm::Short))
+                .map(Cow::Borrowed),
+            StandardVariable::TitleShort => {
                 entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
             }
-            StandardVariable::TitleShort => None,
             StandardVariable::URL => entry
                 .map(|e| e.url())
                 .map(|d| Cow::Owned(StringChunk::verbatim(d.to_string()).into())),
@@ -260,8 +307,7 @@ pub(super) fn resolve_date_variable(
             .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
             .and_then(Entry::date),
         DateVariable::Issued => entry.date_any(),
-        // TODO match with the original publication stuff above
-        DateVariable::OriginalDate => None,
+        DateVariable::OriginalDate => entry.get_original().and_then(|e| e.date()),
         DateVariable::Submitted => None,
     }
 }
@@ -281,12 +327,7 @@ pub(super) fn resolve_name_variable(
             )
             .map(|e| e.affiliated_with_role(PersonRole::Director)),
         NameVariable::CollectionEditor => entry
-            .bound_select(
-                &select!(
-                    (* > ("p":(Book | Anthology)))
-                ),
-                "p",
-            )
+            .get_collection()
             .and_then(|e| e.editors())
             .map(|a| a.iter().collect()),
         NameVariable::Compiler => {
@@ -295,9 +336,10 @@ pub(super) fn resolve_name_variable(
         NameVariable::Composer => {
             entry.map(|e| Some(e.affiliated_with_role(PersonRole::Composer)))
         }
-        NameVariable::ContainerAuthor => {
-            entry.map_parents(|e| e.authors()).map(|a| a.iter().collect())
-        }
+        NameVariable::ContainerAuthor => entry
+            .get_container()
+            .and_then(|e| e.authors())
+            .map(|a| a.iter().collect()),
         NameVariable::Contributor => {
             entry.map(|e| Some(e.affiliated_with_role(PersonRole::Collaborator)))
         }
@@ -345,8 +387,10 @@ pub(super) fn resolve_name_variable(
         NameVariable::Organizer => {
             entry.map(|e| Some(e.affiliated_with_role(PersonRole::Organizer)))
         }
-        // TODO: Find out how to express original publisher.
-        NameVariable::OriginalAuthor => None,
+        NameVariable::OriginalAuthor => entry
+            .get_original()
+            .and_then(|e| e.authors())
+            .map(|a| a.iter().collect()),
         NameVariable::Performer => {
             entry.map(|e| Some(e.affiliated_with_role(PersonRole::CastMember)))
         }

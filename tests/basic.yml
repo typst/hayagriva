@@ -9,13 +9,14 @@ zygos:
         verbatim: true
     date: 2017
     page-range: 325-341
-    doi: 10.1145/3132747.3132780
+    serial-number:
+        doi: 10.1145/3132747.3132780
     parent:
         - type: Proceedings
           title: Proceedings of the 26th Symposium on Operating Systems Principles
           publisher: Association for Computing Machinery
           location: New York, NY, USA
-          isbn: "978-1450350853"
+          serial-number: { isbn: "978-1450350853" }
 
 wwdc-network:
     type: Article
@@ -85,7 +86,7 @@ harry:
         author: Rowling, J. K.
         volume: 5
         volume-total: 7
-        isbn: 978-0747551003
+        serial-number: { isbn: 978-0747551003 }
         page-total: 768
         date: ~2003-06-21
 
@@ -153,7 +154,8 @@ kinetics:
     type: Article
     title: Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate
     author: ["Doan, T. D.", "Tran Thoai, D. B.", "Haug, Hartmut"]
-    doi: 10.1103/PhysRevB.102.165126
+    serial-number:
+        doi: 10.1103/PhysRevB.102.165126
     page-total: 13
     page-range: 165126-165139
     date: 2020-10-14
@@ -169,9 +171,10 @@ house:
     type: Article
     title: Teaching medicine with the help of "Dr. House"
     author: ["Jerrentrup, Andreas", "Mueller, Tobias", "Glowalla, Ulrich", "Herder, Meike", "Henrichs, Nadine", "Neubauer, Andreas", "Schaefer, Juergen R."]
-    doi: 10.1371/journal.pone.0193972
+    serial-number:
+        doi: 10.1371/journal.pone.0193972
+        serial: e0193972
     date: 2018-03-13
-    serial-number: e0193972
     parent:
         title:
             value: PLoS ONE
@@ -232,7 +235,7 @@ gedanken:
         editor: ["Shannon, C. E.", "McCarthy, J."]
         volume: 34
         date: 1956-04
-        isbn: 978-0-691-07916-5
+        serial-number: { isbn: 978-0-691-07916-5 }
         location: Princeton, NJ, USA
         publisher: NBS
         parent:
@@ -296,7 +299,7 @@ un-hdr:
     author: United Nations Development Programme
     title: Human Development Report 2019
     location: New York
-    issn: 2412-3129
+    serial-number: { issn: 2412-3129 }
     url: http://hdr.undp.org/sites/default/files/hdr2019.pdf
     date: 2019
 
@@ -378,7 +381,8 @@ overleaf:
 latex-users:
     type: Article
     title: How many scholarly articles are written in LaTeX?
-    doi: 10.22541/au.148771883.35456290
+    serial-number:
+        doi: 10.22541/au.148771883.35456290
     author: Pepe, Alberto
     date: 2017-02-21
     parent:
