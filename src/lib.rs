@@ -149,7 +149,7 @@ mod util;
 
 use std::collections::BTreeMap;
 
-pub use citationberg::{IndependentStyle, LocaleFile};
+pub use citationberg::{IndependentStyle, LocaleFile, LongShortForm};
 pub use csl::{
     standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
     BufWriteFormat, CitationItem, CitationRequest, Elem, ElemChild, ElemChildren,
