@@ -69,66 +69,6 @@ impl<'a> BibliographyDriver<'a> {
         Self::default()
     }
 
-    /// Create a new citation with the given items. Bibliography-wide
-    /// disambiguation will not be applied.
-    pub fn instant_citation(&self, mut req: CitationRequest<'_>) -> ElemChildren {
-        let style = req.style();
-        style.sort(&mut req.items, style.csl.citation.sort.as_ref());
-        let mut res = vec![];
-        for item in req.items {
-            res.push(style.citation(
-                item.entry,
-                CiteProperties::for_sorting(item.locator, 0),
-                req.locale.as_ref(),
-                item.kind,
-            ));
-        }
-
-        let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
-
-        let formatting =
-            Formatting::default().apply(style.csl.citation.layout.to_formatting());
-
-        if !non_empty.is_empty() {
-            let mut res = if let Some(prefix) = style.csl.citation.layout.prefix.as_ref()
-            {
-                ElemChildren(vec![Formatted { text: prefix.clone(), formatting }.into()])
-            } else {
-                ElemChildren::new()
-            };
-
-            for (i, elem_children) in non_empty.into_iter().enumerate() {
-                let first = i == 0;
-                if !first {
-                    res.0.push(
-                        Formatted {
-                            text: style
-                                .csl
-                                .citation
-                                .layout
-                                .delimiter
-                                .as_deref()
-                                .unwrap_or(Citation::DEFAULT_CITE_GROUP_DELIMITER)
-                                .to_string(),
-                            formatting,
-                        }
-                        .into(),
-                    );
-                }
-
-                res.0.extend(elem_children.0)
-            }
-
-            if let Some(suffix) = style.csl.citation.layout.suffix.as_ref() {
-                res.0.push(Formatted { text: suffix.clone(), formatting }.into());
-            }
-
-            simplify_children(res)
-        } else {
-            ElemChildren::new()
-        }
-    }
-
     /// Create a new citation with the given items.
     pub fn citation(&mut self, mut req: CitationRequest<'a>) {
         let style = req.style();
@@ -544,6 +484,65 @@ impl<'a> BibliographyDriver<'a> {
             bibliography: bib_render,
             citations: final_citations,
         }
+    }
+}
+
+/// Create a new citation with the given items. Bibliography-wide disambiguation
+/// and some other features will not be applied.
+pub fn standalone_citation(mut req: CitationRequest<'_>) -> ElemChildren {
+    let style = req.style();
+    style.sort(&mut req.items, style.csl.citation.sort.as_ref());
+    let mut res = vec![];
+    for item in req.items {
+        res.push(style.citation(
+            item.entry,
+            CiteProperties::for_sorting(item.locator, 0),
+            req.locale.as_ref(),
+            item.kind,
+        ));
+    }
+
+    let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
+
+    let formatting =
+        Formatting::default().apply(style.csl.citation.layout.to_formatting());
+
+    if !non_empty.is_empty() {
+        let mut res = if let Some(prefix) = style.csl.citation.layout.prefix.as_ref() {
+            ElemChildren(vec![Formatted { text: prefix.clone(), formatting }.into()])
+        } else {
+            ElemChildren::new()
+        };
+
+        for (i, elem_children) in non_empty.into_iter().enumerate() {
+            let first = i == 0;
+            if !first {
+                res.0.push(
+                    Formatted {
+                        text: style
+                            .csl
+                            .citation
+                            .layout
+                            .delimiter
+                            .as_deref()
+                            .unwrap_or(Citation::DEFAULT_CITE_GROUP_DELIMITER)
+                            .to_string(),
+                        formatting,
+                    }
+                    .into(),
+                );
+            }
+
+            res.0.extend(elem_children.0)
+        }
+
+        if let Some(suffix) = style.csl.citation.layout.suffix.as_ref() {
+            res.0.push(Formatted { text: suffix.clone(), formatting }.into());
+        }
+
+        simplify_children(res)
+    } else {
+        ElemChildren::new()
     }
 }
 

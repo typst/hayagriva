@@ -231,7 +231,6 @@ impl<'a> InstanceContext<'a> {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::PartTitle => None,
-            // TODO: Accomodate more serial numbers
             StandardVariable::PMCID => {
                 entry.pmcid().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
             }

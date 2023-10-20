@@ -151,9 +151,10 @@ use std::collections::BTreeMap;
 
 pub use citationberg::{IndependentStyle, LocaleFile};
 pub use csl::{
-    BibliographyDriver, BibliographyRequest, Brackets, BufWriteFormat, CitationItem,
-    CitationRequest, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
-    Rendered, RenderedBibliography, RenderedCitation, SpecialForm, SpecificLocator,
+    standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
+    BufWriteFormat, CitationItem, CitationRequest, Elem, ElemChild, ElemChildren,
+    ElemMeta, Formatted, Formatting, Rendered, RenderedBibliography, RenderedCitation,
+    SpecialForm, SpecificLocator,
 };
 pub use selectors::{Selector, SelectorError};
 
@@ -523,6 +524,7 @@ entry! {
     /// Any serial number or version describing the item that is not appropriate
     /// for the fields doi, edition, isbn or issn (may be assigned by the author
     /// of the item; especially useful for preprint archives).
+    #[serde(alias = "serial")]
     "serial-number" => serial_number: SerialNumber,
     /// The language of the item.
     "language" => language: LanguageIdentifier,
