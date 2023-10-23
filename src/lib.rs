@@ -42,10 +42,10 @@ use hayagriva::{
     CitationItem, CitationRequest, LocaleFile, IndependentStyle
 };
 
-let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
+let en_locale = fs::read_to_string("tests/data/locales-en-US.xml").unwrap();
 let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
 
-let style = fs::read_to_string("tests/art-history.csl").unwrap();
+let style = fs::read_to_string("tests/data/art-history.csl").unwrap();
 let style = IndependentStyle::from_xml(&style).unwrap();
 
 let mut driver = BibliographyDriver::new();
@@ -62,7 +62,7 @@ let result = driver.finish(BibliographyRequest {
 });
 
 for cite in result.citations {
-    println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
+    println!("{}", cite.citation.to_string())
 }
 ```
 
@@ -149,6 +149,8 @@ mod util;
 
 use std::collections::BTreeMap;
 
+#[cfg(feature = "rkyv")]
+pub use crate::csl::archive;
 pub use citationberg::{IndependentStyle, LocaleFile, LongShortForm};
 pub use csl::{
     standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
@@ -237,6 +239,12 @@ impl IntoIterator for Library {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter().map(|(_, v)| v)
+    }
+}
+
+impl FromIterator<Entry> for Library {
+    fn from_iter<T: IntoIterator<Item = Entry>>(iter: T) -> Self {
+        Self(iter.into_iter().map(|e| (e.key().to_string(), e)).collect())
     }
 }
 
@@ -868,7 +876,7 @@ mod tests {
 
     #[test]
     fn selectors() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/data/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
 
         select_all!("article > proceedings", entries, ["zygos"]);
@@ -931,7 +939,7 @@ mod tests {
 
     #[test]
     fn selector_bindings() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/data/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
 
         select!(

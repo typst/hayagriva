@@ -65,13 +65,6 @@ impl Elem {
         Ok(())
     }
 
-    /// Write the element to a string.
-    pub fn to_string(&self, format: BufWriteFormat) -> String {
-        let mut buf = String::new();
-        self.write_buf(&mut buf, format).unwrap();
-        buf
-    }
-
     pub(super) fn is_empty(&self) -> bool {
         if self.children.is_empty() {
             true
@@ -90,6 +83,16 @@ impl Elem {
 
     pub(super) fn may_inline(&self) -> bool {
         self.display.is_none() && self.meta.is_none()
+    }
+}
+
+impl fmt::Display for Elem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            self.write_buf(f, BufWriteFormat::Plain)
+        } else {
+            self.write_buf(f, BufWriteFormat::VT100)
+        }
     }
 }
 
@@ -221,12 +224,15 @@ impl ElemChildren {
         }
         Ok(())
     }
+}
 
-    /// Write the children to a string.
-    pub fn to_string(&self, format: BufWriteFormat) -> String {
-        let mut buf = String::new();
-        self.write_buf(&mut buf, format).unwrap();
-        buf
+impl fmt::Display for ElemChildren {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            self.write_buf(f, BufWriteFormat::Plain)
+        } else {
+            self.write_buf(f, BufWriteFormat::VT100)
+        }
     }
 }
 
@@ -249,7 +255,8 @@ pub enum ElemChild {
 }
 
 impl ElemChild {
-    pub(super) fn write_buf(
+    /// Write the child to a buffer.
+    pub fn write_buf(
         &self,
         w: &mut impl fmt::Write,
         format: BufWriteFormat,
@@ -280,13 +287,6 @@ impl ElemChild {
         }
     }
 
-    /// Write the element to a string.
-    pub fn to_string(&self, format: BufWriteFormat) -> String {
-        let mut buf = String::new();
-        self.write_buf(&mut buf, format).unwrap();
-        buf
-    }
-
     pub(super) fn str_len(&self) -> usize {
         match self {
             ElemChild::Text(t) => t.text.len(),
@@ -313,6 +313,16 @@ impl ElemChild {
             }
             ElemChild::Elem(e) => e.is_empty(),
             ElemChild::Link { text, .. } => text.text.is_empty(),
+        }
+    }
+}
+
+impl fmt::Display for ElemChild {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            self.write_buf(f, BufWriteFormat::Plain)
+        } else {
+            self.write_buf(f, BufWriteFormat::VT100)
         }
     }
 }

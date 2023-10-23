@@ -274,3 +274,5 @@ Hayagriva is licensed under a MIT / Apache 2.0 dual license.
 Users and consumers of the library may choose which of those licenses they want
 to apply whereas contributors have to accept that their code is in compliance
 and distributed under the terms of both of these licenses.
+
+Hayagriva includes CSL styles that are licensed as CC-BY-SA 3.0 International if the `rkyv` feature is enabled.

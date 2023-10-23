@@ -11,7 +11,7 @@ categories = ["template-engine", "value-formatting", "command-line-utilities"]
 keywords = ["bibliography", "citation", "reference", "bibtex", "literature"]
 
 [features]
-default = ["biblatex"]
+default = ["biblatex", "rkyv"]
 cli = ["clap", "strum"]
 
 [dependencies]
@@ -30,6 +30,7 @@ serde = { version = "1", features = ["derive"] }
 indexmap = { version = "2.0.2", features = ["serde"] }
 serde_yaml = "0.9.25"
 numerals = "0.1.4"
+rkyv = { version = "0.7.42", optional = true }
 
 [[bin]]
 name = "hayagriva"

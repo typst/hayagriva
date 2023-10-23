@@ -28,6 +28,8 @@ pub use self::elem::{
     BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
 };
 
+#[cfg(feature = "rkyv")]
+pub mod archive;
 mod elem;
 mod rendering;
 mod sort;
@@ -267,7 +269,7 @@ impl<'a> BibliographyDriver<'a> {
                 let Some(name_elem) = cite.items[i]
                     .rendered
                     .get_meta(ElemMeta::Names)
-                    .map(|e| e.to_string(BufWriteFormat::Plain))
+                    .map(|e| format!("{:?}", e))
                 else {
                     continue;
                 };
@@ -685,7 +687,7 @@ fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
                 continue;
             }
 
-            let buf = item.rendered.to_string(BufWriteFormat::Plain);
+            let buf = format!("{:?}", item.rendered);
             match map.entry(buf) {
                 HmEntry::Occupied(entry) => match *entry.get() {
                     PotentialDisambiguation::Single(pos) => {
@@ -2213,10 +2215,10 @@ mod tests {
 
     #[test]
     fn test_csl() {
-        let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
+        let en_locale = fs::read_to_string("tests/data/locales-en-US.xml").unwrap();
         let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
 
-        let yaml = fs::read_to_string("tests/basic.yml").unwrap();
+        let yaml = fs::read_to_string("tests/data/basic.yml").unwrap();
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 

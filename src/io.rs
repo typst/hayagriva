@@ -53,7 +53,7 @@ impl std::fmt::Display for BibLaTeXError {
 
 /// Parse a bibliography from a BibLaTeX source string.
 #[cfg(feature = "biblatex")]
-pub fn from_biblatex_str(biblatex: &str) -> Result<Vec<Entry>, Vec<BibLaTeXError>> {
+pub fn from_biblatex_str(biblatex: &str) -> Result<Library, Vec<BibLaTeXError>> {
     let bibliography =
         Bibliography::parse(biblatex).map_err(|e| vec![BibLaTeXError::Parse(e)])?;
 
@@ -63,7 +63,7 @@ pub fn from_biblatex_str(biblatex: &str) -> Result<Vec<Entry>, Vec<BibLaTeXError
 
 /// Parse a bibliography from a BibLaTeX [`Bibliography`].
 #[cfg(feature = "biblatex")]
-pub fn from_biblatex(bibliography: &Bibliography) -> Result<Vec<Entry>, Vec<TypeError>> {
+pub fn from_biblatex(bibliography: &Bibliography) -> Result<Library, Vec<TypeError>> {
     let res: Vec<Result<Entry, TypeError>> =
         bibliography.iter().map(TryInto::try_into).collect();
     let errors: Vec<TypeError> = res
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let contents = fs::read_to_string("tests/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/data/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
         let yaml = to_yaml_str(&entries).unwrap();
         println!("{}", &yaml);
