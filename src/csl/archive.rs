@@ -1,11 +1,13 @@
 //! Optional archive of included CSL styles.
 
 use citationberg::{Locale, Style};
-use rkyv::{AlignedBytes, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 use std::collections::HashMap;
 
-const ARCHIVE: AlignedBytes<1693160> =
-    AlignedBytes(*include_bytes!("../../styles.cbor.rkyv"));
+#[repr(align(8))]
+struct Data<T: ?Sized>(T);
+
+static ARCHIVE: &Data<[u8]> = &Data(*include_bytes!("../../styles.cbor.rkyv"));
 
 /// In-memory representation of a CSL archive.
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
