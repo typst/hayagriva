@@ -151,6 +151,7 @@ use std::collections::BTreeMap;
 
 #[cfg(feature = "rkyv")]
 pub use crate::csl::archive;
+pub use citationberg::LocaleCode;
 pub use citationberg::{IndependentStyle, LocaleFile, LongShortForm};
 pub use csl::{
     standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
