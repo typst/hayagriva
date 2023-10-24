@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Write;
 use std::str::FromStr;
 
@@ -5,14 +6,14 @@ use citationberg::taxonomy::{
     NumberVariable, OtherTerm, StandardVariable, Term, Variable,
 };
 use citationberg::{
-    ChooseBranch, DateDayForm, DateMonthForm, DatePartName, DateParts, DateStrongAnyForm,
-    LabelPluralize, LayoutRenderingElement, LongShortForm, NumberForm, TestPosition,
-    TextCase, ToAffixes, ToFormatting,
+    ChooseBranch, CslMacro, DateDayForm, DateMonthForm, DatePartName, DateParts,
+    DateStrongAnyForm, LabelPluralize, LayoutRenderingElement, LongShortForm, NumberForm,
+    TestPosition, TextCase, ToAffixes, ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
 use crate::lang::{Case, SentenceCase, TitleCase};
-use crate::types::{Date, MaybeTyped, Numeric};
+use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
 
 use super::taxonomy::matches_entry_type;
 use super::{Context, ElemMeta, IbidState, SpecialForm};
@@ -28,11 +29,38 @@ pub(crate) trait RenderCsl {
 
 impl RenderCsl for citationberg::Text {
     fn render(&self, ctx: &mut Context) {
+        enum ResolvedTextTarget<'a> {
+            StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
+            NumberVariable(NumberVariable, MaybeTyped<Cow<'a, Numeric>>),
+            Macro(&'a CslMacro),
+            Term(&'a str),
+            Value(&'a str),
+        }
+
         if ctx.instance.kind == Some(SpecialForm::AuthorOnly)
             && !matches!(&self.target, TextTarget::Macro { .. })
         {
             return;
         }
+
+        let Some(target) = (match &self.target {
+            TextTarget::Variable { var: Variable::Standard(var), form } => ctx
+                .resolve_standard_variable(*form, *var)
+                .map(|s| ResolvedTextTarget::StandardVariable(*var, s)),
+            TextTarget::Variable { var: Variable::Number(var), .. } => ctx
+                .resolve_number_variable(*var)
+                .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
+            TextTarget::Variable { .. } => None,
+            TextTarget::Macro { name } => {
+                ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)
+            }
+            TextTarget::Term { term, form, plural } => {
+                ctx.term(*term, *form, *plural).map(ResolvedTextTarget::Term)
+            }
+            TextTarget::Value { val } => Some(ResolvedTextTarget::Value(val)),
+        }) else {
+            return;
+        };
 
         let depth = ctx.push_elem(self.formatting);
 
@@ -45,60 +73,44 @@ impl RenderCsl for citationberg::Text {
         ctx.may_strip_periods(self.strip_periods);
         let cidx = ctx.push_case(self.text_case);
 
-        match &self.target {
-            TextTarget::Variable { var: Variable::Standard(var), form } => {
-                if let Some(val) = ctx.resolve_standard_variable(*form, *var) {
-                    match var {
-                        StandardVariable::URL => {
-                            let str = val.to_string();
-                            ctx.push_link(&val, str);
-                        }
-                        StandardVariable::DOI => {
-                            let url = format!("https://doi.org/{}", val.to_str());
-                            ctx.push_link(&val, url);
-                        }
-                        StandardVariable::PMID => {
-                            let url = format!(
-                                "https://www.ncbi.nlm.nih.gov/pubmed/{}",
-                                val.to_str()
-                            );
-                            ctx.push_link(&val, url);
-                        }
-                        StandardVariable::PMCID => {
-                            let url = format!(
-                                "https://www.ncbi.nlm.nih.gov/pmc/articles/{}",
-                                val.to_str()
-                            );
-                            ctx.push_link(&val, url);
-                        }
-                        _ => ctx.push_chunked(&val),
-                    }
+        match target {
+            ResolvedTextTarget::StandardVariable(var, val) => match var {
+                StandardVariable::URL => {
+                    let str = val.to_string();
+                    ctx.push_link(&val, str);
                 }
-            }
-            TextTarget::Variable { var: Variable::Number(var), .. } => {
-                if let Some(n) = ctx.resolve_number_variable(*var) {
-                    ctx.push_str(&n.to_str())
+                StandardVariable::DOI => {
+                    let url = format!("https://doi.org/{}", val.to_str());
+                    ctx.push_link(&val, url);
                 }
-            }
-            TextTarget::Variable { .. } => {}
-            TextTarget::Macro { name } => {
+                StandardVariable::PMID => {
+                    let url =
+                        format!("https://www.ncbi.nlm.nih.gov/pubmed/{}", val.to_str());
+                    ctx.push_link(&val, url);
+                }
+                StandardVariable::PMCID => {
+                    let url = format!(
+                        "https://www.ncbi.nlm.nih.gov/pmc/articles/{}",
+                        val.to_str()
+                    );
+                    ctx.push_link(&val, url);
+                }
+                _ => ctx.push_chunked(&val),
+            },
+            ResolvedTextTarget::NumberVariable(_, n) => ctx.push_str(&n.to_str()),
+            ResolvedTextTarget::Macro(mac) => {
                 let len = ctx.writing.len();
-                let mac = ctx.style.get_macro(name);
 
-                if let Some(mac) = &mac {
-                    for child in &mac.children {
-                        child.render(ctx);
-                    }
+                for child in &mac.children {
+                    child.render(ctx);
+                }
 
-                    if len < ctx.writing.len() {
-                        ctx.writing.printed_non_empty_macro();
-                    }
+                if len < ctx.writing.len() {
+                    ctx.writing.printed_non_empty_macro();
                 }
             }
-            TextTarget::Term { term, form, plural } => {
-                ctx.push_str(ctx.term(*term, *form, *plural).unwrap_or_default())
-            }
-            TextTarget::Value { val } => ctx.push_str(val),
+            ResolvedTextTarget::Term(s) => ctx.push_str(s),
+            ResolvedTextTarget::Value(val) => ctx.push_str(val),
         }
 
         ctx.pop_case(cidx);
