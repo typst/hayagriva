@@ -4,7 +4,7 @@ use std::fmt::Write;
 use citationberg::taxonomy::{NameVariable, OtherTerm, Term};
 use citationberg::{
     DelimiterBehavior, DemoteNonDroppingParticle, LayoutRenderingElement, NameAnd,
-    NameAsSortOrder, NameForm, Names,
+    NameAsSortOrder, NameForm, NameLabelPosition, Names, ToAffixes, ToFormatting,
 };
 use citationberg::{DisambiguationRule, TermForm};
 
@@ -34,20 +34,20 @@ impl DisambiguatedNameForm {
         }
 
         let form = names
-            .name
+            .name()
             .as_ref()
             .and_then(|name| name.form)
             .or_else(|| ctx.writing.name_options.last().name_form)
             .unwrap_or_default();
 
         if names
-            .options
+            .options()
             .initialize_with
             .as_ref()
             .or_else(|| ctx.writing.name_options.last().initialize_with.as_ref())
             .is_some()
             && names
-                .options
+                .options()
                 .initialize
                 .or_else(|| ctx.writing.name_options.last().initialize)
                 .unwrap_or(true)
@@ -227,11 +227,11 @@ impl RenderCsl for Names {
                 .collect()
         };
 
-        ctx.writing.push_name_options(&self.options);
+        ctx.writing.push_name_options(&self.options());
 
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
         if is_empty {
-            if let Some(substitute) = &self.substitute {
+            if let Some(substitute) = &self.substitute() {
                 ctx.writing.start_suppressing_queried_variables();
 
                 for child in &substitute.children {
@@ -253,20 +253,20 @@ impl RenderCsl for Names {
             return;
         }
 
-        let depth = ctx.push_elem(self.formatting);
-        let affix_loc = ctx.apply_prefix(&self.affixes);
+        let depth = ctx.push_elem(self.to_formatting());
+        let affix_loc = ctx.apply_prefix(&self.to_affixes());
 
         let default_form = DisambiguatedNameForm::from(self, ctx);
         if default_form == DisambiguatedNameForm::Count {
             write!(ctx, "{}", people.into_iter().fold(0, |acc, curr| acc + curr.0.len()))
                 .unwrap();
-            ctx.apply_suffix(&self.affixes, affix_loc);
+            ctx.apply_suffix(&self.to_affixes(), affix_loc);
             ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
             ctx.writing.pop_name_options();
             return;
         }
 
-        let cs_name = self.name.clone().unwrap_or_default();
+        let cs_name = self.name().cloned().unwrap_or_default();
         let options = cs_name.options(ctx.writing.name_options.last());
         let props = if let DisambiguateState::NameDisambiguation(props) =
             &ctx.instance.cite_props.speculative.disambiguation
@@ -306,17 +306,25 @@ impl RenderCsl for Names {
             .enumerate()
         {
             let plural = persons.len() != 1;
-            add_names(self, ctx, persons, &cs_name, forms, variable);
-
-            if !ctx.instance.sorting {
-                if let Some(label) = &self.label {
-                    render_label_with_var(
-                        label,
-                        ctx,
-                        ctx.term(variable.into(), label.form, plural).unwrap_or_default(),
-                    )
+            let label = self.label();
+            let do_label = |requested_pos: NameLabelPosition, ctx: &mut Context<'_>| {
+                if !ctx.instance.sorting {
+                    if let Some((label, pos)) = label {
+                        if pos == requested_pos {
+                            render_label_with_var(
+                                label,
+                                ctx,
+                                ctx.term(variable.into(), label.form, plural)
+                                    .unwrap_or_default(),
+                            )
+                        }
+                    }
                 }
-            }
+            };
+
+            do_label(NameLabelPosition::BeforeName, ctx);
+            add_names(self, ctx, persons, &cs_name, forms, variable);
+            do_label(NameLabelPosition::AfterName, ctx);
 
             if i > 0 {
                 let delim = self.delimiter(ctx.writing.name_options.last());
@@ -331,7 +339,7 @@ impl RenderCsl for Names {
         // [`NameDisambiguationProperties::disambiguate_list`] on the identical
         // pairs. Rerender if necessary.
 
-        ctx.apply_suffix(&self.affixes, affix_loc);
+        ctx.apply_suffix(&self.to_affixes(), affix_loc);
         ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
         ctx.writing.pop_name_options();
         ctx.writing.first_name_properties(|| props);
@@ -355,7 +363,8 @@ fn add_names(
 ) {
     let has_et_al = forms.iter().any(|f| f.is_none());
     let take = forms.iter().position(|f| f.is_none()).unwrap_or(persons.len());
-    let name_opts = cs_name.options(&names.options);
+    let names_opts = names.options();
+    let name_opts = cs_name.options(&names_opts);
     let et_al_use_last = has_et_al.then(|| forms.last().copied().flatten()).flatten();
     let mut last_inverted = false;
 
@@ -374,18 +383,19 @@ fn add_names(
         if !first {
             let mut delim = EndDelim::Delim;
             if last && !has_et_al {
-                if let Some(d) = names.options.and {
-                    delim =
-                        match names.options.delimiter_precedes_last.unwrap_or_default() {
-                            DelimiterBehavior::Contextual if i >= 2 => {
-                                EndDelim::DelimAnd(d)
-                            }
-                            DelimiterBehavior::AfterInvertedName if last_inverted => {
-                                EndDelim::DelimAnd(d)
-                            }
-                            DelimiterBehavior::Always => EndDelim::DelimAnd(d),
-                            _ => EndDelim::And(d),
+                if let Some(d) = names.options().and {
+                    delim = match names
+                        .options()
+                        .delimiter_precedes_last
+                        .unwrap_or_default()
+                    {
+                        DelimiterBehavior::Contextual if i >= 2 => EndDelim::DelimAnd(d),
+                        DelimiterBehavior::AfterInvertedName if last_inverted => {
+                            EndDelim::DelimAnd(d)
                         }
+                        DelimiterBehavior::Always => EndDelim::DelimAnd(d),
+                        _ => EndDelim::And(d),
+                    }
                 }
             }
 
@@ -414,7 +424,7 @@ fn add_names(
             }
         }
 
-        let reverse = match names.options.name_as_sort_order {
+        let reverse = match names.options().name_as_sort_order {
             Some(NameAsSortOrder::First) if i == 0 => true,
             Some(NameAsSortOrder::All) => true,
             _ => false,
@@ -444,7 +454,7 @@ fn add_names(
                 name,
                 ctx,
                 form,
-                matches!(names.options.name_as_sort_order, Some(NameAsSortOrder::All)),
+                matches!(names.options().name_as_sort_order, Some(NameAsSortOrder::All)),
                 demote_non_dropping,
                 names,
                 cs_name,
@@ -453,9 +463,9 @@ fn add_names(
             );
         }
     } else if has_et_al {
-        let cs_et_al = names.et_al.unwrap_or_default();
+        let cs_et_al = names.et_al().cloned().unwrap_or_default();
         if let Some(term) = ctx.term(cs_et_al.term.into(), TermForm::default(), false) {
-            let delim = match names.options.delimiter_precedes_et_al {
+            let delim = match names.options().delimiter_precedes_et_al {
                 Some(DelimiterBehavior::Always) => true,
                 Some(DelimiterBehavior::Contextual) if take >= 2 => true,
                 Some(DelimiterBehavior::AfterInvertedName) if last_inverted => true,
@@ -487,7 +497,8 @@ fn write_name(
     name_idx: usize,
 ) {
     let hyphen_init = ctx.style.csl.settings.initialize_with_hyphen;
-    let sort_sep = names.options.sort_separator.as_deref().unwrap_or(", ");
+    let names_opts = names.options();
+    let sort_sep = names_opts.sort_separator.as_deref().unwrap_or(", ");
 
     let first_part = cs_name.name_part_given();
     let family_part = cs_name.name_part_family();
@@ -507,7 +518,7 @@ fn write_name(
     let first_name = |ctx: &mut Context| {
         if let Some(first) = &name.given_name {
             if let Some(initialize_with) = names
-                .options
+                .options()
                 .initialize_with
                 .clone()
                 .or_else(|| ctx.writing.name_options.last().initialize_with.clone())
