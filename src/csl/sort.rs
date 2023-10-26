@@ -7,18 +7,18 @@ use citationberg::{
 };
 
 use crate::csl::rendering::RenderCsl;
-use crate::csl::taxonomy::{resolve_date_variable, resolve_name_variable};
 use crate::csl::BufWriteFormat;
 
+use super::taxonomy::EntryLike;
 use super::{CitationItem, InstanceContext, StyleContext};
 
 impl<'a> StyleContext<'a> {
     /// Retrieve the ordering of two entries according to the given sort key.
-    fn cmp_entries(
+    fn cmp_entries<T: EntryLike>(
         &self,
-        a: &CitationItem,
+        a: &CitationItem<T>,
         a_idx: usize,
-        b: &CitationItem,
+        b: &CitationItem<T>,
         b_idx: usize,
         key: &SortKey,
     ) -> Ordering {
@@ -34,8 +34,8 @@ impl<'a> StyleContext<'a> {
                 a.cmp(&b)
             }
             SortKey::Variable { variable: Variable::Date(d), .. } => {
-                let a = resolve_date_variable(a.entry, *d);
-                let b = resolve_date_variable(b.entry, *d);
+                let a = a.entry.resolve_date_variable(*d);
+                let b = b.entry.resolve_date_variable(*d);
 
                 match (a, b) {
                     (Some(a), Some(b)) => a.csl_cmp(b),
@@ -45,8 +45,8 @@ impl<'a> StyleContext<'a> {
                 }
             }
             SortKey::Variable { variable: Variable::Name(n), .. } => {
-                let a = resolve_name_variable(a.entry, *n);
-                let b = resolve_name_variable(b.entry, *n);
+                let a = a.entry.resolve_name_variable(*n);
+                let b = b.entry.resolve_name_variable(*n);
 
                 for (a_pers, b_pers) in a.iter().zip(b.iter()) {
                     let ord = a_pers.csl_cmp(
@@ -88,7 +88,7 @@ impl<'a> StyleContext<'a> {
                 names_use_last,
                 ..
             } => {
-                let render = |entry: &CitationItem, idx: usize| {
+                let render = |entry: &CitationItem<T>, idx: usize| {
                     let mut ctx = self.sorting_ctx(entry, idx, entry.locale.as_ref());
                     ctx.writing.name_options.push(InheritableNameOptions {
                         et_al_min: *names_min,
@@ -125,7 +125,7 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Sorts the given citation items by the style's sort keys.
-    pub fn sort(&self, cites: &mut [CitationItem], sort: Option<&Sort>) {
+    pub fn sort<T: EntryLike>(&self, cites: &mut [CitationItem<T>], sort: Option<&Sort>) {
         if let Some(sort) = sort {
             cites.sort_by(|a, b| {
                 let mut ordering = Ordering::Equal;

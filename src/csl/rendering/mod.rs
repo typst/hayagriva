@@ -15,7 +15,7 @@ use citationberg::{TermForm, TextTarget};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
 
-use super::taxonomy::matches_entry_type;
+use super::taxonomy::EntryLike;
 use super::{Context, ElemMeta, IbidState, SpecialForm};
 
 pub mod names;
@@ -24,11 +24,11 @@ pub mod names;
 /// [`Entry`] with them.
 pub(crate) trait RenderCsl {
     /// Render the element given the context's Entry into the context's buffer.
-    fn render(&self, ctx: &mut Context);
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>);
 }
 
 impl RenderCsl for citationberg::Text {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         enum ResolvedTextTarget<'a> {
             StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
             NumberVariable(NumberVariable, MaybeTyped<Cow<'a, Numeric>>),
@@ -131,7 +131,7 @@ impl RenderCsl for citationberg::Text {
 }
 
 impl RenderCsl for citationberg::Number {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
             return;
         }
@@ -202,7 +202,7 @@ impl RenderCsl for citationberg::Number {
 }
 
 impl RenderCsl for citationberg::Label {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
             return;
         }
@@ -232,9 +232,9 @@ impl RenderCsl for citationberg::Label {
     }
 }
 
-fn render_label_with_var(
+fn render_label_with_var<T: EntryLike>(
     label: &citationberg::VariablelessLabel,
-    ctx: &mut Context,
+    ctx: &mut Context<T>,
     content: &str,
 ) {
     if content.is_empty() {
@@ -258,7 +258,7 @@ fn render_label_with_var(
 }
 
 impl RenderCsl for citationberg::Date {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
             return;
         }
@@ -365,10 +365,10 @@ impl RenderCsl for citationberg::Date {
     }
 }
 
-fn render_date_part(
+fn render_date_part<T: EntryLike>(
     date_part: &citationberg::DatePart,
     date: &Date,
-    ctx: &mut Context,
+    ctx: &mut Context<T>,
     over_ride: Option<&citationberg::DatePart>,
 ) {
     let Some(val) = (match date_part.name {
@@ -472,7 +472,7 @@ fn render_date_part(
 
 /// Render the year suffix if it is set and the style will not render it
 /// explicitly.
-fn render_year_suffix_implicitly(ctx: &mut Context) {
+fn render_year_suffix_implicitly<T: EntryLike>(ctx: &mut Context<T>) {
     if ctx.style.renders_year_suffix_implicitly() {
         if let Some(year_suffix) = ctx.resolve_standard_variable(
             LongShortForm::default(),
@@ -484,7 +484,7 @@ fn render_year_suffix_implicitly(ctx: &mut Context) {
 }
 
 impl RenderCsl for citationberg::Choose {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         for branch in self.branches() {
             if branch.match_.test(BranchConditionIter::from_branch(branch, ctx)) {
                 render_with_delimiter(&branch.children, self.delimiter.as_deref(), ctx);
@@ -498,10 +498,10 @@ impl RenderCsl for citationberg::Choose {
     }
 }
 
-fn render_with_delimiter(
+fn render_with_delimiter<T: EntryLike>(
     children: &[LayoutRenderingElement],
     delimiter: Option<&str>,
-    ctx: &mut Context,
+    ctx: &mut Context<T>,
 ) {
     let mut last_empty = true;
     let mut loc = None;
@@ -594,15 +594,15 @@ impl Iterator for BranchConditionPos {
     }
 }
 
-struct BranchConditionIter<'a, 'b> {
+struct BranchConditionIter<'a, 'b, T: EntryLike> {
     cond: &'a ChooseBranch,
-    ctx: &'a mut Context<'b>,
+    ctx: &'a mut Context<'b, T>,
     pos: BranchConditionPos,
     idx: usize,
 }
 
-impl<'a, 'b> BranchConditionIter<'a, 'b> {
-    fn from_branch(cond: &'a ChooseBranch, ctx: &'a mut Context<'b>) -> Self {
+impl<'a, 'b, T: EntryLike> BranchConditionIter<'a, 'b, T> {
+    fn from_branch(cond: &'a ChooseBranch, ctx: &'a mut Context<'b, T>) -> Self {
         Self {
             cond,
             ctx,
@@ -617,7 +617,7 @@ impl<'a, 'b> BranchConditionIter<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
+impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -737,7 +737,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
                     let kind = kind[self.idx];
                     self.idx += 1;
 
-                    Some(matches_entry_type(self.ctx.instance.entry, kind))
+                    Some(self.ctx.instance.entry.matches_entry_type(kind))
                 } else {
                     self.next_case();
                     self.next()
@@ -779,7 +779,7 @@ impl<'a, 'b> Iterator for BranchConditionIter<'a, 'b> {
 }
 
 impl RenderCsl for citationberg::Group {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         let info = ctx.writing.push_usage_info();
         let idx = ctx.push_elem(self.to_formatting());
         let affixes = self.to_affixes();
@@ -805,7 +805,7 @@ impl RenderCsl for citationberg::Group {
 }
 
 impl RenderCsl for citationberg::LayoutRenderingElement {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         match self {
             citationberg::LayoutRenderingElement::Text(text) => text.render(ctx),
             citationberg::LayoutRenderingElement::Number(num) => num.render(ctx),
@@ -819,7 +819,7 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 }
 
 impl RenderCsl for citationberg::Layout {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         let fidx = ctx.push_format(self.to_formatting());
         for e in &self.elements {
             e.render(ctx);
@@ -829,7 +829,7 @@ impl RenderCsl for citationberg::Layout {
 }
 
 impl RenderCsl for citationberg::RenderingElement {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         match self {
             citationberg::RenderingElement::Layout(l) => l.render(ctx),
             citationberg::RenderingElement::Other(o) => o.render(ctx),

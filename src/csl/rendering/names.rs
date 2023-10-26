@@ -8,6 +8,7 @@ use citationberg::{
 };
 use citationberg::{DisambiguationRule, TermForm};
 
+use crate::csl::taxonomy::EntryLike;
 use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm};
 use crate::types::Person;
 
@@ -28,7 +29,7 @@ pub enum DisambiguatedNameForm {
 }
 
 impl DisambiguatedNameForm {
-    fn from(names: &citationberg::Names, ctx: &Context) -> Self {
+    fn from<T: EntryLike>(names: &citationberg::Names, ctx: &Context<T>) -> Self {
         if ctx.instance.sorting {
             return Self::LongFull;
         }
@@ -184,7 +185,7 @@ impl NameDisambiguationProperties {
 }
 
 impl RenderCsl for Names {
-    fn render(&self, ctx: &mut Context) {
+    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         match &ctx.instance.kind {
             Some(SpecialForm::AuthorOnly) => {
                 if self.variable.iter().all(|v| &NameVariable::Author != v) {
@@ -307,7 +308,8 @@ impl RenderCsl for Names {
         {
             let plural = persons.len() != 1;
             let label = self.label();
-            let do_label = |requested_pos: NameLabelPosition, ctx: &mut Context<'_>| {
+            let do_label = |requested_pos: NameLabelPosition,
+                            ctx: &mut Context<'_, T>| {
                 if !ctx.instance.sorting {
                     if let Some((label, pos)) = label {
                         if pos == requested_pos {
@@ -353,9 +355,9 @@ enum EndDelim {
     DelimAnd(NameAnd),
 }
 
-fn add_names(
+fn add_names<T: EntryLike>(
     names: &citationberg::Names,
-    ctx: &mut Context,
+    ctx: &mut Context<T>,
     persons: Vec<&Person>,
     cs_name: &citationberg::Name,
     forms: &[Option<DisambiguatedNameForm>],
@@ -485,9 +487,9 @@ fn add_names(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn write_name(
+fn write_name<T: EntryLike>(
     name: &Person,
-    ctx: &mut Context,
+    ctx: &mut Context<T>,
     form: DisambiguatedNameForm,
     reverse: bool,
     demote_non_dropping: bool,
@@ -515,7 +517,7 @@ fn write_name(
         family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
 
-    let first_name = |ctx: &mut Context| {
+    let first_name = |ctx: &mut Context<T>| {
         if let Some(first) = &name.given_name {
             if let Some(initialize_with) = names
                 .options()
@@ -538,7 +540,7 @@ fn write_name(
         }
     };
 
-    let simple = |ctx: &mut Context| {
+    let simple = |ctx: &mut Context<T>| {
         let idx = ctx.push_format(family_format);
         let cidx = ctx.push_case(family_case);
         if let Some(prefix) = family_affixes[0] {
@@ -552,7 +554,7 @@ fn write_name(
         }
     };
 
-    let reverse_keep_particle = |ctx: &mut Context<'_>| {
+    let reverse_keep_particle = |ctx: &mut Context<T>| {
         let idx = ctx.push_format(family_format);
         let cidx = ctx.push_case(family_case);
 
@@ -602,7 +604,7 @@ fn write_name(
         }
     };
 
-    let reverse_demote_particle = |ctx: &mut Context<'_>| {
+    let reverse_demote_particle = |ctx: &mut Context<T>| {
         let idx = ctx.push_format(family_format);
         let cidx = ctx.push_case(family_case);
 

@@ -13,14 +13,76 @@ use unic_langid::LanguageIdentifier;
 
 use super::{DisambiguateState, InstanceContext};
 
-impl<'a> InstanceContext<'a> {
+pub trait EntryLike {
+    fn resolve_number_variable(
+        &self,
+        variable: NumberVariable,
+    ) -> Option<MaybeTyped<Cow<'_, Numeric>>>;
+    fn resolve_standard_variable(
+        &self,
+        form: LongShortForm,
+        variable: StandardVariable,
+    ) -> Option<Cow<'_, ChunkedString>>;
+    fn resolve_name_variable(&self, variable: NameVariable) -> Vec<&Person>;
+    fn resolve_date_variable(&self, variable: DateVariable) -> Option<&Date>;
+    fn matches_entry_type(&self, kind: taxonomy::Kind) -> bool;
+    fn is_english(&self) -> Option<bool>;
+}
+
+impl<'a, T: EntryLike> InstanceContext<'a, T> {
     pub(super) fn resolve_number_variable(
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
         match variable {
+            NumberVariable::CitationNumber => Some(MaybeTyped::Typed(Cow::Owned(
+                Numeric::from(self.cite_props.speculative.citation_number as u32 + 1),
+            ))),
+            NumberVariable::FirstReferenceNoteNumber => self
+                .cite_props
+                .certain
+                .first_note_number
+                .map(|n| MaybeTyped::Typed(Cow::Owned(Numeric::from(n as u32)))),
+            NumberVariable::Locator => {
+                let l = self.cite_props.speculative.locator?.1;
+                Some(
+                    Numeric::from_str(l)
+                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                        .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
+                )
+            }
+            _ => self.entry.resolve_number_variable(variable),
+        }
+    }
+
+    // Number variables are standard variables.
+    pub(super) fn resolve_standard_variable(
+        &self,
+        form: LongShortForm,
+        variable: StandardVariable,
+    ) -> Option<Cow<'a, ChunkedString>> {
+        match variable {
+            StandardVariable::YearSuffix => {
+                if let DisambiguateState::YearSuffix(s) =
+                    self.cite_props.speculative.disambiguation
+                {
+                    Some(Cow::Owned(StringChunk::normal(letter(s)).into()))
+                } else {
+                    None
+                }
+            }
+            _ => self.entry.resolve_standard_variable(form, variable),
+        }
+    }
+}
+
+impl EntryLike for Entry {
+    fn resolve_number_variable(
+        &self,
+        variable: NumberVariable,
+    ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
+        match variable {
             NumberVariable::ChapterNumber => self
-                .entry
                 .bound_select(
                     &select!(
                         (("e":Anthos) > ("p":Anthology)) |
@@ -32,58 +94,37 @@ impl<'a> InstanceContext<'a> {
                 )
                 .and_then(Entry::volume)
                 .map(MaybeTyped::to_cow),
-            NumberVariable::CitationNumber => Some(MaybeTyped::Typed(Cow::Owned(
-                Numeric::from(self.cite_props.speculative.citation_number as u32 + 1),
-            ))),
-            NumberVariable::CollectionNumber => self
-                .entry
-                .get_collection()
-                .and_then(Entry::volume)
-                .map(MaybeTyped::to_cow),
-            NumberVariable::Edition => {
-                self.entry.map(|e| e.edition()).map(MaybeTyped::to_cow)
+            NumberVariable::CitationNumber => panic!("processor must resolve this"),
+            NumberVariable::CollectionNumber => {
+                self.get_collection().and_then(Entry::volume).map(MaybeTyped::to_cow)
             }
-            NumberVariable::FirstReferenceNoteNumber => self
-                .cite_props
-                .certain
-                .first_note_number
-                .map(|n| MaybeTyped::Typed(Cow::Owned(Numeric::from(n as u32)))),
-            NumberVariable::Issue => {
-                self.entry.map(|e| e.issue()).map(MaybeTyped::to_cow)
+            NumberVariable::Edition => self.map(|e| e.edition()).map(MaybeTyped::to_cow),
+            NumberVariable::FirstReferenceNoteNumber => {
+                panic!("processor must resolve this")
             }
-            NumberVariable::Locator => {
-                let l = self.cite_props.speculative.locator?.1;
-                Some(
-                    Numeric::from_str(l)
-                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                        .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
-                )
-            }
+            NumberVariable::Issue => self.map(|e| e.issue()).map(MaybeTyped::to_cow),
+            NumberVariable::Locator => panic!("processor must resolve this"),
             NumberVariable::Number => {
-                return self.entry.serial_number().and_then(|s| s.0.get("serial")).map(
-                    |s| {
-                        Numeric::from_str(s)
-                            .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                            .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
-                    },
-                )
+                return self.serial_number().and_then(|s| s.0.get("serial")).map(|s| {
+                    Numeric::from_str(s)
+                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                        .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
+                })
             }
             NumberVariable::NumberOfPages => {
-                self.entry.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
+                self.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
             NumberVariable::NumberOfVolumes => {
-                self.entry.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
+                self.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
             NumberVariable::Page => {
-                self.entry.page_range().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
+                self.page_range().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
             NumberVariable::PageFirst => self
-                .entry
                 .page_range()
                 .and_then(|r| r.range())
                 .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start)))),
             NumberVariable::PartNumber => self
-                .entry
                 .bound_select(
                     &select!(
                         (("e":*) > (Article | Blog | Book | Legislation))
@@ -93,7 +134,6 @@ impl<'a> InstanceContext<'a> {
                 .and_then(Entry::volume)
                 .map(MaybeTyped::to_cow),
             NumberVariable::PrintingNumber => self
-                .entry
                 .map(|e| e.serial_number())
                 .and_then(|s| s.0.get("printing"))
                 .map(|s| {
@@ -104,7 +144,6 @@ impl<'a> InstanceContext<'a> {
             NumberVariable::Section => None,
             NumberVariable::SupplementNumber => None,
             NumberVariable::Version => self
-                .entry
                 .bound_select(&select!(("e":Repository)), "e")
                 .and_then(Entry::serial_number)
                 .and_then(|s| s.0.get("version"))
@@ -113,17 +152,17 @@ impl<'a> InstanceContext<'a> {
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
                 }),
-            NumberVariable::Volume => self.entry.volume().map(MaybeTyped::to_cow),
+            NumberVariable::Volume => self.volume().map(MaybeTyped::to_cow),
         }
     }
 
     // Number variables are standard variables.
-    pub(super) fn resolve_standard_variable(
+    fn resolve_standard_variable(
         &self,
         form: LongShortForm,
         variable: StandardVariable,
-    ) -> Option<Cow<'a, ChunkedString>> {
-        let entry = self.entry;
+    ) -> Option<Cow<'_, ChunkedString>> {
+        let entry = self;
         match variable {
             StandardVariable::Abstract => None,
             StandardVariable::Annote => None,
@@ -276,319 +315,306 @@ impl<'a> InstanceContext<'a> {
                     (* > ("p":Reference)) |
                     (Article > ("p":Proceedings))
                 );
-                entry
-                    .bound_select(&selector, "p")
+
+                self.bound_select(&selector, "p")
                     .and_then(Entry::title)
                     .map(|f| f.select(form))
                     .map(Cow::Borrowed)
             }
-            StandardVariable::YearSuffix => {
-                if let DisambiguateState::YearSuffix(s) =
-                    self.cite_props.speculative.disambiguation
-                {
-                    Some(Cow::Owned(StringChunk::normal(letter(s)).into()))
-                } else {
-                    None
+            StandardVariable::YearSuffix => panic!("processor must resolve this"),
+        }
+    }
+
+    fn resolve_date_variable(&self, variable: DateVariable) -> Option<&Date> {
+        match variable {
+            DateVariable::Accessed => self.url_any().and_then(|u| u.visit_date.as_ref()),
+            DateVariable::AvailableDate => None,
+            DateVariable::EventDate => self
+                .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
+                .and_then(Entry::date),
+            DateVariable::Issued => self.date_any(),
+            DateVariable::OriginalDate => self.get_original().and_then(|e| e.date()),
+            DateVariable::Submitted => None,
+        }
+    }
+
+    fn resolve_name_variable(&self, variable: taxonomy::NameVariable) -> Vec<&Person> {
+        match variable {
+            NameVariable::Author => self.authors().map(|a| a.iter().collect()),
+            NameVariable::Chair => self
+                .bound_select(
+                    &select!(
+                        (* > ("p":(Proceedings | Conference)))
+                    ),
+                    "p",
+                )
+                .map(|e| e.affiliated_with_role(PersonRole::Director)),
+            NameVariable::CollectionEditor => self
+                .get_collection()
+                .and_then(|e| e.editors())
+                .map(|a| a.iter().collect()),
+            NameVariable::Compiler => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Compiler)))
+            }
+            NameVariable::Composer => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Composer)))
+            }
+            NameVariable::ContainerAuthor => self
+                .get_container()
+                .and_then(|e| e.authors())
+                .map(|a| a.iter().collect()),
+            NameVariable::Contributor => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Collaborator)))
+            }
+            NameVariable::Curator => self
+                .bound_select(
+                    &select!(
+                        (* > ("p":Exhibition))
+                    ),
+                    "p",
+                )
+                .map(|e| e.affiliated_with_role(PersonRole::Organizer)),
+            NameVariable::Director => self
+                .bound_select(
+                    &select!(
+                        (* > ("p":(Audio | Video)))
+                    ),
+                    "p",
+                )
+                .map(|e| e.affiliated_with_role(PersonRole::Director)),
+            NameVariable::Editor => self.editors().map(|a| a.iter().collect()),
+            NameVariable::EditorialDirector => None,
+            NameVariable::EditorTranslator => {
+                let translator = self.affiliated_with_role(PersonRole::Translator);
+                Some(
+                    self.editors()
+                        .unwrap_or_default()
+                        .iter()
+                        .filter(|e| translator.contains(e))
+                        .collect(),
+                )
+            }
+            NameVariable::ExecutiveProducer => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::ExecutiveProducer)))
+            }
+            NameVariable::Guest => None,
+            NameVariable::Host => None,
+            NameVariable::Illustrator => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Illustrator)))
+            }
+            NameVariable::Interviewer => None,
+            NameVariable::Narrator => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Narrator)))
+            }
+            NameVariable::Organizer => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Organizer)))
+            }
+            NameVariable::OriginalAuthor => self
+                .get_original()
+                .and_then(|e| e.authors())
+                .map(|a| a.iter().collect()),
+            NameVariable::Performer => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::CastMember)))
+            }
+            NameVariable::Producer => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Producer)))
+            }
+            NameVariable::Recipient => None,
+            NameVariable::ReviewedAuthor => None,
+            NameVariable::ScriptWriter => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Writer)))
+            }
+            NameVariable::SeriesCreator => self
+                .bound_select(
+                    &select!(
+                        (* > ("p":(Audio | Video))) | ("p":(Audio | Video))
+                    ),
+                    "p",
+                )
+                .map(|e| e.affiliated_with_role(PersonRole::Founder)),
+            NameVariable::Translator => {
+                self.map(|e| Some(e.affiliated_with_role(PersonRole::Translator)))
+            }
+        }
+        .unwrap_or_default()
+    }
+
+    fn matches_entry_type(&self, kind: citationberg::taxonomy::Kind) -> bool {
+        // Each match arm contains mutually exclusive entry kinds.
+        match kind {
+            Kind::Article
+            | Kind::ArticleMagazine
+            | Kind::ArticleNewspaper
+            | Kind::ArticleJournal
+            | Kind::PaperConference
+            | Kind::Report
+            | Kind::Thesis
+            | Kind::Manuscript => {
+                if kind == Kind::ArticleMagazine {
+                    // TODO: Hayagriva does not differentiate between scientific and
+                    // non-scientific magazines. Could disambiguate via presence of
+                    // DOI or similar.
+                    return false;
                 }
+
+                let is_journal = select!(Article > Periodical).matches(self);
+                if kind == Kind::ArticleJournal {
+                    return is_journal;
+                }
+
+                let is_news = select!(Article > Newspaper).matches(self);
+                if kind == Kind::ArticleNewspaper {
+                    return is_news;
+                }
+
+                let is_conference = select!(Article > Proceedings).matches(self);
+                if kind == Kind::PaperConference {
+                    return is_conference;
+                }
+
+                let is_report = select!((* > Report) | Report).matches(self);
+                if kind == Kind::Report {
+                    return is_report;
+                }
+
+                let is_thesis = select!((* > Thesis) | Thesis).matches(self);
+                if kind == Kind::Thesis {
+                    return is_thesis;
+                }
+
+                let is_manuscript = self.entry_type() == &EntryType::Manuscript;
+                if kind == Kind::Manuscript {
+                    return is_manuscript;
+                }
+
+                self.entry_type() == &EntryType::Article
+                    && !select!(* > Blog).matches(self)
+                    && !(is_journal
+                        || is_news
+                        || is_conference
+                        || is_report
+                        || is_thesis
+                        || is_manuscript)
             }
+            Kind::Book | Kind::Classic | Kind::Periodical | Kind::Collection => {
+                if !select!(Book | Anthology | Proceedings).matches(self) {
+                    return false;
+                }
+
+                if kind == Kind::Classic {
+                    // TODO: Hayagriva does not support indicating something is a
+                    // classic.
+                    return false;
+                }
+
+                let is_periodical =
+                    select!((Book > Periodical) | Periodical).matches(self);
+                if kind == Kind::Periodical {
+                    return is_periodical;
+                }
+
+                let is_collection = self.entry_type() == &EntryType::Anthology;
+                if kind == Kind::Collection {
+                    return is_collection;
+                }
+
+                !(is_periodical || is_collection)
+            }
+            Kind::Chapter => {
+                select!(Chapter > (Book | Anthology | Proceedings)).matches(self)
+            }
+            Kind::Entry | Kind::EntryDictionary | Kind::EntryEncyclopedia => {
+                if kind == Kind::EntryDictionary {
+                    // TODO: We do not differentiate between dictionaries and other
+                    // references.
+                    return false;
+                }
+
+                let is_encyclopedia = select!(* > Reference).matches(self);
+                if kind == Kind::EntryEncyclopedia {
+                    return is_encyclopedia;
+                }
+
+                self.entry_type() == &EntryType::Entry && !is_encyclopedia
+            }
+            Kind::Event => self.entry_type() == &EntryType::Exhibition,
+            Kind::Hearing | Kind::Interview | Kind::Performance | Kind::Speech => false,
+            Kind::Broadcast | Kind::MotionPicture | Kind::MusicalScore | Kind::Song => {
+                let is_music_score =
+                    select!(Audio > (Book | Periodical | Reference | Misc | Blog | Web))
+                        .matches(self);
+                if kind == Kind::MusicalScore {
+                    return is_music_score;
+                }
+
+                let is_motion_picture =
+                    self.entry_type() == &EntryType::Video && self.parents().is_empty();
+                if kind == Kind::MotionPicture {
+                    return is_motion_picture;
+                }
+
+                let is_song =
+                    self.entry_type() == &EntryType::Audio && self.parents().is_empty();
+                if kind == Kind::Song {
+                    return is_song;
+                }
+
+                matches!(self.entry_type(), EntryType::Audio | EntryType::Video)
+                    && !(is_music_score || is_motion_picture || is_song)
+            }
+            Kind::Legislation | Kind::Bill => {
+                if self.entry_type() != &EntryType::Legislation {
+                    return false;
+                }
+
+                let is_published = self.publisher().is_some();
+                if kind == Kind::Bill {
+                    return !is_published;
+                }
+
+                is_published
+            }
+            Kind::LegalCase => self.entry_type() == &EntryType::Case,
+            Kind::Regulation | Kind::Standard | Kind::Treaty => false,
+            Kind::Patent => self.entry_type() == &EntryType::Patent,
+            Kind::Webpage | Kind::PostWeblog | Kind::Post => {
+                let is_blogpost = select!(* > Blog).matches(self);
+                if kind == Kind::PostWeblog {
+                    return is_blogpost;
+                }
+
+                let is_post = select!(Post | (* > Thread)).matches(self);
+                if kind == Kind::Post {
+                    return is_post;
+                }
+
+                select!((Misc["url"]) | (* > (Web | Blog)) | Web | Blog | Thread)
+                    .matches(self)
+                    && !(is_blogpost || is_post)
+            }
+            Kind::Dataset => false,
+            Kind::Figure | Kind::Graphic | Kind::Map => {
+                let is_figure = select!(Artwork > Article).matches(self);
+                if kind == Kind::Figure {
+                    return is_figure;
+                }
+
+                if kind == Kind::Map {
+                    return false;
+                }
+
+                self.entry_type() == &EntryType::Artwork && !is_figure
+            }
+            Kind::Pamphlet => false,
+            Kind::PersonalCommunication => false,
+            Kind::Review | Kind::ReviewBook => false,
+            Kind::Software => self.entry_type() == &EntryType::Repository,
+            Kind::Document => self.entry_type() == &EntryType::Misc,
         }
     }
-}
 
-pub(super) fn resolve_date_variable(
-    entry: &Entry,
-    variable: DateVariable,
-) -> Option<&Date> {
-    match variable {
-        DateVariable::Accessed => entry.url_any().and_then(|u| u.visit_date.as_ref()),
-        DateVariable::AvailableDate => None,
-        DateVariable::EventDate => entry
-            .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
-            .and_then(Entry::date),
-        DateVariable::Issued => entry.date_any(),
-        DateVariable::OriginalDate => entry.get_original().and_then(|e| e.date()),
-        DateVariable::Submitted => None,
-    }
-}
-
-pub(super) fn resolve_name_variable(
-    entry: &Entry,
-    variable: taxonomy::NameVariable,
-) -> Vec<&Person> {
-    match variable {
-        NameVariable::Author => entry.authors().map(|a| a.iter().collect()),
-        NameVariable::Chair => entry
-            .bound_select(
-                &select!(
-                    (* > ("p":(Proceedings | Conference)))
-                ),
-                "p",
-            )
-            .map(|e| e.affiliated_with_role(PersonRole::Director)),
-        NameVariable::CollectionEditor => entry
-            .get_collection()
-            .and_then(|e| e.editors())
-            .map(|a| a.iter().collect()),
-        NameVariable::Compiler => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Compiler)))
-        }
-        NameVariable::Composer => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Composer)))
-        }
-        NameVariable::ContainerAuthor => entry
-            .get_container()
-            .and_then(|e| e.authors())
-            .map(|a| a.iter().collect()),
-        NameVariable::Contributor => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Collaborator)))
-        }
-        NameVariable::Curator => entry
-            .bound_select(
-                &select!(
-                    (* > ("p":Exhibition))
-                ),
-                "p",
-            )
-            .map(|e| e.affiliated_with_role(PersonRole::Organizer)),
-        NameVariable::Director => entry
-            .bound_select(
-                &select!(
-                    (* > ("p":(Audio | Video)))
-                ),
-                "p",
-            )
-            .map(|e| e.affiliated_with_role(PersonRole::Director)),
-        NameVariable::Editor => entry.editors().map(|a| a.iter().collect()),
-        NameVariable::EditorialDirector => None,
-        NameVariable::EditorTranslator => {
-            let translator = entry.affiliated_with_role(PersonRole::Translator);
-            Some(
-                entry
-                    .editors()
-                    .unwrap_or_default()
-                    .iter()
-                    .filter(|e| translator.contains(e))
-                    .collect(),
-            )
-        }
-        NameVariable::ExecutiveProducer => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::ExecutiveProducer)))
-        }
-        NameVariable::Guest => None,
-        NameVariable::Host => None,
-        NameVariable::Illustrator => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Illustrator)))
-        }
-        NameVariable::Interviewer => None,
-        NameVariable::Narrator => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Narrator)))
-        }
-        NameVariable::Organizer => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Organizer)))
-        }
-        NameVariable::OriginalAuthor => entry
-            .get_original()
-            .and_then(|e| e.authors())
-            .map(|a| a.iter().collect()),
-        NameVariable::Performer => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::CastMember)))
-        }
-        NameVariable::Producer => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Producer)))
-        }
-        NameVariable::Recipient => None,
-        NameVariable::ReviewedAuthor => None,
-        NameVariable::ScriptWriter => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Writer)))
-        }
-        NameVariable::SeriesCreator => entry
-            .bound_select(
-                &select!(
-                    (* > ("p":(Audio | Video))) | ("p":(Audio | Video))
-                ),
-                "p",
-            )
-            .map(|e| e.affiliated_with_role(PersonRole::Founder)),
-        NameVariable::Translator => {
-            entry.map(|e| Some(e.affiliated_with_role(PersonRole::Translator)))
-        }
-    }
-    .unwrap_or_default()
-}
-
-pub(super) fn matches_entry_type(
-    entry: &Entry,
-    kind: citationberg::taxonomy::Kind,
-) -> bool {
-    // Each match arm contains mutually exclusive entry kinds.
-    match kind {
-        Kind::Article
-        | Kind::ArticleMagazine
-        | Kind::ArticleNewspaper
-        | Kind::ArticleJournal
-        | Kind::PaperConference
-        | Kind::Report
-        | Kind::Thesis
-        | Kind::Manuscript => {
-            if kind == Kind::ArticleMagazine {
-                // TODO: Hayagriva does not differentiate between scientific and
-                // non-scientific magazines. Could disambiguate via presence of
-                // DOI or similar.
-                return false;
-            }
-
-            let is_journal = select!(Article > Periodical).matches(entry);
-            if kind == Kind::ArticleJournal {
-                return is_journal;
-            }
-
-            let is_news = select!(Article > Newspaper).matches(entry);
-            if kind == Kind::ArticleNewspaper {
-                return is_news;
-            }
-
-            let is_conference = select!(Article > Proceedings).matches(entry);
-            if kind == Kind::PaperConference {
-                return is_conference;
-            }
-
-            let is_report = select!((* > Report) | Report).matches(entry);
-            if kind == Kind::Report {
-                return is_report;
-            }
-
-            let is_thesis = select!((* > Thesis) | Thesis).matches(entry);
-            if kind == Kind::Thesis {
-                return is_thesis;
-            }
-
-            let is_manuscript = entry.entry_type() == &EntryType::Manuscript;
-            if kind == Kind::Manuscript {
-                return is_manuscript;
-            }
-
-            entry.entry_type() == &EntryType::Article
-                && !select!(* > Blog).matches(entry)
-                && !(is_journal
-                    || is_news
-                    || is_conference
-                    || is_report
-                    || is_thesis
-                    || is_manuscript)
-        }
-        Kind::Book | Kind::Classic | Kind::Periodical | Kind::Collection => {
-            if !select!(Book | Anthology | Proceedings).matches(entry) {
-                return false;
-            }
-
-            if kind == Kind::Classic {
-                // TODO: Hayagriva does not support indicating something is a
-                // classic.
-                return false;
-            }
-
-            let is_periodical = select!((Book > Periodical) | Periodical).matches(entry);
-            if kind == Kind::Periodical {
-                return is_periodical;
-            }
-
-            let is_collection = entry.entry_type() == &EntryType::Anthology;
-            if kind == Kind::Collection {
-                return is_collection;
-            }
-
-            !(is_periodical || is_collection)
-        }
-        Kind::Chapter => {
-            select!(Chapter > (Book | Anthology | Proceedings)).matches(entry)
-        }
-        Kind::Entry | Kind::EntryDictionary | Kind::EntryEncyclopedia => {
-            if kind == Kind::EntryDictionary {
-                // TODO: We do not differentiate between dictionaries and other
-                // references.
-                return false;
-            }
-
-            let is_encyclopedia = select!(* > Reference).matches(entry);
-            if kind == Kind::EntryEncyclopedia {
-                return is_encyclopedia;
-            }
-
-            entry.entry_type() == &EntryType::Entry && !is_encyclopedia
-        }
-        Kind::Event => entry.entry_type() == &EntryType::Exhibition,
-        Kind::Hearing | Kind::Interview | Kind::Performance | Kind::Speech => false,
-        Kind::Broadcast | Kind::MotionPicture | Kind::MusicalScore | Kind::Song => {
-            let is_music_score =
-                select!(Audio > (Book | Periodical | Reference | Misc | Blog | Web))
-                    .matches(entry);
-            if kind == Kind::MusicalScore {
-                return is_music_score;
-            }
-
-            let is_motion_picture =
-                entry.entry_type() == &EntryType::Video && entry.parents().is_empty();
-            if kind == Kind::MotionPicture {
-                return is_motion_picture;
-            }
-
-            let is_song =
-                entry.entry_type() == &EntryType::Audio && entry.parents().is_empty();
-            if kind == Kind::Song {
-                return is_song;
-            }
-
-            matches!(entry.entry_type(), EntryType::Audio | EntryType::Video)
-                && !(is_music_score || is_motion_picture || is_song)
-        }
-        Kind::Legislation | Kind::Bill => {
-            if entry.entry_type() != &EntryType::Legislation {
-                return false;
-            }
-
-            let is_published = entry.publisher().is_some();
-            if kind == Kind::Bill {
-                return !is_published;
-            }
-
-            is_published
-        }
-        Kind::LegalCase => entry.entry_type() == &EntryType::Case,
-        Kind::Regulation | Kind::Standard | Kind::Treaty => false,
-        Kind::Patent => entry.entry_type() == &EntryType::Patent,
-        Kind::Webpage | Kind::PostWeblog | Kind::Post => {
-            let is_blogpost = select!(* > Blog).matches(entry);
-            if kind == Kind::PostWeblog {
-                return is_blogpost;
-            }
-
-            let is_post = select!(Post | (* > Thread)).matches(entry);
-            if kind == Kind::Post {
-                return is_post;
-            }
-
-            select!((Misc["url"]) | (* > (Web | Blog)) | Web | Blog | Thread)
-                .matches(entry)
-                && !(is_blogpost || is_post)
-        }
-        Kind::Dataset => false,
-        Kind::Figure | Kind::Graphic | Kind::Map => {
-            let is_figure = select!(Artwork > Article).matches(entry);
-            if kind == Kind::Figure {
-                return is_figure;
-            }
-
-            if kind == Kind::Map {
-                return false;
-            }
-
-            entry.entry_type() == &EntryType::Artwork && !is_figure
-        }
-        Kind::Pamphlet => false,
-        Kind::PersonalCommunication => false,
-        Kind::Review | Kind::ReviewBook => false,
-        Kind::Software => entry.entry_type() == &EntryType::Repository,
-        Kind::Document => entry.entry_type() == &EntryType::Misc,
+    fn is_english(&self) -> Option<bool> {
+        self.language().map(|l| l.language.as_str() == "en")
     }
 }
 

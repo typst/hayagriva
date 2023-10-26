@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry as HmEntry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::hash::Hash;
 use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
 
@@ -19,14 +20,13 @@ use indexmap::IndexSet;
 use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::rendering::RenderCsl;
-use crate::csl::taxonomy::resolve_name_variable;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
-use crate::Entry;
 
 pub use self::elem::{
     BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
 };
+use self::taxonomy::EntryLike;
 
 #[cfg(feature = "rkyv")]
 pub mod archive;
@@ -35,19 +35,23 @@ mod rendering;
 mod sort;
 mod taxonomy;
 
-use taxonomy::resolve_date_variable;
-
 /// This struct formats a set of citations according to a style.
-#[derive(Debug, Default)]
-pub struct BibliographyDriver<'a> {
+#[derive(Debug)]
+pub struct BibliographyDriver<'a, T: EntryLike> {
     /// The citations we have seen so far.
-    citations: Vec<CitationRequest<'a>>,
+    citations: Vec<CitationRequest<'a, T>>,
+}
+
+impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
+    fn default() -> Self {
+        Self { citations: Vec::new() }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct SpeculativeItemRender<'a> {
+struct SpeculativeItemRender<'a, T: EntryLike> {
     rendered: ElemChildren,
-    entry: &'a Entry,
+    entry: &'a T,
     cite_props: CiteProperties<'a>,
     checked_disambiguate: bool,
     first_name: Option<NameDisambiguationProperties>,
@@ -60,19 +64,19 @@ struct SpeculativeItemRender<'a> {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-struct SpeculativeCiteRender<'a, 'b> {
-    items: Vec<SpeculativeItemRender<'a>>,
-    request: &'b CitationRequest<'a>,
+struct SpeculativeCiteRender<'a, 'b, T: EntryLike> {
+    items: Vec<SpeculativeItemRender<'a, T>>,
+    request: &'b CitationRequest<'a, T>,
 }
 
-impl<'a> BibliographyDriver<'a> {
+impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
     /// Create a new bibliography driver.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Create a new citation with the given items.
-    pub fn citation(&mut self, mut req: CitationRequest<'a>) {
+    pub fn citation(&mut self, mut req: CitationRequest<'a, T>) {
         let style = req.style();
         style.sort(&mut req.items, style.csl.citation.sort.as_ref());
         self.citations.push(req);
@@ -80,7 +84,7 @@ impl<'a> BibliographyDriver<'a> {
 }
 
 /// Implementations for finishing the bibliography.
-impl<'a> BibliographyDriver<'a> {
+impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
     /// Render the bibliography.
     pub fn finish(self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
@@ -101,19 +105,19 @@ impl<'a> BibliographyDriver<'a> {
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
         );
-        let citation_number = |item: &Entry| {
+        let citation_number = |item: &T| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
         };
 
-        let mut seen: HashSet<*const Entry> = HashSet::new();
-        let mut res: Vec<SpeculativeCiteRender> = Vec::new();
-        let mut last_cite: Option<&CitationItem> = None;
+        let mut seen: HashSet<*const T> = HashSet::new();
+        let mut res: Vec<SpeculativeCiteRender<T>> = Vec::new();
+        let mut last_cite: Option<&CitationItem<T>> = None;
 
         for citation in &self.citations {
             let items = &citation.items;
             let style = citation.style();
 
-            let mut renders: Vec<SpeculativeItemRender<'_>> = Vec::new();
+            let mut renders: Vec<SpeculativeItemRender<'_, T>> = Vec::new();
 
             for item in items.iter() {
                 let entry = &item.entry;
@@ -153,7 +157,7 @@ impl<'a> BibliographyDriver<'a> {
                 };
 
                 let ctx = style.do_citation(
-                    entry,
+                    *entry,
                     cite_props.clone(),
                     citation.locale.as_ref(),
                     item.kind,
@@ -188,9 +192,9 @@ impl<'a> BibliographyDriver<'a> {
                 break;
             }
 
-            let mut rerender: HashMap<*const Entry, DisambiguateState> = HashMap::new();
-            let mark = |map: &mut HashMap<*const Entry, DisambiguateState>,
-                        entry: &Entry,
+            let mut rerender: HashMap<*const T, DisambiguateState> = HashMap::new();
+            let mark = |map: &mut HashMap<*const T, DisambiguateState>,
+                        entry: &T,
                         state: DisambiguateState| {
                 map.entry(entry)
                     .and_modify(|e| *e = e.clone().max(state.clone()))
@@ -337,7 +341,7 @@ impl<'a> BibliographyDriver<'a> {
             .and_then(|b| b.sort.as_ref())
             .is_none()
         {
-            let mut seen: HashMap<*const Entry, usize> = HashMap::new();
+            let mut seen: HashMap<*const T, usize> = HashMap::new();
             let mut start = 0;
             for cite in res.iter_mut() {
                 for item in cite.items.iter_mut() {
@@ -394,7 +398,7 @@ impl<'a> BibliographyDriver<'a> {
                             if let Some(delim) = cite
                                 .items
                                 .get(last)
-                                .and_then(|i: &SpeculativeItemRender| i.delim_override)
+                                .and_then(|i: &SpeculativeItemRender<T>| i.delim_override)
                                 .or(cite
                                     .request
                                     .style
@@ -491,7 +495,9 @@ impl<'a> BibliographyDriver<'a> {
 
 /// Create a new citation with the given items. Bibliography-wide disambiguation
 /// and some other features will not be applied.
-pub fn standalone_citation(mut req: CitationRequest<'_>) -> ElemChildren {
+pub fn standalone_citation<T: EntryLike>(
+    mut req: CitationRequest<'_, T>,
+) -> ElemChildren {
     let style = req.style();
     style.sort(&mut req.items, style.csl.citation.sort.as_ref());
     let mut res = vec![];
@@ -551,12 +557,13 @@ pub fn standalone_citation(mut req: CitationRequest<'_>) -> ElemChildren {
 type AmbiguousGroup = Vec<(usize, usize)>;
 
 /// Progressively transform names to disambiguate them.
-fn disambiguate_names<F>(
-    renders: &[SpeculativeCiteRender<'_, '_>],
+fn disambiguate_names<F, T>(
+    renders: &[SpeculativeCiteRender<'_, '_, T>],
     group: &AmbiguousGroup,
     mut mark: F,
 ) where
-    F: FnMut(&Entry, DisambiguateState),
+    T: EntryLike,
+    F: FnMut(&T, DisambiguateState),
 {
     for &(cite_idx, item_idx) in group.iter() {
         let style = renders[cite_idx].request.style;
@@ -588,12 +595,13 @@ fn disambiguate_names<F>(
 }
 
 /// Mark qualifying entries for disambiguation with `cs:choose`.
-fn disambiguate_with_choose<F>(
-    renders: &[SpeculativeCiteRender<'_, '_>],
+fn disambiguate_with_choose<F, T>(
+    renders: &[SpeculativeCiteRender<'_, '_, T>],
     group: &AmbiguousGroup,
     mut mark: F,
 ) where
-    F: FnMut(&Entry, DisambiguateState),
+    T: EntryLike,
+    F: FnMut(&T, DisambiguateState),
 {
     if group.iter().any(|&(cite_idx, item_idx)| {
         renders[cite_idx].items[item_idx].checked_disambiguate
@@ -620,12 +628,13 @@ fn disambiguate_with_choose<F>(
 }
 
 /// Mark qualifying entries for disambiguation with year suffixes.
-fn disambiguate_year_suffix<F>(
-    renders: &[SpeculativeCiteRender<'_, '_>],
+fn disambiguate_year_suffix<F, T>(
+    renders: &[SpeculativeCiteRender<'_, '_, T>],
     group: &AmbiguousGroup,
     mut mark: F,
 ) where
-    F: FnMut(&Entry, DisambiguateState),
+    T: EntryLike + PartialEq,
+    F: FnMut(&T, DisambiguateState),
 {
     if renders
         .iter()
@@ -663,7 +672,9 @@ fn disambiguate_year_suffix<F>(
 
 /// Return a vector of that contains every group of mutually ambiguous items
 /// with cite and item index.
-fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
+fn find_ambiguous_sets<T: EntryLike + PartialEq>(
+    cites: &[SpeculativeCiteRender<'_, '_, T>],
+) -> Vec<AmbiguousGroup> {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum PotentialDisambiguation {
         /// Two usizes for an item that produced this string.
@@ -720,7 +731,7 @@ fn find_ambiguous_sets(cites: &[SpeculativeCiteRender]) -> Vec<AmbiguousGroup> {
         .collect()
 }
 
-fn collapse_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
+fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
     let style = &cite.request.style;
 
     let after_collapse_delim = style
@@ -735,7 +746,7 @@ fn collapse_items<'a>(cite: &mut SpeculativeCiteRender<'a, '_>) {
             let mut range_start: Option<(usize, usize, usize)> = None;
 
             let end_range =
-                |items: &mut [SpeculativeItemRender<'a>],
+                |items: &mut [SpeculativeItemRender<'a, T>],
                  range_start: &mut Option<(usize, usize, usize)>| {
                     if let &mut Some((start, end, _)) = range_start {
                         if start < end {
@@ -845,10 +856,10 @@ pub struct RenderedCitation {
 
 /// A context that contains all information related to rendering a single entry.
 #[derive(Debug, Clone, PartialEq)]
-struct InstanceContext<'a> {
+struct InstanceContext<'a, T: EntryLike> {
     // Entry-dependent data.
     /// The current entry.
-    pub entry: &'a Entry,
+    pub entry: &'a T,
     /// The position of this citation in the list of citations.
     pub cite_props: CiteProperties<'a>,
     /// Whether we are sorting or formatting right now.
@@ -859,9 +870,9 @@ struct InstanceContext<'a> {
     pub kind: Option<SpecialForm>,
 }
 
-impl<'a> InstanceContext<'a> {
+impl<'a, T: EntryLike> InstanceContext<'a, T> {
     fn new(
-        entry: &'a Entry,
+        entry: &'a T,
         cite_props: CiteProperties<'a>,
         sorting: bool,
         locale: Option<&'a LocaleCode>,
@@ -870,7 +881,7 @@ impl<'a> InstanceContext<'a> {
         Self { entry, cite_props, sorting, locale, kind }
     }
 
-    fn sort_instance(item: &CitationItem<'a>, idx: usize) -> Self {
+    fn sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
         Self::new(
             item.entry,
             CiteProperties::for_sorting(item.locator, idx),
@@ -902,13 +913,13 @@ impl<'a> StyleContext<'a> {
         Self { csl: style, locale_files, locale_override: locale }
     }
 
-    fn ctx<'b>(
+    fn ctx<'b, T: EntryLike>(
         &'b self,
-        entry: &'b Entry,
+        entry: &'b T,
         cite_props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
         kind: Option<SpecialForm>,
-    ) -> Context<'b> {
+    ) -> Context<'b, T> {
         Context {
             instance: InstanceContext::new(entry, cite_props, false, locale, kind),
             style: self,
@@ -916,12 +927,12 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    fn sorting_ctx<'b>(
+    fn sorting_ctx<'b, T: EntryLike>(
         &'b self,
-        item: &'b CitationItem<'b>,
+        item: &'b CitationItem<'b, T>,
         idx: usize,
         locale: Option<&'b LocaleCode>,
-    ) -> Context<'b> {
+    ) -> Context<'b, T> {
         Context {
             instance: InstanceContext::new(
                 item.entry,
@@ -936,9 +947,9 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Render the given item within a citation.
-    fn citation(
+    fn citation<T: EntryLike>(
         &self,
-        entry: &Entry,
+        entry: &T,
         props: CiteProperties<'a>,
         locale: Option<&LocaleCode>,
         kind: Option<SpecialForm>,
@@ -948,13 +959,13 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Render the given item within a citation.
-    fn do_citation<'b>(
+    fn do_citation<'b, T: EntryLike>(
         &'b self,
-        entry: &'b Entry,
+        entry: &'b T,
         props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
         kind: Option<SpecialForm>,
-    ) -> Context<'b> {
+    ) -> Context<'b, T> {
         let mut ctx = self.ctx(entry, props, locale, kind);
         ctx.writing.push_name_options(&self.csl.citation.name_options);
         self.csl.citation.layout.render(&mut ctx);
@@ -962,9 +973,9 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Render the given item within a bibliography.
-    fn bibliography(
+    fn bibliography<T: EntryLike>(
         &self,
-        entry: &Entry,
+        entry: &T,
         props: CiteProperties,
         locale: Option<&LocaleCode>,
         kind: Option<SpecialForm>,
@@ -1001,9 +1012,9 @@ impl<'a> StyleContext<'a> {
 
 /// A citation request. A citation can contain references to multiple items.
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct CitationRequest<'a> {
+pub struct CitationRequest<'a, T: EntryLike> {
     /// The items to format.
-    pub items: Vec<CitationItem<'a>>,
+    pub items: Vec<CitationItem<'a, T>>,
     /// Which style to use for the citation.
     style: &'a IndependentStyle,
     /// The requested locale for the style's terms.
@@ -1023,10 +1034,10 @@ pub struct CitationRequest<'a> {
     pub affix_override: Option<Brackets>,
 }
 
-impl<'a> CitationRequest<'a> {
+impl<'a, T: EntryLike> CitationRequest<'a, T> {
     /// Create a new citation request.
     pub fn new(
-        items: Vec<CitationItem<'a>>,
+        items: Vec<CitationItem<'a, T>>,
         style: &'a IndependentStyle,
         locale: Option<LocaleCode>,
         locale_files: &'a [Locale],
@@ -1045,7 +1056,7 @@ impl<'a> CitationRequest<'a> {
 
     /// Create a new citation request without a note number.
     pub fn from_items(
-        items: Vec<CitationItem<'a>>,
+        items: Vec<CitationItem<'a, T>>,
         style: &'a IndependentStyle,
         locale_files: &'a [Locale],
     ) -> Self {
@@ -1127,9 +1138,9 @@ impl<'a> BibliographyRequest<'a> {
 
 /// A reference to an [`Entry`] within a [`CitationRequest`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CitationItem<'a> {
+pub struct CitationItem<'a, T: EntryLike> {
     /// The entry to format.
-    pub entry: &'a Entry,
+    pub entry: &'a T,
     /// The locator that specifies where in the entry the item is found.
     pub locator: Option<SpecificLocator<'a>>,
     /// A locale code that overrides the assumed locale of the entry. If this is
@@ -1142,9 +1153,9 @@ pub struct CitationItem<'a> {
     pub kind: Option<SpecialForm>,
 }
 
-impl<'a> CitationItem<'a> {
+impl<'a, T: EntryLike> CitationItem<'a, T> {
     /// Create a new citation item for the given entry.
-    pub fn with_entry(entry: &'a Entry) -> Self {
+    pub fn with_entry(entry: &'a T) -> Self {
         Self {
             entry,
             locator: None,
@@ -1155,7 +1166,7 @@ impl<'a> CitationItem<'a> {
     }
 
     /// Create a new citation item with a locator for the given entry.
-    pub fn with_locator(entry: &'a Entry, locator: Option<SpecificLocator<'a>>) -> Self {
+    pub fn with_locator(entry: &'a T, locator: Option<SpecificLocator<'a>>) -> Self {
         Self {
             entry,
             locator,
@@ -1578,8 +1589,8 @@ impl WritingContext {
     }
 }
 
-pub(crate) struct Context<'a> {
-    instance: InstanceContext<'a>,
+pub(crate) struct Context<'a, T: EntryLike> {
+    instance: InstanceContext<'a, T>,
     style: &'a StyleContext<'a>,
     writing: WritingContext,
 }
@@ -1730,7 +1741,10 @@ impl IbidState {
         matches!(self, Self::IbidWithLocator | Self::Ibid)
     }
 
-    fn with_last(this: &CitationItem, last: Option<&CitationItem>) -> Self {
+    fn with_last<T>(this: &CitationItem<T>, last: Option<&CitationItem<T>>) -> Self
+    where
+        T: EntryLike + PartialEq,
+    {
         if let Some(last) = last {
             if last.entry == this.entry && !last.hidden {
                 if last.locator == this.locator {
@@ -1752,7 +1766,7 @@ impl IbidState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SpecificLocator<'a>(pub Locator, pub &'a str);
 
-impl<'a> Context<'a> {
+impl<'a, T: EntryLike> Context<'a, T> {
     /// Push a format on top of the stack if it is not empty.
     fn push_format(&mut self, format: citationberg::Formatting) -> FormatIdx {
         self.writing.push_format(format)
@@ -2003,8 +2017,7 @@ impl<'a> Context<'a> {
         if self
             .instance
             .entry
-            .language()
-            .map(|l| l.language.as_str() == "en")
+            .is_english()
             .or_else(|| self.instance.locale.map(LocaleCode::is_english))
             .or_else(|| {
                 self.style.csl.default_locale.as_ref().map(LocaleCode::is_english)
@@ -2067,7 +2080,7 @@ impl<'a> Context<'a> {
     ) -> Option<&'a Date> {
         self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         self.writing.prepare_variable_query(variable)?;
-        let res = resolve_date_variable(self.instance.entry, variable);
+        let res = self.instance.entry.resolve_date_variable(variable);
 
         if res.is_some() {
             self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
@@ -2087,7 +2100,7 @@ impl<'a> Context<'a> {
             return Vec::new();
         }
 
-        let res = resolve_name_variable(self.instance.entry, variable);
+        let res = self.instance.entry.resolve_name_variable(variable);
 
         if !res.is_empty() {
             self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
@@ -2132,7 +2145,7 @@ struct CaseIdx(NonZeroUsize);
 #[must_use = "usage info stack must be popped"]
 struct UsageInfoIdx(NonZeroUsize);
 
-impl Write for Context<'_> {
+impl<T: EntryLike> Write for Context<'_, T> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.push_str(s);
         Ok(())
