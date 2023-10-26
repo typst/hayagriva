@@ -10,7 +10,7 @@ use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 
-use hayagriva::archive::Lookup;
+use hayagriva::archive::{Lookup, StyleMatch};
 
 const CACHE_PATH: &str = "target/haya-cache";
 const STYLES_REPO_NAME: &str = "styles";
@@ -37,6 +37,15 @@ fn try_archive() {
         (false, Err(_)) => create_archive().unwrap(),
         (_, Ok(())) => {}
     }
+}
+
+/// Always archive.
+#[test]
+#[ignore]
+fn always_archive() {
+    ensure_repos().unwrap();
+    create_archive().unwrap();
+    validate_archive().unwrap();
 }
 
 /// Download the CSL styles and locales repos.
@@ -99,6 +108,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let mut res = Lookup {
         map: HashMap::new(),
+        id_map: HashMap::new(),
         styles: Vec::new(),
         locales: retrieve_locales()?,
     };
@@ -134,32 +144,76 @@ fn create_archive() -> Result<(), ArchivalError> {
 
         let rides = OVERRIDES;
         let over = rides.iter().find(|o| o.id == id);
-        let name = if let Some(name) = over.and_then(|o| o.main) {
-            name.to_string()
-        } else {
-            id.trim_end_matches("-journals")
-                .trim_end_matches("-publications")
-                .trim_end_matches("-brackets")
-                .trim_end_matches("-group")
-                .trim_end_matches("-bibliography")
-                .to_string()
-        };
+        let name = clean_name(id, over);
 
         println!("\n{};{}", &id, &name);
 
-        let mut insert = |name: &str| {
-            if res.map.insert(name.to_string(), idx).is_some() {
+        let mut insert = |name: &str, alias: bool| {
+            if res
+                .map
+                .insert(
+                    name.to_string(),
+                    StyleMatch::new(style.info().title.value.to_string(), alias, idx),
+                )
+                .is_some()
+            {
                 panic!("duplicate name {} ({})", name, idx);
+            }
+
+            if !alias {
+                res.id_map.insert(style.info().id.clone(), idx);
             }
         };
 
-        insert(&name);
+        insert(&name, false);
 
         for alias in over.and_then(|o| o.alias.as_ref()).iter().flat_map(|a| a.iter()) {
-            insert(alias);
+            insert(alias, true);
         }
 
         res.styles.push(bytes);
+    }
+
+    for style_thing in fs::read_dir(&style_path.join("dependent")).unwrap() {
+        let thing = style_thing.unwrap();
+        if !thing.file_type()?.is_file() {
+            continue;
+        }
+
+        let path = thing.path();
+        let extension = path.extension();
+        if let Some(extension) = extension {
+            if extension.to_str() != Some("csl") {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        let style: Style = Style::from_xml(&fs::read_to_string(path)?)?;
+        let Style::Dependent(style) = style else {
+            continue;
+        };
+
+        let Some(idx) = res.id_map.get(&style.parent_link.href) else {
+            continue;
+        };
+
+        let id = strip_id(style.info.id.as_str());
+        let rides = OVERRIDES;
+        let over = rides.iter().find(|o| o.id == id);
+        let name = clean_name(id, over);
+
+        if res
+            .map
+            .insert(
+                name.to_string(),
+                StyleMatch::new(style.info.title.value.to_string(), true, *idx),
+            )
+            .is_some()
+        {
+            panic!("duplicate alias name {} ({})", name, idx);
+        }
     }
 
     assert_eq!(res.styles.len(), STYLE_IDS.len());
@@ -168,6 +222,19 @@ fn create_archive() -> Result<(), ArchivalError> {
     fs::write("styles.cbor.rkyv", bytes)?;
 
     Ok(())
+}
+
+fn clean_name(id: &str, over: Option<&Override>) -> String {
+    if let Some(name) = over.and_then(|o| o.main) {
+        name.to_string()
+    } else {
+        id.trim_end_matches("-journals")
+            .trim_end_matches("-publications")
+            .trim_end_matches("-brackets")
+            .trim_end_matches("-group")
+            .trim_end_matches("-bibliography")
+            .to_string()
+    }
 }
 
 /// Retrieve all available CSL locales.
@@ -217,10 +284,10 @@ fn validate_archive() -> Result<(), ArchivalError> {
     let archive = unsafe { read(&archive_file) };
 
     // Check that every archive entry maps to a style.
-    for (k, idx) in archive.map.iter() {
+    for (k, idx) in archive.map.iter().filter(|(_, v)| !v.alias) {
         let bytes = archive
             .styles
-            .get(*idx as usize)
+            .get(idx.index as usize)
             .ok_or_else(|| ArchivalError::ValidationError(k.to_string()))?;
         let style = Style::from_cbor(bytes)
             .map_err(|_| ArchivalError::ValidationError(k.to_string()))?;
@@ -241,7 +308,10 @@ fn validate_archive() -> Result<(), ArchivalError> {
 
     // Check that all requested styles are encoded and referenced.
     assert_eq!(archive.styles.len(), STYLE_IDS.len());
-    assert_eq!(archive.map.values().collect::<HashSet<_>>().len(), STYLE_IDS.len());
+    assert_eq!(
+        archive.map.values().map(|s| s.index).collect::<HashSet<_>>().len(),
+        STYLE_IDS.len()
+    );
 
     // Check that all locales are well-formed.
     for l in archive.locales.iter() {
@@ -478,5 +548,5 @@ const OVERRIDES: [Override; 10] = [
         "modern-language-association-8",
     ),
     Override::first("thieme-german", "thieme"),
-    Override::first("turabian-fullnote-bibliography-8th-edition", "turabian-fullnote"),
+    Override::first("turabian-fullnote-bibliography-8th-edition", "turabian-fullnote-8"),
 ];

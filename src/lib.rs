@@ -39,8 +39,9 @@ assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 use std::fs;
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, BufWriteFormat,
-    CitationItem, CitationRequest, LocaleFile, IndependentStyle
+    CitationItem, CitationRequest,
 };
+use hayagriva::citationberg::{LocaleFile, IndependentStyle};
 
 let en_locale = fs::read_to_string("tests/data/locales-en-US.xml").unwrap();
 let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
@@ -151,11 +152,7 @@ use std::collections::BTreeMap;
 
 #[cfg(feature = "rkyv")]
 pub use crate::csl::archive;
-pub use citationberg::LocaleCode;
-pub use citationberg::{
-    Display, FontStyle, FontVariant, FontWeight, IndependentStyle, LocaleFile,
-    LongShortForm, Style, TextDecoration, VerticalAlign,
-};
+pub use citationberg;
 pub use csl::{
     standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
     BufWriteFormat, CitationItem, CitationRequest, Elem, ElemChild, ElemChildren,

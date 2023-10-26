@@ -13,16 +13,36 @@ static ARCHIVE: &Data<[u8]> = &Data(*include_bytes!("../../styles.cbor.rkyv"));
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
 pub struct Lookup {
     /// Maps from a CSL style name to an index into the `styles` vector.
-    pub map: HashMap<String, usize>,
+    pub map: HashMap<String, StyleMatch>,
+    /// Maps from a CSL ID to an index into the `styles` vector.
+    pub id_map: HashMap<String, usize>,
     /// The CSL styles in the archive as CBOR-encoded bytes.
     pub styles: Vec<Vec<u8>>,
     /// The locales in the archive as CBOR-encoded bytes.
     pub locales: Vec<Vec<u8>>,
 }
 
+/// A match between a style name and a style.
+#[derive(Debug, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StyleMatch {
+    /// A full, descriptive name of the style.
+    pub full_name: String,
+    /// Whether this is an alias.
+    pub alias: bool,
+    /// The style index.
+    pub index: usize,
+}
+
+impl StyleMatch {
+    /// Create a new style match.
+    pub fn new(full_name: String, alias: bool, index: usize) -> Self {
+        Self { full_name, alias, index }
+    }
+}
+
 /// Read an archive
-unsafe fn read(buf: &[u8]) -> &<Lookup as Archive>::Archived {
-    rkyv::archived_root::<Lookup>(buf)
+fn read() -> &'static <Lookup as Archive>::Archived {
+    unsafe { rkyv::archived_root::<Lookup>(&ARCHIVE.0) }
 }
 
 /// An archived CSL style.
@@ -30,6 +50,10 @@ unsafe fn read(buf: &[u8]) -> &<Lookup as Archive>::Archived {
 pub struct ArchiveStyle {
     /// Name of the style.
     pub name: &'static str,
+    /// A full, descriptive name of the style.
+    pub full_name: &'static str,
+    /// Whether this is an alias.
+    pub alias: bool,
     index: u32,
 }
 
@@ -42,28 +66,40 @@ impl ArchiveStyle {
 
 /// Retrieve a list of styles.
 pub fn styles() -> Vec<ArchiveStyle> {
-    unsafe { read(&ARCHIVE.0) }
+    read()
         .map
         .iter()
-        .map(|(k, v)| ArchiveStyle { name: k.as_str(), index: *v })
+        .map(|(k, v)| ArchiveStyle {
+            name: k.as_str(),
+            index: v.index,
+            full_name: &v.full_name,
+            alias: v.alias,
+        })
         .collect()
 }
 
 /// Retrieve a style from the archive
 pub fn style(s: ArchiveStyle) -> Style {
-    Style::from_cbor(&unsafe { read(&ARCHIVE.0) }.styles[s.index as usize]).unwrap()
+    Style::from_cbor(&read().styles[s.index as usize]).unwrap()
 }
 
 /// Retrieve a style by name.
 pub fn style_by_name(n: &str) -> Option<Style> {
-    let lookup = unsafe { read(&ARCHIVE.0) };
-    let idx = *lookup.map.get(n)?;
-    Some(Style::from_cbor(&lookup.styles[idx as usize]).unwrap())
+    let lookup = read();
+    let index = lookup.map.get(n)?.index;
+    Some(Style::from_cbor(&lookup.styles[index as usize]).unwrap())
+}
+
+/// Retrieve a style by name.
+pub fn style_by_id(n: &str) -> Option<Style> {
+    let lookup = read();
+    let index = lookup.id_map.get(n)?;
+    Some(Style::from_cbor(&lookup.styles[*index as usize]).unwrap())
 }
 
 /// Retrieve the locales.
 pub fn locales() -> Vec<Locale> {
-    let lookup = unsafe { read(&ARCHIVE.0) };
+    let lookup = read();
     let res: Result<Vec<_>, _> =
         lookup.locales.iter().map(|l| Locale::from_cbor(l)).collect();
     res.unwrap()
