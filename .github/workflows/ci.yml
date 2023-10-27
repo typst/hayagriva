@@ -13,4 +13,4 @@ jobs:
           cd ..
           git clone --depth 1 https://github.com/citation-style-language/styles
       - run: cargo build
-      - run: cargo test
+      - run: cargo test --features csl-json-valley

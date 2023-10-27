@@ -253,7 +253,7 @@ impl Person {
                 if c.is_whitespace() || c == '-' {
                     if !collect {
                         if let Some(delimiter) = delimiter {
-                            buf.write_str(delimiter)?;
+                            buf.write_str(delimiter.trim_end())?;
                         }
 
                         collect = true;
