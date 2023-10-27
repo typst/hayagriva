@@ -138,6 +138,8 @@ pub enum ElemMeta {
     /// The element is the output of a single name.
     /// It notes which name variable was used and the index within the variable.
     Name(NameVariable, usize),
+    /// The entry corresponds to a citation item.
+    Entry(usize),
 }
 
 /// A container for element children with useful methods.
@@ -162,7 +164,7 @@ impl ElemChildren {
 
     /// Retrieve a reference to the first child with a matching meta by
     /// DFS.
-    pub(super) fn get_meta(&self, meta: ElemMeta) -> Option<&Elem> {
+    pub fn get_meta(&self, meta: ElemMeta) -> Option<&Elem> {
         for child in &self.0 {
             match child {
                 ElemChild::Elem(e) if e.meta == Some(meta) => return Some(e),

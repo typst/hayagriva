@@ -174,48 +174,6 @@ fn create_archive() -> Result<(), ArchivalError> {
         res.styles.push(bytes);
     }
 
-    for style_thing in fs::read_dir(&style_path.join("dependent")).unwrap() {
-        let thing = style_thing.unwrap();
-        if !thing.file_type()?.is_file() {
-            continue;
-        }
-
-        let path = thing.path();
-        let extension = path.extension();
-        if let Some(extension) = extension {
-            if extension.to_str() != Some("csl") {
-                continue;
-            }
-        } else {
-            continue;
-        }
-
-        let style: Style = Style::from_xml(&fs::read_to_string(path)?)?;
-        let Style::Dependent(style) = style else {
-            continue;
-        };
-
-        let Some(idx) = res.id_map.get(&style.parent_link.href) else {
-            continue;
-        };
-
-        let id = strip_id(style.info.id.as_str());
-        let rides = OVERRIDES;
-        let over = rides.iter().find(|o| o.id == id);
-        let name = clean_name(id, over);
-
-        if res
-            .map
-            .insert(
-                name.to_string(),
-                StyleMatch::new(style.info.title.value.to_string(), true, *idx),
-            )
-            .is_some()
-        {
-            panic!("duplicate alias name {} ({})", name, idx);
-        }
-    }
-
     assert_eq!(res.styles.len(), STYLE_IDS.len());
 
     let bytes = rkyv::to_bytes::<_, 1024>(&res).expect("failed to serialize vec");
@@ -529,7 +487,7 @@ impl Override {
     }
 }
 
-const OVERRIDES: [Override; 10] = [
+const OVERRIDES: [Override; 11] = [
     Override::first(
         "china-national-standard-gb-t-7714-2015-author-date",
         "gb-7114-2015-author-date",
@@ -540,6 +498,10 @@ const OVERRIDES: [Override; 10] = [
         "gb-7114-2015-numeric",
     ),
     Override::first("chinese-gb7714-2005-numeric", "gb-7114-2005-numeric"),
+    Override::first(
+        "deutsche-gesellschaft-fur-psychologie",
+        "deutsche-gesellschaft-für-psychologie",
+    ),
     Override::first("gost-r-7-0-5-2008-numeric", "gost-r-705-2008-numeric"),
     Override::first("iso690-author-date-en", "iso-690-author-date"),
     Override::first("iso690-numeric-en", "iso-690-numeric"),

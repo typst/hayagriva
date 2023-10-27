@@ -61,6 +61,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     hidden: bool,
     locale: Option<LocaleCode>,
     kind: Option<SpecialForm>,
+    initial_idx: usize,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -78,6 +79,10 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
     /// Create a new citation with the given items.
     pub fn citation(&mut self, mut req: CitationRequest<'a, T>) {
         let style = req.style();
+
+        for (i, item) in req.items.iter_mut().enumerate() {
+            item.initial_idx = i;
+        }
         style.sort(&mut req.items, style.csl.citation.sort.as_ref());
         self.citations.push(req);
     }
@@ -174,6 +179,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     hidden: item.hidden,
                     locale: item.locale.clone(),
                     kind: item.kind,
+                    initial_idx: item.initial_idx,
                 });
 
                 last_cite = Some(item);
@@ -414,7 +420,11 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                             }
                         }
 
-                        elem_children.extend(item.rendered.0.clone());
+                        elem_children.push(ElemChild::Elem(Elem {
+                            children: item.rendered.clone(),
+                            display: None,
+                            meta: Some(ElemMeta::Entry(item.initial_idx)),
+                        }));
                         last = Some(i);
                     }
 
@@ -439,30 +449,33 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     .find(|item| item.entry == entry.entry)
                     .unwrap();
 
-                items.push(simplify_children(
-                    bib_style
-                        .bibliography(
-                            entry.entry,
-                            CiteProperties {
-                                certain: cited_item.cite_props.certain,
-                                speculative: SpeculativeCiteProperties {
-                                    locator: None,
-                                    citation_number: cited_item
-                                        .cite_props
-                                        .speculative
-                                        .citation_number,
-                                    ibid: cited_item.cite_props.speculative.ibid,
-                                    disambiguation: cited_item
-                                        .cite_props
-                                        .speculative
-                                        .disambiguation
-                                        .clone(),
+                items.push((
+                    simplify_children(
+                        bib_style
+                            .bibliography(
+                                entry.entry,
+                                CiteProperties {
+                                    certain: cited_item.cite_props.certain,
+                                    speculative: SpeculativeCiteProperties {
+                                        locator: None,
+                                        citation_number: cited_item
+                                            .cite_props
+                                            .speculative
+                                            .citation_number,
+                                        ibid: cited_item.cite_props.speculative.ibid,
+                                        disambiguation: cited_item
+                                            .cite_props
+                                            .speculative
+                                            .disambiguation
+                                            .clone(),
+                                    },
                                 },
-                            },
-                            cited_item.locale.as_ref(),
-                            None,
-                        )
-                        .unwrap(),
+                                cited_item.locale.as_ref(),
+                                None,
+                            )
+                            .unwrap(),
+                    ),
+                    entry.entry.key().to_string(),
                 ))
             }
 
@@ -473,11 +486,11 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                 entry_spacing: bibliography.entry_spacing,
                 items: items
                     .into_iter()
-                    .map(|mut i| {
+                    .map(|(mut i, key)| {
                         if bibliography.second_field_align.is_some() {
-                            (i.remove_any_meta(), i)
+                            BibliographyItem::new(key, i.remove_any_meta(), i)
                         } else {
-                            (None, i)
+                            BibliographyItem::new(key, None, i)
                         }
                     })
                     .collect(),
@@ -842,7 +855,20 @@ pub struct RenderedBibliography {
     /// The bibliography items. The first item may be some if
     /// [`second_field_align`] is set. Then, it is the first field that must be
     /// treated specially.
-    pub items: Vec<(Option<ElemChild>, ElemChildren)>,
+    pub items: Vec<BibliographyItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BibliographyItem {
+    pub key: String,
+    pub first_field: Option<ElemChild>,
+    pub content: ElemChildren,
+}
+
+impl BibliographyItem {
+    fn new(key: String, first_field: Option<ElemChild>, content: ElemChildren) -> Self {
+        Self { key, first_field, content }
+    }
 }
 
 /// A fully rendered citation.
@@ -1151,6 +1177,8 @@ pub struct CitationItem<'a, T: EntryLike> {
     pub hidden: bool,
     /// Format the item in a special way.
     pub kind: Option<SpecialForm>,
+    /// The initial index of this item in the list of items.
+    initial_idx: usize,
 }
 
 impl<'a, T: EntryLike> CitationItem<'a, T> {
@@ -1162,6 +1190,7 @@ impl<'a, T: EntryLike> CitationItem<'a, T> {
             locale: None,
             hidden: false,
             kind: None,
+            initial_idx: 0,
         }
     }
 
@@ -1173,6 +1202,25 @@ impl<'a, T: EntryLike> CitationItem<'a, T> {
             locale: None,
             hidden: false,
             kind: None,
+            initial_idx: 0,
+        }
+    }
+
+    /// Create a new citation with all fields set.
+    pub fn new(
+        entry: &'a T,
+        locator: Option<SpecificLocator<'a>>,
+        locale: Option<LocaleCode>,
+        hidden: bool,
+        kind: Option<SpecialForm>,
+    ) -> Self {
+        Self {
+            entry,
+            locator,
+            locale,
+            hidden,
+            kind,
+            initial_idx: 0,
         }
     }
 

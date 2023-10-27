@@ -335,7 +335,7 @@ fn main() {
             {
                 let alternate = matches.is_present("no-fmt");
 
-                if let Some(prefix) = row.0 {
+                if let Some(prefix) = row.first_field {
                     if alternate {
                         println!("{:#}", prefix)
                     } else {
@@ -344,9 +344,9 @@ fn main() {
                 }
 
                 if alternate {
-                    println!("{:#}", row.1)
+                    println!("{:#}", row.content)
                 } else {
-                    println!("{}", row.1)
+                    println!("{}", row.content)
                 }
             }
         }
@@ -398,7 +398,7 @@ fn main() {
             {
                 let alternate = matches.is_present("no-fmt");
 
-                if let Some(prefix) = row.0 {
+                if let Some(prefix) = row.first_field {
                     if alternate {
                         println!("{:#}", prefix)
                     } else {
@@ -407,9 +407,9 @@ fn main() {
                 }
 
                 if alternate {
-                    println!("{:#}", row.1)
+                    println!("{:#}", row.content)
                 } else {
-                    println!("{}", row.1)
+                    println!("{}", row.content)
                 }
             }
         }

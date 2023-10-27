@@ -27,6 +27,7 @@ pub trait EntryLike {
     fn resolve_date_variable(&self, variable: DateVariable) -> Option<&Date>;
     fn matches_entry_type(&self, kind: taxonomy::Kind) -> bool;
     fn is_english(&self) -> Option<bool>;
+    fn key(&self) -> &str;
 }
 
 impl<'a, T: EntryLike> InstanceContext<'a, T> {
@@ -77,6 +78,10 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
 }
 
 impl EntryLike for Entry {
+    fn key(&self) -> &str {
+        self.key()
+    }
+
     fn resolve_number_variable(
         &self,
         variable: NumberVariable,
