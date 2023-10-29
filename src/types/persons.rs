@@ -454,32 +454,46 @@ impl Person {
         let self_cjk = self.is_cjk();
         let other_cjk = other.is_cjk();
 
+        let name_a = self.name.to_lowercase();
+        let name_b = other.name.to_lowercase();
+        let given_a = self.given_name.as_ref().map(|s| s.to_lowercase());
+        let given_b = other.given_name.as_ref().map(|s| s.to_lowercase());
+
         if self_cjk != other_cjk {
             // Put CJK names last.
             return self_cjk.cmp(&other_cjk);
         } else if self_cjk && other_cjk {
             // Apply special CJK rules.
             return match form {
-                LongShortForm::Long => self
-                    .name
-                    .cmp(&other.name)
-                    .then_with(|| self.given_name.cmp(&other.given_name)),
-                LongShortForm::Short => self.name.cmp(&other.name),
+                LongShortForm::Long => {
+                    name_a.cmp(&name_b).then_with(|| given_a.cmp(&given_b))
+                }
+                LongShortForm::Short => name_a.cmp(&name_b),
             };
         }
 
+        let prefix_a = self.prefix.as_ref().map(|s| s.to_lowercase());
+        let prefix_b = other.prefix.as_ref().map(|s| s.to_lowercase());
+        let suffix_a = self.suffix.as_ref().map(|s| s.to_lowercase());
+        let suffix_b = other.suffix.as_ref().map(|s| s.to_lowercase());
+
         if demote_particle {
             self.name_without_particle()
-                .cmp(other.name_without_particle())
-                .then_with(|| self.name_particles().cmp(&other.name_particles()))
-                .then_with(|| self.given_name.cmp(&other.given_name))
-                .then_with(|| self.suffix.cmp(&other.suffix))
+                .to_lowercase()
+                .cmp(&other.name_without_particle().to_lowercase())
+                .then_with(|| {
+                    self.name_particles()
+                        .map(|c| c.to_lowercase())
+                        .cmp(&other.name_particles().map(|c| c.to_lowercase()))
+                })
+                .then_with(|| given_a.cmp(&given_b))
+                .then_with(|| suffix_a.cmp(&suffix_b))
         } else {
-            self.name
-                .cmp(&other.name)
-                .then_with(|| self.prefix.cmp(&other.prefix))
-                .then_with(|| self.given_name.cmp(&other.given_name))
-                .then_with(|| self.suffix.cmp(&other.suffix))
+            name_a
+                .cmp(&name_b)
+                .then_with(|| prefix_a.cmp(&prefix_b))
+                .then_with(|| given_a.cmp(&given_b))
+                .then_with(|| suffix_a.cmp(&suffix_b))
         }
     }
 }

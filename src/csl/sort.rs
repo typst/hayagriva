@@ -105,7 +105,7 @@ impl<'a> StyleContext<'a> {
                         }
                         ctx.flush().0.into_iter().fold(String::new(), |mut s, f| {
                             f.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
-                            s
+                            s.to_lowercase()
                         })
                     })
                 };
