@@ -2058,7 +2058,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
         while let Some(current_form) = form {
             if let Some(localization) = self.style.lookup_locale(|l| {
                 let term = l.term(term, current_form)?;
-                dbg!(&term);
                 Some(if plural { term.multiple() } else { term.single() })
             }) {
                 return localization;

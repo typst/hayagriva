@@ -279,6 +279,7 @@ impl FromStr for Numeric {
         let value = match s.peek() {
             Some(c) if is_delimiter(c) => {
                 s.eat();
+                s.eat_until(|c: char| !is_delimiter(c));
                 let mut items = vec![(value, Some(NumericDelimiter::try_from(c)?))];
                 loop {
                     let num = number(&mut s).ok_or(NumericError::NoNumber)?;
@@ -454,7 +455,7 @@ impl FromStr for NumericDelimiter {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let first_char = s.chars().next().ok_or(NumericError::MissingDelimiter)?;
-        if s.len() > first_char.len_utf8() {
+        if first_char != '-' && s.len() > first_char.len_utf8() {
             return Err(NumericError::NotADelimiter);
         }
 
@@ -472,5 +473,24 @@ impl TryFrom<char> for NumericDelimiter {
             '-' | '–' => Ok(NumericDelimiter::Hyphen),
             _ => Err(NumericError::NotADelimiter),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_mixed_range() {
+        let s = "34,37--39";
+        let n: Numeric = s.parse().unwrap();
+        assert_eq!(
+            n.value,
+            NumericValue::Set(vec![
+                (34, Some(NumericDelimiter::Comma)),
+                (37, Some(NumericDelimiter::Hyphen)),
+                (39, None)
+            ])
+        );
     }
 }
