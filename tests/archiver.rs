@@ -8,11 +8,14 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::process::Command;
 
 use hayagriva::archive::{Lookup, StyleMatch};
 
-const CACHE_PATH: &str = "target/haya-cache";
+mod common;
+use common::{ensure_repo, iter_files, iter_files_with_name};
+
+use crate::common::CACHE_PATH;
+
 const STYLES_REPO_NAME: &str = "styles";
 const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
@@ -51,56 +54,7 @@ fn always_archive() {
 /// Download the CSL styles and locales repos.
 fn ensure_repos() -> Result<(), ArchivalError> {
     ensure_repo(CSL_REPO, STYLES_REPO_NAME, "master")?;
-    ensure_repo(LOCALES_REPO, LOCALES_REPO_NAME, "master")
-}
-
-/// Clone a repo if it does not exist, pull it otherwise.
-///
-/// This function requires a `git` installation to be available in PATH.
-fn ensure_repo(
-    repo_url: &str,
-    repo_name: &str,
-    branch_name: &str,
-) -> Result<(), ArchivalError> {
-    let cache_path = PathBuf::from(CACHE_PATH);
-    fs::create_dir_all(CACHE_PATH)?;
-
-    // Check if styles directory exists. If it does, try to git pull origin
-    // main. If that fails or the directory does not exist, clone the repo.
-    let style_path = cache_path.join(repo_name);
-    let clone = if style_path.exists() {
-        let status = Command::new("git")
-            .args(["pull", "origin", branch_name])
-            .current_dir(&style_path)
-            .status()
-            .expect("Please ensure git is installed");
-
-        if !status.success() {
-            fs::remove_dir_all(&style_path)?;
-            true
-        } else {
-            false
-        }
-    } else {
-        true
-    };
-
-    if clone {
-        let status = Command::new("git")
-            .args(["clone", repo_url, repo_name, "--depth", "1"])
-            .current_dir(&cache_path)
-            .status()
-            .expect("Please ensure git is installed");
-
-        if !status.success() {
-            return Err(ArchivalError::Io(io::Error::new(
-                io::ErrorKind::Other,
-                "Failed to clone repo. Is git installed correnctly and is the internet working?",
-            )));
-        }
-    }
-
-    Ok(())
+    Ok(ensure_repo(LOCALES_REPO, LOCALES_REPO_NAME, "master")?)
 }
 
 /// Create an archive of CSL and its locales as CBOR.
@@ -113,22 +67,7 @@ fn create_archive() -> Result<(), ArchivalError> {
         locales: retrieve_locales()?,
     };
 
-    for style_thing in fs::read_dir(&style_path).unwrap() {
-        let thing = style_thing.unwrap();
-        if !thing.file_type()?.is_file() {
-            continue;
-        }
-
-        let path = thing.path();
-        let extension = path.extension();
-        if let Some(extension) = extension {
-            if extension.to_str() != Some("csl") {
-                continue;
-            }
-        } else {
-            continue;
-        }
-
+    for path in iter_files(&style_path, "csl") {
         let style: Style = Style::from_xml(&fs::read_to_string(path)?)?;
         if let Style::Dependent(_) = style {
             continue;
@@ -199,31 +138,8 @@ fn clean_name(id: &str, over: Option<&Override>) -> String {
 fn retrieve_locales() -> Result<Vec<Vec<u8>>, ArchivalError> {
     let mut res = Vec::new();
     let locales_path = PathBuf::from(CACHE_PATH).join(LOCALES_REPO_NAME);
-    for style_thing in fs::read_dir(&locales_path).unwrap() {
-        let thing = style_thing.unwrap();
-        if !thing.file_type()?.is_file() {
-            continue;
-        }
-
-        let path = thing.path();
-        let extension = path.extension();
-        if let Some(extension) = extension {
-            if extension.to_str() != Some("xml") {
-                continue;
-            }
-        } else {
-            continue;
-        }
-
-        let file_name = path.file_name();
-        if let Some(name) = file_name {
-            if !name.to_string_lossy().starts_with("locales-") {
-                continue;
-            }
-        } else {
-            continue;
-        }
-
+    for path in iter_files_with_name(&locales_path, "xml", |n| n.starts_with("locales-"))
+    {
         let xml = fs::read_to_string(path)?;
         let locale: Locale = LocaleFile::from_xml(&xml)?.into();
         let bytes = locale.to_cbor()?;
@@ -301,22 +217,7 @@ fn strip_id(full_id: &str) -> &str {
 fn retrieve_dependent_aliasses() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
     let mut dependent_alias: HashMap<_, Vec<_>> = HashMap::new();
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
-    for style_thing in fs::read_dir(style_path.join("dependent")).unwrap() {
-        let thing = style_thing.unwrap();
-        if !thing.file_type()?.is_file() {
-            continue;
-        }
-
-        let path = thing.path();
-        let extension = path.extension();
-        if let Some(extension) = extension {
-            if extension.to_str() != Some("csl") {
-                continue;
-            }
-        } else {
-            continue;
-        }
-
+    for path in iter_files(&style_path.join("dependent"), "csl") {
         let style: Style = Style::from_xml(&fs::read_to_string(path)?)?;
         if let Style::Dependent(d) = style {
             let id = strip_id(&d.info.id).to_string();
@@ -338,7 +239,7 @@ unsafe fn read(buf: &[u8]) -> &<Lookup as Archive>::Archived {
 
 /// An error while creating or checking an archive.
 #[derive(Debug)]
-enum ArchivalError {
+pub enum ArchivalError {
     Io(io::Error),
     Deserialize(XmlSerdeError),
     Serialize(CborSerializeError),

@@ -1,10 +1,12 @@
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::Write;
 
 use citationberg::taxonomy::{NameVariable, OtherTerm, Term};
 use citationberg::{
     DelimiterBehavior, DemoteNonDroppingParticle, LayoutRenderingElement, NameAnd,
-    NameAsSortOrder, NameForm, NameLabelPosition, Names, ToAffixes, ToFormatting,
+    NameAsSortOrder, NameForm, NameLabelPosition, NameOptions, Names, ToAffixes,
+    ToFormatting,
 };
 use citationberg::{DisambiguationRule, TermForm};
 
@@ -29,30 +31,14 @@ pub enum DisambiguatedNameForm {
 }
 
 impl DisambiguatedNameForm {
-    fn from<T: EntryLike>(names: &citationberg::Names, ctx: &Context<T>) -> Self {
+    fn from<T: EntryLike>(option: &citationberg::NameOptions, ctx: &Context<T>) -> Self {
         if ctx.instance.sorting {
             return Self::LongFull;
         }
 
-        let form = names
-            .name()
-            .as_ref()
-            .and_then(|name| name.form)
-            .or_else(|| ctx.writing.name_options.last().name_form)
-            .unwrap_or_default();
+        let form = option.form;
 
-        if names
-            .options()
-            .initialize_with
-            .as_ref()
-            .or_else(|| ctx.writing.name_options.last().initialize_with.as_ref())
-            .is_some()
-            && names
-                .options()
-                .initialize
-                .or_else(|| ctx.writing.name_options.last().initialize)
-                .unwrap_or(true)
-        {
+        if option.initialize_with.is_some() && option.initialize {
             if form == NameForm::Short {
                 Self::ShortInitialized
             } else {
@@ -186,6 +172,7 @@ impl NameDisambiguationProperties {
 
 impl RenderCsl for Names {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
+        // Suppress this variable if we are in a special form.
         match &ctx.instance.kind {
             Some(SpecialForm::AuthorOnly) => {
                 if self.variable.iter().all(|v| &NameVariable::Author != v) {
@@ -200,7 +187,10 @@ impl RenderCsl for Names {
             None => {}
         }
 
-        let people: Vec<(Vec<&Person>, NameVariable)> = if self.variable.len() == 2
+        // The editor and translator variables need to be merged if they are
+        // both present and identical.
+        let people: Vec<(Vec<Cow<'_, Person>>, NameVariable)> = if self.variable.len()
+            == 2
             && self.variable.contains(&NameVariable::Editor)
             && self.variable.contains(&NameVariable::Translator)
         {
@@ -228,8 +218,10 @@ impl RenderCsl for Names {
                 .collect()
         };
 
+        // Push to the name options stack.
         ctx.writing.push_name_options(&self.options());
 
+        // Write the substitute if all variables are empty.
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
         if is_empty {
             if let Some(substitute) = &self.substitute() {
@@ -256,8 +248,12 @@ impl RenderCsl for Names {
 
         let depth = ctx.push_elem(self.to_formatting());
         let affix_loc = ctx.apply_prefix(&self.to_affixes());
+        let cs_name = self.name().cloned().unwrap_or_default();
+        let options = cs_name.options(ctx.writing.name_options.last());
 
-        let default_form = DisambiguatedNameForm::from(self, ctx);
+        let default_form = DisambiguatedNameForm::from(&options, ctx);
+
+        // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
             write!(ctx, "{}", people.into_iter().fold(0, |acc, curr| acc + curr.0.len()))
                 .unwrap();
@@ -267,8 +263,8 @@ impl RenderCsl for Names {
             return;
         }
 
-        let cs_name = self.name().cloned().unwrap_or_default();
-        let options = cs_name.options(ctx.writing.name_options.last());
+        // If we disambiguate, we need to copy the name forms and otherwise
+        // compute them using the options.
         let props = if let DisambiguateState::NameDisambiguation(props) =
             &ctx.instance.cite_props.speculative.disambiguation
         {
@@ -313,6 +309,16 @@ impl RenderCsl for Names {
                 if !ctx.instance.sorting {
                     if let Some((label, pos)) = label {
                         if pos == requested_pos {
+                            // if pos == NameLabelPosition::AfterName
+                            //     && !label
+                            //         .affixes
+                            //         .prefix
+                            //         .as_ref()
+                            //         .map_or(false, |p| p.starts_with(' '))
+                            // {
+                            //     ctx.ensure_space();
+                            // }
+
                             render_label_with_var(
                                 label,
                                 ctx,
@@ -358,14 +364,14 @@ enum EndDelim {
 fn add_names<T: EntryLike>(
     names: &citationberg::Names,
     ctx: &mut Context<T>,
-    persons: Vec<&Person>,
+    persons: Vec<Cow<'_, Person>>,
     cs_name: &citationberg::Name,
     forms: &[Option<DisambiguatedNameForm>],
     variable: NameVariable,
 ) {
     let has_et_al = forms.iter().any(|f| f.is_none());
     let take = forms.iter().position(|f| f.is_none()).unwrap_or(persons.len());
-    let names_opts = names.options();
+    let names_opts = ctx.writing.name_options.last().clone();
     let name_opts = cs_name.options(&names_opts);
     let et_al_use_last = has_et_al.then(|| forms.last().copied().flatten()).flatten();
     let mut last_inverted = false;
@@ -385,12 +391,8 @@ fn add_names<T: EntryLike>(
         if !first {
             let mut delim = EndDelim::Delim;
             if last && !has_et_al {
-                if let Some(d) = names.options().and {
-                    delim = match names
-                        .options()
-                        .delimiter_precedes_last
-                        .unwrap_or_default()
-                    {
+                if let Some(d) = name_opts.and {
+                    delim = match name_opts.delimiter_precedes_last {
                         DelimiterBehavior::Contextual if i >= 2 => EndDelim::DelimAnd(d),
                         DelimiterBehavior::AfterInvertedName if last_inverted => {
                             EndDelim::DelimAnd(d)
@@ -426,7 +428,7 @@ fn add_names<T: EntryLike>(
             }
         }
 
-        let reverse = match names.options().name_as_sort_order {
+        let reverse = match name_opts.name_as_sort_order {
             Some(NameAsSortOrder::First) if i == 0 => true,
             Some(NameAsSortOrder::All) => true,
             _ => false,
@@ -438,8 +440,8 @@ fn add_names<T: EntryLike>(
             form,
             reverse,
             demote_non_dropping,
-            names,
             cs_name,
+            &name_opts,
             variable,
             i,
         );
@@ -456,10 +458,10 @@ fn add_names<T: EntryLike>(
                 name,
                 ctx,
                 form,
-                matches!(names.options().name_as_sort_order, Some(NameAsSortOrder::All)),
+                matches!(name_opts.name_as_sort_order, Some(NameAsSortOrder::All)),
                 demote_non_dropping,
-                names,
                 cs_name,
+                &name_opts,
                 variable,
                 persons.len() - 1,
             );
@@ -467,10 +469,10 @@ fn add_names<T: EntryLike>(
     } else if has_et_al {
         let cs_et_al = names.et_al().cloned().unwrap_or_default();
         if let Some(term) = ctx.term(cs_et_al.term.into(), TermForm::default(), false) {
-            let delim = match names.options().delimiter_precedes_et_al {
-                Some(DelimiterBehavior::Always) => true,
-                Some(DelimiterBehavior::Contextual) if take >= 2 => true,
-                Some(DelimiterBehavior::AfterInvertedName) if last_inverted => true,
+            let delim = match name_opts.delimiter_precedes_et_al {
+                DelimiterBehavior::Always => true,
+                DelimiterBehavior::Contextual if take >= 2 => true,
+                DelimiterBehavior::AfterInvertedName if last_inverted => true,
                 _ => false,
             };
 
@@ -493,14 +495,13 @@ fn write_name<T: EntryLike>(
     form: DisambiguatedNameForm,
     reverse: bool,
     demote_non_dropping: bool,
-    names: &citationberg::Names,
     cs_name: &citationberg::Name,
+    name_opts: &NameOptions,
     variable: NameVariable,
     name_idx: usize,
 ) {
     let hyphen_init = ctx.style.csl.settings.initialize_with_hyphen;
-    let names_opts = names.options();
-    let sort_sep = names_opts.sort_separator.as_deref().unwrap_or(", ");
+    let sort_sep = name_opts.sort_separator;
 
     let first_part = cs_name.name_part_given();
     let family_part = cs_name.name_part_family();
@@ -519,16 +520,11 @@ fn write_name<T: EntryLike>(
 
     let first_name = |ctx: &mut Context<T>| {
         if let Some(first) = &name.given_name {
-            if let Some(initialize_with) = names
-                .options()
-                .initialize_with
-                .clone()
-                .or_else(|| ctx.writing.name_options.last().initialize_with.clone())
-            {
+            if let Some(initialize_with) = name_opts.initialize_with {
                 if form == DisambiguatedNameForm::LongInitialized {
-                    name.initials(ctx, Some(&initialize_with), hyphen_init).unwrap();
+                    name.initials(ctx, Some(initialize_with), hyphen_init).unwrap();
                 } else {
-                    name.first_name_with_delimiter(ctx, Some(&initialize_with)).unwrap();
+                    name.first_name_with_delimiter(ctx, Some(initialize_with)).unwrap();
                 }
             } else {
                 ctx.push_str(first);

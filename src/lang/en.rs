@@ -1,6 +1,6 @@
 pub const ARTICLES: [&str; 8] = ["A", "AN", "An", "THE", "The", "a", "an", "the"];
 
-pub const NEVER_CAPITALIZE: [&str; 46] = [
+pub const NEVER_CAPITALIZE: [&str; 50] = [
     "A",
     "Above",
     "Across",
@@ -18,6 +18,7 @@ pub const NEVER_CAPITALIZE: [&str; 46] = [
     "Between",
     "But",
     "By",
+    "Down",
     "During",
     "For",
     "From",
@@ -39,11 +40,14 @@ pub const NEVER_CAPITALIZE: [&str; 46] = [
     "So",
     "T",
     "The",
+    "Till",
     "To",
     "Toward",
     "Under",
     "Underneath",
     "Until",
+    "Up",
+    "Via",
     "With",
     "Within",
     "Yet",

@@ -38,7 +38,7 @@ impl<'a> StyleContext<'a> {
                 let b = b.entry.resolve_date_variable(*d);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(b),
+                    (Some(a), Some(b)) => a.csl_cmp(&b),
                     (Some(_), None) => Ordering::Greater,
                     (None, Some(_)) => Ordering::Less,
                     (None, None) => Ordering::Equal,

@@ -167,7 +167,8 @@ impl RenderCsl for citationberg::Number {
                                     OtherTerm::PageRangeDelimiter.into(),
                                     TermForm::default(),
                                     false,
-                                ),
+                                )
+                                .or(Some("–")),
                             )
                             .unwrap();
                         false
@@ -328,11 +329,7 @@ impl RenderCsl for citationberg::Date {
 
         let cidx = ctx.push_case(self.text_case.or(base.and_then(|b| b.text_case)));
 
-        let parts = if let Some(base) = base {
-            base.parts.unwrap_or_default()
-        } else {
-            DateParts::default()
-        };
+        let parts = self.parts.or(base.and_then(|b| b.parts)).unwrap_or_default();
 
         // TODO: Date ranges
         let mut last_was_empty = true;
@@ -355,7 +352,7 @@ impl RenderCsl for citationberg::Date {
                 .then(|| self.date_part.iter().find(|p| p.name == part.name))
                 .flatten();
 
-            render_date_part(part, date, ctx, over_ride);
+            render_date_part(part, &date, ctx, over_ride);
             last_was_empty = cursor == ctx.writing.len();
         }
 
@@ -429,22 +426,18 @@ fn render_date_part<T: EntryLike>(
             write!(ctx, "{}", val).unwrap();
         }
         DateStrongAnyForm::Month(DateMonthForm::Long) => {
-            if let Some(month) = ctx.term(
-                OtherTerm::month((val - 1) as u8).unwrap().into(),
-                TermForm::Long,
-                false,
-            ) {
+            if let Some(month) = OtherTerm::month((val - 1) as u8)
+                .and_then(|m| ctx.term(m.into(), TermForm::Long, false))
+            {
                 ctx.push_str(month);
             } else {
                 write!(ctx, "{}", val).unwrap();
             }
         }
         DateStrongAnyForm::Month(DateMonthForm::Short) => {
-            if let Some(month) = ctx.term(
-                OtherTerm::month((val - 1) as u8).unwrap().into(),
-                TermForm::Short,
-                false,
-            ) {
+            if let Some(month) = OtherTerm::month((val - 1) as u8)
+                .and_then(|m| ctx.term(m.into(), TermForm::Short, false))
+            {
                 ctx.push_str(month);
             } else {
                 write!(ctx, "{}", val).unwrap();

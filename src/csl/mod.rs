@@ -23,6 +23,7 @@ use crate::csl::rendering::RenderCsl;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
 
+use self::elem::last_text_mut_child;
 pub use self::elem::{
     BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
 };
@@ -429,10 +430,16 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     }
 
                     if let Some(suffix) = cite.request.suffix() {
-                        elem_children.push(ElemChild::Text(Formatted {
-                            text: suffix.to_string(),
-                            formatting,
-                        }));
+                        let mut slice = [0; 4];
+                        let print = last_text_mut_child(&mut elem_children)
+                            .map_or(true, |t| {
+                                !t.text.ends_with(suffix.as_str(&mut slice))
+                            });
+                        if print {
+                            elem_children.push(
+                                Formatted { text: suffix.to_string(), formatting }.into(),
+                            );
+                        }
                     }
 
                     simplify_children(ElemChildren(elem_children))
@@ -558,7 +565,10 @@ pub fn standalone_citation<T: EntryLike>(
         }
 
         if let Some(suffix) = style.csl.citation.layout.suffix.as_ref() {
-            res.0.push(Formatted { text: suffix.clone(), formatting }.into());
+            let print = res.last_text_mut().map_or(true, |t| !t.text.ends_with(suffix));
+            if print {
+                res.0.push(Formatted { text: suffix.clone(), formatting }.into());
+            }
         }
 
         simplify_children(res)
@@ -1115,6 +1125,18 @@ enum CharOrSlice<'a> {
     Slice(&'a str),
 }
 
+impl<'a> CharOrSlice<'a> {
+    fn as_str<'b>(&self, slice: &'b mut [u8; 4]) -> &'b str
+    where
+        'a: 'b,
+    {
+        match self {
+            CharOrSlice::Slice(s) => s,
+            CharOrSlice::Char(c) => c.encode_utf8(slice),
+        }
+    }
+}
+
 impl Default for CharOrSlice<'_> {
     fn default() -> Self {
         Self::Slice("")
@@ -1446,7 +1468,17 @@ impl WritingContext {
             self.discard_elem(loc.0);
         } else {
             if let Some(suffix) = &affixes.suffix {
-                self.buf.push_str(suffix);
+                let do_suffix = if !self.buf.is_empty() {
+                    !self.buf.as_string_mut().ends_with(suffix.as_str())
+                } else if let Some(l) = self.elem_stack.last_mut().last_text_mut() {
+                    !l.text.ends_with(suffix)
+                } else {
+                    true
+                };
+
+                if do_suffix {
+                    self.buf.push_str(suffix);
+                }
             }
             self.commit_elem(loc.0, None, None);
         }
@@ -1493,10 +1525,14 @@ impl WritingContext {
 
     /// Ensure that the buffer is either empty or the last character is a space.
     pub fn ensure_space(&mut self) {
-        if (!self.buf.is_empty() || self.elem_stack.iter().any(|e| !e.is_empty()))
-            && !self.buf.ends_with(' ')
-        {
-            self.buf.push(' ');
+        if !self.buf.is_empty() {
+            if !self.buf.ends_with(' ') && !self.buf.ends_with('\u{a0}') {
+                self.buf.push(' ');
+            }
+        } else if let Some(l) = self.elem_stack.last_mut().last_text_mut() {
+            if !l.text.ends_with(' ') && !l.text.ends_with('\u{a0}') {
+                l.text.push(' ');
+            }
         }
     }
 
@@ -2004,7 +2040,13 @@ impl<'a, T: EntryLike> Context<'a, T> {
     }
 
     /// Get a term from the style.
-    fn term(&self, term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
+    fn term(&self, mut term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
+        if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator) {
+            if let Some(locator) = self.instance.cite_props.speculative.locator {
+                term = locator.0.into();
+            }
+        }
+
         let mut form = Some(form);
         while let Some(current_form) = form {
             if let Some(localization) = self.style.lookup_locale(|l| {
@@ -2125,7 +2167,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_date_variable(
         &self,
         variable: csl_taxonomy::DateVariable,
-    ) -> Option<&'a Date> {
+    ) -> Option<Cow<'a, Date>> {
         self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.entry.resolve_date_variable(variable);
@@ -2142,7 +2184,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_name_variable(
         &self,
         variable: csl_taxonomy::NameVariable,
-    ) -> Vec<&'a Person> {
+    ) -> Vec<Cow<'a, Person>> {
         self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         if self.writing.prepare_variable_query(variable).is_none() {
             return Vec::new();

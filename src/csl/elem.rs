@@ -226,6 +226,19 @@ impl ElemChildren {
         }
         Ok(())
     }
+
+    /// Get a mutable reference on the last text leaf.
+    pub(super) fn last_text_mut(&mut self) -> Option<&mut Formatted> {
+        last_text_mut_child(&mut self.0)
+    }
+}
+
+pub(crate) fn last_text_mut_child(children: &mut [ElemChild]) -> Option<&mut Formatted> {
+    children.last_mut().and_then(|c| match c {
+        ElemChild::Text(t) => Some(t),
+        ElemChild::Elem(e) => e.children.last_text_mut(),
+        _ => None,
+    })
 }
 
 impl fmt::Display for ElemChildren {
