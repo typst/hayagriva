@@ -385,6 +385,10 @@ fn render_date_part<T: EntryLike>(
     let affixes = &date_part.affixes;
     let affix_loc = ctx.apply_prefix(affixes);
 
+    if date_part.name == DatePartName::Month {
+        ctx.may_strip_periods(date_part.strip_periods);
+    }
+
     let cidx = ctx.push_case(over_ride.and_then(|o| o.text_case).or(date_part.text_case));
 
     let form = over_ride
@@ -459,6 +463,7 @@ fn render_date_part<T: EntryLike>(
     }
 
     ctx.apply_suffix(affixes, affix_loc);
+    ctx.stop_stripping_periods();
     ctx.pop_case(cidx);
     ctx.pop_format(idx);
 }

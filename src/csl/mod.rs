@@ -10,8 +10,8 @@ use std::{mem, vec};
 
 use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, Citation, Collapse, CslMacro, Display,
-    GrammarGender, IndependentStyle, InheritableNameOptions, Locale, LocaleCode,
+    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, Collapse, CslMacro,
+    Display, GrammarGender, IndependentStyle, InheritableNameOptions, Locale, LocaleCode,
     RendersYearSuffix, SecondFieldAlign, StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
@@ -565,7 +565,7 @@ pub fn standalone_citation<T: EntryLike>(
         }
 
         if let Some(suffix) = style.csl.citation.layout.suffix.as_ref() {
-            let print = res.last_text_mut().map_or(true, |t| !t.text.ends_with(suffix));
+            let print = res.last_text().map_or(true, |t| !t.text.ends_with(suffix));
             if print {
                 res.0.push(Formatted { text: suffix.clone(), formatting }.into());
             }
@@ -1264,19 +1264,30 @@ impl<'a> StyleContext<'a> {
     where
         F: FnMut(&'a Locale) -> Option<R>,
     {
-        let mut lookup = |file: &'a [Locale], lang| {
+        let mut lookup = |file: &'a [Locale], lang: Option<&LocaleCode>| {
             #[allow(clippy::redundant_closure)]
             file.iter().find(|l| l.lang.as_ref() == lang).and_then(|l| f(l))
         };
 
         let locale = self.locale();
-        let fallback = locale.fallback();
         let en_us = LocaleCode::en_us();
 
         for (i, resource) in [self.csl.locale.as_slice(), self.locale_files]
             .into_iter()
             .enumerate()
         {
+            let fallback = if i == 0 {
+                locale.parse_base().and_then(|base| match base {
+                    BaseLanguage::Iso639_1(lang) => {
+                        Some(LocaleCode(String::from_utf8(lang.to_vec()).unwrap()))
+                    }
+                    BaseLanguage::Iana(lang) => Some(LocaleCode(lang)),
+                    _ => None,
+                })
+            } else {
+                locale.fallback()
+            };
+
             if let Some(output) = lookup(resource, Some(&locale)) {
                 return Some(output);
             }
@@ -1459,29 +1470,6 @@ impl WritingContext {
         };
 
         (pos, affixes.prefix.as_ref().map(|p| p.len()).unwrap_or_default())
-    }
-
-    /// Apply a suffix, but only if the location was followed by something.
-    /// Delete any prefix if not.
-    fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
-        if !self.has_content_since(&loc) {
-            self.discard_elem(loc.0);
-        } else {
-            if let Some(suffix) = &affixes.suffix {
-                let do_suffix = if !self.buf.is_empty() {
-                    !self.buf.as_string_mut().ends_with(suffix.as_str())
-                } else if let Some(l) = self.elem_stack.last_mut().last_text_mut() {
-                    !l.text.ends_with(suffix)
-                } else {
-                    true
-                };
-
-                if do_suffix {
-                    self.buf.push_str(suffix);
-                }
-            }
-            self.commit_elem(loc.0, None, None);
-        }
     }
 
     /// Nest the last subtree into its ancestor. If the `display` argument is
@@ -1941,7 +1929,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
             let mut used_buf = false;
             let buf = if self.writing.buf.is_empty() {
-                match self.writing.elem_stack.last_mut().0.last_mut() {
+                match self
+                    .writing
+                    .elem_stack
+                    .last_mut_predicate(|p| !p.is_empty())
+                    .and_then(|p| p.0.last_mut())
+                {
                     Some(ElemChild::Text(f)) => &mut f.text,
                     _ => {
                         used_buf = true;
@@ -1983,6 +1976,19 @@ impl<'a, T: EntryLike> Context<'a, T> {
         self.writing.buf.reconfigure(
             (*self.writing.cases.last()).map(Into::into).unwrap_or_default(),
         );
+
+        if s.chars().next().map_or(false, |c| c == '.' || c == ',') {
+            let last = self.writing.elem_stack.last_mut_predicate(|s| !s.is_empty());
+            if !self.writing.buf.is_empty() {
+                if self.writing.buf.ends_with(' ') {
+                    self.writing.buf.as_string_mut().pop();
+                }
+            } else if let Some(last) = last {
+                if last.last_char() == Some(' ') {
+                    last.pop_char();
+                }
+            }
+        }
 
         if self.writing.strip_periods {
             // Replicate citeproc.js behavior: remove a period if the
@@ -2051,6 +2057,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
         while let Some(current_form) = form {
             if let Some(localization) = self.style.lookup_locale(|l| {
                 let term = l.term(term, current_form)?;
+                dbg!(&term);
                 Some(if plural { term.multiple() } else { term.single() })
             }) {
                 return localization;
@@ -2207,7 +2214,24 @@ impl<'a, T: EntryLike> Context<'a, T> {
     /// Apply a suffix, but only if the location was followed by something.
     /// Delete any prefix if not.
     fn apply_suffix(&mut self, affixes: &Affixes, loc: (DisplayLoc, usize)) {
-        self.writing.apply_suffix(affixes, loc)
+        if !self.writing.has_content_since(&loc) {
+            self.discard_elem(loc.0);
+        } else {
+            if let Some(suffix) = &affixes.suffix {
+                let do_suffix = if !self.writing.buf.is_empty() {
+                    !self.writing.buf.as_string_mut().ends_with(suffix.as_str())
+                } else if let Some(l) = self.writing.elem_stack.last_mut().last_text() {
+                    !l.text.ends_with(suffix)
+                } else {
+                    true
+                };
+
+                if do_suffix {
+                    self.push_str(suffix);
+                }
+            }
+            self.commit_elem(loc.0, None, None);
+        }
     }
 
     /// Test whether this entry should disambiguate via `cs:choose`.

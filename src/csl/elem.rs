@@ -231,12 +231,35 @@ impl ElemChildren {
     pub(super) fn last_text_mut(&mut self) -> Option<&mut Formatted> {
         last_text_mut_child(&mut self.0)
     }
+
+    /// Get a reference on the last text leaf.
+    pub(super) fn last_text(&self) -> Option<&Formatted> {
+        last_text_child(&self.0)
+    }
+
+    /// Get the last character of the last text leaf.
+    pub(super) fn last_char(&self) -> Option<char> {
+        self.last_text().and_then(|t| t.text.chars().last())
+    }
+
+    /// Remove the last character of the last text leaf.
+    pub(super) fn pop_char(&mut self) -> Option<char> {
+        self.last_text_mut().and_then(|t| t.text.pop())
+    }
 }
 
 pub(crate) fn last_text_mut_child(children: &mut [ElemChild]) -> Option<&mut Formatted> {
     children.last_mut().and_then(|c| match c {
         ElemChild::Text(t) => Some(t),
-        ElemChild::Elem(e) => e.children.last_text_mut(),
+        ElemChild::Elem(e) => last_text_mut_child(&mut e.children.0),
+        _ => None,
+    })
+}
+
+pub(crate) fn last_text_child(children: &[ElemChild]) -> Option<&Formatted> {
+    children.last().and_then(|c| match c {
+        ElemChild::Text(t) => Some(t),
+        ElemChild::Elem(e) => last_text_child(&e.children.0),
         _ => None,
     })
 }
@@ -525,6 +548,49 @@ impl<T> NonEmptyStack<T> {
 
     pub fn last_mut(&mut self) -> &mut T {
         &mut self.last
+    }
+
+    pub fn last_predicate(&self, predicate: impl Fn(&T) -> bool) -> Option<&T> {
+        for x in (0..self.len().get()).rev() {
+            let item = self.get(x).unwrap();
+            if predicate(item) {
+                return Some(item);
+            }
+        }
+
+        None
+    }
+
+    pub fn last_mut_predicate(
+        &mut self,
+        predicate: impl Fn(&T) -> bool,
+    ) -> Option<&mut T> {
+        let len = self.len().get();
+
+        for x in (0..len).rev() {
+            let item = self.get(x).unwrap();
+            if predicate(item) {
+                return Some(self.get_mut(x).unwrap());
+            }
+        }
+
+        None
+    }
+
+    fn get(&self, idx: usize) -> Option<&T> {
+        if idx + 1 == self.len().get() {
+            Some(&self.last)
+        } else {
+            self.head.get(idx)
+        }
+    }
+
+    fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
+        if idx + 1 == self.len().get() {
+            Some(&mut self.last)
+        } else {
+            self.head.get_mut(idx)
+        }
     }
 
     pub fn len(&self) -> NonZeroUsize {

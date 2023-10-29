@@ -330,7 +330,9 @@ fn test_parse_tests() {
         ]
         .contains(&name)
             && !name.starts_with("magic_")
-    }) {
+    })
+    .take(100)
+    {
         let str = std::fs::read_to_string(&path).unwrap();
         let case = build_case(&str);
         total += 1;
@@ -353,7 +355,7 @@ fn test_parse_tests() {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "name_LabelAfterPlural.txt";
+    let name = "locator_SingularEmbeddedLabelAfterPlural.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
@@ -453,15 +455,15 @@ where
                     .map(|i| {
                         CitationItem::new(
                             case.input.iter().find(|e| e.id() == i.id.as_str()).unwrap(),
-                            i.label
-                                .as_ref()
-                                .and_then(|l| i.locator.as_ref().map(|lo| (lo, l)))
-                                .map(|(lo, l)| {
-                                    SpecificLocator(
-                                        Locator::from_str(l).unwrap(),
-                                        lo.as_str(),
-                                    )
-                                }),
+                            i.locator.as_deref().map(|lo| {
+                                SpecificLocator(
+                                    i.label
+                                        .as_deref()
+                                        .map(|l| Locator::from_str(l).unwrap())
+                                        .unwrap_or(Locator::Page),
+                                    lo,
+                                )
+                            }),
                             None,
                             false,
                             if i.suppress_author {

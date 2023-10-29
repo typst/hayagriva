@@ -705,8 +705,8 @@ fn write_name<T: EntryLike>(
             }
 
             first_name(ctx);
-            ctx.ensure_space();
             if let Some(prefix) = &name.prefix {
+                ctx.ensure_space();
                 ctx.push_str(prefix);
             }
 
