@@ -30,7 +30,7 @@ pub trait EntryLike {
     fn resolve_date_variable(&self, variable: DateVariable) -> Option<Cow<'_, Date>>;
     fn matches_entry_type(&self, kind: taxonomy::Kind) -> bool;
     fn is_english(&self) -> Option<bool>;
-    fn key(&self) -> &str;
+    fn key(&self) -> Cow<'_, str>;
 }
 
 impl<'a, T: EntryLike> InstanceContext<'a, T> {
@@ -81,8 +81,8 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
 }
 
 impl EntryLike for Entry {
-    fn key(&self) -> &str {
-        self.key()
+    fn key(&self) -> Cow<'_, str> {
+        Cow::Borrowed(self.key())
     }
 
     fn resolve_number_variable(
@@ -761,6 +761,10 @@ impl EntryLike for csl_json_valley::Item {
             .get("language")
             .and_then(|l| l.as_str())
             .map(|l| l.starts_with("en"))
+    }
+
+    fn key(&self) -> Cow<'_, str> {
+        Cow::Owned(self.id())
     }
 }
 

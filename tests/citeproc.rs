@@ -450,29 +450,26 @@ where
         for cite in cites {
             driver.citation(CitationRequest::new(
                 cite.iter()
-                    .map(|i| CitationItem {
-                        entry: case
-                            .input
-                            .iter()
-                            .find(|e| e.id() == i.id.as_str())
-                            .unwrap(),
-                        locator: i
-                            .label
-                            .as_ref()
-                            .and_then(|l| i.locator.as_ref().map(|lo| (lo, l)))
-                            .map(|(lo, l)| {
-                                SpecificLocator(
-                                    Locator::from_str(l).unwrap(),
-                                    lo.as_str(),
-                                )
-                            }),
-                        locale: None,
-                        kind: if i.suppress_author {
-                            Some(hayagriva::SpecialForm::SuppressAuthor)
-                        } else {
-                            None
-                        },
-                        hidden: false,
+                    .map(|i| {
+                        CitationItem::new(
+                            case.input.iter().find(|e| e.id() == i.id.as_str()).unwrap(),
+                            i.label
+                                .as_ref()
+                                .and_then(|l| i.locator.as_ref().map(|lo| (lo, l)))
+                                .map(|(lo, l)| {
+                                    SpecificLocator(
+                                        Locator::from_str(l).unwrap(),
+                                        lo.as_str(),
+                                    )
+                                }),
+                            None,
+                            false,
+                            if i.suppress_author {
+                                Some(hayagriva::SpecialForm::SuppressAuthor)
+                            } else {
+                                None
+                            },
+                        )
                     })
                     .collect(),
                 &style,
@@ -484,16 +481,7 @@ where
         }
     } else {
         driver.citation(CitationRequest::new(
-            case.input
-                .iter()
-                .map(|e| CitationItem {
-                    entry: e,
-                    locator: None,
-                    locale: None,
-                    kind: None,
-                    hidden: false,
-                })
-                .collect(),
+            case.input.iter().map(|e| CitationItem::with_entry(e)).collect(),
             &style,
             None,
             locales,
