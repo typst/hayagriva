@@ -172,21 +172,6 @@ impl NameDisambiguationProperties {
 
 impl RenderCsl for Names {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        // Suppress this variable if we are in a special form.
-        match &ctx.instance.kind {
-            Some(SpecialForm::AuthorOnly) => {
-                if self.variable.iter().all(|v| &NameVariable::Author != v) {
-                    return;
-                }
-            }
-            Some(SpecialForm::SuppressAuthor) => {
-                if self.variable.iter().any(|v| &NameVariable::Author == v) {
-                    return;
-                }
-            }
-            None => {}
-        }
-
         // The editor and translator variables need to be merged if they are
         // both present and identical.
         let people: Vec<(Vec<Cow<'_, Person>>, NameVariable)> = if self.variable.len()
@@ -223,6 +208,37 @@ impl RenderCsl for Names {
 
         // Write the substitute if all variables are empty.
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
+        // Suppress this variable if we are in a special form.
+        match &ctx.instance.kind {
+            Some(SpecialForm::AuthorOnly) => {
+                // Skip if none of the variables are the author and the supplement does not contain the author either.
+                let contains_author =
+                    self.variable.iter().any(|v| &NameVariable::Author == v);
+                let substitute_will_render_author = is_empty
+                    && self.substitute().map_or(false, |s| {
+                        s.children
+                            .iter()
+                            .filter_map(|c| match c {
+                                LayoutRenderingElement::Names(n) => {
+                                    Some(n.variable.iter())
+                                }
+                                _ => None,
+                            })
+                            .flatten()
+                            .any(|v| &NameVariable::Author == v)
+                    });
+                if !contains_author && !substitute_will_render_author {
+                    return;
+                }
+            }
+            Some(SpecialForm::SuppressAuthor) => {
+                if self.variable.iter().any(|v| &NameVariable::Author == v) {
+                    return;
+                }
+            }
+            None => {}
+        }
+
         if is_empty {
             if let Some(substitute) = &self.substitute() {
                 ctx.writing.start_suppressing_queried_variables();

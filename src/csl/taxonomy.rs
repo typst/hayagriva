@@ -194,19 +194,19 @@ impl EntryLike for Entry {
             StandardVariable::CitationLabel => entry
                 .map(|e| e.authors())
                 .and_then(|a| a.first())
-                .map(|n| n.name.chars().take(4).collect::<String>())
+                .map(|n| n.name.chars().take(3).collect::<String>())
                 .or_else(|| {
                     entry.title().map(|t| {
                         t.select(LongShortForm::default())
                             .to_string()
                             .chars()
-                            .take(4)
+                            .take(3)
                             .collect::<String>()
                     })
                 })
                 .map(|s| {
                     let s = if let Some(date) = entry.date() {
-                        format!("{}{}", s, date.year % 100)
+                        format!("{}{:02}", s, date.year % 100)
                     } else {
                         s
                     };

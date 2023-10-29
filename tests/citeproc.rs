@@ -10,7 +10,7 @@ use citationberg::{Locale, Style, XmlSerdeError};
 use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
 
 use csl_json_valley::DateStr;
-use hayagriva::archive::locales;
+use hayagriva::archive::{locales, style_by_name};
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest,
     SpecificLocator,
@@ -510,4 +510,59 @@ where
         eprintln!("Got:\n{}", output);
         false
     }
+}
+
+#[test]
+fn author_only() {
+    let style = style_by_name("apa").unwrap();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let item: csl_json_valley::Item = serde_json::from_str(
+        r#"{
+        "id": "ITEM-1", 
+        "title": "Book A",
+        "author": [
+            {
+                "family": "Doe",
+                "given": "John"
+            }
+        ], 
+        "issued": {
+           "date-parts": [
+             [
+               "2000"
+             ]
+           ]
+        },
+        "type": "book"
+    }"#,
+    )
+    .unwrap();
+
+    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
+        BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(
+            &item,
+            None,
+            None,
+            false,
+            Some(hayagriva::SpecialForm::AuthorOnly),
+        )],
+        &style,
+        None,
+        &[],
+        Some(1),
+        None,
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(&style, None, &[]));
+    let mut buf = String::new();
+    rendered.citations[0]
+        .citation
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, "(Doe)");
 }
