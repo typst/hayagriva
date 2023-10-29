@@ -252,7 +252,7 @@ impl Serialize for ChunkedString {
 }
 
 impl ChunkedString {
-    /// Creates a new empty `ChunkedStr`.
+    /// Creates a new empty `ChunkedString`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -319,7 +319,7 @@ impl ChunkedString {
         self.0.iter().all(|c| c.is_empty())
     }
 
-    /// Extend with another `ChunkedStr`.
+    /// Extend with another `ChunkedString`.
     pub fn extend(&mut self, other: Self) {
         self.0.extend(other.0);
     }
@@ -366,12 +366,12 @@ impl ChunkedString {
     }
 }
 
-/// Check whether this is a control character for [`ChunkedStr`].
+/// Check whether this is a control character for [`ChunkedString`].
 fn is_chunk_control(c: char) -> bool {
     c == '\\' || c == '{' || c == '}' || c == '$'
 }
 
-/// Error that occurs when parsing a [`ChunkedStr`].
+/// Error that occurs when parsing a [`ChunkedString`].
 ///
 /// Occurs when there are unbalanced braces. The field contains the position of
 /// the unmatched closing brace.

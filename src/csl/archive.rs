@@ -65,17 +65,13 @@ impl ArchiveStyle {
 }
 
 /// Retrieve a list of styles.
-pub fn styles() -> Vec<ArchiveStyle> {
-    read()
-        .map
-        .iter()
-        .map(|(k, v)| ArchiveStyle {
-            name: k.as_str(),
-            index: v.index,
-            full_name: &v.full_name,
-            alias: v.alias,
-        })
-        .collect()
+pub fn styles() -> impl Iterator<Item = ArchiveStyle> {
+    read().map.iter().map(|(k, v)| ArchiveStyle {
+        name: k.as_str(),
+        index: v.index,
+        full_name: &v.full_name,
+        alias: v.alias,
+    })
 }
 
 /// Retrieve a style from the archive

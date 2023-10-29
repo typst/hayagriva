@@ -550,17 +550,6 @@ impl<T> NonEmptyStack<T> {
         &mut self.last
     }
 
-    pub fn last_predicate(&self, predicate: impl Fn(&T) -> bool) -> Option<&T> {
-        for x in (0..self.len().get()).rev() {
-            let item = self.get(x).unwrap();
-            if predicate(item) {
-                return Some(item);
-            }
-        }
-
-        None
-    }
-
     pub fn last_mut_predicate(
         &mut self,
         predicate: impl Fn(&T) -> bool,

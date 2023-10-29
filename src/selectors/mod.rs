@@ -3,10 +3,9 @@
 /// Construct a [`Selector`].
 ///
 /// Selectors can be used to filter bibliographies or to differentiate between
-/// [`entries`](Entry) when implementing a custom [`CitationStyle`][CitStyle] or
-/// [`BibliographyStyle`][BibStyle]. An [introduction to selectors][intro] is
-/// available in the Git repository. This macro accepts expressions very similar
-/// to the user-facing macros as parsed by [`Selector::parse`].
+/// [`entries`](Entry) during processing. An [introduction to selectors][intro]
+/// is available in the Git repository. This macro accepts expressions very
+/// similar to the user-facing macros as parsed by [`Selector::parse`].
 ///
 /// There are three main differences:
 /// - Binding names and attributes have to be strings and thus wrapped in double

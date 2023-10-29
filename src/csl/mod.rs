@@ -858,12 +858,13 @@ pub struct RenderedBibliography {
     pub hanging_indent: bool,
     /// When set, the second field is aligned.
     pub second_field_align: Option<SecondFieldAlign>,
-    /// The line spacing within the bibliography as a multiple of regular line spacing.
+    /// The line spacing within the bibliography as a multiple of regular line
+    /// spacing.
     pub line_spacing: NonZeroI16,
     /// Extra space between entries as a multiple of line height.
     pub entry_spacing: i16,
     /// The bibliography items. The first item may be some if
-    /// [`second_field_align`] is set. Then, it is the first field that must be
+    /// `second_field_align` is set. Then, it is the first field that must be
     /// treated specially.
     pub items: Vec<BibliographyItem>,
 }
@@ -1193,7 +1194,7 @@ pub struct CitationItem<'a, T: EntryLike> {
     pub locator: Option<SpecificLocator<'a>>,
     /// A locale code that overrides the assumed locale of the entry. If this is
     /// none, this will default to [`CitationRequest::locale`] and then
-    /// [`citationberg::Style::default_locale`].
+    /// [`citationberg::IndependentStyle::default_locale`].
     pub locale: Option<LocaleCode>,
     /// Whether this item will be included in the output.
     pub hidden: bool,
