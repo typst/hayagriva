@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry as HmEntry;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 use std::hash::Hash;
 use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
@@ -64,6 +64,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     hidden: bool,
     locale: Option<LocaleCode>,
     purpose: Option<CitePurpose>,
+    collapse_verdict: Option<CollapseVerdict>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -91,7 +92,7 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 }
 
 /// Implementations for finishing the bibliography.
-impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
+impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T> {
     /// Render the bibliography.
     pub fn finish(self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
@@ -171,6 +172,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     item.locale.as_ref(),
                     citation.locale.as_ref(),
                     item.purpose,
+                    None,
                 );
                 renders.push(SpeculativeItemRender {
                     entry,
@@ -184,6 +186,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     hidden: item.hidden,
                     locale: item.locale.clone(),
                     purpose: item.purpose,
+                    collapse_verdict: None,
                 });
 
                 last_cite = Some(item);
@@ -364,13 +367,13 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
         let mut final_citations: Vec<RenderedCitation> = Vec::new();
         for cite in res.iter_mut() {
             let style_ctx = cite.request.style();
-            for item in cite.items.iter_mut() {
-                item.rendered = last_purpose_render(&style_ctx, item, cite.request);
-            }
-
             // 5. Collapse grouped citations.
             if cite.request.items.iter().all(|c| c.purpose.is_none()) {
                 collapse_items(cite);
+            }
+
+            for item in cite.items.iter_mut() {
+                item.rendered = last_purpose_render(&style_ctx, item, cite.request);
             }
 
             // 6. Add affixes.
@@ -391,16 +394,15 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                         }));
                     }
 
-                    let mut last = None;
                     for (i, item) in cite.items.iter().enumerate() {
                         if item.hidden {
                             continue;
                         }
 
-                        if let Some(last) = last {
+                        if i != 0 {
                             if let Some(delim) = cite
                                 .items
-                                .get(last)
+                                .get(i)
                                 .and_then(|i: &SpeculativeItemRender<T>| i.delim_override)
                                 .or(cite
                                     .request
@@ -424,7 +426,6 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                                 item.cite_props.certain.initial_idx,
                             )),
                         }));
-                        last = Some(i);
                     }
 
                     if let Some(suffix) = cite.request.suffix() {
@@ -539,6 +540,7 @@ pub fn standalone_citation<T: EntryLike>(
                 item.locale.as_ref(),
                 req.locale.as_ref(),
                 item.purpose,
+                None,
             )
         });
     }
@@ -601,6 +603,7 @@ fn do_rerender<T: EntryLike>(
         item.locale.as_ref(),
         request.locale.as_ref(),
         item.purpose,
+        item.collapse_verdict,
     )
 }
 
@@ -644,7 +647,7 @@ fn date_replacement<T: EntryLike>(
     })])
 }
 
-fn last_purpose_render<T: EntryLike>(
+fn last_purpose_render<T: EntryLike + Debug>(
     ctx: &StyleContext<'_>,
     item: &SpeculativeItemRender<T>,
     request: &CitationRequest<'_, T>,
@@ -848,6 +851,8 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         .as_deref()
         .or(style.citation.layout.delimiter.as_deref());
 
+    let group_delimiter = style.citation.cite_group_delimiter.as_deref();
+
     match style.citation.collapse {
         Some(Collapse::CitationNumber) if style.settings.class == StyleClass::InText => {
             // Option with the start, end of the range and the next expected number.
@@ -907,7 +912,8 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     // This is our group.
                     Some((_, idx)) if Some(idx) == cite.items[i].group_idx => {
                         // FIXME: Retains delimiter in names.
-                        cite.items[i].rendered.remove_meta(ElemMeta::Names);
+                        cite.items[i].delim_override = group_delimiter;
+                        cite.items[i].collapse_verdict = Some(CollapseVerdict::First);
                     }
                     // This is a different group.
                     Some((i, _)) => {
@@ -925,6 +931,15 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         }
         None => {}
     }
+}
+
+/// What we have decided for rerendering this item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum CollapseVerdict {
+    /// Only the first date should be printed.
+    First,
+    /// Only the year suffix should be printed.
+    YearSuffix,
 }
 
 /// The result of [`BibliographyDriver::finish`].
@@ -1096,8 +1111,10 @@ impl<'a> StyleContext<'a> {
         locale: Option<&LocaleCode>,
         term_locale: Option<&LocaleCode>,
         kind: Option<CitePurpose>,
+        collapse_verdict: Option<CollapseVerdict>,
     ) -> ElemChildren {
-        let ctx = self.do_citation(entry, props, locale, term_locale, kind);
+        let ctx =
+            self.do_citation(entry, props, locale, term_locale, kind, collapse_verdict);
         ctx.flush()
     }
 
@@ -1121,13 +1138,34 @@ impl<'a> StyleContext<'a> {
         locale: Option<&'b LocaleCode>,
         term_locale: Option<&'b LocaleCode>,
         kind: Option<CitePurpose>,
+        collapse_verdict: Option<CollapseVerdict>,
     ) -> Context<'b, T> {
         let mut ctx = self.ctx(entry, props, locale, term_locale);
 
         let do_regular = |ctx: &mut Context<'b, T>| {
+            let reset = if ctx.instance.kind.is_none() {
+                match collapse_verdict {
+                    Some(CollapseVerdict::First) => {
+                        ctx.set_special_form(Some(SpecialForm::OnlyFirstDate));
+                        true
+                    }
+                    Some(CollapseVerdict::YearSuffix) => {
+                        ctx.set_special_form(Some(SpecialForm::OnlyYearSuffix));
+                        true
+                    }
+                    None => false,
+                }
+            } else {
+                false
+            };
+
             ctx.writing.push_name_options(&self.csl.citation.name_options);
             self.csl.citation.layout.render(ctx);
             ctx.writing.pop_name_options();
+
+            if reset {
+                ctx.set_special_form(None);
+            }
         };
 
         let do_author = |ctx: &mut Context<'b, T>| {
@@ -1510,7 +1548,7 @@ impl<'a> StyleContext<'a> {
 
 /// This struct contains all information needed to render a single entry. It
 /// contains buffers and is mutable.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct WritingContext {
     // Dynamic settings that change while rendering.
     /// Whether to watch out for punctuation that should be pulled inside the
@@ -1552,6 +1590,27 @@ pub(crate) struct WritingContext {
     /// A list of in-progress subtrees. Elements that are to be nested are
     /// pushed and then either popped or inserted at the end of their ancestor.
     elem_stack: NonEmptyStack<ElemChildren>,
+}
+
+impl Default for WritingContext {
+    fn default() -> Self {
+        Self {
+            pull_punctuation: false,
+            inner_quotes: false,
+            strip_periods: false,
+            suppress_queried_variables: false,
+            suppressed_variables: RefCell::new(Vec::new()),
+            checked_disambiguate: false,
+            first_date: true,
+            first_name: None,
+            format_stack: NonEmptyStack::default(),
+            cases: NonEmptyStack::default(),
+            name_options: NonEmptyStack::default(),
+            usage_info: RefCell::default(),
+            buf: CaseFolder::default(),
+            elem_stack: NonEmptyStack::default(),
+        }
+    }
 }
 
 impl WritingContext {
@@ -1627,6 +1686,9 @@ impl WritingContext {
     ///
     /// Will panic if the location does not match.
     fn discard_elem(&mut self, loc: DisplayLoc) {
+        if self.elem_stack.len().get() != loc.0.get() + 1 {
+            panic!("stack location does not match");
+        }
         assert_eq!(
             self.elem_stack.len().get(),
             loc.0.get() + 1,

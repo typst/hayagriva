@@ -491,7 +491,17 @@ fn render_date_part<T: EntryLike>(
     over_ride: Option<&citationberg::DatePart>,
     first: bool,
 ) {
-    let is_only_suffix = ctx.instance.kind != Some(SpecialForm::OnlyYearSuffix);
+    let Some(val) = (match date_part.name {
+        DatePartName::Day => date.day.map(|i| i as i32 + 1),
+        DatePartName::Month => date.month.map(|i| i as i32 + 1),
+        DatePartName::Year => {
+            Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
+        }
+    }) else {
+        return;
+    };
+
+    let is_only_suffix = ctx.instance.kind == Some(SpecialForm::OnlyYearSuffix);
     let form = over_ride
         .map(citationberg::DatePart::form)
         .unwrap_or_else(|| date_part.form());
@@ -510,17 +520,7 @@ fn render_date_part<T: EntryLike>(
 
     let cidx = ctx.push_case(over_ride.and_then(|o| o.text_case).or(date_part.text_case));
 
-    if is_only_suffix {
-        let Some(val) = (match date_part.name {
-            DatePartName::Day => date.day.map(|i| i as i32 + 1),
-            DatePartName::Month => date.month.map(|i| i as i32 + 1),
-            DatePartName::Year => {
-                Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
-            }
-        }) else {
-            return;
-        };
-
+    if !is_only_suffix {
         match form {
             DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
             | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {

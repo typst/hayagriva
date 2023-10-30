@@ -331,7 +331,6 @@ fn test_parse_tests() {
         ]
         .contains(&name)
             && !name.starts_with("magic_")
-            && name.contains("disambiguate")
     }) {
         let str = std::fs::read_to_string(&path).unwrap();
         let case = build_case(&str);
@@ -355,7 +354,7 @@ fn test_parse_tests() {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "disambiguate_YearSuffixWithEtAlSubsequent.txt";
+    let name = "name_CiteGroupDelimiterWithYearSuffixCollapse.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
