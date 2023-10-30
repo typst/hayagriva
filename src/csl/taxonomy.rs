@@ -326,10 +326,7 @@ impl EntryLike for Entry {
                 .map(Cow::Borrowed),
             StandardVariable::References => None,
             StandardVariable::ReviewedGenre => None,
-            StandardVariable::ReviewedTitle => entry
-                .map_parents(|e| e.title())
-                .map(|f| f.select(form))
-                .map(Cow::Borrowed),
+            StandardVariable::ReviewedTitle => None,
             StandardVariable::Scale => None,
             StandardVariable::Source => entry
                 .bound_select(&select!(* > ("p":Repository)), "p")
