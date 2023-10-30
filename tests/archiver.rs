@@ -21,6 +21,7 @@ const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
 const LOCALES_REPO_NAME: &str = "locales";
 const ARCHIVE_NAME: &str = "styles.cbor.rkyv";
+const OWN_STYLES: &str = "styles";
 
 /// Ensure the CSL repos are available, create an archive, and validate it.
 #[test]
@@ -60,6 +61,7 @@ fn ensure_repos() -> Result<(), ArchivalError> {
 /// Create an archive of CSL and its locales as CBOR.
 fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
+    let own_style_path = PathBuf::from(OWN_STYLES);
     let mut res = Lookup {
         map: HashMap::new(),
         id_map: HashMap::new(),
@@ -67,19 +69,19 @@ fn create_archive() -> Result<(), ArchivalError> {
         locales: retrieve_locales()?,
     };
 
-    for path in iter_files(&style_path, "csl") {
+    for path in iter_files(&style_path, "csl").chain(iter_files(&own_style_path, "csl")) {
         let style: Style = Style::from_xml(&fs::read_to_string(path)?)?;
-        if let Style::Dependent(_) = style {
+        let Style::Independent(indep) = &style else {
             continue;
-        }
+        };
 
-        if STYLE_IDS.binary_search(&style.info().id.as_str()).is_err() {
+        if STYLE_IDS.binary_search(&indep.info.id.as_str()).is_err() {
             continue;
         }
 
         let bytes = style.to_cbor()?;
         let idx = res.styles.len();
-        let id = strip_id(style.info().id.as_str());
+        let id = strip_id(indep.info.id.as_str());
 
         let rides = OVERRIDES;
         let over = rides.iter().find(|o| o.id == id);
@@ -92,7 +94,12 @@ fn create_archive() -> Result<(), ArchivalError> {
                 .map
                 .insert(
                     name.to_string(),
-                    StyleMatch::new(style.info().title.value.to_string(), alias, idx),
+                    StyleMatch::new(
+                        indep.info.title.value.to_string(),
+                        alias,
+                        indep.bibliography.is_some(),
+                        idx,
+                    ),
                 )
                 .is_some()
             {
@@ -100,7 +107,7 @@ fn create_archive() -> Result<(), ArchivalError> {
             }
 
             if !alias {
-                res.id_map.insert(style.info().id.clone(), idx);
+                res.id_map.insert(indep.info.id.clone(), idx);
             }
         };
 
@@ -173,7 +180,11 @@ fn validate_archive() -> Result<(), ArchivalError> {
         }
 
         // Check that the archive is well-formed.
-        let path = format!("target/haya-cache/styles/{}.csl", strip_id(id));
+        let path = if id.contains("typst.org") {
+            format!("styles/{}.csl", strip_id(id))
+        } else {
+            format!("{}/{}/{}.csl", CACHE_PATH, STYLES_REPO_NAME, strip_id(id))
+        };
         eprintln!("{}", path);
         let original_xml = fs::read_to_string(path)?;
         let original_style = Style::from_xml(&original_xml)?;
@@ -209,7 +220,9 @@ fn validate_archive() -> Result<(), ArchivalError> {
 
 /// Remove the common URL trunk from CSL ids.
 fn strip_id(full_id: &str) -> &str {
-    full_id.trim_start_matches("http://www.zotero.org/styles/")
+    full_id
+        .trim_start_matches("http://www.zotero.org/styles/")
+        .trim_start_matches("http://typst.org/csl/")
 }
 
 /// Map which styles are referenced by which dependent styles.
@@ -288,7 +301,8 @@ impl fmt::Display for ArchivalError {
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 80] = [
+const STYLE_IDS: [&str; 81] = [
+    "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
     "http://www.zotero.org/styles/american-geophysical-union",
@@ -378,7 +392,7 @@ struct Override {
     /// Main name.
     main: Option<&'static str>,
     /// Alternative names.
-    alias: Option<Vec<&'static str>>,
+    alias: Option<&'static [&'static str]>,
 }
 
 impl Override {
@@ -386,9 +400,19 @@ impl Override {
     const fn first(id: &'static str, name: &'static str) -> Self {
         Self { id, main: Some(name), alias: None }
     }
+
+    const fn alias(
+        id: &'static str,
+        name: &'static str,
+        alias: &'static [&'static str],
+    ) -> Self {
+        Self { id, main: Some(name), alias: Some(alias) }
+    }
 }
 
-const OVERRIDES: [Override; 11] = [
+const OVERRIDES: [Override; 17] = [
+    Override::alias("apa", "american-psychological-association", &["apa"]),
+    Override::alias("bmj", "british-medical-journal", &["bmj"]),
     Override::first(
         "china-national-standard-gb-t-7714-2015-author-date",
         "gb-7114-2015-author-date",
@@ -404,12 +428,29 @@ const OVERRIDES: [Override; 11] = [
         "deutsche-gesellschaft-für-psychologie",
     ),
     Override::first("gost-r-7-0-5-2008-numeric", "gost-r-705-2008-numeric"),
+    Override::alias(
+        "ieee",
+        "institute-of-electrical-and-electronics-engineers",
+        &["ieee"],
+    ),
     Override::first("iso690-author-date-en", "iso-690-author-date"),
     Override::first("iso690-numeric-en", "iso-690-numeric"),
-    Override::first(
+    Override::alias(
+        "modern-language-association",
+        "modern-language-association",
+        &["mla"],
+    ),
+    Override::alias(
         "modern-language-association-8th-edition",
         "modern-language-association-8",
+        &["mla-8"],
     ),
+    Override::alias(
+        "spie",
+        "society-of-photo-optical-instrumentation-engineers",
+        &["spie"],
+    ),
+    Override::alias("plos", "public-library-of-science", &["plos"]),
     Override::first("thieme-german", "thieme"),
     Override::first("turabian-fullnote-bibliography-8th-edition", "turabian-fullnote-8"),
 ];

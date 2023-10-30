@@ -36,8 +36,9 @@ impl RenderCsl for citationberg::Text {
         let depth = ctx.push_elem(self.formatting);
 
         // Only print affixes if this macro is not used out of its original context.
+        #[allow(clippy::match_like_matches_macro)]
         let print_affixes = match ctx.instance.kind {
-            Some(SpecialForm::VarOnly(v))
+            Some(SpecialForm::VarOnly(_))
                 if matches!(&self.target, TextTarget::Macro { .. }) =>
             {
                 false

@@ -29,14 +29,16 @@ pub struct StyleMatch {
     pub full_name: String,
     /// Whether this is an alias.
     pub alias: bool,
+    /// Whether the style contains a bibliography.
+    pub bibliography: bool,
     /// The style index.
     pub index: usize,
 }
 
 impl StyleMatch {
     /// Create a new style match.
-    pub fn new(full_name: String, alias: bool, index: usize) -> Self {
-        Self { full_name, alias, index }
+    pub fn new(full_name: String, alias: bool, bibliography: bool, index: usize) -> Self {
+        Self { full_name, alias, bibliography, index }
     }
 }
 
