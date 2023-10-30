@@ -2,6 +2,7 @@ use std::{fs, io, path::PathBuf, process::Command};
 
 pub const CACHE_PATH: &str = "target/haya-cache";
 
+#[allow(unused)]
 pub fn iter_files<'a>(
     path: &'a PathBuf,
     extension: &'a str,

@@ -12,7 +12,7 @@ use clap::{crate_version, Arg, Command};
 use strum::{EnumVariantNames, VariantNames};
 
 use hayagriva::archive::{locales, style, style_by_name, styles};
-use hayagriva::{io, BibliographyDriver, Brackets, CitationItem, CitationRequest};
+use hayagriva::{io, BibliographyDriver, CitationItem, CitationRequest};
 use hayagriva::{BibliographyRequest, Selector};
 
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
@@ -134,16 +134,6 @@ fn main() {
                             .long("combined")
                             .short('c')
                             .help("Combine all keys into one citation (ignored for Chicago Notes)")
-                    )
-                    .arg(
-                        Arg::new("no-brackets")
-                            .long("no-brackets")
-                            .help("Print the citation without brackets.")
-                    )
-                    .arg(
-                        Arg::new("force-brackets")
-                            .long("force-brackets")
-                            .help("Print the citation with brackets, no matter the style.")
                     )
             )
             .subcommand(
@@ -323,7 +313,6 @@ fn main() {
                     locale.clone(),
                     &locales,
                     None,
-                    None,
                 ))
             }
 
@@ -357,13 +346,6 @@ fn main() {
             let locale_str: Option<&String> = sub_matches.get_one("locale");
             let collapse = sub_matches.is_present("combined");
 
-            let affix_override = match (sub_matches.is_present("no-brackets"), sub_matches.is_present("force-brackets")) {
-                (true, true) => panic!("the options `--no-brackets` and `--force-brackets` are mutually exclusive"),
-                (_, true) => Some(Brackets::Square),
-                (true, _) => Some(Brackets::None),
-                (false, false) => None
-            };
-
             let (style, locales, locale) =
                 retrieve_assets(style, csl, locale_path, locale_str);
 
@@ -375,7 +357,6 @@ fn main() {
                     locale.clone(),
                     &locales,
                     None,
-                    affix_override,
                 ));
             } else {
                 for entry in &bibliography {
@@ -385,7 +366,6 @@ fn main() {
                         locale.clone(),
                         &locales,
                         None,
-                        affix_override,
                     ))
                 }
             }

@@ -9,7 +9,7 @@ use citationberg::taxonomy::Locator;
 use citationberg::{Locale, LocaleCode, Style, XmlError};
 use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
 
-use csl_json_valley::DateStr;
+use citationberg::json as csl_json;
 use hayagriva::archive::{locales, style_by_name};
 use hayagriva::io::from_biblatex_str;
 use hayagriva::{
@@ -214,10 +214,10 @@ struct TestCase {
     mode: TestMode,
     result: String,
     csl: Style,
-    input: Vec<csl_json_valley::Item>,
+    input: Vec<csl_json::Item>,
     bib_entries: Option<Vec<Vec<String>>>,
     bib_section: Option<String>,
-    citation_items: Option<Vec<Vec<csl_json_valley::CitationItem>>>,
+    citation_items: Option<Vec<Vec<csl_json::CitationItem>>>,
     citations: Option<String>,
 }
 
@@ -397,14 +397,11 @@ where
         .input
         .iter()
         .flat_map(|i| i.0.values())
-        .filter_map(|v| {
-            if let csl_json_valley::FieldValue::Date(d) = v {
-                Some(d)
-            } else {
-                None
-            }
-        })
-        .any(|d| DateStr::try_from(d.clone()).map_or(false, |d| d.end.is_some()));
+        .filter_map(|v| if let csl_json::Value::Date(d) = v { Some(d) } else { None })
+        .any(|d| {
+            csl_json::FixedDateRange::try_from(d.clone())
+                .map_or(false, |d| d.end.is_some())
+        });
 
     if case.mode == TestMode::Bibliography {
         if print {
@@ -445,8 +442,7 @@ where
         panic!("test {} has dependent style", display());
     };
 
-    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
-        BibliographyDriver::new();
+    let mut driver: BibliographyDriver<'_, csl_json::Item> = BibliographyDriver::new();
     let mut output = String::new();
     if let Some(cites) = &case.citation_items {
         for cite in cites {
@@ -454,7 +450,10 @@ where
                 cite.iter()
                     .map(|i| {
                         CitationItem::new(
-                            case.input.iter().find(|e| e.id() == i.id.as_str()).unwrap(),
+                            case.input
+                                .iter()
+                                .find(|e| e.id().unwrap_or_default() == i.id.as_str())
+                                .unwrap(),
                             i.locator.as_deref().map(|lo| {
                                 SpecificLocator(
                                     i.label
@@ -482,7 +481,7 @@ where
         }
     } else {
         driver.citation(CitationRequest::new(
-            case.input.iter().map(|e| CitationItem::with_entry(e)).collect(),
+            case.input.iter().map(CitationItem::with_entry).collect(),
             &style,
             None,
             locales,
@@ -517,16 +516,16 @@ fn purposes() {
         panic!("test has dependent style");
     };
 
-    let item: csl_json_valley::Item = serde_json::from_str(
+    let item: csl_json::Item = serde_json::from_str(
         r#"{
-        "id": "ITEM-1", 
+        "id": "ITEM-1",
         "title": "Book A",
         "author": [
             {
                 "family": "Doe",
                 "given": "John"
             }
-        ], 
+        ],
         "issued": {
            "date-parts": [
              [
@@ -545,7 +544,7 @@ fn purposes() {
         (CitePurpose::Year, "2000"),
         (CitePurpose::Full, "Doe, J. (2000). Book A."),
     ] {
-        let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
+        let mut driver: BibliographyDriver<'_, csl_json::Item> =
             BibliographyDriver::new();
         driver.citation(CitationRequest::new(
             vec![CitationItem::new(&item, None, None, false, Some(purpose))],
@@ -572,7 +571,7 @@ fn case_folding() {
         panic!("test has dependent style");
     };
 
-    let item: csl_json_valley::Item = serde_json::from_str(
+    let item: csl_json::Item = serde_json::from_str(
         r#"{
         "id": "ITEM-1",
         "container-title": "my lowercase container title",
@@ -581,8 +580,7 @@ fn case_folding() {
     )
     .unwrap();
 
-    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
-        BibliographyDriver::new();
+    let mut driver: BibliographyDriver<'_, csl_json::Item> = BibliographyDriver::new();
     driver.citation(CitationRequest::new(
         vec![CitationItem::new(&item, None, None, false, None)],
         &style,
@@ -599,61 +597,6 @@ fn case_folding() {
     let mut buf = String::new();
     rendered.bibliography.unwrap().items[0]
         .content
-        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
-        .unwrap();
-    assert_eq!(buf, ". my lowercase container title");
-}
-
-#[test]
-fn vancouver() {
-    let style = style_by_name("vancouver").unwrap();
-    let locales = locales();
-    let Style::Independent(style) = style else {
-        panic!("test has dependent style");
-    };
-
-    let item: csl_json_valley::Item = serde_json::from_str(
-        r#"{
-        "id": "ITEM-1", 
-        "title": "Book A",
-        "author": [
-            {
-                "family": "Doe",
-                "given": "John"
-            }
-        ], 
-        "issued": {
-           "date-parts": [
-             [
-               "2000"
-             ]
-           ]
-        },
-        "type": "book"
-    }"#,
-    )
-    .unwrap();
-
-    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
-        BibliographyDriver::new();
-    driver.citation(CitationRequest::new(
-        vec![CitationItem::new(
-            &item,
-            Some(SpecificLocator(Locator::Page, LocatorPayload::Str("12"))),
-            None,
-            false,
-            None,
-        )],
-        &style,
-        None,
-        &locales,
-        Some(1),
-    ));
-
-    let rendered = driver.finish(BibliographyRequest::new(&style, None, &locales));
-    let mut buf = String::new();
-    rendered.citations[0]
-        .citation
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
     assert_eq!(buf, ". my lowercase container title");

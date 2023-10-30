@@ -12,8 +12,8 @@ use citationberg::taxonomy::{
 use citationberg::{taxonomy, LongShortForm};
 use unic_langid::LanguageIdentifier;
 
-#[cfg(feature = "csl-json-valley")]
-use csl_json_valley::{DateStr, FieldValue, NameItem, NameRepr};
+#[cfg(feature = "csl-json")]
+use citationberg::json as csl_json;
 
 use super::{DisambiguateState, InstanceContext, LocatorPayload};
 
@@ -663,18 +663,18 @@ impl EntryLike for Entry {
     }
 }
 
-#[cfg(feature = "csl-json-valley")]
-impl EntryLike for csl_json_valley::Item {
+#[cfg(feature = "csl-json")]
+impl EntryLike for citationberg::json::Item {
     fn resolve_standard_variable(
         &self,
         _: LongShortForm,
         variable: StandardVariable,
     ) -> Option<Cow<'_, ChunkedString>> {
         match self.0.get(&variable.to_string())? {
-            FieldValue::String(s) => {
+            csl_json::Value::String(s) => {
                 Some(Cow::Owned(StringChunk::normal(s.clone()).into()))
             }
-            FieldValue::Number(n) => {
+            csl_json::Value::Number(n) => {
                 Some(Cow::Owned(StringChunk::normal(n.to_string()).into()))
             }
             _ => None,
@@ -683,8 +683,8 @@ impl EntryLike for csl_json_valley::Item {
 
     fn resolve_date_variable(&self, variable: DateVariable) -> Option<Cow<'_, Date>> {
         match self.0.get(&variable.to_string())? {
-            FieldValue::Date(d) => {
-                let Ok(d) = DateStr::try_from(d.clone()) else {
+            csl_json::Value::Date(d) => {
+                let Ok(d) = csl_json::FixedDateRange::try_from(d.clone()) else {
                     return None;
                 };
                 if d.end.is_some() {
@@ -704,18 +704,18 @@ impl EntryLike for csl_json_valley::Item {
 
     fn resolve_name_variable(&self, variable: NameVariable) -> Vec<Cow<'_, Person>> {
         match self.0.get(&variable.to_string()) {
-            Some(FieldValue::Name(n)) => n
+            Some(csl_json::Value::Names(names)) => names
                 .iter()
-                .map(|n| {
-                    Cow::Owned(match n {
-                        NameRepr::Literal(l) => Person {
+                .map(|name| {
+                    Cow::Owned(match name {
+                        csl_json::NameValue::Literal(l) => Person {
                             name: l.literal.clone(),
                             prefix: None,
                             suffix: None,
                             given_name: None,
                             alias: None,
                         },
-                        NameRepr::Item(NameItem {
+                        csl_json::NameValue::Item(csl_json::NameItem {
                             family,
                             given,
                             non_dropping_particle: None,
@@ -733,7 +733,7 @@ impl EntryLike for csl_json_valley::Item {
 
                             p
                         }
-                        NameRepr::Item(NameItem {
+                        csl_json::NameValue::Item(csl_json::NameItem {
                             family,
                             given,
                             non_dropping_particle,
@@ -762,10 +762,10 @@ impl EntryLike for csl_json_valley::Item {
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
         match self.0.get(&variable.to_string())? {
-            FieldValue::Number(n) => {
+            csl_json::Value::Number(n) => {
                 Some(MaybeTyped::Typed(Cow::Owned(Numeric::from(*n as u32))))
             }
-            FieldValue::String(s) => {
+            csl_json::Value::String(s) => {
                 let res = MaybeTyped::<Numeric>::infallible_from_str(s);
                 Some(match res {
                     MaybeTyped::String(s) => MaybeTyped::String(s),
@@ -780,22 +780,21 @@ impl EntryLike for csl_json_valley::Item {
         let Some(actual) = self.0.get("type") else {
             return false;
         };
-        let Some(str) = actual.as_str() else {
+        let Some(string) = actual.to_str() else {
             return false;
         };
-
-        Kind::from_str(&str) == Ok(kind)
+        Kind::from_str(&string) == Ok(kind)
     }
 
     fn is_english(&self) -> Option<bool> {
         self.0
             .get("language")
-            .and_then(|l| l.as_str())
+            .and_then(|l| l.to_str())
             .map(|l| l.starts_with("en"))
     }
 
     fn key(&self) -> Cow<'_, str> {
-        Cow::Owned(self.id())
+        self.id().unwrap_or_default()
     }
 }
 

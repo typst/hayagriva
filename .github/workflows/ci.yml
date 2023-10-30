@@ -7,10 +7,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
-      - 
-        name: Check out CSL styles
+      - name: Check out CSL styles
         run: |
           cd ..
           git clone --depth 1 https://github.com/citation-style-language/styles
       - run: cargo build
-      - run: cargo test --features csl-json-valley
+      - run: cargo test --features csl-json
