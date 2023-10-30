@@ -233,7 +233,11 @@ impl RenderCsl for Names {
                     return;
                 }
             }
-            Some(SpecialForm::VarOnly(_)) => return,
+            Some(
+                SpecialForm::VarOnly(_)
+                | SpecialForm::OnlyFirstDate
+                | SpecialForm::OnlyYearSuffix,
+            ) => return,
             Some(SpecialForm::SuppressAuthor) => {
                 if self.variable.iter().any(|v| &NameVariable::Author == v) {
                     return;
