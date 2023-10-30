@@ -510,7 +510,7 @@ where
 }
 
 #[test]
-fn author_only() {
+fn purposes() {
     let style = style_by_name("apa").unwrap();
     let Style::Independent(style) = style else {
         panic!("test has dependent style");
@@ -542,6 +542,7 @@ fn author_only() {
         (CitePurpose::Author, "Doe"),
         (CitePurpose::Prose, "Doe (2000)"),
         (CitePurpose::Year, "2000"),
+        (CitePurpose::Full, "Doe, J. (2000). Book A."),
     ] {
         let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
             BibliographyDriver::new();

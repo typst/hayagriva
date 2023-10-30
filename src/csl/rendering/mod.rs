@@ -34,7 +34,18 @@ impl RenderCsl for citationberg::Text {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         let Some(target) = ResolvedTextTarget::compute(self, ctx) else { return };
         let depth = ctx.push_elem(self.formatting);
-        let affix_loc = ctx.apply_prefix(&self.affixes);
+
+        // Only print affixes if this macro is not used out of its original context.
+        let print_affixes = match ctx.instance.kind {
+            Some(SpecialForm::VarOnly(v))
+                if matches!(&self.target, TextTarget::Macro { .. }) =>
+            {
+                false
+            }
+            _ => true,
+        };
+
+        let affix_loc = print_affixes.then(|| ctx.apply_prefix(&self.affixes));
 
         if self.quotes {
             ctx.push_quotes();
@@ -94,7 +105,9 @@ impl RenderCsl for citationberg::Text {
             ctx.may_pull_punctuation();
         }
 
-        ctx.apply_suffix(&self.affixes, affix_loc);
+        if let Some(affix_loc) = affix_loc {
+            ctx.apply_suffix(&self.affixes, affix_loc);
+        }
         ctx.commit_elem(
             depth,
             self.display,

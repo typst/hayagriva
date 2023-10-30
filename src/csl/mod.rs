@@ -365,7 +365,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
         for cite in res.iter_mut() {
             let style_ctx = cite.request.style();
             for item in cite.items.iter_mut() {
-                item.rendered = last_purpose_render(&style_ctx, item, &cite.request);
+                item.rendered = last_purpose_render(&style_ctx, item, cite.request);
             }
 
             // 5. Collapse grouped citations.
@@ -379,8 +379,11 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
 
             final_citations.push(RenderedCitation {
                 note_number: cite.request.note_number,
-                citation: {
+                citation: if cite.items.iter().all(|i| i.hidden) {
+                    ElemChildren::new()
+                } else {
                     let mut elem_children: Vec<ElemChild> = Vec::new();
+
                     if let Some(prefix) = cite.request.prefix() {
                         elem_children.push(ElemChild::Text(Formatted {
                             text: prefix.to_string(),
@@ -513,7 +516,14 @@ pub fn standalone_citation<T: EntryLike>(
     let style = req.style();
     style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
     let mut res = vec![];
+    let mut all_hidden = true;
     for item in req.items {
+        if item.hidden {
+            continue;
+        } else {
+            all_hidden = false;
+        }
+
         res.push(if let Some(CitePurpose::Year) = item.purpose {
             date_replacement(
                 &style,
@@ -538,7 +548,7 @@ pub fn standalone_citation<T: EntryLike>(
     let formatting =
         Formatting::default().apply(style.csl.citation.layout.to_formatting());
 
-    if !non_empty.is_empty() {
+    if !non_empty.is_empty() && !all_hidden {
         let mut res = if let Some(prefix) = style.csl.citation.layout.prefix.as_ref() {
             ElemChildren(vec![Formatted { text: prefix.clone(), formatting }.into()])
         } else {
@@ -1311,12 +1321,7 @@ impl<'a, T: EntryLike> CitationRequest<'a, T> {
     }
 
     fn shall_affix(&self) -> bool {
-        self.items.iter().all(|p| {
-            !matches!(
-                p.purpose,
-                Some(CitePurpose::Prose | CitePurpose::Author | CitePurpose::Year)
-            )
-        })
+        self.items.iter().all(|p| p.purpose.is_none())
     }
 
     fn prefix(&self) -> Option<&'a str> {
@@ -2121,7 +2126,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Pull punctuation into a quote if applicable
     fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
-        if self.writing.pull_punctuation && s.starts_with(['.', ',']) {
+        if self.writing.pull_punctuation && s.starts_with(['.', ',', ';', '!', '?']) {
             let close_quote =
                 self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
             let close_inner_quote =
@@ -2177,15 +2182,41 @@ impl<'a, T: EntryLike> Context<'a, T> {
             (*self.writing.cases.last()).map(Into::into).unwrap_or_default(),
         );
 
-        if s.chars().next().map_or(false, |c| c == '.' || c == ',') {
-            let last = self.writing.elem_stack.last_mut_predicate(|s| !s.is_empty());
-            if !self.writing.buf.is_empty() {
-                if self.writing.buf.ends_with(' ') {
-                    self.writing.buf.as_string_mut().pop();
-                }
+        fn last_buffer(ctx: &mut WritingContext) -> Option<&mut String> {
+            let last = ctx
+                .elem_stack
+                .last_mut_predicate(|s| !s.is_empty())
+                .and_then(|e| e.last_text_mut());
+            if !ctx.buf.is_empty() {
+                Some(ctx.buf.as_string_mut())
             } else if let Some(last) = last {
-                if last.last_char() == Some(' ') {
-                    last.pop_char();
+                Some(&mut last.text)
+            } else {
+                None
+            }
+        }
+
+        let ends_with_space = last_buffer(&mut self.writing).map_or(false, |s| {
+            s.chars().next_back().map_or(false, |c| c.is_whitespace())
+        });
+
+        // Punctuation eats spaces. Whitespace should be trimmed.
+        if ends_with_space
+            && s.chars().next().map_or(false, |c| {
+                c.is_whitespace() || c == '.' || c == ',' || c == ']' || c == ')'
+            })
+        {
+            if let Some(buf) = last_buffer(&mut self.writing) {
+                buf.truncate(buf.trim_end().len());
+            }
+        }
+
+        // Do not print duplicate affixes.
+        if s.chars().all(|c| !c.is_alphabetic()) {
+            let trimmed = s.trim_end();
+            if let Some(last) = last_buffer(&mut self.writing) {
+                if let Some(strip) = last.strip_suffix(trimmed) {
+                    last.truncate(strip.len());
                 }
             }
         }
