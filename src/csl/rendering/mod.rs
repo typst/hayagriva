@@ -26,45 +26,14 @@ pub mod names;
 pub(crate) trait RenderCsl {
     /// Render the element given the context's Entry into the context's buffer.
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>);
+    /// Check whether the element will render a given variable.
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool;
 }
 
 impl RenderCsl for citationberg::Text {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        enum ResolvedTextTarget<'a> {
-            StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
-            NumberVariable(NumberVariable, NumberVariableResult<'a>),
-            Macro(&'a CslMacro),
-            Term(&'a str),
-            Value(&'a str),
-        }
-
-        if ctx.instance.kind == Some(SpecialForm::AuthorOnly)
-            && !matches!(&self.target, TextTarget::Macro { .. })
-        {
-            return;
-        }
-
-        let Some(target) = (match &self.target {
-            TextTarget::Variable { var: Variable::Standard(var), form } => ctx
-                .resolve_standard_variable(*form, *var)
-                .map(|s| ResolvedTextTarget::StandardVariable(*var, s)),
-            TextTarget::Variable { var: Variable::Number(var), .. } => ctx
-                .resolve_number_variable(*var)
-                .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
-            TextTarget::Variable { .. } => None,
-            TextTarget::Macro { name } => {
-                ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)
-            }
-            TextTarget::Term { term, form, plural } => {
-                ctx.term(*term, *form, *plural).map(ResolvedTextTarget::Term)
-            }
-            TextTarget::Value { val } => Some(ResolvedTextTarget::Value(val)),
-        }) else {
-            return;
-        };
-
+        let Some(target) = ResolvedTextTarget::compute(self, ctx) else { return };
         let depth = ctx.push_elem(self.formatting);
-
         let affix_loc = ctx.apply_prefix(&self.affixes);
 
         if self.quotes {
@@ -132,11 +101,70 @@ impl RenderCsl for citationberg::Text {
             matches!(&self.target, TextTarget::Variable { .. }).then_some(ElemMeta::Text),
         );
     }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        let Some(target) = ResolvedTextTarget::compute(self, ctx) else { return false };
+        match target {
+            ResolvedTextTarget::StandardVariable(s, _) => var == Variable::Standard(s),
+            ResolvedTextTarget::NumberVariable(n, _) => var == Variable::Number(n),
+            ResolvedTextTarget::Macro(mac) => {
+                mac.children.iter().any(|c| c.will_render(ctx, var))
+            }
+            ResolvedTextTarget::Term(_) => false,
+            ResolvedTextTarget::Value(_) => false,
+        }
+    }
+}
+
+enum ResolvedTextTarget<'a, 'b> {
+    StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
+    NumberVariable(NumberVariable, NumberVariableResult<'a>),
+    Macro(&'a CslMacro),
+    Term(&'a str),
+    Value(&'b str),
+}
+
+impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
+    fn compute<T: EntryLike>(
+        text: &'b citationberg::Text,
+        ctx: &mut Context<'a, T>,
+    ) -> Option<Self> {
+        match ctx.instance.kind {
+            // If we are supposed to print a variable we need to return if this
+            // is neither a macro nor that variable.
+            Some(SpecialForm::VarOnly(v))
+                if !matches!(&text.target, TextTarget::Macro { .. }) =>
+            {
+                match text.target {
+                    TextTarget::Variable { var, .. } if var == v => {}
+                    _ => return None,
+                }
+            }
+            _ => {}
+        }
+
+        match &text.target {
+            TextTarget::Variable { var: Variable::Standard(var), form } => ctx
+                .resolve_standard_variable(*form, *var)
+                .map(|s| ResolvedTextTarget::StandardVariable(*var, s)),
+            TextTarget::Variable { var: Variable::Number(var), .. } => ctx
+                .resolve_number_variable(*var)
+                .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
+            TextTarget::Variable { .. } => None,
+            TextTarget::Macro { name } => {
+                ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)
+            }
+            TextTarget::Term { term, form, plural } => {
+                ctx.term(*term, *form, *plural).map(ResolvedTextTarget::Term)
+            }
+            TextTarget::Value { val } => Some(ResolvedTextTarget::Value(val)),
+        }
+    }
 }
 
 impl RenderCsl for citationberg::Number {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
+        if !self.will_render(ctx, self.variable.into()) {
             return;
         }
 
@@ -211,12 +239,28 @@ impl RenderCsl for citationberg::Number {
                 .or(Some(ElemMeta::Number)),
         );
     }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        match ctx.instance.kind {
+            Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
+                return false
+            }
+            Some(SpecialForm::VarOnly(_)) => return false,
+            _ => {}
+        }
+
+        var == Variable::Number(self.variable)
+    }
 }
 
 impl RenderCsl for citationberg::Label {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
-            return;
+        match ctx.instance.kind {
+            Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
+                return
+            }
+            Some(SpecialForm::VarOnly(_)) => return,
+            _ => {}
         }
 
         // Never yield a label if the locator is set to custom.
@@ -255,6 +299,10 @@ impl RenderCsl for citationberg::Label {
         render_label_with_var(&self.label, ctx, content);
         ctx.commit_elem(depth, None, Some(ElemMeta::Label));
     }
+
+    fn will_render<T: EntryLike>(&self, _ctx: &mut Context<T>, _var: Variable) -> bool {
+        false
+    }
 }
 
 fn render_label_with_var<T: EntryLike>(
@@ -284,11 +332,11 @@ fn render_label_with_var<T: EntryLike>(
 
 impl RenderCsl for citationberg::Date {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        if ctx.instance.kind == Some(SpecialForm::AuthorOnly) {
+        let Some(variable) = self.variable else { return };
+        if !self.will_render(ctx, variable.into()) {
             return;
         }
 
-        let Some(variable) = self.variable else { return };
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
         if ctx.instance.sorting {
@@ -384,6 +432,18 @@ impl RenderCsl for citationberg::Date {
         ctx.apply_suffix(&self.affixes, affix_loc);
         ctx.commit_elem(depth, self.display, Some(ElemMeta::Date));
     }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        match ctx.instance.kind {
+            Some(SpecialForm::VarOnly(Variable::Date(d))) if self.variable != Some(d) => {
+                return false
+            }
+            Some(SpecialForm::VarOnly(_)) => return false,
+            _ => {}
+        }
+
+        Some(var) == self.variable.map(Variable::Date)
+    }
 }
 
 fn render_date_part<T: EntryLike>(
@@ -395,7 +455,9 @@ fn render_date_part<T: EntryLike>(
     let Some(val) = (match date_part.name {
         DatePartName::Day => date.day.map(|i| i as i32 + 1),
         DatePartName::Month => date.month.map(|i| i as i32 + 1),
-        DatePartName::Year => Some(date.year),
+        DatePartName::Year => {
+            Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
+        }
     }) else {
         return;
     };
@@ -480,8 +542,8 @@ fn render_date_part<T: EntryLike>(
     }
 
     if let DateStrongAnyForm::Year(_) = form {
-        if val < 1000 {
-            ctx.push_str(if val < 0 { "BC" } else { "AD" });
+        if date.year < 1000 {
+            ctx.push_str(if date.year < 0 { "BC" } else { "AD" });
         }
         render_year_suffix_implicitly(ctx);
     }
@@ -495,7 +557,7 @@ fn render_date_part<T: EntryLike>(
 /// Render the year suffix if it is set and the style will not render it
 /// explicitly.
 fn render_year_suffix_implicitly<T: EntryLike>(ctx: &mut Context<T>) {
-    if ctx.style.renders_year_suffix_implicitly() {
+    if ctx.renders_year_suffix_implicitly() {
         if let Some(year_suffix) = ctx.resolve_standard_variable(
             LongShortForm::default(),
             StandardVariable::YearSuffix,
@@ -516,6 +578,20 @@ impl RenderCsl for citationberg::Choose {
 
         if let Some(fallthrough) = &self.otherwise {
             render_with_delimiter(&fallthrough.children, self.delimiter.as_deref(), ctx);
+        }
+    }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        for branch in self.branches() {
+            if branch.match_.test(BranchConditionIter::from_branch(branch, ctx)) {
+                return branch.children.iter().any(|c| c.will_render(ctx, var));
+            }
+        }
+
+        if let Some(fallthrough) = &self.otherwise {
+            fallthrough.children.iter().any(|c| c.will_render(ctx, var))
+        } else {
+            false
         }
     }
 }
@@ -824,6 +900,10 @@ impl RenderCsl for citationberg::Group {
             ctx.writing.printed_non_empty_group()
         }
     }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        self.children.iter().any(|e| e.will_render(ctx, var))
+    }
 }
 
 impl RenderCsl for citationberg::LayoutRenderingElement {
@@ -838,6 +918,32 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
             citationberg::LayoutRenderingElement::Group(group) => group.render(ctx),
         }
     }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        match self {
+            citationberg::LayoutRenderingElement::Text(text) => {
+                text.will_render(ctx, var)
+            }
+            citationberg::LayoutRenderingElement::Number(num) => {
+                num.will_render(ctx, var)
+            }
+            citationberg::LayoutRenderingElement::Label(label) => {
+                label.will_render(ctx, var)
+            }
+            citationberg::LayoutRenderingElement::Date(date) => {
+                date.will_render(ctx, var)
+            }
+            citationberg::LayoutRenderingElement::Names(names) => {
+                names.will_render(ctx, var)
+            }
+            citationberg::LayoutRenderingElement::Choose(choose) => {
+                choose.will_render(ctx, var)
+            }
+            citationberg::LayoutRenderingElement::Group(group) => {
+                group.will_render(ctx, var)
+            }
+        }
+    }
 }
 
 impl RenderCsl for citationberg::Layout {
@@ -848,6 +954,10 @@ impl RenderCsl for citationberg::Layout {
         }
         ctx.pop_format(fidx);
     }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        self.elements.iter().any(|e| e.will_render(ctx, var))
+    }
 }
 
 impl RenderCsl for citationberg::RenderingElement {
@@ -855,6 +965,13 @@ impl RenderCsl for citationberg::RenderingElement {
         match self {
             citationberg::RenderingElement::Layout(l) => l.render(ctx),
             citationberg::RenderingElement::Other(o) => o.render(ctx),
+        }
+    }
+
+    fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
+        match self {
+            citationberg::RenderingElement::Layout(l) => l.will_render(ctx, var),
+            citationberg::RenderingElement::Other(o) => o.will_render(ctx, var),
         }
     }
 }

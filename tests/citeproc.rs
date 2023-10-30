@@ -11,9 +11,10 @@ use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
 
 use csl_json_valley::DateStr;
 use hayagriva::archive::{locales, style_by_name};
+use hayagriva::io::from_biblatex_str;
 use hayagriva::{
-    BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest,
-    LocatorPayload, SpecificLocator,
+    BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
+    Entry, LocatorPayload, SpecificLocator,
 };
 use unscanny::Scanner;
 
@@ -465,7 +466,7 @@ where
                             None,
                             false,
                             if i.suppress_author {
-                                Some(hayagriva::SpecialForm::SuppressAuthor)
+                                Some(hayagriva::CitePurpose::Author)
                             } else {
                                 None
                             },
@@ -476,7 +477,6 @@ where
                 None,
                 locales,
                 Some(1),
-                None,
             ));
         }
     } else {
@@ -486,7 +486,6 @@ where
             None,
             locales,
             Some(1),
-            None,
         ));
     }
 
@@ -539,30 +538,29 @@ fn author_only() {
     )
     .unwrap();
 
-    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
-        BibliographyDriver::new();
-    driver.citation(CitationRequest::new(
-        vec![CitationItem::new(
-            &item,
+    for (purpose, res) in [
+        (CitePurpose::Author, "Doe"),
+        (CitePurpose::Prose, "Doe (2000)"),
+        (CitePurpose::Year, "2000"),
+    ] {
+        let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
+            BibliographyDriver::new();
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::new(&item, None, None, false, Some(purpose))],
+            &style,
             None,
-            None,
-            false,
-            Some(hayagriva::SpecialForm::AuthorOnly),
-        )],
-        &style,
-        None,
-        &[],
-        Some(1),
-        None,
-    ));
+            &[],
+            Some(1),
+        ));
 
-    let rendered = driver.finish(BibliographyRequest::new(&style, None, &[]));
-    let mut buf = String::new();
-    rendered.citations[0]
-        .citation
-        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
-        .unwrap();
-    assert_eq!(buf, "(Doe)");
+        let rendered = driver.finish(BibliographyRequest::new(&style, None, &[]));
+        let mut buf = String::new();
+        rendered.citations[0]
+            .citation
+            .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+            .unwrap();
+        assert_eq!(buf, res);
+    }
 }
 
 #[test]
@@ -584,18 +582,11 @@ fn case_folding() {
     let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
         BibliographyDriver::new();
     driver.citation(CitationRequest::new(
-        vec![CitationItem::new(
-            &item,
-            None,
-            None,
-            false,
-            Some(hayagriva::SpecialForm::AuthorOnly),
-        )],
+        vec![CitationItem::new(&item, None, None, false, None)],
         &style,
         Some(LocaleCode("de-DE".to_string())),
         &[],
         Some(1),
-        None,
     ));
 
     let rendered = driver.finish(BibliographyRequest::new(
@@ -609,4 +600,40 @@ fn case_folding() {
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
     assert_eq!(buf, ". my lowercase container title");
+}
+
+#[test]
+fn access_date() {
+    let style = style_by_name("apa").unwrap();
+    let locales = locales();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let lib = from_biblatex_str(
+        r#"@test{test,
+        url={https://example.com},
+        urldate={2021}
+      }"#,
+    )
+    .unwrap();
+    let entry = lib.get("test").unwrap();
+    assert_eq!(entry.url().unwrap().visit_date.unwrap().year, 2021);
+
+    let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(entry, None, None, false, None)],
+        &style,
+        None,
+        &locales,
+        Some(1),
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(&style, None, &locales));
+    let mut buf = String::new();
+    rendered.bibliography.unwrap().items[0]
+        .content
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, "Retrieved 2021, from https://example.com/");
 }

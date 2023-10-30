@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::Write;
 
-use citationberg::taxonomy::{NameVariable, OtherTerm, Term};
+use citationberg::taxonomy::{NameVariable, OtherTerm, Term, Variable};
 use citationberg::{
     DelimiterBehavior, DemoteNonDroppingParticle, LayoutRenderingElement, NameAnd,
     NameAsSortOrder, NameForm, NameLabelPosition, NameOptions, Names, ToAffixes,
@@ -210,11 +210,10 @@ impl RenderCsl for Names {
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
         // Suppress this variable if we are in a special form.
         match &ctx.instance.kind {
-            Some(SpecialForm::AuthorOnly) => {
+            Some(SpecialForm::VarOnly(Variable::Name(var))) => {
                 // Skip if none of the variables are the author and the supplement does not contain the author either.
-                let contains_author =
-                    self.variable.iter().any(|v| &NameVariable::Author == v);
-                let substitute_will_render_author = is_empty
+                let contains_v = self.variable.iter().any(|v| var == v);
+                let substitute_will_render_v = is_empty
                     && self.substitute().map_or(false, |s| {
                         s.children
                             .iter()
@@ -225,12 +224,13 @@ impl RenderCsl for Names {
                                 _ => None,
                             })
                             .flatten()
-                            .any(|v| &NameVariable::Author == v)
+                            .any(|v| var == v)
                     });
-                if !contains_author && !substitute_will_render_author {
+                if !contains_v && !substitute_will_render_v {
                     return;
                 }
             }
+            Some(SpecialForm::VarOnly(_)) => return,
             Some(SpecialForm::SuppressAuthor) => {
                 if self.variable.iter().any(|v| &NameVariable::Author == v) {
                     return;
@@ -325,16 +325,6 @@ impl RenderCsl for Names {
                 if !ctx.instance.sorting {
                     if let Some((label, pos)) = label {
                         if pos == requested_pos {
-                            // if pos == NameLabelPosition::AfterName
-                            //     && !label
-                            //         .affixes
-                            //         .prefix
-                            //         .as_ref()
-                            //         .map_or(false, |p| p.starts_with(' '))
-                            // {
-                            //     ctx.ensure_space();
-                            // }
-
                             render_label_with_var(
                                 label,
                                 ctx,
@@ -367,6 +357,24 @@ impl RenderCsl for Names {
         ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
         ctx.writing.pop_name_options();
         ctx.writing.first_name_properties(|| props);
+    }
+
+    fn will_render<T: EntryLike>(
+        &self,
+        ctx: &mut Context<T>,
+        var: citationberg::taxonomy::Variable,
+    ) -> bool {
+        if self.variable.iter().any(|v| Variable::Name(*v) == var) {
+            return true;
+        }
+
+        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty()) {
+            if let Some(substitute) = &self.substitute() {
+                return substitute.children.iter().any(|c| c.will_render(ctx, var));
+            }
+        }
+
+        false
     }
 }
 

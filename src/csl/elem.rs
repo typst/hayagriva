@@ -558,6 +558,10 @@ impl<T> NonEmptyStack<T> {
         &mut self.last
     }
 
+    pub fn first_mut(&mut self) -> &mut T {
+        self.head.first_mut().unwrap_or(&mut self.last)
+    }
+
     pub fn last_mut_predicate(
         &mut self,
         predicate: impl Fn(&T) -> bool,

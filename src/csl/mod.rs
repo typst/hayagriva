@@ -1,4 +1,3 @@
-use core::fmt;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry as HmEntry;
@@ -8,11 +7,14 @@ use std::hash::Hash;
 use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
 
-use citationberg::taxonomy::{Locator, OtherTerm, Term, Variable};
+use citationberg::taxonomy::{
+    DateVariable, Locator, NameVariable, OtherTerm, StandardVariable, Term, Variable,
+};
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, Collapse, CslMacro,
-    Display, GrammarGender, IndependentStyle, InheritableNameOptions, Locale, LocaleCode,
-    RendersYearSuffix, SecondFieldAlign, StyleClass, TermForm, ToFormatting,
+    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
+    CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
+    LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
+    StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -61,7 +63,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     locator: Option<SpecificLocator<'a>>,
     hidden: bool,
     locale: Option<LocaleCode>,
-    kind: Option<SpecialForm>,
+    purpose: Option<CitePurpose>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -168,7 +170,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     cite_props.clone(),
                     item.locale.as_ref(),
                     citation.locale.as_ref(),
-                    item.kind,
+                    item.purpose,
                 );
                 renders.push(SpeculativeItemRender {
                     entry,
@@ -181,7 +183,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     rendered: ctx.flush(),
                     hidden: item.hidden,
                     locale: item.locale.clone(),
-                    kind: item.kind,
+                    purpose: item.purpose,
                 });
 
                 last_cite = Some(item);
@@ -244,13 +246,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                 for item in cite.items.iter_mut() {
                     if let Some(state) = rerender.get(&(item.entry as _)) {
                         item.cite_props.speculative.disambiguation = state.clone();
-                        item.rendered = style_ctx.citation(
-                            item.entry,
-                            item.cite_props.clone(),
-                            item.locale.as_ref(),
-                            cite.request.locale.as_ref(),
-                            item.kind,
-                        );
+                        item.rendered = do_rerender(&style_ctx, item, cite.request);
                     }
                 }
             }
@@ -369,17 +365,11 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
         for cite in res.iter_mut() {
             let style_ctx = cite.request.style();
             for item in cite.items.iter_mut() {
-                item.rendered = style_ctx.citation(
-                    item.entry,
-                    item.cite_props.clone(),
-                    item.locale.as_ref(),
-                    cite.request.locale.as_ref(),
-                    item.kind,
-                );
+                item.rendered = last_purpose_render(&style_ctx, item, &cite.request);
             }
 
             // 5. Collapse grouped citations.
-            if cite.request.items.iter().all(|c| c.kind.is_none()) {
+            if cite.request.items.iter().all(|c| c.purpose.is_none()) {
                 collapse_items(cite);
             }
 
@@ -435,11 +425,8 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     }
 
                     if let Some(suffix) = cite.request.suffix() {
-                        let mut slice = [0; 4];
                         let print = last_text_mut_child(&mut elem_children)
-                            .map_or(true, |t| {
-                                !t.text.ends_with(suffix.as_str(&mut slice))
-                            });
+                            .map_or(true, |t| !t.text.ends_with(suffix));
                         if print {
                             elem_children.push(
                                 Formatted { text: suffix.to_string(), formatting }.into(),
@@ -484,7 +471,6 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                                 },
                                 cited_item.locale.as_ref(),
                                 request.locale.as_ref(),
-                                None,
                             )
                             .unwrap(),
                     ),
@@ -528,13 +514,23 @@ pub fn standalone_citation<T: EntryLike>(
     style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
     let mut res = vec![];
     for item in req.items {
-        res.push(style.citation(
-            item.entry,
-            CiteProperties::for_sorting(item.locator, 0),
-            item.locale.as_ref(),
-            req.locale.as_ref(),
-            item.kind,
-        ));
+        res.push(if let Some(CitePurpose::Year) = item.purpose {
+            date_replacement(
+                &style,
+                item.entry,
+                &CiteProperties::for_sorting(item.locator, 0),
+                req.locale.as_ref(),
+                item.locale.as_ref(),
+            )
+        } else {
+            style.citation(
+                item.entry,
+                CiteProperties::for_sorting(item.locator, 0),
+                item.locale.as_ref(),
+                req.locale.as_ref(),
+                item.purpose,
+            )
+        });
     }
 
     let non_empty: Vec<_> = res.into_iter().filter(|c| c.has_content()).collect();
@@ -581,6 +577,78 @@ pub fn standalone_citation<T: EntryLike>(
         simplify_children(res)
     } else {
         ElemChildren::new()
+    }
+}
+
+fn do_rerender<T: EntryLike>(
+    ctx: &StyleContext<'_>,
+    item: &SpeculativeItemRender<T>,
+    request: &CitationRequest<'_, T>,
+) -> ElemChildren {
+    ctx.citation(
+        item.entry,
+        item.cite_props.clone(),
+        item.locale.as_ref(),
+        request.locale.as_ref(),
+        item.purpose,
+    )
+}
+
+fn date_replacement<T: EntryLike>(
+    ctx: &StyleContext<'_>,
+    entry: &T,
+    cite_props: &CiteProperties,
+    term_locale: Option<&LocaleCode>,
+    locale: Option<&LocaleCode>,
+) -> ElemChildren {
+    let date = entry
+        .resolve_date_variable(DateVariable::Issued)
+        .or_else(|| entry.resolve_date_variable(DateVariable::EventDate))
+        .or_else(|| entry.resolve_date_variable(DateVariable::Submitted))
+        .or_else(|| entry.resolve_date_variable(DateVariable::OriginalDate));
+
+    ElemChildren(vec![ElemChild::Text(Formatted {
+        text: if let Some(date) = date {
+            format!(
+                "{}{}",
+                if date.year > 0 { date.year } else { date.year.abs() + 1 },
+                if date.year < 1000 {
+                    if date.year < 0 {
+                        "BC"
+                    } else {
+                        "AD"
+                    }
+                } else {
+                    ""
+                }
+            )
+        } else if let Some(no_date) = ctx
+            .ctx(entry, cite_props.clone(), locale, term_locale)
+            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false)
+        {
+            no_date.to_string()
+        } else {
+            "n.d.".to_string()
+        },
+        formatting: Formatting::default(),
+    })])
+}
+
+fn last_purpose_render<T: EntryLike>(
+    ctx: &StyleContext<'_>,
+    item: &SpeculativeItemRender<T>,
+    request: &CitationRequest<'_, T>,
+) -> ElemChildren {
+    if let Some(CitePurpose::Year) = item.purpose {
+        date_replacement(
+            ctx,
+            item.entry,
+            &item.cite_props,
+            request.locale.as_ref(),
+            item.locale.as_ref(),
+        )
+    } else {
+        do_rerender(ctx, item, request)
     }
 }
 
@@ -974,7 +1042,6 @@ impl<'a> StyleContext<'a> {
         cite_props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
         term_locale: Option<&'b LocaleCode>,
-        kind: Option<SpecialForm>,
     ) -> Context<'b, T> {
         Context {
             instance: InstanceContext::new(
@@ -983,7 +1050,7 @@ impl<'a> StyleContext<'a> {
                 false,
                 locale,
                 term_locale,
-                kind,
+                None,
             ),
             style: self,
             writing: WritingContext::new(),
@@ -1018,10 +1085,22 @@ impl<'a> StyleContext<'a> {
         props: CiteProperties<'a>,
         locale: Option<&LocaleCode>,
         term_locale: Option<&LocaleCode>,
-        kind: Option<SpecialForm>,
+        kind: Option<CitePurpose>,
     ) -> ElemChildren {
         let ctx = self.do_citation(entry, props, locale, term_locale, kind);
         ctx.flush()
+    }
+
+    /// Render the given item within a bibliography.
+    fn bibliography<T: EntryLike>(
+        &self,
+        entry: &T,
+        props: CiteProperties<'a>,
+        locale: Option<&LocaleCode>,
+        term_locale: Option<&LocaleCode>,
+    ) -> Option<ElemChildren> {
+        self.do_bibliography(entry, props, locale, term_locale)
+            .map(|ctx| ctx.flush())
     }
 
     /// Render the given item within a citation.
@@ -1031,28 +1110,142 @@ impl<'a> StyleContext<'a> {
         props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
         term_locale: Option<&'b LocaleCode>,
-        kind: Option<SpecialForm>,
+        kind: Option<CitePurpose>,
     ) -> Context<'b, T> {
-        let mut ctx = self.ctx(entry, props, locale, term_locale, kind);
-        ctx.writing.push_name_options(&self.csl.citation.name_options);
-        self.csl.citation.layout.render(&mut ctx);
+        let mut ctx = self.ctx(entry, props, locale, term_locale);
+
+        let do_regular = |ctx: &mut Context<'b, T>| {
+            ctx.writing.push_name_options(&self.csl.citation.name_options);
+            self.csl.citation.layout.render(ctx);
+            ctx.writing.pop_name_options();
+        };
+
+        let do_author = |ctx: &mut Context<'b, T>| {
+            let author_var = Variable::Name(NameVariable::Author);
+
+            if self.csl.citation.layout.will_render(ctx, author_var) {
+                // Render name from citation.
+                ctx.set_special_form(Some(SpecialForm::VarOnly(author_var)));
+                do_regular(ctx);
+            } else {
+                // Render name from bibliography.
+                ctx.set_special_form(Some(SpecialForm::VarOnly(author_var)));
+                let needs_synthesis = if let Some(bibliography) = &self.csl.bibliography {
+                    if bibliography.layout.will_render(ctx, author_var) {
+                        ctx.writing.push_name_options(&bibliography.name_options);
+                        bibliography.layout.render(ctx);
+                        ctx.writing.pop_name_options();
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+
+                if needs_synthesis {
+                    // We build our own name and render it with the citation's
+                    // properties.
+                    let layout = Layout::new(
+                        vec![LayoutRenderingElement::Names(Names::with_variables(vec![
+                            NameVariable::Author,
+                        ]))],
+                        self.csl.citation.layout.to_formatting(),
+                        None,
+                        None,
+                    );
+                    ctx.writing.push_name_options(&self.csl.citation.name_options);
+                    layout.render(ctx);
+                    ctx.writing.pop_name_options();
+                }
+            }
+            ctx.set_special_form(None);
+        };
+
+        match kind {
+            Some(CitePurpose::Author) => {
+                do_author(&mut ctx);
+            }
+            Some(CitePurpose::Full) if self.csl.bibliography.is_some() => {
+                let bib = self.csl.bibliography.as_ref().unwrap();
+                ctx.writing.push_name_options(&bib.name_options);
+                bib.layout.render(&mut ctx);
+                ctx.writing.pop_name_options();
+
+                if bib.second_field_align.is_some() {
+                    if let Some(mut t) =
+                        ctx.writing.elem_stack.first_mut().remove_any_meta()
+                    {
+                        if let ElemChild::Text(t) = &mut t {
+                            t.text.push(' ');
+                        } else if let ElemChild::Elem(e) = &mut t {
+                            if let Some(t) = e.children.last_text_mut() {
+                                t.text.push(' ');
+                            }
+                        }
+
+                        ctx.writing.elem_stack.first_mut().0.insert(0, t);
+                    }
+                }
+            }
+            Some(CitePurpose::Prose) => {
+                do_author(&mut ctx);
+                if !self.csl.citation.layout.prefix.as_ref().map_or(false, |f| {
+                    f.chars().next().map_or(false, char::is_whitespace)
+                }) {
+                    ctx.ensure_space();
+                }
+
+                if self.csl.info.category.iter().any(|c| {
+                    matches!(
+                        c,
+                        StyleCategory::CitationFormat {
+                            format: CitationFormat::Label | CitationFormat::Numeric
+                        }
+                    )
+                }) {
+                    // Print the label.
+                    if let Some(prefix) = self.csl.citation.layout.prefix.as_ref() {
+                        ctx.push_str(prefix);
+                    }
+                    do_regular(&mut ctx);
+                    if let Some(suffix) = self.csl.citation.layout.suffix.as_ref() {
+                        ctx.push_str(suffix);
+                    }
+                } else {
+                    // Print the citation surrounded by parentheses and suppress
+                    // the author.
+                    ctx.push_str(
+                        self.csl.citation.layout.prefix.as_deref().unwrap_or("("),
+                    );
+                    ctx.set_special_form(Some(SpecialForm::SuppressAuthor));
+                    do_regular(&mut ctx);
+                    ctx.set_special_form(None);
+                    ctx.push_str(
+                        self.csl.citation.layout.suffix.as_deref().unwrap_or(")"),
+                    );
+                }
+            }
+            Some(CitePurpose::Year) | Some(CitePurpose::Full) | None => {
+                do_regular(&mut ctx);
+            }
+        }
         ctx
     }
 
     /// Render the given item within a bibliography.
-    fn bibliography<T: EntryLike>(
-        &self,
-        entry: &T,
-        props: CiteProperties,
-        locale: Option<&LocaleCode>,
-        term_locale: Option<&LocaleCode>,
-        kind: Option<SpecialForm>,
-    ) -> Option<ElemChildren> {
-        let mut ctx = self.ctx(entry, props, locale, term_locale, kind);
+    fn do_bibliography<'b, T: EntryLike>(
+        &'b self,
+        entry: &'b T,
+        props: CiteProperties<'a>,
+        locale: Option<&'b LocaleCode>,
+        term_locale: Option<&'b LocaleCode>,
+    ) -> Option<Context<'b, T>> {
+        let mut ctx = self.ctx(entry, props, locale, term_locale);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
         self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
-        Some(ctx.flush())
+        Some(ctx)
     }
 
     /// Return the locale to use for this style.
@@ -1061,20 +1254,6 @@ impl<'a> StyleContext<'a> {
             .clone()
             .or_else(|| self.csl.default_locale.clone())
             .unwrap_or_else(LocaleCode::en_us)
-    }
-
-    /// Checks that neither the bibliography nor the citation layout render the
-    /// year suffix.
-    fn renders_year_suffix_implicitly(&self) -> bool {
-        self.csl.citation.layout.renders_year_suffix(&self.csl.macros)
-            == RendersYearSuffix::No
-            && self
-                .csl
-                .bibliography
-                .as_ref()
-                .map(|b| b.layout.renders_year_suffix(&self.csl.macros))
-                .unwrap_or_default()
-                == RendersYearSuffix::No
     }
 }
 
@@ -1098,8 +1277,6 @@ pub struct CitationRequest<'a, T: EntryLike> {
     /// `near-note` will always test false if this is none for the referenced
     /// note.
     note_number: Option<usize>,
-    /// Whether to override the default affixes of the style with some brackets.
-    pub affix_override: Option<Brackets>,
 }
 
 impl<'a, T: EntryLike> CitationRequest<'a, T> {
@@ -1110,7 +1287,6 @@ impl<'a, T: EntryLike> CitationRequest<'a, T> {
         locale: Option<LocaleCode>,
         locale_files: &'a [Locale],
         note_number: Option<usize>,
-        affix_override: Option<Brackets>,
     ) -> Self {
         Self {
             items,
@@ -1118,7 +1294,6 @@ impl<'a, T: EntryLike> CitationRequest<'a, T> {
             locale,
             locale_files,
             note_number: note_number.filter(|_| style.settings.class == StyleClass::Note),
-            affix_override,
         }
     }
 
@@ -1128,59 +1303,38 @@ impl<'a, T: EntryLike> CitationRequest<'a, T> {
         style: &'a IndependentStyle,
         locale_files: &'a [Locale],
     ) -> Self {
-        Self::new(items, style, None, locale_files, None, None)
+        Self::new(items, style, None, locale_files, None)
     }
 
     fn style(&self) -> StyleContext<'a> {
         StyleContext::new(self.style, self.locale.clone(), self.locale_files)
     }
 
-    fn prefix(&self) -> Option<CharOrSlice<'a>> {
-        if let Some(o) = self.affix_override {
-            o.left().map(CharOrSlice::Char)
-        } else {
-            self.style.citation.layout.prefix.as_deref().map(CharOrSlice::Slice)
-        }
+    fn shall_affix(&self) -> bool {
+        self.items.iter().all(|p| {
+            !matches!(
+                p.purpose,
+                Some(CitePurpose::Prose | CitePurpose::Author | CitePurpose::Year)
+            )
+        })
     }
 
-    fn suffix(&self) -> Option<CharOrSlice<'a>> {
-        if let Some(o) = self.affix_override {
-            o.right().map(CharOrSlice::Char)
-        } else {
-            self.style.citation.layout.suffix.as_deref().map(CharOrSlice::Slice)
-        }
+    fn prefix(&self) -> Option<&'a str> {
+        self.style
+            .citation
+            .layout
+            .prefix
+            .as_deref()
+            .filter(|_| self.shall_affix())
     }
-}
 
-enum CharOrSlice<'a> {
-    Char(char),
-    Slice(&'a str),
-}
-
-impl<'a> CharOrSlice<'a> {
-    fn as_str<'b>(&self, slice: &'b mut [u8; 4]) -> &'b str
-    where
-        'a: 'b,
-    {
-        match self {
-            CharOrSlice::Slice(s) => s,
-            CharOrSlice::Char(c) => c.encode_utf8(slice),
-        }
-    }
-}
-
-impl Default for CharOrSlice<'_> {
-    fn default() -> Self {
-        Self::Slice("")
-    }
-}
-
-impl fmt::Display for CharOrSlice<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CharOrSlice::Char(c) => c.fmt(f),
-            CharOrSlice::Slice(s) => s.fmt(f),
-        }
+    fn suffix(&self) -> Option<&'a str> {
+        self.style
+            .citation
+            .layout
+            .suffix
+            .as_deref()
+            .filter(|_| self.shall_affix())
     }
 }
 
@@ -1230,7 +1384,7 @@ pub struct CitationItem<'a, T: EntryLike> {
     /// Whether this item will be included in the output.
     pub hidden: bool,
     /// Format the item in a special way.
-    pub kind: Option<SpecialForm>,
+    pub purpose: Option<CitePurpose>,
     /// The initial index of this item in the list of items.
     initial_idx: usize,
 }
@@ -1243,7 +1397,7 @@ impl<'a, T: EntryLike> CitationItem<'a, T> {
             locator: None,
             locale: None,
             hidden: false,
-            kind: None,
+            purpose: None,
             initial_idx: 0,
         }
     }
@@ -1255,7 +1409,7 @@ impl<'a, T: EntryLike> CitationItem<'a, T> {
             locator,
             locale: None,
             hidden: false,
-            kind: None,
+            purpose: None,
             initial_idx: 0,
         }
     }
@@ -1266,21 +1420,21 @@ impl<'a, T: EntryLike> CitationItem<'a, T> {
         locator: Option<SpecificLocator<'a>>,
         locale: Option<LocaleCode>,
         hidden: bool,
-        kind: Option<SpecialForm>,
+        purpose: Option<CitePurpose>,
     ) -> Self {
         Self {
             entry,
             locator,
             locale,
             hidden,
-            kind,
+            purpose,
             initial_idx: 0,
         }
     }
 
     /// Change the `kind` of this item.
-    pub fn kind(mut self, kind: SpecialForm) -> Self {
-        self.kind = Some(kind);
+    pub fn kind(mut self, purpose: CitePurpose) -> Self {
+        self.purpose = Some(purpose);
         self
     }
 }
@@ -2291,6 +2445,25 @@ impl<'a, T: EntryLike> Context<'a, T> {
         self.writing.checked_disambiguate = true;
         self.instance.cite_props.speculative.disambiguation == DisambiguateState::Choose
     }
+
+    /// Checks that neither the bibliography nor the citation layout render the
+    /// year suffix.
+    fn renders_year_suffix_implicitly(&mut self) -> bool {
+        !self
+            .style
+            .csl
+            .citation
+            .layout
+            .will_render(self, StandardVariable::YearSuffix.into())
+            && self.style.csl.bibliography.as_ref().map_or(false, |b| {
+                b.layout.will_render(self, StandardVariable::YearSuffix.into())
+            })
+    }
+
+    /// Set the [`SpecialForm`]
+    fn set_special_form(&mut self, form: Option<SpecialForm>) {
+        self.instance.kind = form;
+    }
 }
 
 #[must_use = "format stack must be popped"]
@@ -2374,11 +2547,25 @@ impl Brackets {
     }
 }
 
+/// For what purpose to generate a citation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CitePurpose {
+    /// The citation will only contain the name of the author.
+    Author,
+    /// The citation will only contain the year. Year Affixes will not be
+    /// included.
+    Year,
+    /// The citation will equate to the bibliography entry of the item.
+    Full,
+    /// The citation will be well-suited for inclusion in prose.
+    Prose,
+}
+
 /// A special citation form to use for the [`CitationItem`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpecialForm {
+enum SpecialForm {
     /// Only output the author.
-    AuthorOnly,
+    VarOnly(Variable),
     /// Output everything but the author.
     SuppressAuthor,
 }
@@ -2428,7 +2615,7 @@ mod tests {
                     CitationItem::with_entry(bib.nth(n + 1).unwrap()),
                 ];
                 driver.citation(CitationRequest::new(
-                    items, &style, None, &en_locale, None, None,
+                    items, &style, None, &en_locale, None,
                 ));
             }
 
