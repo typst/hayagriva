@@ -21,13 +21,13 @@ use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::rendering::RenderCsl;
 use crate::lang::CaseFolder;
-use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Numeric, Person};
+use crate::types::{ChunkKind, ChunkedString, Date, Person};
 
 use self::elem::last_text_mut_child;
 pub use self::elem::{
     BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
 };
-use self::taxonomy::EntryLike;
+use self::taxonomy::{EntryLike, NumberVariableResult};
 
 #[cfg(feature = "rkyv")]
 pub mod archive;
@@ -62,7 +62,6 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     hidden: bool,
     locale: Option<LocaleCode>,
     kind: Option<SpecialForm>,
-    initial_idx: usize,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -154,6 +153,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                         first_note_number,
                         is_near_note,
                         is_first: seen.insert(*entry),
+                        initial_idx: item.initial_idx,
                     },
                     speculative: SpeculativeCiteProperties::speculate(
                         None,
@@ -180,7 +180,6 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     hidden: item.hidden,
                     locale: item.locale.clone(),
                     kind: item.kind,
-                    initial_idx: item.initial_idx,
                 });
 
                 last_cite = Some(item);
@@ -424,7 +423,9 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                         elem_children.push(ElemChild::Elem(Elem {
                             children: item.rendered.clone(),
                             display: None,
-                            meta: Some(ElemMeta::Entry(item.initial_idx)),
+                            meta: Some(ElemMeta::Entry(
+                                item.cite_props.certain.initial_idx,
+                            )),
                         }));
                         last = Some(i);
                     }
@@ -1455,7 +1456,9 @@ impl WritingContext {
             }
             Some(ElemChild::Text(_)) => false,
             Some(ElemChild::Elem(e)) => e.has_content(),
-            Some(ElemChild::Markup(_) | ElemChild::Link { .. }) => true,
+            Some(
+                ElemChild::Markup(_) | ElemChild::Link { .. } | ElemChild::Transparent(_),
+            ) => true,
             None => false,
         };
 
@@ -1706,6 +1709,8 @@ struct CertainCiteProperties {
     /// Only depends on insertion order. The entry cannot be switched with
     /// itself during cite grouping.
     pub is_first: bool,
+    /// The index of the item in the original citation request.
+    pub initial_idx: usize,
 }
 
 impl CertainCiteProperties {
@@ -1837,7 +1842,17 @@ impl IbidState {
 /// This struct allows to add context to where the information in a cite is
 /// found in the source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SpecificLocator<'a>(pub Locator, pub &'a str);
+pub struct SpecificLocator<'a>(pub Locator, pub LocatorPayload<'a>);
+
+/// The type of content a `cs:text` element should yield for a locator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LocatorPayload<'a> {
+    /// Just print the string.
+    Str(&'a str),
+    /// An element with the original index of the locator will be yielded. The
+    /// consumer can then recognize this and replace it with their own content.
+    Transparent,
+}
 
 impl<'a, T: EntryLike> Context<'a, T> {
     /// Push a format on top of the stack if it is not empty.
@@ -2041,6 +2056,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .push(ElemChild::Link { text: format.add_text(chunked.to_string()), url })
     }
 
+    /// Push a transparent element child into the buffer.
+    pub fn push_transparent(&mut self, idx: usize) {
+        self.writing.save_to_block();
+        self.writing.elem_stack.last_mut().0.push(ElemChild::Transparent(idx))
+    }
+
     /// Folds all remaining elements into the first element and returns it.
     fn flush(self) -> ElemChildren {
         self.writing.flush()
@@ -2139,7 +2160,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_number_variable(
         &self,
         variable: csl_taxonomy::NumberVariable,
-    ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
+    ) -> Option<NumberVariableResult<'a>> {
         self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_number_variable(variable);

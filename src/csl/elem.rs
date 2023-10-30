@@ -28,6 +28,7 @@ impl Elem {
                 ElemChild::Elem(e) => e.str_len(),
                 ElemChild::Markup(m) => m.len(),
                 ElemChild::Link { text, .. } => text.text.len(),
+                ElemChild::Transparent(_) => 0,
             })
             .sum()
     }
@@ -290,6 +291,9 @@ pub enum ElemChild {
         /// The URL.
         url: String,
     },
+    /// A transparent element that must be replaced by the consumer. It contains
+    /// the original index of the cite request.
+    Transparent(usize),
 }
 
 impl ElemChild {
@@ -322,6 +326,7 @@ impl ElemChild {
                 w.write_str(&text.text)?;
                 text.formatting.write_end(w, format)
             }
+            ElemChild::Transparent(_) => Ok(()),
         }
     }
 
@@ -331,6 +336,7 @@ impl ElemChild {
             ElemChild::Elem(e) => e.str_len(),
             ElemChild::Markup(m) => m.len(),
             ElemChild::Link { text, .. } => text.text.len(),
+            ElemChild::Transparent(_) => 0,
         }
     }
 
@@ -341,6 +347,7 @@ impl ElemChild {
             }
             ElemChild::Elem(e) => e.has_content(),
             ElemChild::Link { .. } => true,
+            ElemChild::Transparent(_) => true,
         }
     }
 
@@ -351,6 +358,7 @@ impl ElemChild {
             }
             ElemChild::Elem(e) => e.is_empty(),
             ElemChild::Link { text, .. } => text.text.is_empty(),
+            ElemChild::Transparent(_) => false,
         }
     }
 }

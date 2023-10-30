@@ -3,7 +3,7 @@ use std::fmt::Write;
 use std::str::FromStr;
 
 use citationberg::taxonomy::{
-    NumberVariable, OtherTerm, StandardVariable, Term, Variable,
+    Locator, NumberVariable, OtherTerm, StandardVariable, Term, Variable,
 };
 use citationberg::{
     ChooseBranch, CslMacro, DateDayForm, DateMonthForm, DatePartName, DateParts,
@@ -12,6 +12,7 @@ use citationberg::{
 };
 use citationberg::{TermForm, TextTarget};
 
+use crate::csl::taxonomy::NumberVariableResult;
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
 
@@ -31,7 +32,7 @@ impl RenderCsl for citationberg::Text {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         enum ResolvedTextTarget<'a> {
             StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
-            NumberVariable(NumberVariable, MaybeTyped<Cow<'a, Numeric>>),
+            NumberVariable(NumberVariable, NumberVariableResult<'a>),
             Macro(&'a CslMacro),
             Term(&'a str),
             Value(&'a str),
@@ -97,7 +98,10 @@ impl RenderCsl for citationberg::Text {
                 }
                 _ => ctx.push_chunked(&val),
             },
-            ResolvedTextTarget::NumberVariable(_, n) => ctx.push_str(&n.to_str()),
+            ResolvedTextTarget::NumberVariable(_, n) => match n {
+                NumberVariableResult::Regular(n) => ctx.push_str(&n.to_str()),
+                NumberVariableResult::Transparent(n) => ctx.push_transparent(n),
+            },
             ResolvedTextTarget::Macro(mac) => {
                 let len = ctx.writing.len();
 
@@ -138,7 +142,7 @@ impl RenderCsl for citationberg::Number {
 
         let value = ctx.resolve_number_variable(self.variable);
         if ctx.instance.sorting {
-            if let Some(MaybeTyped::Typed(n)) = value {
+            if let Some(NumberVariableResult::Regular(MaybeTyped::Typed(n))) = value {
                 n.fmt_value(ctx, true).unwrap();
                 return;
             }
@@ -150,7 +154,9 @@ impl RenderCsl for citationberg::Number {
         let gender = ctx.gender(self.variable.into());
 
         match value {
-            Some(MaybeTyped::Typed(num)) if num.will_transform() => {
+            Some(NumberVariableResult::Regular(MaybeTyped::Typed(num)))
+                if num.will_transform() =>
+            {
                 let normal_num = if self.form == NumberForm::Numeric
                     && self.variable == NumberVariable::Page
                 {
@@ -185,8 +191,13 @@ impl RenderCsl for citationberg::Number {
                         .unwrap();
                 }
             }
-            Some(MaybeTyped::Typed(num)) => write!(ctx, "{}", num).unwrap(),
-            Some(MaybeTyped::String(s)) => ctx.push_str(&s),
+            Some(NumberVariableResult::Regular(MaybeTyped::Typed(num))) => {
+                write!(ctx, "{}", num).unwrap()
+            }
+            Some(NumberVariableResult::Regular(MaybeTyped::String(s))) => {
+                ctx.push_str(&s)
+            }
+            Some(NumberVariableResult::Transparent(n)) => ctx.push_transparent(n),
             None => {}
         }
 
@@ -208,6 +219,18 @@ impl RenderCsl for citationberg::Label {
             return;
         }
 
+        // Never yield a label if the locator is set to custom.
+        if self.variable == NumberVariable::Locator
+            && ctx
+                .instance
+                .cite_props
+                .speculative
+                .locator
+                .map_or(false, |l| l.0 == Locator::Custom)
+        {
+            return;
+        }
+
         let Some(variable) = ctx.resolve_number_variable(self.variable) else {
             return;
         };
@@ -217,10 +240,11 @@ impl RenderCsl for citationberg::Label {
             LabelPluralize::Always => true,
             LabelPluralize::Never => false,
             LabelPluralize::Contextual => match variable {
-                MaybeTyped::String(_) => false,
-                MaybeTyped::Typed(n) => {
+                NumberVariableResult::Regular(MaybeTyped::String(_)) => false,
+                NumberVariableResult::Regular(MaybeTyped::Typed(n)) => {
                     n.is_plural(self.variable.is_number_of_variable())
                 }
+                NumberVariableResult::Transparent(_) => false,
             },
         };
 
@@ -646,7 +670,7 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
                             .unwrap_or_default(),
                         Variable::Number(var) => matches!(
                             self.ctx.resolve_number_variable(var),
-                            Some(MaybeTyped::Typed(_))
+                            Some(NumberVariableResult::Regular(MaybeTyped::Typed(_)))
                         ),
                         _ => false,
                     })

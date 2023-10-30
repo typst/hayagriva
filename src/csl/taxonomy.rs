@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp;
 use std::str::FromStr;
 
 use crate::types::{
@@ -14,7 +15,7 @@ use unic_langid::LanguageIdentifier;
 #[cfg(feature = "csl-json-valley")]
 use csl_json_valley::{DateStr, FieldValue, NameItem, NameRepr};
 
-use super::{DisambiguateState, InstanceContext};
+use super::{DisambiguateState, InstanceContext, LocatorPayload};
 
 pub trait EntryLike {
     fn resolve_number_variable(
@@ -37,25 +38,34 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
     pub(super) fn resolve_number_variable(
         &self,
         variable: NumberVariable,
-    ) -> Option<MaybeTyped<Cow<'a, Numeric>>> {
+    ) -> Option<NumberVariableResult<'a>> {
         match variable {
-            NumberVariable::CitationNumber => Some(MaybeTyped::Typed(Cow::Owned(
-                Numeric::from(self.cite_props.speculative.citation_number as u32 + 1),
-            ))),
-            NumberVariable::FirstReferenceNoteNumber => self
-                .cite_props
-                .certain
-                .first_note_number
-                .map(|n| MaybeTyped::Typed(Cow::Owned(Numeric::from(n as u32)))),
-            NumberVariable::Locator => {
-                let l = self.cite_props.speculative.locator?.1;
-                Some(
+            NumberVariable::CitationNumber => {
+                Some(NumberVariableResult::Regular(MaybeTyped::Typed(Cow::Owned(
+                    Numeric::from(self.cite_props.speculative.citation_number as u32 + 1),
+                ))))
+            }
+            NumberVariable::FirstReferenceNoteNumber => {
+                self.cite_props.certain.first_note_number.map(|n| {
+                    NumberVariableResult::Regular(MaybeTyped::Typed(Cow::Owned(
+                        Numeric::from(n as u32),
+                    )))
+                })
+            }
+            NumberVariable::Locator => match self.cite_props.speculative.locator?.1 {
+                LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
                     Numeric::from_str(l)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
-                )
-            }
-            _ => self.entry.resolve_number_variable(variable),
+                )),
+                LocatorPayload::Transparent => Some(NumberVariableResult::Transparent(
+                    self.cite_props.certain.initial_idx,
+                )),
+            },
+            _ => self
+                .entry
+                .resolve_number_variable(variable)
+                .map(NumberVariableResult::from_regular),
         }
     }
 
@@ -76,6 +86,27 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
                 }
             }
             _ => self.entry.resolve_standard_variable(form, variable),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum NumberVariableResult<'a> {
+    Regular(MaybeTyped<Cow<'a, Numeric>>),
+    Transparent(usize),
+}
+
+impl<'a> NumberVariableResult<'a> {
+    pub(super) fn from_regular(regular: MaybeTyped<Cow<'a, Numeric>>) -> Self {
+        Self::Regular(regular)
+    }
+
+    pub(super) fn csl_cmp(&self, other: &Self) -> cmp::Ordering {
+        match (self, other) {
+            (Self::Regular(a), Self::Regular(b)) => a.csl_cmp(b),
+            (Self::Regular(_), Self::Transparent(_)) => cmp::Ordering::Less,
+            (Self::Transparent(_), Self::Regular(_)) => cmp::Ordering::Greater,
+            (Self::Transparent(a), Self::Transparent(b)) => a.cmp(b),
         }
     }
 }

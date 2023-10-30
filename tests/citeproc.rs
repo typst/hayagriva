@@ -13,7 +13,7 @@ use csl_json_valley::DateStr;
 use hayagriva::archive::{locales, style_by_name};
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest,
-    SpecificLocator,
+    LocatorPayload, SpecificLocator,
 };
 use unscanny::Scanner;
 
@@ -330,9 +330,7 @@ fn test_parse_tests() {
         ]
         .contains(&name)
             && !name.starts_with("magic_")
-    })
-    .take(100)
-    {
+    }) {
         let str = std::fs::read_to_string(&path).unwrap();
         let case = build_case(&str);
         total += 1;
@@ -461,7 +459,7 @@ where
                                         .as_deref()
                                         .map(|l| Locator::from_str(l).unwrap())
                                         .unwrap_or(Locator::Page),
-                                    lo,
+                                    LocatorPayload::Str(lo),
                                 )
                             }),
                             None,

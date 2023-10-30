@@ -156,8 +156,8 @@ pub use citationberg;
 pub use csl::{
     standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
     BufWriteFormat, CitationItem, CitationRequest, Elem, ElemChild, ElemChildren,
-    ElemMeta, Formatted, Formatting, Rendered, RenderedBibliography, RenderedCitation,
-    SpecialForm, SpecificLocator,
+    ElemMeta, Formatted, Formatting, LocatorPayload, Rendered, RenderedBibliography,
+    RenderedCitation, SpecialForm, SpecificLocator,
 };
 pub use selectors::{Selector, SelectorError};
 
