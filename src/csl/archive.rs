@@ -3,7 +3,7 @@
 use citationberg::{Locale, Style};
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[repr(align(8))]
 struct Data<T: ?Sized>(T);
@@ -14,7 +14,7 @@ static ARCHIVE: &Data<[u8]> = &Data(*include_bytes!("../../styles.cbor.rkyv"));
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
 pub struct Lookup {
     /// Maps from a CSL style name to an index into the `styles` vector.
-    pub map: HashMap<String, StyleMatch>,
+    pub map: BTreeMap<String, StyleMatch>,
     /// Maps from a CSL ID to an index into the `styles` vector.
     pub id_map: HashMap<String, usize>,
     /// The CSL styles in the archive as CBOR-encoded bytes.

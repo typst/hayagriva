@@ -4,8 +4,8 @@ use citationberg::{Locale, LocaleFile, XmlError};
 use rkyv::Archive;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs;
 use std::io;
@@ -65,7 +65,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
     let mut res = Lookup {
-        map: HashMap::new(),
+        map: BTreeMap::new(),
         id_map: HashMap::new(),
         styles: Vec::new(),
         locales: retrieve_locales()?,
@@ -411,13 +411,15 @@ impl Override {
     }
 }
 
-const OVERRIDES: [Override; 17] = [
+const OVERRIDES: [Override; 19] = [
     Override::alias("apa", "american-psychological-association", &["apa"]),
     Override::alias("bmj", "british-medical-journal", &["bmj"]),
     Override::first(
         "china-national-standard-gb-t-7714-2015-author-date",
         "gb-7114-2015-author-date",
     ),
+    Override::first("chicago-fullnote-bibliography", "chicago-fullnotes"),
+    Override::first("chicago-note-bibliography", "chicago-notes"),
     Override::first("china-national-standard-gb-t-7714-2015-note", "gb-7114-2015-note"),
     Override::first(
         "china-national-standard-gb-t-7714-2015-numeric",
