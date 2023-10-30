@@ -154,6 +154,19 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                     _ => return None,
                 }
             }
+            Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix)
+                if !matches!(&text.target, TextTarget::Macro { .. }) =>
+            {
+                if !matches!(
+                    text.target,
+                    TextTarget::Variable {
+                        var: Variable::Standard(StandardVariable::YearSuffix),
+                        ..
+                    },
+                ) {
+                    return None;
+                }
+            }
             _ => {}
         }
 
@@ -259,6 +272,9 @@ impl RenderCsl for citationberg::Number {
             Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
                 return false
             }
+            Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
+                return false
+            }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
         }
@@ -273,7 +289,11 @@ impl RenderCsl for citationberg::Label {
             Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
                 return
             }
-            Some(SpecialForm::VarOnly(_)) => return,
+            Some(
+                SpecialForm::VarOnly(_)
+                | SpecialForm::OnlyFirstDate
+                | SpecialForm::OnlyYearSuffix,
+            ) => return,
             _ => {}
         }
 
@@ -406,6 +426,7 @@ impl RenderCsl for citationberg::Date {
             None
         };
 
+        let first = ctx.is_first_date();
         let formatting = base
             .map(|b| self.formatting.apply(b.formatting))
             .unwrap_or(self.formatting);
@@ -438,7 +459,7 @@ impl RenderCsl for citationberg::Date {
                 .then(|| self.date_part.iter().find(|p| p.name == part.name))
                 .flatten();
 
-            render_date_part(part, &date, ctx, over_ride);
+            render_date_part(part, &date, ctx, over_ride, first);
             last_was_empty = cursor == ctx.writing.len();
         }
 
@@ -451,6 +472,9 @@ impl RenderCsl for citationberg::Date {
         match ctx.instance.kind {
             Some(SpecialForm::VarOnly(Variable::Date(d))) if self.variable != Some(d) => {
                 return false
+            }
+            Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
+                return ctx.peek_is_first_date()
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
@@ -465,16 +489,12 @@ fn render_date_part<T: EntryLike>(
     date: &Date,
     ctx: &mut Context<T>,
     over_ride: Option<&citationberg::DatePart>,
+    first: bool,
 ) {
-    let Some(val) = (match date_part.name {
-        DatePartName::Day => date.day.map(|i| i as i32 + 1),
-        DatePartName::Month => date.month.map(|i| i as i32 + 1),
-        DatePartName::Year => {
-            Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
-        }
-    }) else {
-        return;
-    };
+    let is_only_suffix = ctx.instance.kind != Some(SpecialForm::OnlyYearSuffix);
+    let form = over_ride
+        .map(citationberg::DatePart::form)
+        .unwrap_or_else(|| date_part.form());
 
     let formatting = over_ride
         .map(|p| p.formatting.apply(date_part.formatting))
@@ -483,86 +503,101 @@ fn render_date_part<T: EntryLike>(
     let idx = ctx.push_format(formatting);
 
     let affixes = &date_part.affixes;
-    let affix_loc = ctx.apply_prefix(affixes);
-
+    let affix_loc = (!is_only_suffix).then(|| ctx.apply_prefix(affixes));
     if date_part.name == DatePartName::Month {
         ctx.may_strip_periods(date_part.strip_periods);
     }
 
     let cidx = ctx.push_case(over_ride.and_then(|o| o.text_case).or(date_part.text_case));
 
-    let form = over_ride
-        .map(citationberg::DatePart::form)
-        .unwrap_or_else(|| date_part.form());
-    match form {
-        DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
-        | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
-            write!(ctx, "{:02}", val).unwrap();
-        }
-        DateStrongAnyForm::Day(DateDayForm::Ordinal)
-            if val != 1
-                || !ctx
-                    .style
-                    .lookup_locale(|l| {
-                        Some(
-                            l.style_options
-                                .and_then(|o| o.limit_day_ordinals_to_day_1)
-                                .unwrap_or_default(),
-                        )
-                    })
-                    .unwrap_or_default() =>
-        {
-            let gender = date
-                .month
-                .and_then(OtherTerm::month)
-                .and_then(|m| ctx.gender(m.into()));
+    if is_only_suffix {
+        let Some(val) = (match date_part.name {
+            DatePartName::Day => date.day.map(|i| i as i32 + 1),
+            DatePartName::Month => date.month.map(|i| i as i32 + 1),
+            DatePartName::Year => {
+                Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
+            }
+        }) else {
+            return;
+        };
 
-            write!(
-                ctx,
-                "{}{}",
-                val,
-                ctx.ordinal_lookup().lookup(val, gender).unwrap_or_default()
-            )
-            .unwrap();
-        }
-        DateStrongAnyForm::Day(DateDayForm::Numeric | DateDayForm::Ordinal)
-        | DateStrongAnyForm::Month(DateMonthForm::Numeric) => {
-            write!(ctx, "{}", val).unwrap();
-        }
-        DateStrongAnyForm::Month(DateMonthForm::Long) => {
-            if let Some(month) = OtherTerm::month((val - 1) as u8)
-                .and_then(|m| ctx.term(m.into(), TermForm::Long, false))
+        match form {
+            DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
+            | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
+                write!(ctx, "{:02}", val).unwrap();
+            }
+            DateStrongAnyForm::Day(DateDayForm::Ordinal)
+                if val != 1
+                    || !ctx
+                        .style
+                        .lookup_locale(|l| {
+                            Some(
+                                l.style_options
+                                    .and_then(|o| o.limit_day_ordinals_to_day_1)
+                                    .unwrap_or_default(),
+                            )
+                        })
+                        .unwrap_or_default() =>
             {
-                ctx.push_str(month);
-            } else {
+                let gender = date
+                    .month
+                    .and_then(OtherTerm::month)
+                    .and_then(|m| ctx.gender(m.into()));
+
+                write!(
+                    ctx,
+                    "{}{}",
+                    val,
+                    ctx.ordinal_lookup().lookup(val, gender).unwrap_or_default()
+                )
+                .unwrap();
+            }
+            DateStrongAnyForm::Day(DateDayForm::Numeric | DateDayForm::Ordinal)
+            | DateStrongAnyForm::Month(DateMonthForm::Numeric) => {
                 write!(ctx, "{}", val).unwrap();
             }
-        }
-        DateStrongAnyForm::Month(DateMonthForm::Short) => {
-            if let Some(month) = OtherTerm::month((val - 1) as u8)
-                .and_then(|m| ctx.term(m.into(), TermForm::Short, false))
-            {
-                ctx.push_str(month);
-            } else {
-                write!(ctx, "{}", val).unwrap();
+            DateStrongAnyForm::Month(DateMonthForm::Long) => {
+                if let Some(month) = OtherTerm::month((val - 1) as u8)
+                    .and_then(|m| ctx.term(m.into(), TermForm::Long, false))
+                {
+                    ctx.push_str(month);
+                } else {
+                    write!(ctx, "{}", val).unwrap();
+                }
+            }
+            DateStrongAnyForm::Month(DateMonthForm::Short) => {
+                if let Some(month) = OtherTerm::month((val - 1) as u8)
+                    .and_then(|m| ctx.term(m.into(), TermForm::Short, false))
+                {
+                    ctx.push_str(month);
+                } else {
+                    write!(ctx, "{}", val).unwrap();
+                }
+            }
+            DateStrongAnyForm::Year(LongShortForm::Short) => {
+                write!(ctx, "{:02}", (val % 100).abs()).unwrap();
+            }
+            DateStrongAnyForm::Year(LongShortForm::Long) => {
+                write!(ctx, "{}", val.abs()).unwrap();
             }
         }
-        DateStrongAnyForm::Year(LongShortForm::Short) => {
-            write!(ctx, "{:02}", (val % 100).abs()).unwrap();
-        }
-        DateStrongAnyForm::Year(LongShortForm::Long) => {
-            write!(ctx, "{}", val.abs()).unwrap();
+
+        if let DateStrongAnyForm::Year(_) = form {
+            if date.year < 1000 {
+                ctx.push_str(if date.year < 0 { "BC" } else { "AD" });
+            }
         }
     }
 
     if let DateStrongAnyForm::Year(_) = form {
-        if date.year < 1000 {
-            ctx.push_str(if date.year < 0 { "BC" } else { "AD" });
+        if first {
+            render_year_suffix_implicitly(ctx);
         }
-        render_year_suffix_implicitly(ctx);
     }
 
-    ctx.apply_suffix(affixes, affix_loc);
+    if let Some(affix_loc) = affix_loc {
+        ctx.apply_suffix(affixes, affix_loc);
+    }
     ctx.stop_stripping_periods();
     ctx.pop_case(cidx);
     ctx.pop_format(idx);

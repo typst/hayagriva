@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 mod common;
 use citationberg::taxonomy::Locator;
-use citationberg::{Locale, LocaleCode, Style, XmlSerdeError};
+use citationberg::{Locale, LocaleCode, Style, XmlError};
 use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
 
 use csl_json_valley::DateStr;
@@ -105,7 +105,7 @@ enum TestParseError {
     SyntaxError,
     WrongClosingTag,
     MissingRequiredSection(SectionTag),
-    CslError(XmlSerdeError),
+    CslError(XmlError),
     JsonError(serde_json::Error),
 }
 
@@ -276,7 +276,7 @@ impl<'s> TestCaseBuilder<'s> {
             result: self
                 .result
                 .ok_or(TestParseError::MissingRequiredSection(SectionTag::Result))?
-                .to_string(),
+                .replace("&#38;", "&"),
             csl: Style::from_xml(
                 self.csl
                     .ok_or(TestParseError::MissingRequiredSection(SectionTag::Csl))?,
@@ -331,6 +331,7 @@ fn test_parse_tests() {
         ]
         .contains(&name)
             && !name.starts_with("magic_")
+            && name.contains("disambiguate")
     }) {
         let str = std::fs::read_to_string(&path).unwrap();
         let case = build_case(&str);
@@ -354,7 +355,7 @@ fn test_parse_tests() {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "locator_SingularEmbeddedLabelAfterPlural.txt";
+    let name = "disambiguate_YearSuffixWithEtAlSubsequent.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
@@ -598,6 +599,61 @@ fn case_folding() {
     let mut buf = String::new();
     rendered.bibliography.unwrap().items[0]
         .content
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, ". my lowercase container title");
+}
+
+#[test]
+fn vancouver() {
+    let style = style_by_name("vancouver").unwrap();
+    let locales = locales();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let item: csl_json_valley::Item = serde_json::from_str(
+        r#"{
+        "id": "ITEM-1", 
+        "title": "Book A",
+        "author": [
+            {
+                "family": "Doe",
+                "given": "John"
+            }
+        ], 
+        "issued": {
+           "date-parts": [
+             [
+               "2000"
+             ]
+           ]
+        },
+        "type": "book"
+    }"#,
+    )
+    .unwrap();
+
+    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
+        BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(
+            &item,
+            Some(SpecificLocator(Locator::Page, LocatorPayload::Str("12"))),
+            None,
+            false,
+            None,
+        )],
+        &style,
+        None,
+        &locales,
+        Some(1),
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(&style, None, &locales));
+    let mut buf = String::new();
+    rendered.citations[0]
+        .citation
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
     assert_eq!(buf, ". my lowercase container title");

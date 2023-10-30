@@ -2,6 +2,7 @@
 
 use citationberg::{Locale, Style};
 use rkyv::{Archive, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 
 #[repr(align(8))]
@@ -78,27 +79,33 @@ pub fn styles() -> impl Iterator<Item = ArchiveStyle> {
 
 /// Retrieve a style from the archive
 pub fn style(s: ArchiveStyle) -> Style {
-    Style::from_cbor(&read().styles[s.index as usize]).unwrap()
+    from_cbor::<Style>(&read().styles[s.index as usize]).unwrap()
 }
 
 /// Retrieve a style by name.
 pub fn style_by_name(n: &str) -> Option<Style> {
     let lookup = read();
     let index = lookup.map.get(n)?.index;
-    Some(Style::from_cbor(&lookup.styles[index as usize]).unwrap())
+    Some(from_cbor::<Style>(&lookup.styles[index as usize]).unwrap())
 }
 
 /// Retrieve a style by name.
 pub fn style_by_id(n: &str) -> Option<Style> {
     let lookup = read();
     let index = lookup.id_map.get(n)?;
-    Some(Style::from_cbor(&lookup.styles[*index as usize]).unwrap())
+    Some(from_cbor::<Style>(&lookup.styles[*index as usize]).unwrap())
 }
 
 /// Retrieve the locales.
 pub fn locales() -> Vec<Locale> {
     let lookup = read();
     let res: Result<Vec<_>, _> =
-        lookup.locales.iter().map(|l| Locale::from_cbor(l)).collect();
+        lookup.locales.iter().map(|l| from_cbor::<Locale>(l)).collect();
     res.unwrap()
+}
+
+fn from_cbor<T: DeserializeOwned>(
+    reader: &[u8],
+) -> Result<T, ciborium::de::Error<std::io::Error>> {
+    ciborium::de::from_reader(reader)
 }

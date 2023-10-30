@@ -178,6 +178,9 @@ impl RenderCsl for Names {
             == 2
             && self.variable.contains(&NameVariable::Editor)
             && self.variable.contains(&NameVariable::Translator)
+            && ctx
+                .term(NameVariable::EditorTranslator.into(), TermForm::default(), false)
+                .is_some()
         {
             let editors = ctx.resolve_name_variable(NameVariable::Editor);
             let translators = ctx.resolve_name_variable(NameVariable::Translator);

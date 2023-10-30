@@ -11,15 +11,16 @@ categories = ["template-engine", "value-formatting", "command-line-utilities"]
 keywords = ["bibliography", "citation", "reference", "bibtex", "literature"]
 
 [features]
-default = ["biblatex", "rkyv"]
+default = ["biblatex", "archive"]
 cli = ["clap", "strum"]
+archive = ["rkyv", "ciborium"]
 
 [dependencies]
 biblatex = { version = "0.8", optional = true }
+ciborium = { version = "0.2.1", optional = true }
 citationberg = { git = "https://github.com/typst/citationberg" }
 clap = { version = "3.1", optional = true, features = ["cargo"] }
 csl-json-valley = { git = "https://github.com/typst/csl-json-valley", optional = true }
-# Needed for legacy styles
 strum = { version = "0.24", features = ["derive"], optional = true }
 thiserror = "1.0.48"
 unic-langid = { version = "0.9.0", features = ["serde"] }

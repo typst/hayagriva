@@ -1,7 +1,9 @@
 #![cfg(feature = "rkyv")]
-use citationberg::{CborDeserializeError, CborSerializeError, Style, XmlSerdeError};
-use citationberg::{Locale, LocaleFile};
+use citationberg::Style;
+use citationberg::{Locale, LocaleFile, XmlError};
 use rkyv::Archive;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -79,7 +81,7 @@ fn create_archive() -> Result<(), ArchivalError> {
             continue;
         }
 
-        let bytes = style.to_cbor()?;
+        let bytes = to_cbor_vec(&style)?;
         let idx = res.styles.len();
         let id = strip_id(indep.info.id.as_str());
 
@@ -149,7 +151,7 @@ fn retrieve_locales() -> Result<Vec<Vec<u8>>, ArchivalError> {
     {
         let xml = fs::read_to_string(path)?;
         let locale: Locale = LocaleFile::from_xml(&xml)?.into();
-        let bytes = locale.to_cbor()?;
+        let bytes = to_cbor_vec(&locale)?;
         res.push(bytes);
     }
 
@@ -170,7 +172,7 @@ fn validate_archive() -> Result<(), ArchivalError> {
             .styles
             .get(idx.index as usize)
             .ok_or_else(|| ArchivalError::ValidationError(k.to_string()))?;
-        let style = Style::from_cbor(bytes)
+        let style = from_cbor::<Style>(bytes)
             .map_err(|_| ArchivalError::ValidationError(k.to_string()))?;
         let id = &style.info().id;
 
@@ -200,7 +202,7 @@ fn validate_archive() -> Result<(), ArchivalError> {
 
     // Check that all locales are well-formed.
     for l in archive.locales.iter() {
-        let locale = Locale::from_cbor(l)?;
+        let locale = from_cbor::<Locale>(l)?;
         let locale_name = format!(
             "locales-{}.xml",
             locale.lang.as_ref().ok_or_else(|| {
@@ -254,9 +256,9 @@ unsafe fn read(buf: &[u8]) -> &<Lookup as Archive>::Archived {
 #[derive(Debug)]
 pub enum ArchivalError {
     Io(io::Error),
-    Deserialize(XmlSerdeError),
-    Serialize(CborSerializeError),
-    CborDeserialize(CborDeserializeError),
+    Deserialize(XmlError),
+    Serialize(ciborium::ser::Error<std::io::Error>),
+    CborDeserialize(ciborium::de::Error<std::io::Error>),
     ValidationError(String),
     LocaleValidationError(String),
 }
@@ -267,20 +269,19 @@ impl From<io::Error> for ArchivalError {
     }
 }
 
-impl From<XmlSerdeError> for ArchivalError {
-    fn from(value: XmlSerdeError) -> Self {
+impl From<XmlError> for ArchivalError {
+    fn from(value: XmlError) -> Self {
         Self::Deserialize(value)
     }
 }
 
-impl From<CborSerializeError> for ArchivalError {
-    fn from(value: CborSerializeError) -> Self {
+impl From<ciborium::ser::Error<std::io::Error>> for ArchivalError {
+    fn from(value: ciborium::ser::Error<std::io::Error>) -> Self {
         Self::Serialize(value)
     }
 }
-
-impl From<CborDeserializeError> for ArchivalError {
-    fn from(value: CborDeserializeError) -> Self {
+impl From<ciborium::de::Error<std::io::Error>> for ArchivalError {
+    fn from(value: ciborium::de::Error<std::io::Error>) -> Self {
         Self::CborDeserialize(value)
     }
 }
@@ -454,3 +455,24 @@ const OVERRIDES: [Override; 17] = [
     Override::first("thieme-german", "thieme"),
     Override::first("turabian-fullnote-bibliography-8th-edition", "turabian-fullnote-8"),
 ];
+
+fn from_cbor<T: DeserializeOwned>(
+    reader: &[u8],
+) -> Result<T, ciborium::de::Error<std::io::Error>> {
+    ciborium::de::from_reader(reader)
+}
+
+fn to_cbor<T: Serialize>(
+    writer: &mut Vec<u8>,
+    value: &T,
+) -> Result<(), ciborium::ser::Error<std::io::Error>> {
+    ciborium::ser::into_writer(value, writer)
+}
+
+fn to_cbor_vec<T: Serialize>(
+    value: &T,
+) -> Result<Vec<u8>, ciborium::ser::Error<std::io::Error>> {
+    let mut writer = Vec::new();
+    to_cbor(&mut writer, value)?;
+    Ok(writer)
+}

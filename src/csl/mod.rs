@@ -1526,6 +1526,8 @@ pub(crate) struct WritingContext {
     suppressed_variables: RefCell<Vec<Variable>>,
     /// Whether this render has checked for `disambiguate` in `cs:choose`.
     checked_disambiguate: bool,
+    /// Check whether this is the first date.
+    first_date: bool,
     /// The disambiguation-relevant properties of the first `cs:name` element.
     /// This is `None` if no `cs:name` elements were rendered.
     first_name: Option<NameDisambiguationProperties>,
@@ -2477,6 +2479,18 @@ impl<'a, T: EntryLike> Context<'a, T> {
         self.instance.cite_props.speculative.disambiguation == DisambiguateState::Choose
     }
 
+    /// Check whether this is the first date and set the first date flag.
+    fn is_first_date(&mut self) -> bool {
+        let res = self.writing.first_date;
+        self.writing.first_date = false;
+        res
+    }
+
+    /// Check whether this is the first date.
+    fn peek_is_first_date(&self) -> bool {
+        self.writing.first_date
+    }
+
     /// Checks that neither the bibliography nor the citation layout render the
     /// year suffix.
     fn renders_year_suffix_implicitly(&mut self) -> bool {
@@ -2486,7 +2500,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .citation
             .layout
             .will_render(self, StandardVariable::YearSuffix.into())
-            && self.style.csl.bibliography.as_ref().map_or(false, |b| {
+            && !self.style.csl.bibliography.as_ref().map_or(false, |b| {
                 b.layout.will_render(self, StandardVariable::YearSuffix.into())
             })
     }
@@ -2597,6 +2611,10 @@ pub enum CitePurpose {
 enum SpecialForm {
     /// Only output the author.
     VarOnly(Variable),
+    /// Only print the first date.
+    OnlyFirstDate,
+    /// Only print the year suffix.
+    OnlyYearSuffix,
     /// Output everything but the author.
     SuppressAuthor,
 }
