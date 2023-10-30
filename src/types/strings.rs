@@ -224,13 +224,13 @@ impl<'de> Deserialize<'de> for ChunkedString {
                 Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(
                     map,
                 ))
-                .map(|inner: Inner| {
+                .and_then(|inner: Inner| {
                     if inner.verbatim {
-                        StringChunk::verbatim(inner.value)
+                        Ok(StringChunk::verbatim(inner.value).into())
                     } else {
-                        StringChunk::normal(inner.value)
+                        Self::Value::from_str(&inner.value)
+                            .map_err(|e| serde::de::Error::custom(e.to_string()))
                     }
-                    .into()
                 })
             }
         }
