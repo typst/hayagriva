@@ -199,7 +199,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         //
         // If we have set the disambiguation state for an item, we need to set
         // the same state for all entries referencing that item.
-        for _ in 0..5 {
+        for _ in 0..6 {
             let ambiguous = find_ambiguous_sets(&res);
             if ambiguous.is_empty() {
                 break;
@@ -269,9 +269,12 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                             cite.request
                                 .style
                                 .citation
-                                .collapse
-                                .is_some()
-                                .then_some(Citation::DEFAULT_CITE_GROUP_DELIMITER)
+                                .layout
+                                .delimiter
+                                .as_deref()
+                                .filter(|_| {
+                                    cite.request.style.citation.collapse.is_some()
+                                })
                         },
                     )
                 else {
@@ -939,6 +942,7 @@ enum CollapseVerdict {
     /// Only the first date should be printed.
     First,
     /// Only the year suffix should be printed.
+    #[allow(dead_code)]
     YearSuffix,
 }
 
@@ -1078,7 +1082,7 @@ impl<'a> StyleContext<'a> {
                 None,
             ),
             style: self,
-            writing: WritingContext::new(),
+            writing: WritingContext::new(self.csl.settings.options.clone()),
         }
     }
 
@@ -1099,7 +1103,7 @@ impl<'a> StyleContext<'a> {
                 None,
             ),
             style: self,
-            writing: WritingContext::new(),
+            writing: WritingContext::new(self.csl.settings.options.clone()),
         }
     }
 
@@ -1614,8 +1618,11 @@ impl Default for WritingContext {
 }
 
 impl WritingContext {
-    fn new() -> Self {
-        Self::default()
+    fn new(options: InheritableNameOptions) -> Self {
+        Self {
+            name_options: NonEmptyStack::new(options),
+            ..Self::default()
+        }
     }
 
     /// Retrieve the current formatting.
@@ -1710,7 +1717,9 @@ impl WritingContext {
             Some(ElemChild::Text(_)) => false,
             Some(ElemChild::Elem(e)) => e.has_content(),
             Some(
-                ElemChild::Markup(_) | ElemChild::Link { .. } | ElemChild::Transparent(_),
+                ElemChild::Markup(_)
+                | ElemChild::Link { .. }
+                | ElemChild::Transparent { .. },
             ) => true,
             None => false,
         };
@@ -2337,8 +2346,13 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Push a transparent element child into the buffer.
     pub fn push_transparent(&mut self, idx: usize) {
+        let format = *self.writing.formatting();
         self.writing.save_to_block();
-        self.writing.elem_stack.last_mut().0.push(ElemChild::Transparent(idx))
+        self.writing
+            .elem_stack
+            .last_mut()
+            .0
+            .push(ElemChild::Transparent { cite_idx: idx, format })
     }
 
     /// Folds all remaining elements into the first element and returns it.

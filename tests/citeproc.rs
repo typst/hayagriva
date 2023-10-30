@@ -354,7 +354,7 @@ fn test_parse_tests() {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "name_CiteGroupDelimiterWithYearSuffixCollapse.txt";
+    let name = "nameattr_DelimiterPrecedesLastOnCitationInCitation.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");

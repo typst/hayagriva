@@ -28,7 +28,7 @@ impl Elem {
                 ElemChild::Elem(e) => e.str_len(),
                 ElemChild::Markup(m) => m.len(),
                 ElemChild::Link { text, .. } => text.text.len(),
-                ElemChild::Transparent(_) => 0,
+                ElemChild::Transparent { .. } => 0,
             })
             .sum()
     }
@@ -181,24 +181,6 @@ impl ElemChildren {
         None
     }
 
-    /// Remove the first child with a matching meta by DFS.
-    pub(super) fn remove_meta(&mut self, meta: ElemMeta) -> bool {
-        for i in 0..self.0.len() {
-            if let ElemChild::Elem(e) = &mut self.0[i] {
-                if e.meta == Some(meta) {
-                    self.0.remove(i);
-                    return true;
-                }
-
-                if e.children.remove_meta(meta) {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
     /// Remove the first child with any meta by DFS.
     pub(super) fn remove_any_meta(&mut self) -> Option<ElemChild> {
         for i in 0..self.0.len() {
@@ -236,16 +218,6 @@ impl ElemChildren {
     /// Get a reference on the last text leaf.
     pub(super) fn last_text(&self) -> Option<&Formatted> {
         last_text_child(&self.0)
-    }
-
-    /// Get the last character of the last text leaf.
-    pub(super) fn last_char(&self) -> Option<char> {
-        self.last_text().and_then(|t| t.text.chars().last())
-    }
-
-    /// Remove the last character of the last text leaf.
-    pub(super) fn pop_char(&mut self) -> Option<char> {
-        self.last_text_mut().and_then(|t| t.text.pop())
     }
 }
 
@@ -291,9 +263,14 @@ pub enum ElemChild {
         /// The URL.
         url: String,
     },
-    /// A transparent element that must be replaced by the consumer. It contains
-    /// the original index of the cite request.
-    Transparent(usize),
+    /// A transparent element that must be replaced by the consumer.
+    Transparent {
+        /// The original index of the cite request so the consumer can look up
+        /// the right citation item.
+        cite_idx: usize,
+        /// The formatting of the element.
+        format: Formatting,
+    },
 }
 
 impl ElemChild {
@@ -326,7 +303,7 @@ impl ElemChild {
                 w.write_str(&text.text)?;
                 text.formatting.write_end(w, format)
             }
-            ElemChild::Transparent(_) => Ok(()),
+            ElemChild::Transparent { .. } => Ok(()),
         }
     }
 
@@ -336,7 +313,7 @@ impl ElemChild {
             ElemChild::Elem(e) => e.str_len(),
             ElemChild::Markup(m) => m.len(),
             ElemChild::Link { text, .. } => text.text.len(),
-            ElemChild::Transparent(_) => 0,
+            ElemChild::Transparent { .. } => 0,
         }
     }
 
@@ -347,7 +324,7 @@ impl ElemChild {
             }
             ElemChild::Elem(e) => e.has_content(),
             ElemChild::Link { .. } => true,
-            ElemChild::Transparent(_) => true,
+            ElemChild::Transparent { .. } => true,
         }
     }
 
@@ -358,7 +335,7 @@ impl ElemChild {
             }
             ElemChild::Elem(e) => e.is_empty(),
             ElemChild::Link { text, .. } => text.text.is_empty(),
-            ElemChild::Transparent(_) => false,
+            ElemChild::Transparent { .. } => false,
         }
     }
 }
