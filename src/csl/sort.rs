@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use citationberg::taxonomy::Variable;
 use citationberg::{
-    DemoteNonDroppingParticle, InheritableNameOptions, LongShortForm, Sort,
+    DemoteNonDroppingParticle, InheritableNameOptions, LocaleCode, LongShortForm, Sort,
     SortDirection, SortKey,
 };
 
@@ -21,6 +21,7 @@ impl<'a> StyleContext<'a> {
         b: &CitationItem<T>,
         b_idx: usize,
         key: &SortKey,
+        term_locale: Option<&LocaleCode>,
     ) -> Ordering {
         let ordering = match key {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
@@ -89,7 +90,8 @@ impl<'a> StyleContext<'a> {
                 ..
             } => {
                 let render = |entry: &CitationItem<T>, idx: usize| {
-                    let mut ctx = self.sorting_ctx(entry, idx, entry.locale.as_ref());
+                    let mut ctx =
+                        self.sorting_ctx(entry, idx, entry.locale.as_ref(), term_locale);
                     ctx.writing.name_options.push(InheritableNameOptions {
                         et_al_min: *names_min,
                         et_al_subsequent_min: *names_min,
@@ -125,12 +127,17 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Sorts the given citation items by the style's sort keys.
-    pub fn sort<T: EntryLike>(&self, cites: &mut [CitationItem<T>], sort: Option<&Sort>) {
+    pub fn sort<T: EntryLike>(
+        &self,
+        cites: &mut [CitationItem<T>],
+        sort: Option<&Sort>,
+        term_locale: Option<&LocaleCode>,
+    ) {
         if let Some(sort) = sort {
             cites.sort_by(|a, b| {
                 let mut ordering = Ordering::Equal;
                 for key in &sort.keys {
-                    ordering = self.cmp_entries(a, 0, b, 0, key);
+                    ordering = self.cmp_entries(a, 0, b, 0, key, term_locale);
                     if ordering != Ordering::Equal {
                         break;
                     }

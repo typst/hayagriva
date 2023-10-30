@@ -83,7 +83,7 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
         for (i, item) in req.items.iter_mut().enumerate() {
             item.initial_idx = i;
         }
-        style.sort(&mut req.items, style.csl.citation.sort.as_ref());
+        style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
         self.citations.push(req);
     }
 }
@@ -109,6 +109,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
         bib_style.sort(
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
+            request.locale.as_ref(),
         );
         let citation_number = |item: &T| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
@@ -165,6 +166,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                 let ctx = style.do_citation(
                     *entry,
                     cite_props.clone(),
+                    item.locale.as_ref(),
                     citation.locale.as_ref(),
                     item.kind,
                 );
@@ -246,6 +248,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                             item.entry,
                             item.cite_props.clone(),
                             item.locale.as_ref(),
+                            cite.request.locale.as_ref(),
                             item.kind,
                         );
                     }
@@ -370,6 +373,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                     item.entry,
                     item.cite_props.clone(),
                     item.locale.as_ref(),
+                    cite.request.locale.as_ref(),
                     item.kind,
                 );
             }
@@ -479,6 +483,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq> BibliographyDriver<'a, T> {
                                     },
                                 },
                                 cited_item.locale.as_ref(),
+                                request.locale.as_ref(),
                                 None,
                             )
                             .unwrap(),
@@ -520,12 +525,13 @@ pub fn standalone_citation<T: EntryLike>(
     mut req: CitationRequest<'_, T>,
 ) -> ElemChildren {
     let style = req.style();
-    style.sort(&mut req.items, style.csl.citation.sort.as_ref());
+    style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
     let mut res = vec![];
     for item in req.items {
         res.push(style.citation(
             item.entry,
             CiteProperties::for_sorting(item.locator, 0),
+            item.locale.as_ref(),
             req.locale.as_ref(),
             item.kind,
         ));
@@ -904,6 +910,8 @@ struct InstanceContext<'a, T: EntryLike> {
     pub sorting: bool,
     /// The locale for the content in the entry.
     pub locale: Option<&'a LocaleCode>,
+    /// The locale for the terms.
+    pub term_locale: Option<&'a LocaleCode>,
     /// Whether this citation should respect a special form.
     pub kind: Option<SpecialForm>,
 }
@@ -914,9 +922,17 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
         cite_props: CiteProperties<'a>,
         sorting: bool,
         locale: Option<&'a LocaleCode>,
+        term_locale: Option<&'a LocaleCode>,
         kind: Option<SpecialForm>,
     ) -> Self {
-        Self { entry, cite_props, sorting, locale, kind }
+        Self {
+            entry,
+            cite_props,
+            sorting,
+            locale,
+            term_locale,
+            kind,
+        }
     }
 
     fn sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
@@ -924,6 +940,7 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
             item.entry,
             CiteProperties::for_sorting(item.locator, idx),
             true,
+            None,
             None,
             None,
         )
@@ -956,10 +973,18 @@ impl<'a> StyleContext<'a> {
         entry: &'b T,
         cite_props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
+        term_locale: Option<&'b LocaleCode>,
         kind: Option<SpecialForm>,
     ) -> Context<'b, T> {
         Context {
-            instance: InstanceContext::new(entry, cite_props, false, locale, kind),
+            instance: InstanceContext::new(
+                entry,
+                cite_props,
+                false,
+                locale,
+                term_locale,
+                kind,
+            ),
             style: self,
             writing: WritingContext::new(),
         }
@@ -970,6 +995,7 @@ impl<'a> StyleContext<'a> {
         item: &'b CitationItem<'b, T>,
         idx: usize,
         locale: Option<&'b LocaleCode>,
+        term_locale: Option<&'b LocaleCode>,
     ) -> Context<'b, T> {
         Context {
             instance: InstanceContext::new(
@@ -977,6 +1003,7 @@ impl<'a> StyleContext<'a> {
                 CiteProperties::for_sorting(item.locator, idx),
                 true,
                 locale,
+                term_locale,
                 None,
             ),
             style: self,
@@ -990,9 +1017,10 @@ impl<'a> StyleContext<'a> {
         entry: &T,
         props: CiteProperties<'a>,
         locale: Option<&LocaleCode>,
+        term_locale: Option<&LocaleCode>,
         kind: Option<SpecialForm>,
     ) -> ElemChildren {
-        let ctx = self.do_citation(entry, props, locale, kind);
+        let ctx = self.do_citation(entry, props, locale, term_locale, kind);
         ctx.flush()
     }
 
@@ -1002,9 +1030,10 @@ impl<'a> StyleContext<'a> {
         entry: &'b T,
         props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
+        term_locale: Option<&'b LocaleCode>,
         kind: Option<SpecialForm>,
     ) -> Context<'b, T> {
-        let mut ctx = self.ctx(entry, props, locale, kind);
+        let mut ctx = self.ctx(entry, props, locale, term_locale, kind);
         ctx.writing.push_name_options(&self.csl.citation.name_options);
         self.csl.citation.layout.render(&mut ctx);
         ctx
@@ -1016,9 +1045,10 @@ impl<'a> StyleContext<'a> {
         entry: &T,
         props: CiteProperties,
         locale: Option<&LocaleCode>,
+        term_locale: Option<&LocaleCode>,
         kind: Option<SpecialForm>,
     ) -> Option<ElemChildren> {
-        let mut ctx = self.ctx(entry, props, locale, kind);
+        let mut ctx = self.ctx(entry, props, locale, term_locale, kind);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
         self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
@@ -2132,16 +2162,17 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Set the case of the next text.
     fn push_case(&mut self, case: Option<TextCase>) -> CaseIdx {
-        if self
-            .instance
-            .entry
-            .is_english()
-            .or_else(|| self.instance.locale.map(LocaleCode::is_english))
-            .or_else(|| {
-                self.style.csl.default_locale.as_ref().map(LocaleCode::is_english)
-            })
-            .unwrap_or(true)
-            || case.map_or(true, |c| c.is_language_independent())
+        if case.map_or(true, |c| c.is_language_independent())
+            || self
+                .instance
+                .entry
+                .is_english()
+                .or_else(|| self.instance.locale.map(LocaleCode::is_english))
+                .or_else(|| self.instance.term_locale.map(LocaleCode::is_english))
+                .or_else(|| {
+                    self.style.csl.default_locale.as_ref().map(LocaleCode::is_english)
+                })
+                .unwrap_or(true)
         {
             self.writing.push_case(case)
         } else {

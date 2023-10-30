@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 mod common;
 use citationberg::taxonomy::Locator;
-use citationberg::{Locale, Style, XmlSerdeError};
+use citationberg::{Locale, LocaleCode, Style, XmlSerdeError};
 use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
 
 use csl_json_valley::DateStr;
@@ -563,4 +563,50 @@ fn author_only() {
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
     assert_eq!(buf, "(Doe)");
+}
+
+#[test]
+fn case_folding() {
+    let style = style_by_name("chicago-author-date").unwrap();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let item: csl_json_valley::Item = serde_json::from_str(
+        r#"{
+        "id": "ITEM-1",
+        "container-title": "my lowercase container title",
+        "type": "paper-conference"
+    }"#,
+    )
+    .unwrap();
+
+    let mut driver: BibliographyDriver<'_, csl_json_valley::Item> =
+        BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(
+            &item,
+            None,
+            None,
+            false,
+            Some(hayagriva::SpecialForm::AuthorOnly),
+        )],
+        &style,
+        Some(LocaleCode("de-DE".to_string())),
+        &[],
+        Some(1),
+        None,
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(
+        &style,
+        Some(LocaleCode("de-DE".to_string())),
+        &[],
+    ));
+    let mut buf = String::new();
+    rendered.bibliography.unwrap().items[0]
+        .content
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, ". my lowercase container title");
 }
