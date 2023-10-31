@@ -3,10 +3,9 @@
 /// Construct a [`Selector`].
 ///
 /// Selectors can be used to filter bibliographies or to differentiate between
-/// [`entries`](Entry) when implementing a custom [`CitationStyle`][CitStyle] or
-/// [`BibliographyStyle`][BibStyle]. An [introduction to selectors][intro] is
-/// available in the Git repository. This macro accepts expressions very similar
-/// to the user-facing macros as parsed by [`Selector::parse`].
+/// [`entries`](Entry) during processing. An [introduction to selectors][intro]
+/// is available in the Git repository. This macro accepts expressions very
+/// similar to the user-facing macros as parsed by [`Selector::parse`].
 ///
 /// There are three main differences:
 /// - Binding names and attributes have to be strings and thus wrapped in double
@@ -137,7 +136,7 @@ impl Selector {
     ///
     /// This can panic if there are resolving entries which do not bind the
     /// argument.
-    pub(crate) fn bound<'s>(&self, entry: &'s Entry, bound: &str) -> Option<&'s Entry> {
+    pub fn bound<'s>(&self, entry: &'s Entry, bound: &str) -> Option<&'s Entry> {
         self.apply(entry).map(|mut hm| hm.remove(bound).unwrap())
     }
 
@@ -169,7 +168,7 @@ impl Selector {
             }),
 
             Self::Attr(expr, attributes) => expr.apply(entry).and_then(|bound| {
-                if attributes.iter().all(|arg| entry.get(arg.as_ref()).is_some()) {
+                if attributes.iter().all(|arg| entry.has(arg.as_ref())) {
                     Some(bound)
                 } else {
                     None
@@ -189,7 +188,7 @@ impl Selector {
             Self::Multi(_) => None,
 
             Self::Ancestrage(lhs, rhs) => lhs.apply(entry).and_then(|mut bound| {
-                let parents = entry.parents().unwrap_or_default();
+                let parents = &entry.parents;
                 if let Some((other, _)) = rhs.apply_any(parents) {
                     bound.extend(other);
                     Some(bound)
@@ -238,9 +237,10 @@ impl Selector {
             Self::Attr(expr, attributes) => {
                 expr.apply_any(entries).and_then(|(bound, es)| {
                     if !es.is_empty() {
-                        if es.iter().any(|e| {
-                            attributes.iter().all(|arg| e.get(arg.as_ref()).is_some())
-                        }) {
+                        if es
+                            .iter()
+                            .any(|e| attributes.iter().all(|arg| e.has(arg.as_ref())))
+                        {
                             Some((bound, es))
                         } else {
                             None

@@ -169,20 +169,19 @@ impl<'s> Parser<'s> {
     /// The position in the string at which the last token ends and next token
     /// will start.
     fn index(&self) -> usize {
-        self.tokens.index
+        self.tokens.s.cursor()
     }
 
     /// Jump to a position in the source string.
     fn jump(&mut self, index: usize) {
-        self.tokens.index = index;
+        self.tokens.s.jump(index);
     }
 }
 
 /// An iterator over the tokens of a string of source code.
 #[derive(Debug, Clone)]
 struct Tokens<'s> {
-    src: &'s str,
-    index: usize,
+    s: unscanny::Scanner<'s>,
 }
 
 /// A minimal semantic entity of source code.
@@ -222,14 +221,7 @@ enum Token<'s> {
 impl<'s> Tokens<'s> {
     /// Create a new token iterator with the given mode.
     fn new(src: &'s str) -> Self {
-        Self { src, index: 0 }
-    }
-
-    /// Eat the next char.
-    fn eat(&mut self) -> Option<char> {
-        let next = self.src[self.index..].chars().next()?;
-        self.index += next.len_utf8();
-        Some(next)
+        Self { s: unscanny::Scanner::new(src) }
     }
 }
 
@@ -238,12 +230,12 @@ impl<'s> Iterator for Tokens<'s> {
 
     /// Parse the next token in the source code.
     fn next(&mut self) -> Option<Self::Item> {
-        let mut start = self.index;
-        let mut c = self.eat()?;
+        let mut start = self.s.cursor();
+        let mut c = self.s.eat()?;
 
         while c.is_whitespace() {
-            start = self.index;
-            c = self.eat()?;
+            start = self.s.cursor();
+            c = self.s.eat()?;
         }
 
         Some(match c {
@@ -266,15 +258,15 @@ impl<'s> Iterator for Tokens<'s> {
 
             // Identifiers.
             c if is_id_start(c) => {
-                let mut end = self.index;
-                while let Some(next) = self.eat() {
+                let mut end = self.s.cursor();
+                while let Some(next) = self.s.eat() {
                     if !is_id_continue(next) {
-                        self.index = end;
+                        self.s.jump(end);
                         break;
                     }
-                    end = self.index;
+                    end = self.s.cursor();
                 }
-                Token::Ident(&self.src[start..end])
+                Token::Ident(&self.s.string()[start..end])
             }
 
             _ => Token::Invalid,

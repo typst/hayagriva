@@ -2,7 +2,7 @@
 name = "hayagriva"
 version = "0.3.2"
 authors = ["Martin Haug <mhaug@live.de>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Work with references: Literature database management, storage, and citation formatting"
 repository = "https://github.com/typst/hayagriva"
@@ -11,25 +11,37 @@ categories = ["template-engine", "value-formatting", "command-line-utilities"]
 keywords = ["bibliography", "citation", "reference", "bibtex", "literature"]
 
 [features]
-default = ["biblatex"]
-cli = ["clap"]
+default = ["biblatex", "archive"]
+cli = ["clap", "strum"]
+archive = ["rkyv", "ciborium"]
+csl-json = ["citationberg/json"]
 
 [dependencies]
-biblatex = { version = "0.8", optional = true }
-clap = { version = "3.1", optional = true, features = ["cargo"] }
-chrono = { version = "0.4", default-features = false }
-isolang = "2.1"
-lazy_static = "1.4.0"
-linked-hash-map = "0.5.3"
-paste = "1.0.0"
-regex = { version = "1.4", default-features = false, features = ["std", "unicode-perl"] }
-strum = { version = "0.24", features = ["derive"] }
-thiserror = "1.0.20"
-unic-langid = "0.9.0"
+citationberg = "0.1"
+indexmap = { version = "2.0.2", features = ["serde"] }
+numerals = "0.1.4"
+paste = "1.0.14"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9.25"
+thiserror = "1.0.48"
+unic-langid = { version = "0.9.0", features = ["serde"] }
 unicode-segmentation = "1.6.0"
-url = "2.1.1"
-yaml-rust = "0.4.4"
+unscanny = "0.1.0"
+url = { version =  "2.4", features = ["serde"] }
+biblatex = { version = "0.8.1", optional = true }
+ciborium = { version = "0.2.1", optional = true }
+clap = { version = "3.1", optional = true, features = ["cargo"] }
+rkyv = { version = "0.7.42", optional = true }
+strum = { version = "0.24", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1"
 
 [[bin]]
 name = "hayagriva"
 required-features = ["cli"]
+
+[[test]]
+name = "citeproc"
+path = "tests/citeproc.rs"
+required-features = ["csl-json"]

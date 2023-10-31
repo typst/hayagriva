@@ -4,11 +4,6 @@
 [![Current crates.io release](https://img.shields.io/crates/v/hayagriva)](https://crates.io/crates/hayagriva)
 [![Documentation](https://img.shields.io/badge/docs.rs-hayagriva-66c2a5?labelColor=555555&logoColor=white&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxwYXRoIGZpbGw9IiNmNWY1ZjUiIGQ9Ik00ODguNiAyNTAuMkwzOTIgMjE0VjEwNS41YzAtMTUtOS4zLTI4LjQtMjMuNC0zMy43bC0xMDAtMzcuNWMtOC4xLTMuMS0xNy4xLTMuMS0yNS4zIDBsLTEwMCAzNy41Yy0xNC4xIDUuMy0yMy40IDE4LjctMjMuNCAzMy43VjIxNGwtOTYuNiAzNi4yQzkuMyAyNTUuNSAwIDI2OC45IDAgMjgzLjlWMzk0YzAgMTMuNiA3LjcgMjYuMSAxOS45IDMyLjJsMTAwIDUwYzEwLjEgNS4xIDIyLjEgNS4xIDMyLjIgMGwxMDMuOS01MiAxMDMuOSA1MmMxMC4xIDUuMSAyMi4xIDUuMSAzMi4yIDBsMTAwLTUwYzEyLjItNi4xIDE5LjktMTguNiAxOS45LTMyLjJWMjgzLjljMC0xNS05LjMtMjguNC0yMy40LTMzLjd6TTM1OCAyMTQuOGwtODUgMzEuOXYtNjguMmw4NS0zN3Y3My4zek0xNTQgMTA0LjFsMTAyLTM4LjIgMTAyIDM4LjJ2LjZsLTEwMiA0MS40LTEwMi00MS40di0uNnptODQgMjkxLjFsLTg1IDQyLjV2LTc5LjFsODUtMzguOHY3NS40em0wLTExMmwtMTAyIDQxLjQtMTAyLTQxLjR2LS42bDEwMi0zOC4yIDEwMiAzOC4ydi42em0yNDAgMTEybC04NSA0Mi41di03OS4xbDg1LTM4Ljh2NzUuNHptMC0xMTJsLTEwMiA0MS40LTEwMi00MS40di0uNmwxMDItMzguMiAxMDIgMzguMnYuNnoiPjwvcGF0aD48L3N2Zz4K)](https://docs.rs/hayagriva/)
 
-⚠️ **Note:** Hayagriva is currently being reworked to make use of
-   [CSL](https://citationstyles.org/), which will unlock a large library of
-   citation and bibliography styles without manual implementation work in
-   hayagriva. Please do not contribute new style implementations.
-
 Rusty bibliography management.
 
 Hayagriva is a tool that can help your or your apps deal with literature and
@@ -28,34 +23,14 @@ to install and use Hayagriva on your terminal.
 
 ## Supported styles
 
-- Institute of Electrical and Electronics Engineers (IEEE)
-    - References
-    - Numerical citations
-- Modern Language Association (MLA), 8th edition of the MLA Handbook
-    - "Works Cited" references
-- Chicago Manual of Style (CMoS), 17th edition
-    - Notes and Bibliography
-    - Author-Date references and citations
-- American Psychological Association (APA), 7th edition of the APA Publication Manual
-    - References
-- Other in-text citation styles
-    - Alphanumerical (e. g. "Rass97")
-    - Author Title
+Hayagriva supports all styles provided in the
+[official Citation Style Language repository](https://github.com/citation-style-language/styles),
+currently over 2,600.
 
-## Usage
-
-Add this to your `Cargo.toml`:
-```toml
-[dependencies]
-hayagriva = "0.3"
-```
-
-Below, there is an example of how to parse a YAML database and get a Modern
-Language Association-style citation.
+# Usage
 
 ```rust
 use hayagriva::io::from_yaml_str;
-use hayagriva::style::{Database, Mla};
 
 let yaml = r#"
 crazy-rich:
@@ -69,20 +44,46 @@ crazy-rich:
 
 // Parse a bibliography
 let bib = from_yaml_str(yaml).unwrap();
-assert_eq!(bib[0].date().unwrap().year, 2014);
+assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 
 // Format the reference
-let db = Database::from_entries(bib.iter());
-let mut mla = Mla::new();
-let reference = db.bibliography(&mut mla, None);
-assert_eq!(reference[0].display.value, "Kwan, Kevin. Crazy Rich Asians. Anchor Books, 2014.");
+use std::fs;
+use hayagriva::{
+    BibliographyDriver, BibliographyRequest, BufWriteFormat,
+    CitationItem, CitationRequest,
+};
+use hayagriva::citationberg::{LocaleFile, IndependentStyle};
+
+let en_locale = fs::read_to_string("tests/data/locales-en-US.xml").unwrap();
+let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
+
+let style = fs::read_to_string("tests/data/art-history.csl").unwrap();
+let style = IndependentStyle::from_xml(&style).unwrap();
+
+let mut driver = BibliographyDriver::new();
+
+for entry in bib.iter() {
+    let items = vec![CitationItem::with_entry(entry)];
+    driver.citation(CitationRequest::from_items(items, &style, &locales));
+}
+
+let result = driver.finish(BibliographyRequest {
+    style: &style,
+    locale: None,
+    locale_files: &locales,
+});
+
+for cite in result.citations {
+    println!("{}", cite.citation.to_string())
+}
 ```
 
-Formatting for in-text citations is available through implementors of the
-`hayagriva::style::CitationStyle` trait whereas bibliographies can be created by
-`hayagriva::style::BibliographyStyle`. Both traits are used through
-`style::Database` which provides methods to format its records as bibliographies
-and citations.
+To format entries, you need to wrap them in a `CitationRequest`. Each of these
+can reference multiple entries in their respective `CitationItem`s.
+Use these with a `BibliographyDriver` to obtain formatted citations and bibliographies.
+
+You can either supply your own CSL files or choose from about 100 bundled
+citation styles using the `archive` feature.
 
 If the default features are enabled, Hayagriva supports BibTeX and BibLaTeX
 bibliographies. You can use `io::from_biblatex_str` to parse such
@@ -137,7 +138,7 @@ quantized-vortex:
 
 let entries = from_yaml_str(yaml).unwrap();
 let journal = select!((Article["date"]) > ("journal":Periodical));
-assert!(journal.matches(&entries[0]));
+assert!(journal.matches(entries.nth(0).unwrap()));
 ```
 
 There are two ways to check if a selector matches an entry.
@@ -168,7 +169,8 @@ dependence:
     title: The program dependence graph and its use in optimization
     author: ["Ferrante, Jeanne", "Ottenstein, Karl J.", "Warren, Joe D."]
     date: 1987-07
-    doi: "10.1145/24039.24041"
+    serial-number:
+        doi: "10.1145/24039.24041"
     parent:
         type: Periodical
         title: ACM Transactions on Programming Languages and Systems
@@ -259,8 +261,9 @@ refactorings, features that were requested in the issues and greenlit by us, as
 well as the planned features listed below:
 
 - Implementing the YAML-to-BibLaTeX conversion
-- Work for non-English bibliographies
 - Documentation improvements
+- CSL bugfixes
+- CSL-M Support
 
 We wish to thank each and every prospective contributor for the effort you (plan
 to) invest in this project and for adopting it!
@@ -272,3 +275,9 @@ Hayagriva is licensed under a MIT / Apache 2.0 dual license.
 Users and consumers of the library may choose which of those licenses they want
 to apply whereas contributors have to accept that their code is in compliance
 and distributed under the terms of both of these licenses.
+
+Hayagriva includes CSL styles that are licensed as CC-BY-SA 3.0 Deed if the
+`archive` feature is enabled. The file `styles.cbor.rkyv` is a collection of
+these works and falls under this license. Retrieve attribution information by
+deserializing it using the `styles` function and reading the `StyleInfo`
+structs.

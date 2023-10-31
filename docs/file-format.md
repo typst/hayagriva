@@ -150,7 +150,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | title                                                     |
+| **Data type:**   | formattable string                                        |
 | **Description:** | title of the item                                         |
 | **Example:**     | `title: Rick Astley: How An Internet Joke Revived My Career` |
 
@@ -194,6 +194,14 @@ This section lists all possible fields and data types for them.
 | **Description:** | persons involved with the item that do not fit `author` or `editor` |
 | **Example:**     | <pre>affiliated:<br>    - role: Director<br>      names: Cameron, James<br>    - role: CastMember<br>      names: ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]<br></pre> |
 
+#### `call-number`
+
+|                  |                                                           |
+|------------------|-----------------------------------------------------------|
+| **Data type:**   | formattable string                                        |
+| **Description:** | The number of the item in a library, institution, or collection. Use with `archive`.|
+| **Example:**     | `call-number: "F16 D14"`                                  |
+
 #### `publisher`
 
 |                  |                                                           |
@@ -214,7 +222,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | string                                                    |
+| **Data type:**   | formattable string                                        |
 | **Description:** | Organization at/for which the item was produced           |
 | **Example:**     | `organization: Technische Universität Berlin`             |
 
@@ -222,7 +230,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | integer or string                                         |
+| **Data type:**   | numeric or string                                         |
 | **Description:** | For an item whose parent has multiple issues, indicates the position in the issue sequence. Also used to indicate the episode number for TV. |
 | **Example:**     | `issue: 5`                                                |
 
@@ -230,7 +238,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | integer or range of integers                              |
+| **Data type:**   | numeric or string                                         |
 | **Description:** | For an item whose parent has multiple volumes/parts/seasons ... of which this item is one |
 | **Example:**     | `volume: 2-3`                                             |
 
@@ -238,7 +246,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | integer                                                   |
+| **Data type:**   | numeric                                                   |
 | **Description:** | Total number of volumes/parts/seasons this item consists of |
 | **Example:**     | `volume-total: 12`                                        |
 
@@ -246,7 +254,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | integer or string                                         |
+| **Data type:**   | numeric or string                                         |
 | **Description:** | published version of an item                              |
 | **Example:**     | `edition: expanded and revised edition`                   |
 
@@ -254,7 +262,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | integer _(single page)_ or integer range                  |
+| **Data type:**   | numeric or string                                         |
 | **Description:** | the range of pages within the parent this item occupies   |
 | **Example:**     | `page-range: 812-847`                                     |
 
@@ -262,7 +270,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | integer                                                   |
+| **Data type:**   | numeric                                                   |
 | **Description:** | total number of pages the item has                        |
 | **Example:**     | `page-total: 1103`                                        |
 
@@ -302,25 +310,9 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | string                                                    |
-| **Description:** | any serial number or version describing the item that is not appropriate for the fields `doi`, `edition`, `isbn` or `issn` (may be assigned by the author of the item; especially useful for preprint archives) |
-| **Example:**     | `serial-number: 2003.13722`                               |
-
-#### `isbn`
-
-|                  |                                                           |
-|------------------|-----------------------------------------------------------|
-| **Data type:**   | string                                                    |
-| **Description:** | International Standard Book Number (ISBN), prefer ISBN-13 |
-| **Example:**     | `isbn: 978-0-20189683-1`                                  |
-
-#### `issn`
-
-|                  |                                                           |
-|------------------|-----------------------------------------------------------|
-| **Data type:**   | string                                                    |
-| **Description:** | International Standard Serial Number (ISSN)               |
-| **Example:**     | `issn: 0014-1704`                                         |
+| **Data type:**   | string or dictionary of strings                           |
+| **Description:** | Any serial number. If you have serial numbers of well-known schemes like  `doi`, you can put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn` `issn`, `pmid`, `pmcid`, and `arxiv` |
+| **Example:**     | `serial-number: 2003.13722` or <pre>serial-number:<br>    doi: "10.22541/au.148771883.35456290"<br>    arxiv: "1906.00356"</pre> |
 
 #### `language`
 
@@ -350,7 +342,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | string                                                    |
+| **Data type:**   | formattable string                                        |
 | **Description:** | additional description to be appended after reference list entry |
 | **Example:**     | `note: microfilm version`                                 |
 
@@ -378,8 +370,10 @@ Needs a keyword with one of the following values:
 - `newspaper`. The issue of a newspaper that was published on a given day.
 - `legislation`. Legal document or draft thereof that is, is to be, or was to be enacted into binding law (default parent: `anthology`).
 - `manuscript`. Written document that is submitted as a candidate for publication.
-- `tweet`. A post on a micro-blogging platform like Twitter (default parent: `tweet`).
+- `original`. The original container of the entry before it was re-published.
+- `post`. A post on a micro-blogging platform like Twitter (default parent: `post`).
 - `misc`. Items that do not match any of the other Entry type composites.
+- `performance`. A live artistic performance.
 - `periodical`. A publication that periodically publishes issues with unique content. This includes scientific journals and news magazines.
 - `proceedings`. The official published record of the events at a professional conference.
 - `book`. Long-form work published physically as a set of bound sheets.
@@ -397,15 +391,26 @@ The field is case insensitive. It defaults to `Misc` or the default parent if th
 
 #### Formattable String
 
-A formattable string is a string that may run through a sentence or title case transformer when used in a reference or citation. You can disable these transformations or provide your own title and sentence case versions of the string.
+A formattable string is a string that may run through a text case transformer when used in a reference or citation. You can disable these transformations on segments of the string or the whole string.
 
-The simplest scenario for a formattable string is to provide a string:
+The simplest scenario for a formattable string is to provide a string that can be case-folded:
 
 ```yaml
 publisher: UN World Food Programme
 ```
 
-To disable formatting altogether and instead preserve the casing as it appears in the source string, put the string in the `value` sub-field and specify another sub-field as `verbatim: true`:
+If you want to preserve a part of the string but want to go with the style's
+behavior otherwise, enclose the string in braces like below. You must wrap the
+whole string in quotes if you do this.
+
+```yaml
+publisher: "{imagiNary} Publishing"
+```
+
+
+To disable formatting altogether and instead preserve the casing as it appears
+in the source string, put the string in the `value` sub-field and specify
+another sub-field as `verbatim: true`:
 
 ```yaml
 publisher:
@@ -413,33 +418,19 @@ publisher:
     verbatim: true
 ```
 
-If you instead want to provide a custom sentence- or title-cased version of the string, you can write them in their own sub-fields (note that the sub-field value with the canonical name always has to be specified):
+Title and sentence case folding will always be deactivated if your item has set
+the `language` key to something other than English.
+
+You can also include mathematical markup evaluated by [Typst](https://typst.app) by
+wrapping it in dollars.
+
+Furthermore, every formattable string can include a short form that a citation
+style can choose to render over the longer form.
 
 ```yaml
-publisher:
-    value: imagiNary Publishing
-    title-case: Imaginary Publishing
-    sentence-case: imagiNary publishing
-```
-
-A `sentence-case` or `title-case` sub-field will take precedence over `verbatim`.
-
-#### Title
-
-A title is a formattable string that can have two additional sub-fields: `translation` (the translated name of the item) and `shorthand` (shortened name of the item used if a citation style requires it). Both of these fields are formattable strings themselves. Just like a formattable string, a title can be just a string.
-
-```yaml
-title: The Nutcracker
-```
-
-Example with translation and shorthand:
-
-```yaml
-title:
-    value: Щелкунчик
-    verbatim: true
-    translation: The Nutcracker
-    shorthand: Nutcracker
+journal:
+    value: International Proceedings of Customs
+    short: Int. Proc. Customs
 ```
 
 #### Person
@@ -523,13 +514,15 @@ time-range: "03:35:21-03:58:46"
 
 Strings are sequences of characters as a field value. In most cases you can write your string after the colon, but if it contains a special character (`:`, `{`, `}`, `[`, `]`, `,`, `&`, `*`, `#`, `?`, `|`, `-`, `<`, `>`, `=`, `!`, `%`, `@`, `\`) it should be wrapped with double-quotes. If your string contains double-quotes, you can write those as this escape sequence: `\"`. If you instead wrap your string in single quotes, most YAML escape sequences such as `\n` for a line break will be ignored.
 
-#### Integer
+#### Numeric
 
-Integers are whole numbers that can be negative, e. g. `53789` or `-3`.
+Numeric variables are one or more numbers that are delimited by commas,
+ampersands, and hyphens. Numeric variables can express a single number or a
+range and contain only integers, but may contain negative numbers. Numeric variables can have a non-numeric prefix and suffix.
 
-#### Integer range
-
-Integer ranges are two integers within a string, separated by a hyphen and optionally spaces (`6 - 18`). Both integers must be positive.
+```yaml
+page-range: S10-15
+```
 
 #### Unicode Language Identifier
 
