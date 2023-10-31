@@ -26,8 +26,7 @@ to install and use Hayagriva on your terminal.
 
 Hayagriva supports all styles provided in the
 [official Citation Style Language repository](https://github.com/citation-style-language/styles),
-currently over 2,600. You must provide your own style file, which can be
-obtained there.
+currently over 2,600.
 
 # Usage
 
@@ -52,13 +51,14 @@ assert_eq!(bib.get("crazy-rich").unwrap().date().unwrap().year, 2014);
 use std::fs;
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, BufWriteFormat,
-    CitationItem, CitationRequest, LocaleFile, IndependentStyle
+    CitationItem, CitationRequest,
 };
+use hayagriva::citationberg::{LocaleFile, IndependentStyle};
 
-let en_locale = fs::read_to_string("tests/locales-en-US.xml").unwrap();
+let en_locale = fs::read_to_string("tests/data/locales-en-US.xml").unwrap();
 let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
 
-let style = fs::read_to_string("tests/art-history.csl").unwrap();
+let style = fs::read_to_string("tests/data/art-history.csl").unwrap();
 let style = IndependentStyle::from_xml(&style).unwrap();
 
 let mut driver = BibliographyDriver::new();
@@ -75,13 +75,16 @@ let result = driver.finish(BibliographyRequest {
 });
 
 for cite in result.citations {
-    println!("{}", cite.citation.to_string(BufWriteFormat::Plain))
+    println!("{}", cite.citation.to_string())
 }
 ```
 
 To format entries, you need to wrap them in a `CitationRequest`. Each of these
 can reference multiple entries in their respective `CitationItem`s.
 Use these with a `BibliographyDriver` to obtain formatted citations and bibliographies.
+
+You can either supply your own CSL files or choose from about 100 bundled
+citation styles using the `archive` feature.
 
 If the default features are enabled, Hayagriva supports BibTeX and BibLaTeX
 bibliographies. You can use `io::from_biblatex_str` to parse such
@@ -167,7 +170,8 @@ dependence:
     title: The program dependence graph and its use in optimization
     author: ["Ferrante, Jeanne", "Ottenstein, Karl J.", "Warren, Joe D."]
     date: 1987-07
-    doi: "10.1145/24039.24041"
+    serial-number:
+        doi: "10.1145/24039.24041"
     parent:
         type: Periodical
         title: ACM Transactions on Programming Languages and Systems
@@ -257,12 +261,10 @@ tab. We would also be very happy to accept PRs for bug fixes, minor
 refactorings, features that were requested in the issues and greenlit by us, as
 well as the planned features listed below:
 
-- More citation and reference styles (especially styles used in the 'hard'
-  sciences would be incredibly appreciated)
 - Implementing the YAML-to-BibLaTeX conversion
-- Improvements to the sentence and title formatter
-- Work for non-English bibliographies
 - Documentation improvements
+- CSL bugfixes
+- CSL-M Support
 
 We wish to thank each and every prospective contributor for the effort you (plan
 to) invest in this project and for adopting it!
@@ -275,4 +277,8 @@ Users and consumers of the library may choose which of those licenses they want
 to apply whereas contributors have to accept that their code is in compliance
 and distributed under the terms of both of these licenses.
 
-Hayagriva includes CSL styles that are licensed as CC-BY-SA 3.0 International if the `rkyv` feature is enabled.
+Hayagriva includes CSL styles that are licensed as CC-BY-SA 3.0 Deed if the
+`archive` feature is enabled. The file `styles.cbor.rkyv` is a collection of
+these works and falls under this license. Retrieve attribution information by
+deserializing it using the `styles` function and reading the `StyleInfo`
+structs.
