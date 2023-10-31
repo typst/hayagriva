@@ -32,7 +32,7 @@ docs for examples.
   entries within.
 - The `Database` struct has been replaced by the easier to handle
   `BibliographyDriver`.
-- We switched from `yaml_rust` to `serde_yaml`. The `Entry` now implement's
+- We switched from `yaml_rust` to `serde_yaml`. The `Entry` now implements
   `serde`'s `Serialize` and `Deserialize` traits. Hence, the `from_yaml` and
   `to_yaml` functions have been deleted.
 - Brackets are no longer individually overridable. Instead, use the new
