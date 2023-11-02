@@ -741,6 +741,12 @@ impl Entry {
                 EntryType::Reference,
                 EntryType::Web,
             ]),
+            EntryType::Anthos => retrieve_container(&[
+                EntryType::Book,
+                EntryType::Anthology,
+                EntryType::Reference,
+                EntryType::Report,
+            ]),
             EntryType::Chapter => retrieve_container(&[
                 EntryType::Book,
                 EntryType::Anthology,
