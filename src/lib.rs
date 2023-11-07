@@ -735,11 +735,19 @@ impl Entry {
         match &self.entry_type {
             EntryType::Article => retrieve_container(&[
                 EntryType::Book,
+                EntryType::Conference,
                 EntryType::Periodical,
                 EntryType::Newspaper,
                 EntryType::Blog,
+                EntryType::Proceedings,
                 EntryType::Reference,
                 EntryType::Web,
+            ]),
+            EntryType::Anthos => retrieve_container(&[
+                EntryType::Book,
+                EntryType::Anthology,
+                EntryType::Reference,
+                EntryType::Report,
             ]),
             EntryType::Chapter => retrieve_container(&[
                 EntryType::Book,
