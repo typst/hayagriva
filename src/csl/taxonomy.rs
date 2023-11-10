@@ -272,7 +272,7 @@ impl EntryLike for Entry {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::EventPlace => entry
-                .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc))), "p")
+                .bound_select(&select!(* > ("p":(Exhibition | Conference | Misc | Proceedings))), "p")
                 .and_then(Entry::location)
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
@@ -300,7 +300,7 @@ impl EntryLike for Entry {
                 .map(Cow::Borrowed),
             StandardVariable::OriginalPublisherPlace => entry
                 .get_original()
-                .and_then(|e| e.publisher().and_then(|_| e.location()))
+                .and_then(|e| e.publisher_place())
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::OriginalTitle => entry
@@ -320,8 +320,7 @@ impl EntryLike for Entry {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::PublisherPlace => entry
-                .map(|e| if e.publisher().is_some() { Some(e) } else { None })
-                .and_then(|e| e.location())
+                .map(|e| e.publisher_place())
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::References => None,
