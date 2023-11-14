@@ -416,16 +416,16 @@ const OVERRIDES: [Override; 19] = [
     Override::alias("bmj", "british-medical-journal", &["bmj"]),
     Override::first(
         "china-national-standard-gb-t-7714-2015-author-date",
-        "gb-7114-2015-author-date",
+        "gb-7714-2015-author-date",
     ),
     Override::first("chicago-fullnote-bibliography", "chicago-fullnotes"),
     Override::first("chicago-note-bibliography", "chicago-notes"),
-    Override::first("china-national-standard-gb-t-7714-2015-note", "gb-7114-2015-note"),
+    Override::first("china-national-standard-gb-t-7714-2015-note", "gb-7714-2015-note"),
     Override::first(
         "china-national-standard-gb-t-7714-2015-numeric",
-        "gb-7114-2015-numeric",
+        "gb-7714-2015-numeric",
     ),
-    Override::first("chinese-gb7714-2005-numeric", "gb-7114-2005-numeric"),
+    Override::first("chinese-gb7714-2005-numeric", "gb-7714-2005-numeric"),
     Override::first(
         "deutsche-gesellschaft-fur-psychologie",
         "deutsche-gesellschaft-für-psychologie",
