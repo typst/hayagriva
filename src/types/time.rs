@@ -570,7 +570,7 @@ where
         return None;
     }
 
-    let num = num.parse::<i32>().unwrap() * if positive { 1 } else { -1 };
+    let num = num.parse::<i32>().ok()? * if positive { 1 } else { -1 };
     Some(num)
 }
 
@@ -586,7 +586,7 @@ where
         return None;
     }
 
-    let num = num.parse::<T>().unwrap();
+    let num = num.parse::<T>().ok()?;
     Some(num)
 }
 
@@ -620,14 +620,14 @@ fn parse_day(s: &mut Scanner) -> Result<u8, DateError> {
 }
 
 fn parse_month_with_year(s: &mut Scanner) -> Result<(i32, u8), DateError> {
-    let year = parse_year(s).unwrap();
+    let year = parse_year(s)?;
     s.eat_whitespace();
 
     if !s.eat_if('-') {
         return Err(DateError::UnknownFormat);
     }
 
-    let month = parse_month(s).unwrap();
+    let month = parse_month(s)?;
 
     s.eat_whitespace();
     if !s.done() {
