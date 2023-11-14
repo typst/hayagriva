@@ -391,7 +391,7 @@ impl FromStr for ChunkedString {
         while let Some(c) = s.eat() {
             if c == '\\' && s.peek().is_some_and(is_chunk_control) {
                 chunks.push_char(s.eat().unwrap(), kind);
-                break;
+                continue;
             }
 
             match c {
@@ -547,15 +547,31 @@ impl fmt::Display for StringChunk {
 impl StringChunk {
     /// Writes the chunk as a parenthesized string.
     fn fmt_serialized(&self, buf: &mut impl fmt::Write) -> fmt::Result {
+        fn write_escaped(val: &StringChunk, buf: &mut impl fmt::Write) -> fmt::Result {
+            for char in val.value.chars() {
+                if is_chunk_control(char) {
+                    buf.write_char('\\')?;
+                }
+
+                buf.write_char(char)?;
+            }
+
+            Ok(())
+        }
+
         match self.kind {
             ChunkKind::Normal => {
-                write!(buf, "{}", self.value)?;
+                write_escaped(self, buf)?;
             }
             ChunkKind::Verbatim => {
-                write!(buf, "{{{}}}", self.value)?;
+                buf.write_char('{')?;
+                write_escaped(self, buf)?;
+                buf.write_char('}')?;
             }
             ChunkKind::Math => {
-                write!(buf, "${}$", self.value)?;
+                buf.write_char('$')?;
+                write_escaped(self, buf)?;
+                buf.write_char('$')?;
             }
         }
 
@@ -604,5 +620,64 @@ impl From<FoldableKind> for ChunkKind {
             FoldableKind::Normal => Self::Normal,
             FoldableKind::Verbatim => Self::Verbatim,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escaped_brace() {
+        let str = "Hello {World\\{}";
+        let c = ChunkedString::from_str(str).unwrap();
+        assert_eq!(c.0[0].kind, ChunkKind::Normal);
+        assert_eq!(c.0[1].kind, ChunkKind::Verbatim);
+
+        assert_eq!(c.0[0].value, "Hello ");
+        assert_eq!(c.0[1].value, "World{");
+
+        let mut buf = String::new();
+        c.fmt_serialized(&mut buf).unwrap();
+        assert_eq!(buf, str);
+    }
+
+    #[test]
+    fn escaped_dollar() {
+        let str = "Hello \\$World";
+        let c = ChunkedString::from_str(str).unwrap();
+        assert_eq!(c.0[0].kind, ChunkKind::Normal);
+        assert_eq!(c.0[0].value, "Hello $World");
+
+        let mut buf = String::new();
+        c.fmt_serialized(&mut buf).unwrap();
+        assert_eq!(buf, str);
+    }
+
+    #[test]
+    fn escaped_backslash() {
+        let str = "Hello \\\\World";
+        let c = ChunkedString::from_str(str).unwrap();
+        assert_eq!(c.0[0].kind, ChunkKind::Normal);
+        assert_eq!(c.0[0].value, "Hello \\World");
+
+        let mut buf = String::new();
+        c.fmt_serialized(&mut buf).unwrap();
+        assert_eq!(buf, str);
+    }
+
+    #[test]
+    fn normal_backslash() {
+        let str = "Hello \\World";
+        let str2 = "Hello \\\\World";
+        let c = ChunkedString::from_str(str).unwrap();
+        let c2 = ChunkedString::from_str(str2).unwrap();
+        assert_eq!(c.0[0].kind, ChunkKind::Normal);
+        assert_eq!(c.0[0].value, "Hello \\World");
+        assert_eq!(c, c2);
+
+        let mut buf = String::new();
+        c.fmt_serialized(&mut buf).unwrap();
+        assert_eq!(buf, str2);
     }
 }
