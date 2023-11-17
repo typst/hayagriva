@@ -191,7 +191,11 @@ impl EntryLike for Entry {
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
                 }),
-            NumberVariable::Volume => self.volume().map(MaybeTyped::to_cow),
+            NumberVariable::Volume => self
+                .get_container()
+                .and_then(|e| e.volume())
+                .or_else(|| self.volume())
+                .map(MaybeTyped::to_cow),
         }
     }
 
