@@ -1,17 +1,12 @@
-#![cfg(feature = "rkyv")]
-use citationberg::Style;
+use citationberg::{IndependentStyle, Style};
 use citationberg::{Locale, LocaleFile, XmlError};
-use rkyv::Archive;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::collections::HashSet;
-use std::collections::{BTreeMap, HashMap};
-use std::fmt;
+use std::collections::HashMap;
+use std::fmt::Write;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-
-use hayagriva::archive::{Lookup, StyleMatch};
+use std::{fmt, iter};
 
 mod common;
 use common::{ensure_repo, iter_files, iter_files_with_name};
@@ -22,36 +17,13 @@ const STYLES_REPO_NAME: &str = "styles";
 const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
 const LOCALES_REPO_NAME: &str = "locales";
-const ARCHIVE_NAME: &str = "styles.cbor.rkyv";
 const OWN_STYLES: &str = "styles";
-
-/// Ensure the CSL repos are available, create an archive, and validate it.
-#[test]
-fn try_archive() {
-    ensure_repos().unwrap();
-
-    // Create the archive if it does not exist
-    let created = if !PathBuf::from(ARCHIVE_NAME).exists() {
-        create_archive().unwrap();
-        true
-    } else {
-        false
-    };
-
-    match (created, validate_archive()) {
-        (true, Err(e)) => panic!("{:?}", e),
-        (false, Err(_)) => create_archive().unwrap(),
-        (_, Ok(())) => {}
-    }
-}
 
 /// Always archive.
 #[test]
-#[ignore]
 fn always_archive() {
     ensure_repos().unwrap();
     create_archive().unwrap();
-    validate_archive().unwrap();
 }
 
 /// Download the CSL styles and locales repos.
@@ -64,160 +36,243 @@ fn ensure_repos() -> Result<(), ArchivalError> {
 fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
-    let mut res = Lookup {
-        map: BTreeMap::new(),
-        id_map: HashMap::new(),
-        styles: Vec::new(),
-        locales: retrieve_locales()?,
-    };
-
-    for path in iter_files(&style_path, "csl").chain(iter_files(&own_style_path, "csl")) {
-        let style: Style = Style::from_xml(&fs::read_to_string(path)?)?;
-        let Style::Independent(indep) = &style else {
-            continue;
-        };
-
-        if STYLE_IDS.binary_search(&indep.info.id.as_str()).is_err() {
-            continue;
-        }
-
-        let bytes = to_cbor_vec(&style)?;
-        let idx = res.styles.len();
-        let id = strip_id(indep.info.id.as_str());
-
-        let rides = OVERRIDES;
-        let over = rides.iter().find(|o| o.id == id);
-        let name = clean_name(id, over);
-
-        println!("\n{};{}", &id, &name);
-
-        let mut insert = |name: &str, alias: bool| {
-            if res
-                .map
-                .insert(
-                    name.to_string(),
-                    StyleMatch::new(
-                        indep.info.title.value.to_string(),
-                        alias,
-                        indep.bibliography.is_some(),
-                        idx,
-                    ),
-                )
-                .is_some()
+    let mut w = String::new();
+    let styles: Vec<_> = iter_files(&style_path, "csl")
+        .chain(iter_files(&own_style_path, "csl"))
+        .filter_map(|path| {
             {
-                panic!("duplicate name {} ({})", name, idx);
+                let style: Style =
+                    Style::from_xml(&fs::read_to_string(path).unwrap()).unwrap();
+                let Style::Independent(indep) = &style else { return None };
+
+                if STYLE_IDS.binary_search(&indep.info.id.as_str()).is_err() {
+                    return None;
+                }
+
+                let bytes = to_cbor_vec(&style).unwrap();
+                Some((bytes, indep.clone()))
             }
+            .map(|(bytes, indep)| {
+                let stripped_id = strip_id(indep.info.id.as_str());
 
-            if !alias {
-                res.id_map.insert(indep.info.id.clone(), idx);
-            }
-        };
+                let over = OVERRIDES.iter().find(|o| o.id == stripped_id);
+                let names = get_names(stripped_id, over);
+                let variant_name = heck::AsUpperCamelCase(&names[0]).to_string();
 
-        insert(&name, false);
+                (bytes, indep, names, variant_name)
+            })
+        })
+        .collect();
 
-        for alias in over.and_then(|o| o.alias.as_ref()).iter().flat_map(|a| a.iter()) {
-            insert(alias, true);
-        }
+    write_styles_section(&mut w, styles.as_slice())
+        .map_err(|e| ArchivalError::ValidationError(e.to_string()))?;
 
-        res.styles.push(bytes);
+    let locales_path = PathBuf::from(CACHE_PATH).join(LOCALES_REPO_NAME);
+    let locales =
+        iter_files_with_name(&locales_path, "xml", |n| n.starts_with("locales-"))
+            .map(|path| {
+                let locale: Locale =
+                    LocaleFile::from_xml(&fs::read_to_string(path).unwrap())
+                        .unwrap()
+                        .into();
+                let bytes = to_cbor_vec(&locale).unwrap();
+                (bytes, locale)
+            })
+            .collect::<Vec<_>>();
+
+    write_locales_section(&mut w, locales.as_slice())
+        .map_err(|e| ArchivalError::LocaleValidationError(e.to_string()))?;
+
+    for (bytes, indep, _, _) in styles {
+        let stripped_id = strip_id(indep.info.id.as_str());
+        fs::write(
+            PathBuf::from("archive/styles/").join(format!("{}.cbor", stripped_id)),
+            bytes,
+        )?;
     }
 
-    assert_eq!(res.styles.len(), STYLE_IDS.len());
+    for (bytes, locale) in locales {
+        fs::write(
+            PathBuf::from("archive/locales/")
+                .join(format!("{}.cbor", locale.lang.unwrap())),
+            bytes,
+        )?;
+    }
 
-    let bytes = rkyv::to_bytes::<_, 1024>(&res).expect("failed to serialize vec");
-    fs::write("styles.cbor.rkyv", bytes)?;
+    fs::write("src/csl/archive.rs", w)?;
 
     Ok(())
 }
 
-fn clean_name(id: &str, over: Option<&Override>) -> String {
-    if let Some(name) = over.and_then(|o| o.main) {
-        name.to_string()
+fn write_styles_section(
+    w: &mut String,
+    items: &[(Vec<u8>, IndependentStyle, Vec<String>, String)],
+) -> fmt::Result {
+    writeln!(w, "//! Optional archive of included CSL styles.")?;
+    writeln!(w, "// This file is generated by tests/generate.rs")?;
+    writeln!(w, "// Do not edit by hand!")?;
+    writeln!(w)?;
+    writeln!(w, "use citationberg::{{Locale, Style}};")?;
+    writeln!(w, "use serde::de::DeserializeOwned;")?;
+    writeln!(w)?;
+
+    writeln!(w, "/// A CSL style.")?;
+    writeln!(w, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]")?;
+    writeln!(w, "#[non_exhaustive]")?;
+    writeln!(w, "pub enum StyleID {{")?;
+    for (_, style, _, variant) in items {
+        writeln!(w, "    /// {}.", style.info.title.value)?;
+        if !style.info.authors.is_empty() {
+            writeln!(w, "    ///")?;
+            write!(w, "    /// Authors: ")?;
+            for (i, author) in style.info.authors.iter().enumerate() {
+                if i != 0 {
+                    write!(w, ", ")?;
+                }
+                write!(w, "{}", author.name)?;
+            }
+            writeln!(w, ".")?;
+        }
+        writeln!(w, "    {},", variant)?;
+    }
+    writeln!(w, "}}")?;
+    writeln!(w)?;
+
+    writeln!(w, "impl StyleID {{")?;
+    writeln!(w, "    /// Retrieve this style.")?;
+    writeln!(w, "    pub fn get(self) -> ArchivedStyle {{")?;
+    writeln!(w, "        match self {{")?;
+    for (_, style, names, variant) in items {
+        let stripped_id = strip_id(style.info.id.as_str());
+
+        writeln!(w, "            Self::{} => ArchivedStyle {{", variant)?;
+        writeln!(
+            w,
+            "                bytes: include_bytes!(\"../../archive/styles/{}.cbor\"),",
+            stripped_id
+        )?;
+        writeln!(w, "                id: {:?},", style.info.id)?;
+        writeln!(w, "                names: &[")?;
+        for name in names {
+            writeln!(w, "                    {:?},", name)?;
+        }
+        writeln!(w, "                ],")?;
+        writeln!(w, "                full_name: {:?},", style.info.title.value)?;
+        writeln!(w, "            }},")?;
+    }
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Retrieve all available style IDs.")?;
+    writeln!(w, "    pub fn all() -> &'static [Self] {{")?;
+    writeln!(w, "        &[")?;
+    for (_, _, _, variant) in items {
+        writeln!(w, "            Self::{},", variant)?;
+    }
+    writeln!(w, "        ]")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Retrieve this style by name.")?;
+    writeln!(w, "    pub fn by_name(name: &str) -> Option<Self> {{")?;
+    writeln!(w, "        match name {{")?;
+    for (_, _, names, variant) in items {
+        for name in names {
+            writeln!(w, "            {:?} => Some(Self::{}),", name, variant)?;
+        }
+    }
+    writeln!(w, "            _ => None")?;
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Retrieve this style by CSL ID.")?;
+    writeln!(w, "    pub fn by_id(id: &str) -> Option<Self> {{")?;
+    writeln!(w, "        match id {{")?;
+    for (_, style, _, variant) in items {
+        writeln!(w, "            {:?} => Some(Self::{}),", style.info.id, variant)?;
+    }
+    writeln!(w, "            _ => None")?;
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+
+    writeln!(w, "}}")?;
+    writeln!(w)?;
+
+    writeln!(w, "/// An archived CSL style.")?;
+    writeln!(w, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]")?;
+    writeln!(w, "pub struct ArchivedStyle {{")?;
+    writeln!(w, "    /// The archived bytes.")?;
+    writeln!(w, "    bytes: &'static [u8],")?;
+    writeln!(w, "    /// The ID of the style.")?;
+    writeln!(w, "    pub id: &'static str,")?;
+    writeln!(w, "    /// The name of the style in Hayagriva.")?;
+    writeln!(w, "    /// The first name is the canonical one.")?;
+    writeln!(w, "    pub names: &'static [&'static str],")?;
+    writeln!(w, "    /// The full CSL name of the style.")?;
+    writeln!(w, "    pub full_name: &'static str,")?;
+    writeln!(w, "}}")?;
+    writeln!(w)?;
+
+    writeln!(w, "impl ArchivedStyle {{")?;
+    writeln!(w, "    /// Retrieve this style.")?;
+    writeln!(w, "    pub fn style(&self) -> Style {{")?;
+    writeln!(w, "        from_cbor::<Style>(self.bytes).unwrap()")?;
+    writeln!(w, "    }}")?;
+    writeln!(w, "}}")?;
+    writeln!(w)?;
+
+    writeln!(w, "fn from_cbor<T: DeserializeOwned>(")?;
+    writeln!(w, "    reader: &[u8],")?;
+    writeln!(w, ") -> Result<T, ciborium::de::Error<std::io::Error>> {{")?;
+    writeln!(w, "    ciborium::de::from_reader(reader)")?;
+    writeln!(w, "}}")?;
+
+    Ok(())
+}
+
+fn write_locales_section(w: &mut String, items: &[(Vec<u8>, Locale)]) -> fmt::Result {
+    writeln!(w)?;
+
+    writeln!(w, "/// CBOR-encoded CSL locales.")?;
+    writeln!(w, "pub const LOCALES: &[&[u8]] = &[")?;
+    for (_, locale) in items {
+        writeln!(
+            w,
+            "    include_bytes!(\"../../archive/locales/{}.cbor\"),",
+            locale.lang.as_ref().unwrap()
+        )?;
+    }
+    writeln!(w, "];")?;
+    writeln!(w)?;
+
+    writeln!(w, "/// Get all CSL locales.")?;
+    writeln!(w, "pub fn locales() -> Vec<Locale> {{")?;
+    writeln!(w, "    LOCALES.iter().map(|bytes| {{")?;
+    writeln!(w, "        from_cbor::<Locale>(bytes).unwrap()")?;
+    writeln!(w, "    }}).collect()")?;
+    writeln!(w, "}}")?;
+
+    Ok(())
+}
+
+fn get_names<'a>(id: &'a str, over: Option<&'a Override>) -> Vec<String> {
+    let main = if let Some(name) = over.and_then(|o| o.main) {
+        name
     } else {
         id.trim_end_matches("-journals")
             .trim_end_matches("-publications")
             .trim_end_matches("-brackets")
             .trim_end_matches("-group")
             .trim_end_matches("-bibliography")
-            .to_string()
     }
-}
+    .to_string();
 
-/// Retrieve all available CSL locales.
-fn retrieve_locales() -> Result<Vec<Vec<u8>>, ArchivalError> {
-    let mut res = Vec::new();
-    let locales_path = PathBuf::from(CACHE_PATH).join(LOCALES_REPO_NAME);
-    for path in iter_files_with_name(&locales_path, "xml", |n| n.starts_with("locales-"))
-    {
-        let xml = fs::read_to_string(path)?;
-        let locale: Locale = LocaleFile::from_xml(&xml)?.into();
-        let bytes = to_cbor_vec(&locale)?;
-        res.push(bytes);
-    }
-
-    Ok(res)
-}
-
-/// Check whether all desired styles are available and correctly encoded.
-fn validate_archive() -> Result<(), ArchivalError> {
-    let archive_file = fs::read("styles.cbor.rkyv")?;
-    if archive_file.is_empty() {
-        return Err(ArchivalError::ValidationError("empty file".to_string()));
-    }
-    let archive = unsafe { read(&archive_file) };
-
-    // Check that every archive entry maps to a style.
-    for (k, idx) in archive.map.iter().filter(|(_, v)| !v.alias) {
-        let bytes = archive
-            .styles
-            .get(idx.index as usize)
-            .ok_or_else(|| ArchivalError::ValidationError(k.to_string()))?;
-        let style = from_cbor::<Style>(bytes)
-            .map_err(|_| ArchivalError::ValidationError(k.to_string()))?;
-        let id = &style.info().id;
-
-        // Check that this style is requested.
-        if STYLE_IDS.binary_search(&id.as_str()).is_err() {
-            return Err(ArchivalError::ValidationError(id.to_string()));
-        }
-
-        // Check that the archive is well-formed.
-        let path = if id.contains("typst.org") {
-            format!("styles/{}.csl", strip_id(id))
-        } else {
-            format!("{}/{}/{}.csl", CACHE_PATH, STYLES_REPO_NAME, strip_id(id))
-        };
-        eprintln!("{}", path);
-        let original_xml = fs::read_to_string(path)?;
-        let original_style = Style::from_xml(&original_xml)?;
-        assert_eq!(style, original_style);
-    }
-
-    // Check that all requested styles are encoded and referenced.
-    assert_eq!(archive.styles.len(), STYLE_IDS.len());
-    assert_eq!(
-        archive.map.values().map(|s| s.index).collect::<HashSet<_>>().len(),
-        STYLE_IDS.len()
-    );
-
-    // Check that all locales are well-formed.
-    for l in archive.locales.iter() {
-        let locale = from_cbor::<Locale>(l)?;
-        let locale_name = format!(
-            "locales-{}.xml",
-            locale.lang.as_ref().ok_or_else(|| {
-                ArchivalError::LocaleValidationError("missing lang".to_string())
-            })?
-        );
-        let path = PathBuf::from("target/haya-cache/")
-            .join(LOCALES_REPO_NAME)
-            .join(locale_name);
-        let original_xml = fs::read_to_string(path)?;
-        let original_locale: Locale = LocaleFile::from_xml(&original_xml)?.into();
-        assert_eq!(locale, original_locale);
-    }
-
-    Ok(())
+    let other = if let Some(alias) = over.and_then(|o| o.alias) { alias } else { &[] };
+    iter::once(main)
+        .chain(other.iter().map(ToString::to_string))
+        .collect()
 }
 
 /// Remove the common URL trunk from CSL ids.
@@ -245,11 +300,6 @@ fn retrieve_dependent_aliasses() -> Result<HashMap<String, Vec<String>>, Archiva
     }
 
     Ok(dependent_alias)
-}
-
-/// Read an archive
-unsafe fn read(buf: &[u8]) -> &<Lookup as Archive>::Archived {
-    rkyv::archived_root::<Lookup>(buf)
 }
 
 /// An error while creating or checking an archive.
@@ -457,12 +507,6 @@ const OVERRIDES: [Override; 19] = [
     Override::first("thieme-german", "thieme"),
     Override::first("turabian-fullnote-bibliography-8th-edition", "turabian-fullnote-8"),
 ];
-
-fn from_cbor<T: DeserializeOwned>(
-    reader: &[u8],
-) -> Result<T, ciborium::de::Error<std::io::Error>> {
-    ciborium::de::from_reader(reader)
-}
 
 fn to_cbor<T: Serialize>(
     writer: &mut Vec<u8>,

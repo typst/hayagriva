@@ -3,6 +3,6 @@ Licenses for third party components used by this project can be found below.
 ================================================================================
 The Creative Commons BY-SA 3.0 DEED License applies to:
 * The CSL styles found in `tests/data/*`
-* The CSL styles and locales found in `styles.cbor.rkyv`
+* The CSL styles and locales found in `archive/`
 
 https://creativecommons.org/licenses/by-sa/3.0/

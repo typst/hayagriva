@@ -10,7 +10,7 @@ use citationberg::{Locale, LocaleCode, Style, XmlError};
 use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
 
 use citationberg::json as csl_json;
-use hayagriva::archive::{locales, style_by_name};
+use hayagriva::archive::{locales, StyleID};
 use hayagriva::io::from_biblatex_str;
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
@@ -510,7 +510,7 @@ where
 
 #[test]
 fn purposes() {
-    let style = style_by_name("apa").unwrap();
+    let style = StyleID::by_name("apa").unwrap().get().style();
     let Style::Independent(style) = style else {
         panic!("test has dependent style");
     };
@@ -565,7 +565,7 @@ fn purposes() {
 
 #[test]
 fn case_folding() {
-    let style = style_by_name("chicago-author-date").unwrap();
+    let style = StyleID::by_name("chicago-author-date").unwrap().get().style();
     let Style::Independent(style) = style else {
         panic!("test has dependent style");
     };
@@ -603,7 +603,7 @@ fn case_folding() {
 
 #[test]
 fn access_date() {
-    let style = style_by_name("apa").unwrap();
+    let style = StyleID::by_name("apa").unwrap().get().style();
     let locales = locales();
     let Style::Independent(style) = style else {
         panic!("test has dependent style");

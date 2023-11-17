@@ -31,7 +31,7 @@ pub use self::elem::{
 };
 use self::taxonomy::{EntryLike, NumberVariableResult};
 
-#[cfg(feature = "rkyv")]
+#[cfg(feature = "archive")]
 pub mod archive;
 mod elem;
 mod rendering;

@@ -150,7 +150,7 @@ mod util;
 
 use std::collections::BTreeMap;
 
-#[cfg(feature = "rkyv")]
+#[cfg(feature = "archive")]
 pub use crate::csl::archive;
 pub use citationberg;
 pub use csl::{
