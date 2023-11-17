@@ -194,6 +194,7 @@ impl EntryLike for Entry {
             NumberVariable::Volume => self
                 .get_container()
                 .and_then(|e| e.volume())
+                .or_else(|| self.volume())
                 .map(MaybeTyped::to_cow),
         }
     }
