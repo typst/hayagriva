@@ -1,7 +1,7 @@
 use citationberg::{IndependentStyle, Style};
 use citationberg::{Locale, LocaleFile, XmlError};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
 use std::io;
@@ -24,6 +24,12 @@ const OWN_STYLES: &str = "styles";
 fn always_archive() {
     ensure_repos().unwrap();
     create_archive().unwrap();
+}
+
+#[test]
+fn no_dupe_id() {
+    let set: HashSet<&str> = STYLE_IDS.iter().map(|s| strip_id(s)).collect();
+    assert_eq!(set.len(), STYLE_IDS.len());
 }
 
 /// Download the CSL styles and locales repos.
@@ -116,10 +122,10 @@ fn write_styles_section(
     writeln!(w, "use serde::de::DeserializeOwned;")?;
     writeln!(w)?;
 
-    writeln!(w, "/// A CSL style.")?;
+    writeln!(w, "/// An embedded CSL style.")?;
     writeln!(w, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]")?;
     writeln!(w, "#[non_exhaustive]")?;
-    writeln!(w, "pub enum StyleID {{")?;
+    writeln!(w, "pub enum ArchivedStyle {{")?;
     for (_, style, _, variant) in items {
         writeln!(w, "    /// {}.", style.info.title.value)?;
         if !style.info.authors.is_empty() {
@@ -138,42 +144,7 @@ fn write_styles_section(
     writeln!(w, "}}")?;
     writeln!(w)?;
 
-    writeln!(w, "impl StyleID {{")?;
-    writeln!(w, "    /// Retrieve this style.")?;
-    writeln!(w, "    pub fn get(self) -> ArchivedStyle {{")?;
-    writeln!(w, "        match self {{")?;
-    for (_, style, names, variant) in items {
-        let stripped_id = strip_id(style.info.id.as_str());
-
-        writeln!(w, "            Self::{} => ArchivedStyle {{", variant)?;
-        writeln!(
-            w,
-            "                bytes: include_bytes!(\"../../archive/styles/{}.cbor\"),",
-            stripped_id
-        )?;
-        writeln!(w, "                id: {:?},", style.info.id)?;
-        writeln!(w, "                names: &[")?;
-        for name in names {
-            writeln!(w, "                    {:?},", name)?;
-        }
-        writeln!(w, "                ],")?;
-        writeln!(w, "                full_name: {:?},", style.info.title.value)?;
-        writeln!(w, "            }},")?;
-    }
-    writeln!(w, "        }}")?;
-    writeln!(w, "    }}")?;
-    writeln!(w)?;
-
-    writeln!(w, "    /// Retrieve all available style IDs.")?;
-    writeln!(w, "    pub fn all() -> &'static [Self] {{")?;
-    writeln!(w, "        &[")?;
-    for (_, _, _, variant) in items {
-        writeln!(w, "            Self::{},", variant)?;
-    }
-    writeln!(w, "        ]")?;
-    writeln!(w, "    }}")?;
-    writeln!(w)?;
-
+    writeln!(w, "impl ArchivedStyle {{")?;
     writeln!(w, "    /// Retrieve this style by name.")?;
     writeln!(w, "    pub fn by_name(name: &str) -> Option<Self> {{")?;
     writeln!(w, "        match name {{")?;
@@ -196,32 +167,74 @@ fn write_styles_section(
     writeln!(w, "            _ => None")?;
     writeln!(w, "        }}")?;
     writeln!(w, "    }}")?;
-
-    writeln!(w, "}}")?;
     writeln!(w)?;
 
-    writeln!(w, "/// An archived CSL style.")?;
-    writeln!(w, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]")?;
-    writeln!(w, "pub struct ArchivedStyle {{")?;
-    writeln!(w, "    /// The archived bytes.")?;
-    writeln!(w, "    bytes: &'static [u8],")?;
-    writeln!(w, "    /// The ID of the style.")?;
-    writeln!(w, "    pub id: &'static str,")?;
-    writeln!(w, "    /// The name of the style in Hayagriva.")?;
-    writeln!(w, "    /// The first name is the canonical one.")?;
-    writeln!(w, "    pub names: &'static [&'static str],")?;
-    writeln!(w, "    /// The full CSL name of the style.")?;
-    writeln!(w, "    pub full_name: &'static str,")?;
-    writeln!(w, "}}")?;
-    writeln!(w)?;
-
-    writeln!(w, "impl ArchivedStyle {{")?;
-    writeln!(w, "    /// Retrieve this style.")?;
-    writeln!(w, "    pub fn style(&self) -> Style {{")?;
-    writeln!(w, "        from_cbor::<Style>(self.bytes).unwrap()")?;
+    writeln!(w, "    /// Returns all variants.")?;
+    writeln!(w, "    pub fn all() -> &'static [Self] {{")?;
+    writeln!(w, "        &[")?;
+    for (_, _, _, variant) in items {
+        writeln!(w, "            Self::{},", variant)?;
+    }
+    writeln!(w, "        ]")?;
     writeln!(w, "    }}")?;
-    writeln!(w, "}}")?;
     writeln!(w)?;
+
+    writeln!(w, "    /// Get the CBOR representation of this style.")?;
+    writeln!(w, "    fn bytes(self) -> &'static [u8] {{")?;
+    writeln!(w, "        match self {{")?;
+    for (_, style, _, variant) in items {
+        let stripped_id = strip_id(style.info.id.as_str());
+
+        writeln!(
+            w,
+            "            Self::{} => include_bytes!(\"../../archive/styles/{}.cbor\"),",
+            variant, stripped_id
+        )?;
+    }
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Retrieve the style.")?;
+    writeln!(w, "    pub fn get(self) -> Style {{")?;
+    writeln!(w, "        from_cbor(self.bytes()).unwrap()")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Get the style's names in Hayagriva.")?;
+    writeln!(w, "    pub fn names(self) -> &'static [&'static str] {{")?;
+    writeln!(w, "        match self {{")?;
+    for (_, _, names, variant) in items {
+        writeln!(w, "            Self::{} => &[", variant)?;
+        for name in names {
+            writeln!(w, "                {:?},", name)?;
+        }
+        writeln!(w, "            ],")?;
+    }
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Get the style's full name.")?;
+    writeln!(w, "    pub fn display_name(self) -> &'static str {{")?;
+    writeln!(w, "        match self {{")?;
+    for (_, style, _, variant) in items {
+        writeln!(w, "            Self::{} => {:?},", variant, style.info.title.value)?;
+    }
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+
+    writeln!(w, "    /// Get the style's CSL ID.")?;
+    writeln!(w, "    pub fn csl_id(self) -> &'static str {{")?;
+    writeln!(w, "        match self {{")?;
+    for (_, style, _, variant) in items {
+        writeln!(w, "            Self::{} => {:?},", variant, style.info.id)?;
+    }
+    writeln!(w, "        }}")?;
+    writeln!(w, "    }}")?;
+    writeln!(w)?;
+    writeln!(w, "}}")?;
 
     writeln!(w, "fn from_cbor<T: DeserializeOwned>(")?;
     writeln!(w, "    reader: &[u8],")?;

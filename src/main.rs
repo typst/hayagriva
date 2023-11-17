@@ -11,7 +11,7 @@ use citationberg::{
 use clap::{crate_version, Arg, Command};
 use strum::{EnumVariantNames, VariantNames};
 
-use hayagriva::archive::{locales, StyleID};
+use hayagriva::archive::{locales, ArchivedStyle};
 use hayagriva::{io, BibliographyDriver, CitationItem, CitationRequest};
 use hayagriva::{BibliographyRequest, Selector};
 
@@ -394,10 +394,9 @@ fn main() {
             }
         }
         Some(("styles", _)) => {
-            for s in StyleID::all() {
-                let access = s.get();
-                let style = access.style();
-                println!("- {}", &access.names[0]);
+            for key in ArchivedStyle::all() {
+                let style = key.get();
+                println!("- {}", &key.names()[0]);
                 println!("  Full name: {}", &style.info().title.value);
                 println!("  Authors:");
                 for author in style.info().authors.iter() {
@@ -434,10 +433,8 @@ fn retrieve_assets(
             IndependentStyle::from_xml(&file_str).expect("CSL file malformed")
         }
         (Some(style), _) => {
-            let Style::Independent(indep) = StyleID::by_name(style.as_str())
-                .expect("no style found")
-                .get()
-                .style()
+            let Style::Independent(indep) =
+                ArchivedStyle::by_name(style.as_str()).expect("no style found").get()
             else {
                 panic!("dependent style in archive")
             };
