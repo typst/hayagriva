@@ -157,12 +157,13 @@ impl EntryLike for Entry {
             NumberVariable::NumberOfVolumes => {
                 self.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
-            NumberVariable::Page => {
-                self.page_range().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
-            }
+            NumberVariable::Page => self.page_range().map(MaybeTyped::to_cow),
             NumberVariable::PageFirst => self
                 .page_range()
-                .and_then(|r| r.range())
+                .and_then(|r| match r {
+                    MaybeTyped::Typed(r) => r.range(),
+                    MaybeTyped::String(_) => None,
+                })
                 .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start)))),
             NumberVariable::PartNumber => self
                 .bound_select(

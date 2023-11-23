@@ -468,39 +468,41 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(pages) = map_res(entry.pages())?.and_then(|pages| match pages {
-            PermissiveType::Typed(p) => Some(p),
-            PermissiveType::Chunks(_) => None,
-        }) {
-            item.set_page_range(
-                if let Some(n) =
-                    pages.first().filter(|f| pages.len() == 1 && f.start == f.end)
-                {
-                    Numeric::new(n.start as i32)
-                } else {
-                    let mut items = vec![];
-                    for (i, pair) in pages.iter().enumerate() {
-                        let last = i + 1 == pages.len();
-                        let last_delim = (!last).then_some(NumericDelimiter::Comma);
+        if let Some(pages) = map_res(entry.pages())? {
+            item.set_page_range(match pages {
+                PermissiveType::Typed(pages) => {
+                    if let Some(n) =
+                        pages.first().filter(|f| pages.len() == 1 && f.start == f.end)
+                    {
+                        MaybeTyped::Typed(Numeric::new(n.start as i32))
+                    } else {
+                        let mut items = vec![];
+                        for (i, pair) in pages.iter().enumerate() {
+                            let last = i + 1 == pages.len();
+                            let last_delim = (!last).then_some(NumericDelimiter::Comma);
 
-                        if pair.start == pair.end {
-                            items.push((pair.start as i32, last_delim));
-                        } else {
-                            items.push((
-                                pair.start as i32,
-                                Some(NumericDelimiter::Hyphen),
-                            ));
-                            items.push((pair.end as i32, last_delim));
+                            if pair.start == pair.end {
+                                items.push((pair.start as i32, last_delim));
+                            } else {
+                                items.push((
+                                    pair.start as i32,
+                                    Some(NumericDelimiter::Hyphen),
+                                ));
+                                items.push((pair.end as i32, last_delim));
+                            }
                         }
-                    }
 
-                    Numeric {
-                        value: NumericValue::Set(items),
-                        prefix: None,
-                        suffix: None,
+                        MaybeTyped::Typed(Numeric {
+                            value: NumericValue::Set(items),
+                            prefix: None,
+                            suffix: None,
+                        })
                     }
-                },
-            );
+                }
+                PermissiveType::Chunks(chunks) => {
+                    MaybeTyped::infallible_from_str(&chunks.format_verbatim())
+                }
+            });
         }
 
         if let Some(ptotal) =

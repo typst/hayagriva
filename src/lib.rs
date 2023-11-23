@@ -521,7 +521,7 @@ entry! {
     /// Published version of an item.
     "edition" => edition: MaybeTyped<Numeric>,
     /// The range of pages within the parent this item occupies
-    "page-range" => page_range: Numeric,
+    "page-range" => page_range: MaybeTyped<Numeric>,
     /// The total number of pages the item has.
     "page-total" => page_total: Numeric,
     /// The time range within the parent this item starts and ends at.
