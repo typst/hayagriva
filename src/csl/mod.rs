@@ -33,6 +33,7 @@ use self::taxonomy::{EntryLike, NumberVariableResult};
 
 #[cfg(feature = "archive")]
 pub mod archive;
+mod citation_label;
 mod elem;
 mod rendering;
 mod sort;

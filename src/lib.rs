@@ -784,6 +784,22 @@ impl Entry {
         }
     }
 
+    /// Get the non-partial parent of the entry.
+    pub(crate) fn get_full(&self) -> &Self {
+        let mut parent = self.parents().first();
+        let mut entry = self;
+        while select!(Chapter | Scene).matches(entry) && entry.title().is_none() {
+            if let Some(p) = parent {
+                entry = p;
+                parent = entry.parents().first();
+            } else {
+                break;
+            }
+        }
+
+        entry
+    }
+
     /// Get the collection of an entry like CSL defines it.
     pub(crate) fn get_collection(&self) -> Option<&Self> {
         match &self.entry_type {

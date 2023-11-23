@@ -15,6 +15,7 @@ use unic_langid::LanguageIdentifier;
 #[cfg(feature = "csl-json")]
 use citationberg::json as csl_json;
 
+use super::citation_label::Alphanumerical;
 use super::{DisambiguateState, InstanceContext, LocatorPayload};
 
 pub trait EntryLike {
@@ -226,27 +227,9 @@ impl EntryLike for Entry {
             StandardVariable::CitationKey => {
                 Some(Cow::Owned(StringChunk::verbatim(&entry.key).into()))
             }
-            StandardVariable::CitationLabel => entry
-                .map(|e| e.authors())
-                .and_then(|a| a.first())
-                .map(|n| n.name.chars().take(3).collect::<String>())
-                .or_else(|| {
-                    entry.title().map(|t| {
-                        t.select(LongShortForm::default())
-                            .to_string()
-                            .chars()
-                            .take(3)
-                            .collect::<String>()
-                    })
-                })
-                .map(|s| {
-                    let s = if let Some(date) = entry.date() {
-                        format!("{}{:02}", s, date.year % 100)
-                    } else {
-                        s
-                    };
-                    Cow::Owned(StringChunk::verbatim(s).into())
-                }),
+            StandardVariable::CitationLabel => {
+                Some(Cow::Owned(Alphanumerical::default().citation(entry).into()))
+            }
             // Get third-order title first, then second-order title.
             StandardVariable::CollectionTitle => entry
                 .get_collection()
