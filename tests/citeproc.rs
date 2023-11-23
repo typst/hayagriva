@@ -348,6 +348,8 @@ fn test_parse_tests() {
     }
 
     eprintln!("Total: {}, skipped: {}, passed: {}", total, skipped, passed);
+    let percentage = passed as f64 / (total - skipped) as f64 * 100.0;
+    eprintln!("{:.2}% passed", percentage);
 }
 
 #[test]

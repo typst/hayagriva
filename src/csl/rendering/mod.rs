@@ -7,8 +7,8 @@ use citationberg::taxonomy::{
 };
 use citationberg::{
     ChooseBranch, CslMacro, DateDayForm, DateMonthForm, DatePartName, DateParts,
-    DateStrongAnyForm, LabelPluralize, LayoutRenderingElement, LongShortForm, NumberForm,
-    TestPosition, TextCase, ToAffixes, ToFormatting,
+    DateStrongAnyForm, GrammarGender, LabelPluralize, LayoutRenderingElement,
+    LongShortForm, NumberForm, TestPosition, TextCase, ToAffixes, ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
@@ -79,7 +79,12 @@ impl RenderCsl for citationberg::Text {
                 }
                 _ => ctx.push_chunked(&val),
             },
-            ResolvedTextTarget::NumberVariable(_, n) => match n {
+            ResolvedTextTarget::NumberVariable(var, n) => match n {
+                NumberVariableResult::Regular(MaybeTyped::Typed(num))
+                    if num.will_transform() =>
+                {
+                    render_typed_num(num.as_ref(), NumberForm::default(), var, None, ctx);
+                }
                 NumberVariableResult::Regular(n) => ctx.push_str(&n.to_str()),
                 NumberVariableResult::Transparent(n) => ctx.push_transparent(n),
             },
@@ -212,39 +217,7 @@ impl RenderCsl for citationberg::Number {
             Some(NumberVariableResult::Regular(MaybeTyped::Typed(num)))
                 if num.will_transform() =>
             {
-                let normal_num = if self.form == NumberForm::Numeric
-                    && self.variable == NumberVariable::Page
-                {
-                    if let Some(range) = num.range() {
-                        ctx.style
-                            .csl
-                            .settings
-                            .page_range_format
-                            .unwrap_or_default()
-                            .format(
-                                range,
-                                ctx,
-                                ctx.term(
-                                    OtherTerm::PageRangeDelimiter.into(),
-                                    TermForm::default(),
-                                    false,
-                                )
-                                .or(Some("–")),
-                            )
-                            .unwrap();
-                        false
-                    } else {
-                        true
-                    }
-                } else {
-                    true
-                };
-
-                if normal_num {
-                    num.as_ref()
-                        .with_form(ctx, self.form, gender, ctx.ordinal_lookup())
-                        .unwrap();
-                }
+                render_typed_num(num.as_ref(), self.form, self.variable, gender, ctx);
             }
             Some(NumberVariableResult::Regular(MaybeTyped::Typed(num))) => {
                 write!(ctx, "{}", num).unwrap()
@@ -281,6 +254,44 @@ impl RenderCsl for citationberg::Number {
 
         var == Variable::Number(self.variable)
     }
+}
+
+fn render_typed_num<T: EntryLike>(
+    num: &Numeric,
+    form: NumberForm,
+    variable: NumberVariable,
+    gender: Option<GrammarGender>,
+    ctx: &mut Context<T>,
+) {
+    let normal_num = if form == NumberForm::Numeric && variable == NumberVariable::Page {
+        if let Some(range) = num.range() {
+            render_page_range(range, ctx);
+            false
+        } else {
+            true
+        }
+    } else {
+        true
+    };
+
+    if normal_num {
+        num.with_form(ctx, form, gender, ctx.ordinal_lookup()).unwrap();
+    }
+}
+
+fn render_page_range<T: EntryLike>(range: std::ops::Range<i32>, ctx: &mut Context<T>) {
+    ctx.style
+        .csl
+        .settings
+        .page_range_format
+        .unwrap_or_default()
+        .format(
+            range,
+            ctx,
+            ctx.term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
+                .or(Some("–")),
+        )
+        .unwrap();
 }
 
 impl RenderCsl for citationberg::Label {
