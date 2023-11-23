@@ -343,10 +343,6 @@ impl RenderCsl for Names {
                 }
             };
 
-            do_label(NameLabelPosition::BeforeName, ctx);
-            add_names(self, ctx, persons, &cs_name, forms, variable);
-            do_label(NameLabelPosition::AfterName, ctx);
-
             if i > 0 {
                 let delim = self.delimiter(ctx.writing.name_options.last());
                 if !delim.is_empty() {
@@ -354,6 +350,10 @@ impl RenderCsl for Names {
                     ctx.push_str(&delim);
                 }
             }
+
+            do_label(NameLabelPosition::BeforeName, ctx);
+            add_names(self, ctx, persons, &cs_name, forms, variable);
+            do_label(NameLabelPosition::AfterName, ctx);
         }
 
         // TODO Compare each elem with a name meta and run
