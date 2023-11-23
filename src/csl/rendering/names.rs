@@ -182,8 +182,8 @@ impl RenderCsl for Names {
                 .term(NameVariable::EditorTranslator.into(), TermForm::default(), false)
                 .is_some()
         {
-            let editors = ctx.resolve_name_variable(NameVariable::Editor);
-            let translators = ctx.resolve_name_variable(NameVariable::Translator);
+            let editors = ctx.resolve_name_variable(NameVariable::Editor, false);
+            let translators = ctx.resolve_name_variable(NameVariable::Translator, false);
 
             let mut res = Vec::new();
             if !editors.is_empty() && editors == translators {
@@ -202,7 +202,7 @@ impl RenderCsl for Names {
         } else {
             self.variable
                 .iter()
-                .map(|v| (ctx.resolve_name_variable(*v), *v))
+                .map(|v| (ctx.resolve_name_variable(*v, false), *v))
                 .collect()
         };
 
@@ -375,7 +375,11 @@ impl RenderCsl for Names {
             return true;
         }
 
-        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty()) {
+        if self
+            .variable
+            .iter()
+            .all(|v| ctx.resolve_name_variable(*v, false).is_empty())
+        {
             if let Some(substitute) = &self.substitute() {
                 return substitute.children.iter().any(|c| c.will_render(ctx, var));
             }

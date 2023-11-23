@@ -2455,8 +2455,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_number_variable(
         &self,
         variable: csl_taxonomy::NumberVariable,
+        silent: bool,
     ) -> Option<NumberVariableResult<'a>> {
-        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        if !silent {
+            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        }
+
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_number_variable(variable);
 
@@ -2473,8 +2477,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
         &self,
         form: LongShortForm,
         variable: csl_taxonomy::StandardVariable,
+        silent: bool,
     ) -> Option<Cow<'a, ChunkedString>> {
-        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        if !silent {
+            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        }
+
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_standard_variable(form, variable);
 
@@ -2490,8 +2498,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_date_variable(
         &self,
         variable: csl_taxonomy::DateVariable,
+        silent: bool,
     ) -> Option<Cow<'a, Date>> {
-        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        if !silent {
+            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        }
+
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.entry.resolve_date_variable(variable);
 
@@ -2507,8 +2519,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_name_variable(
         &self,
         variable: csl_taxonomy::NameVariable,
+        silent: bool,
     ) -> Vec<Cow<'a, Person>> {
-        self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        if !silent {
+            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        }
+
         if self.writing.prepare_variable_query(variable).is_none() {
             return Vec::new();
         }

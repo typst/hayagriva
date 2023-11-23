@@ -177,10 +177,10 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
 
         match &text.target {
             TextTarget::Variable { var: Variable::Standard(var), form } => ctx
-                .resolve_standard_variable(*form, *var)
+                .resolve_standard_variable(*form, *var, false)
                 .map(|s| ResolvedTextTarget::StandardVariable(*var, s)),
             TextTarget::Variable { var: Variable::Number(var), .. } => ctx
-                .resolve_number_variable(*var)
+                .resolve_number_variable(*var, false)
                 .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
             TextTarget::Variable { .. } => None,
             TextTarget::Macro { name } => {
@@ -200,7 +200,7 @@ impl RenderCsl for citationberg::Number {
             return;
         }
 
-        let value = ctx.resolve_number_variable(self.variable);
+        let value = ctx.resolve_number_variable(self.variable, false);
         if ctx.instance.sorting {
             if let Some(NumberVariableResult::Regular(MaybeTyped::Typed(n))) = value {
                 n.fmt_value(ctx, true).unwrap();
@@ -320,7 +320,7 @@ impl RenderCsl for citationberg::Label {
             return;
         }
 
-        let Some(variable) = ctx.resolve_number_variable(self.variable) else {
+        let Some(variable) = ctx.resolve_number_variable(self.variable, false) else {
             return;
         };
 
@@ -382,7 +382,7 @@ impl RenderCsl for citationberg::Date {
             return;
         }
 
-        let Some(date) = ctx.resolve_date_variable(variable) else { return };
+        let Some(date) = ctx.resolve_date_variable(variable, false) else { return };
 
         if ctx.instance.sorting {
             let year;
@@ -621,6 +621,7 @@ fn render_year_suffix_implicitly<T: EntryLike>(ctx: &mut Context<T>) {
         if let Some(year_suffix) = ctx.resolve_standard_variable(
             LongShortForm::default(),
             StandardVariable::YearSuffix,
+            false,
         ) {
             ctx.push_chunked(year_suffix.as_ref());
         }
@@ -801,11 +802,15 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
                     Some(match var {
                         Variable::Standard(var) => self
                             .ctx
-                            .resolve_standard_variable(LongShortForm::default(), var)
+                            .resolve_standard_variable(
+                                LongShortForm::default(),
+                                var,
+                                true,
+                            )
                             .map(|v| Numeric::from_str(&v.to_string()).is_ok())
                             .unwrap_or_default(),
                         Variable::Number(var) => matches!(
-                            self.ctx.resolve_number_variable(var),
+                            self.ctx.resolve_number_variable(var, true),
                             Some(NumberVariableResult::Regular(MaybeTyped::Typed(_)))
                         ),
                         _ => false,
@@ -827,7 +832,7 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
 
                     Some(
                         self.ctx
-                            .resolve_date_variable(var)
+                            .resolve_date_variable(var, true)
                             .map_or(false, |d| d.approximate),
                     )
                 } else {
@@ -912,20 +917,24 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
 
                     Some(match var {
                         Variable::Standard(s) => {
-                            let val = self
-                                .ctx
-                                .resolve_standard_variable(LongShortForm::default(), s);
+                            let val = self.ctx.resolve_standard_variable(
+                                LongShortForm::default(),
+                                s,
+                                true,
+                            );
                             val.map_or(false, |s| {
                                 !s.to_string().chars().all(char::is_whitespace)
                             })
                         }
                         Variable::Number(n) => {
-                            let val = self.ctx.resolve_number_variable(n);
+                            let val = self.ctx.resolve_number_variable(n, true);
                             val.is_some()
                         }
-                        Variable::Date(d) => self.ctx.resolve_date_variable(d).is_some(),
+                        Variable::Date(d) => {
+                            self.ctx.resolve_date_variable(d, true).is_some()
+                        }
                         Variable::Name(n) => {
-                            !self.ctx.resolve_name_variable(n).is_empty()
+                            !self.ctx.resolve_name_variable(n, true).is_empty()
                         }
                     })
                 } else {
