@@ -90,8 +90,13 @@ impl<'a> StyleContext<'a> {
                 ..
             } => {
                 let render = |entry: &CitationItem<T>, idx: usize| {
-                    let mut ctx =
-                        self.sorting_ctx(entry, idx, entry.locale.as_ref(), term_locale);
+                    let mut ctx = self.sorting_ctx(
+                        entry,
+                        idx,
+                        entry.locale.as_ref(),
+                        term_locale,
+                        false,
+                    );
                     ctx.writing.name_options.push(InheritableNameOptions {
                         et_al_min: *names_min,
                         et_al_subsequent_min: *names_min,

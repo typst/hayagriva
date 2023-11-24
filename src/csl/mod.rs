@@ -8,7 +8,8 @@ use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
 
 use citationberg::taxonomy::{
-    DateVariable, Locator, NameVariable, OtherTerm, StandardVariable, Term, Variable,
+    DateVariable, Locator, NameVariable, NumberVariable, OtherTerm, StandardVariable,
+    Term, Variable,
 };
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
@@ -23,7 +24,7 @@ use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::rendering::RenderCsl;
 use crate::lang::CaseFolder;
-use crate::types::{ChunkKind, ChunkedString, Date, Person};
+use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Person};
 
 use self::elem::last_text_mut_child;
 pub use self::elem::{
@@ -152,7 +153,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                         .unwrap_or(n)
                 });
 
-                let cite_props = CiteProperties {
+                let mut cite_props = CiteProperties {
                     certain: CertainCiteProperties {
                         note_number: citation.note_number,
                         first_note_number,
@@ -175,6 +176,12 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                     item.purpose,
                     None,
                 );
+
+                // Copy the identifier usage from the context. Assume it does
+                // not change throughout disambiguation.
+                cite_props.speculative.identifier_usage =
+                    ctx.instance.identifier_usage.take();
+
                 renders.push(SpeculativeItemRender {
                     entry,
                     cite_props,
@@ -463,19 +470,10 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                                 entry.entry,
                                 CiteProperties {
                                     certain: cited_item.cite_props.certain,
-                                    speculative: SpeculativeCiteProperties {
-                                        locator: None,
-                                        citation_number: cited_item
-                                            .cite_props
-                                            .speculative
-                                            .citation_number,
-                                        ibid: cited_item.cite_props.speculative.ibid,
-                                        disambiguation: cited_item
-                                            .cite_props
-                                            .speculative
-                                            .disambiguation
-                                            .clone(),
-                                    },
+                                    speculative: cited_item
+                                        .cite_props
+                                        .speculative
+                                        .for_bibliography(),
                                 },
                                 cited_item.locale.as_ref(),
                                 request.locale.as_ref(),
@@ -640,7 +638,7 @@ fn date_replacement<T: EntryLike>(
                 }
             )
         } else if let Some(no_date) = ctx
-            .ctx(entry, cite_props.clone(), locale, term_locale)
+            .ctx(entry, cite_props.clone(), locale, term_locale, false)
             .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false)
         {
             no_date.to_string()
@@ -1012,6 +1010,8 @@ struct InstanceContext<'a, T: EntryLike> {
     pub term_locale: Option<&'a LocaleCode>,
     /// Whether this citation should respect a special form.
     pub kind: Option<SpecialForm>,
+    /// Which labels were written.
+    pub identifier_usage: RefCell<IdentifierUsage>,
 }
 
 impl<'a, T: EntryLike> InstanceContext<'a, T> {
@@ -1025,11 +1025,12 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
     ) -> Self {
         Self {
             entry,
-            cite_props,
             sorting,
             locale,
             term_locale,
             kind,
+            identifier_usage: RefCell::new(cite_props.speculative.identifier_usage),
+            cite_props,
         }
     }
 
@@ -1072,6 +1073,7 @@ impl<'a> StyleContext<'a> {
         cite_props: CiteProperties<'a>,
         locale: Option<&'b LocaleCode>,
         term_locale: Option<&'b LocaleCode>,
+        bibliography: bool,
     ) -> Context<'b, T> {
         Context {
             instance: InstanceContext::new(
@@ -1084,6 +1086,7 @@ impl<'a> StyleContext<'a> {
             ),
             style: self,
             writing: WritingContext::new(self.csl.settings.options.clone()),
+            bibliography,
         }
     }
 
@@ -1093,6 +1096,7 @@ impl<'a> StyleContext<'a> {
         idx: usize,
         locale: Option<&'b LocaleCode>,
         term_locale: Option<&'b LocaleCode>,
+        bibliography: bool,
     ) -> Context<'b, T> {
         Context {
             instance: InstanceContext::new(
@@ -1105,6 +1109,7 @@ impl<'a> StyleContext<'a> {
             ),
             style: self,
             writing: WritingContext::new(self.csl.settings.options.clone()),
+            bibliography,
         }
     }
 
@@ -1145,7 +1150,7 @@ impl<'a> StyleContext<'a> {
         kind: Option<CitePurpose>,
         collapse_verdict: Option<CollapseVerdict>,
     ) -> Context<'b, T> {
-        let mut ctx = self.ctx(entry, props, locale, term_locale);
+        let mut ctx = self.ctx(entry, props, locale, term_locale, false);
 
         let do_regular = |ctx: &mut Context<'b, T>| {
             let reset = if ctx.instance.kind.is_none() {
@@ -1294,7 +1299,7 @@ impl<'a> StyleContext<'a> {
         locale: Option<&'b LocaleCode>,
         term_locale: Option<&'b LocaleCode>,
     ) -> Option<Context<'b, T>> {
-        let mut ctx = self.ctx(entry, props, locale, term_locale);
+        let mut ctx = self.ctx(entry, props, locale, term_locale, true);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
         self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
@@ -1932,6 +1937,7 @@ pub(crate) struct Context<'a, T: EntryLike> {
     instance: InstanceContext<'a, T>,
     style: &'a StyleContext<'a>,
     writing: WritingContext,
+    bibliography: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -2006,6 +2012,8 @@ struct SpeculativeCiteProperties<'a> {
     /// Is always false for the first set of renders. Only the rendered entries
     /// allow us to determine if we need to disambiguate.
     pub disambiguation: DisambiguateState,
+    /// Whether this citation includes an identifier.
+    pub identifier_usage: IdentifierUsage,
 }
 
 impl<'a> SpeculativeCiteProperties<'a> {
@@ -2020,13 +2028,58 @@ impl<'a> SpeculativeCiteProperties<'a> {
             locator,
             citation_number,
             ibid,
-            disambiguation: DisambiguateState::None,
+            disambiguation: DisambiguateState::default(),
+            identifier_usage: IdentifierUsage::default(),
+        }
+    }
+
+    /// Get the speculative cite properties for a bibliography entry.
+    fn for_bibliography(&self) -> Self {
+        Self {
+            locator: None,
+            citation_number: self.citation_number,
+            ibid: self.ibid,
+            disambiguation: self.disambiguation.clone(),
+            identifier_usage: self.identifier_usage,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Which type of citation label was used when this entry was cited.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum IdentifierUsage {
+    /// No label was used.
+    #[default]
+    None,
+    /// Only the alphanumeric citation label was used.
+    OnlyCitationLabel,
+    /// Only the citation number was used.
+    OnlyCitationNumber,
+    /// Both the alphanumeric citation label and the citation number were used.
+    Mixed,
+}
+
+impl IdentifierUsage {
+    /// Return the identifier usage given that a label was used.
+    fn label(self) -> Self {
+        match self {
+            Self::None | Self::OnlyCitationLabel => Self::OnlyCitationLabel,
+            Self::OnlyCitationNumber | Self::Mixed => Self::Mixed,
+        }
+    }
+
+    /// Return the identifier usage given that a number was used.
+    fn number(self) -> Self {
+        match self {
+            Self::None | Self::OnlyCitationNumber => Self::OnlyCitationNumber,
+            Self::OnlyCitationLabel | Self::Mixed => Self::Mixed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub enum DisambiguateState {
+    #[default]
     None,
     NameDisambiguation(NameDisambiguationProperties),
     Choose,
@@ -2454,11 +2507,36 @@ impl<'a, T: EntryLike> Context<'a, T> {
     /// Honors suppressions.
     fn resolve_number_variable(
         &self,
-        variable: csl_taxonomy::NumberVariable,
+        variable: NumberVariable,
         silent: bool,
     ) -> Option<NumberVariableResult<'a>> {
         if !silent {
             self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        }
+
+        // Replace the citation label with citation number if necessary.
+        if variable == NumberVariable::CitationNumber {
+            if self.bibliography {
+                if matches!(
+                    *self.instance.identifier_usage.borrow(),
+                    IdentifierUsage::OnlyCitationLabel
+                ) {
+                    return self
+                        .instance
+                        .resolve_standard_variable(
+                            LongShortForm::default(),
+                            StandardVariable::CitationLabel,
+                        )
+                        .map(|c| {
+                            NumberVariableResult::Regular(MaybeTyped::String(
+                                c.to_string(),
+                            ))
+                        });
+                }
+            } else {
+                *self.instance.identifier_usage.borrow_mut() =
+                    self.instance.identifier_usage.take().number();
+            }
         }
 
         self.writing.prepare_variable_query(variable)?;
@@ -2481,6 +2559,31 @@ impl<'a, T: EntryLike> Context<'a, T> {
     ) -> Option<Cow<'a, ChunkedString>> {
         if !silent {
             self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
+        }
+
+        // Replace the citation label with citation number if necessary.
+        if variable == StandardVariable::CitationLabel {
+            if self.bibliography {
+                if matches!(
+                    *self.instance.identifier_usage.borrow(),
+                    IdentifierUsage::OnlyCitationNumber
+                ) {
+                    return self
+                        .instance
+                        .resolve_number_variable(NumberVariable::CitationNumber)
+                        .map(|n| match n {
+                            NumberVariableResult::Regular(n) => {
+                                Cow::Owned(ChunkedString::from(n.to_string()))
+                            }
+                            NumberVariableResult::Transparent(_) => {
+                                panic!("unexpected transparent")
+                            }
+                        });
+                }
+            } else {
+                *self.instance.identifier_usage.borrow_mut() =
+                    self.instance.identifier_usage.take().label();
+            }
         }
 
         self.writing.prepare_variable_query(variable)?;
