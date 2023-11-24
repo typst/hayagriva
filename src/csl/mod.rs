@@ -847,27 +847,25 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
 fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
     let style = &cite.request.style;
 
-    let after_collapse_delim = style
-        .citation
-        .after_collapse_delimiter
-        .as_deref()
-        .or(style.citation.layout.delimiter.as_deref());
+    let after_collapse_delim = style.citation.after_collapse_delimiter.as_deref();
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
 
     match style.citation.collapse {
-        Some(Collapse::CitationNumber) if style.settings.class == StyleClass::InText => {
-            // Option with the start, end of the range and the next expected number.
-            let mut range_start: Option<(usize, usize, usize)> = None;
+        Some(Collapse::CitationNumber) => {
+            // Option with the start and end of the range.
+            let mut range_start: Option<(usize, usize)> = None;
 
             let end_range =
                 |items: &mut [SpeculativeItemRender<'a, T>],
-                 range_start: &mut Option<(usize, usize, usize)>| {
-                    if let &mut Some((start, end, _)) = range_start {
-                        if start < end {
-                            items[start].delim_override = after_collapse_delim;
+                 range_start: &mut Option<(usize, usize)>| {
+                    if let &mut Some((start, end)) = range_start {
+                        // There should be at least three items in the range.
+                        if start + 1 < end {
+                            items[end].delim_override =
+                                after_collapse_delim.or(Some("–"));
 
-                            for item in &mut items[start + 1..=end] {
+                            for item in &mut items[start + 1..end] {
                                 item.hidden = true;
                             }
                         }
@@ -877,35 +875,48 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                 };
 
             for i in 0..cite.items.len() {
-                if cite.items[i].hidden
-                    || cite.items[i].rendered.get_meta(ElemMeta::CitationNumber).is_none()
-                {
-                    end_range(&mut cite.items, &mut range_start);
-                    continue;
-                }
+                let citation_number = {
+                    // Item must be borrowed in this block only because it
+                    // cannot be mutably borrowed below otherwise.
+                    let item = &cite.items[i];
+                    if item.hidden
+                        || item.rendered.get_meta(ElemMeta::CitationNumber).is_none()
+                    {
+                        end_range(&mut cite.items, &mut range_start);
+                        continue;
+                    }
 
-                match range_start {
-                    Some((start, end, next))
+                    item.cite_props.speculative.citation_number
+                };
+
+                let prev_citation_number = match range_start {
+                    Some((_, end)) => {
+                        Some(cite.items[end].cite_props.speculative.citation_number)
+                    }
+                    None => None,
+                };
+
+                match (range_start, prev_citation_number) {
+                    (Some((start, end)), Some(prev_citation_number))
                         if end + 1 == i
-                            && cite.items[i].cite_props.speculative.citation_number
-                                == next =>
+                            && prev_citation_number + 1 == citation_number =>
                     {
                         // Extend the range.
-                        range_start = Some((start, i, next + 1));
+                        range_start = Some((start, i));
                     }
                     _ => {
                         end_range(&mut cite.items, &mut range_start);
-                        range_start = Some((
-                            i,
-                            i,
-                            cite.items[i].cite_props.speculative.citation_number + 1,
-                        ));
+                        range_start = Some((i, i));
                     }
                 }
             }
+
+            end_range(&mut cite.items, &mut range_start);
         }
-        Some(Collapse::CitationNumber) => {}
         Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
+            let after_collapse_delim =
+                after_collapse_delim.or(style.citation.layout.delimiter.as_deref());
+
             // Index of where the current group started and the group we are
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
@@ -918,12 +929,12 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                         cite.items[i].collapse_verdict = Some(CollapseVerdict::First);
                     }
                     // This is a different group.
-                    Some((i, _)) => {
+                    Some((start, _)) if start + 1 < i => {
                         cite.items[i].delim_override = after_collapse_delim;
                         group_idx = cite.items[i].group_idx.map(|idx| (i, idx));
                     }
                     // We are at the beginning.
-                    None => {
+                    _ => {
                         group_idx = cite.items[i].group_idx.map(|idx| (i, idx));
                     }
                 }

@@ -117,7 +117,15 @@ impl RenderCsl for citationberg::Text {
         ctx.commit_elem(
             depth,
             self.display,
-            matches!(&self.target, TextTarget::Variable { .. }).then_some(ElemMeta::Text),
+            match self.target {
+                TextTarget::Variable { var, .. }
+                    if var == NumberVariable::CitationNumber.into() =>
+                {
+                    Some(ElemMeta::CitationNumber)
+                }
+                TextTarget::Variable { .. } => Some(ElemMeta::Text),
+                _ => None,
+            },
         );
     }
 
@@ -165,7 +173,8 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                 if !matches!(
                     text.target,
                     TextTarget::Variable {
-                        var: Variable::Standard(StandardVariable::YearSuffix),
+                        var: Variable::Standard(StandardVariable::YearSuffix)
+                            | Variable::Number(NumberVariable::Locator),
                         ..
                     },
                 ) {
@@ -246,7 +255,7 @@ impl RenderCsl for citationberg::Number {
                 return false
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
-                return false
+                return self.variable == NumberVariable::Locator
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
@@ -304,7 +313,11 @@ impl RenderCsl for citationberg::Label {
                 SpecialForm::VarOnly(_)
                 | SpecialForm::OnlyFirstDate
                 | SpecialForm::OnlyYearSuffix,
-            ) => return,
+            ) => {
+                if self.variable != NumberVariable::Locator {
+                    return;
+                }
+            }
             _ => {}
         }
 
