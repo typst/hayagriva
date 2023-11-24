@@ -1,3 +1,39 @@
+# 0.5.0
+
+- **Breaking change:** The API for archived styles has changed.
+- **Breaking change:** The name of the GB/T 7714 family of styles have been
+  corrected to `gb-7714-...` from `gb-7114-...`.
+- **Breaking change:** The reexported `TypeErrorKind` and `ParseErrorKind` enums
+  in `biblatex` have added variants and become non-exhaustive.
+- Date parsing will not panic anymore
+  (https://github.com/typst/typst/issues/2553).
+- Anthos entries now properly recognize their parent (#72,
+  https://github.com/typst/typst/issues/2572). Thanks, @zepinglee!
+- Proceedings titles will now be printed correctly (#78). Thanks, @vtta!
+- Citation numbers will now collapse if the style requests it.
+- Escaping in format and chunked strings now works
+  (https://github.com/typst/typst/issues/2669).
+- The old behavior of the alphanumeric style has been restored.
+- Bibliographies now forcibly print the alphanumeric `citation-label` instead of
+  the `citation-number` if the cite only printed the former (and vice-versa;
+  https://github.com/typst/typst/issues/2707).
+- We dropped the dependency on `rkyv` in favor of code generation in a test.
+  This should resolve build problems on some platforms.
+- The retrieval of the volume variable is now more robust (#82). Thanks,
+  @mpmdean!
+- Fixed delimiter order for contributors (#73). Thanks, @zepinglee!
+- Page ranges can now be strings (#83).
+- Page ranges will now use the correct delimiter, even if printed with `cs:text`
+- Fixed a bug with the suppression of empty groups
+  (https://github.com/typst/typst/issues/2548).
+- Bumped `citationberg` to solve a CSL locale fallback issue that affected
+  https://github.com/typst/typst/issues/2548
+- Bumped the `biblatex` crate to 0.9.0 to fix BibLaTeX parsing bugs (e.g.
+  https://github.com/typst/biblatex/issues/41,
+  https://github.com/typst/biblatex/issues/33,
+  https://github.com/typst/biblatex/issues/40,
+  https://github.com/typst/typst/issues/2751, #81)
+
 # 0.4.0
 
 ## Breaking changes:
