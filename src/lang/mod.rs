@@ -39,7 +39,7 @@ impl Default for TitleCase {
     fn default() -> Self {
         Self {
             always_capitalize_after_punctuation: true,
-            always_capitalize_last_word: true,
+            always_capitalize_last_word: false,
             always_capitalize_min_len: None,
             hyphen_word_separator: true,
             keep_all_uppercase_words: true,
@@ -173,8 +173,7 @@ impl CharClass {
                 }
             }
             _ if c.is_whitespace()
-                || (hyphen_separates && matches!(c, '-' | '–' | '—'))
-                || matches!(c, '\'' | '’') =>
+                || (hyphen_separates && matches!(c, '-' | '–' | '—')) =>
             {
                 match self {
                     Self::MaybeNewSentence => Self::NewSentence,
@@ -318,6 +317,7 @@ impl WordData {
     }
 }
 
+#[derive(Debug)]
 enum WordVerdict {
     AllUpper,
     Capitalize,
@@ -387,7 +387,9 @@ impl CaseFolder {
         self.push_str(value);
         self.last_reconfig = self.buf.len();
         self.case = conf;
+        self.char_class = CharClass::InWord;
     }
+
     /// Add a string chunk to the buffer.
     pub fn push_chunk(&mut self, chunk: &FoldableStringChunk) {
         match chunk.kind {
@@ -863,7 +865,11 @@ mod tests {
 
     #[test]
     fn title_case_last_word() {
-        let case: Case = TitleCase::new().into();
+        let case: Case = TitleCase {
+            always_capitalize_last_word: true,
+            ..Default::default()
+        }
+        .into();
 
         let title = case.transform("a holistic investigation of me in general so ");
         assert_eq!("A Holistic Investigation of Me in General So", title);
@@ -892,6 +898,12 @@ mod tests {
 
         let title = case.transform("");
         assert_eq!("", title);
+
+        let title = case.transform("The reason I've got");
+        assert_eq!("The Reason I've Got", title);
+
+        let title = case.transform("UK");
+        assert_eq!("UK", title);
     }
 
     #[test]
@@ -901,6 +913,16 @@ mod tests {
         let title =
             case.transform("Around a table: the reason why we just could not care");
         assert_eq!("Around a Table: The Reason Why We Just Could Not Care", title);
+    }
+
+    #[test]
+    fn title_case_verbatim() {
+        let case: Case = TitleCase::new().into();
+        let mut folder = CaseFolder::with_config(case);
+        folder.push_str("I am ");
+        folder.push_verbatim("S");
+        folder.push_str("tokes");
+        assert_eq!("I Am Stokes", folder.finish());
     }
 
     #[test]
@@ -919,8 +941,8 @@ mod tests {
         let mut props = TitleCase::new();
         let case: Case = props.into();
 
-        let title = case.transform("Exploring NASA's new moon strategy");
-        assert_eq!("Exploring NASA's New Moon Strategy", title);
+        let title = case.transform("Exploring the NASA deep labs");
+        assert_eq!("Exploring the NASA Deep Labs", title);
 
         props.keep_all_uppercase_words = false;
         let case: Case = props.into();
@@ -960,6 +982,20 @@ mod tests {
             "This page is not for discussions. Please use the table below to find the most appropriate section to post.",
             title
         );
+    }
+
+    #[test]
+    fn online() {
+        let case: Case = TitleCase::new().into();
+        let mut folder = CaseFolder::with_config(case);
+        folder.push_str("hello world ");
+        folder.push_str("[");
+        let case = folder.case;
+        folder.reconfigure(Case::FirstUpper);
+        folder.push_str("online");
+        folder.reconfigure(case);
+        folder.push_str("]");
+        assert_eq!("Hello World [Online]", folder.finish());
     }
 
     #[test]
