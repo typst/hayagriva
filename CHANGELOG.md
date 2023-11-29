@@ -1,3 +1,8 @@
+# 0.5.1
+
+- Fixed spacing around math blocks
+- Fixed title case formatting next to `{verbatim}` blocks and apostrophes
+
 # 0.5.0
 
 - **Breaking change:** The API for archived styles has changed.
