@@ -374,6 +374,12 @@ impl CaseFolder {
         self.pristine = false;
     }
 
+    /// Prevent whitespace trimming before and after the current position.
+    pub fn prevent_trimming(&mut self) {
+        self.last_reconfig = self.buf.len();
+        self.pristine = false;
+    }
+
     /// Add a string chunk to the buffer.
     pub fn push_verbatim(&mut self, value: &str) {
         let conf = mem::replace(&mut self.case, Case::NoTransform);

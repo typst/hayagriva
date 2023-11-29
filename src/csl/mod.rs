@@ -1875,6 +1875,12 @@ impl WritingContext {
         UsageInfoIdx(idx)
     }
 
+    /// Reconfigures the case folder's case to the current
+    fn reconfigure(&mut self) {
+        self.buf
+            .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
+    }
+
     /// Pop an element from the usage info stack.
     fn pop_usage_info(&mut self, idx: UsageInfoIdx) -> UsageInfo {
         let info = self.usage_info.get_mut();
@@ -2316,9 +2322,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn push_str(&mut self, s: &str) {
         let s = self.do_pull_punctuation(s);
 
-        self.writing.buf.reconfigure(
-            (*self.writing.cases.last()).map(Into::into).unwrap_or_default(),
-        );
+        self.writing.reconfigure();
 
         fn last_buffer(ctx: &mut WritingContext) -> Option<&mut String> {
             let last = ctx
@@ -2387,12 +2391,15 @@ impl<'a, T: EntryLike> Context<'a, T> {
                     self.writing.pull_punctuation = false;
                 }
                 ChunkKind::Math => {
+                    self.writing.buf.prevent_trimming();
                     self.writing.save_to_block();
                     self.writing
                         .elem_stack
                         .last_mut()
                         .0
-                        .push(ElemChild::Markup(chunk.value.clone()))
+                        .push(ElemChild::Markup(chunk.value.clone()));
+                    self.writing.reconfigure();
+                    self.writing.buf.prevent_trimming();
                 }
             }
         }
