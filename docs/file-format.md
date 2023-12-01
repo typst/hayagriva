@@ -311,8 +311,8 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | string or dictionary of strings                           |
-| **Description:** | Any serial number. If you have serial numbers of well-known schemes like  `doi`, you can put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn` `issn`, `pmid`, `pmcid`, and `arxiv` |
-| **Example:**     | `serial-number: 2003.13722` or <pre>serial-number:<br>    doi: "10.22541/au.148771883.35456290"<br>    arxiv: "1906.00356"</pre> |
+| **Description:** | Any serial number, including article numbers. If you have serial numbers of well-known schemes like  `doi`, you can put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn` `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well. |
+| **Example:**     | `serial-number: 2003.13722` or <pre>serial-number:<br>    doi: "10.22541/au.148771883.35456290"<br>    arxiv: "1906.00356"<br>    serial: "8516"</pre> |
 
 #### `language`
 
