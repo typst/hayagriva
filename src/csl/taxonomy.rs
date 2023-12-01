@@ -409,7 +409,13 @@ impl EntryLike for Entry {
                     "p",
                 )
                 .map(|e| e.affiliated_with_role(PersonRole::Director)),
-            NameVariable::Editor => self.editors().map(|a| a.iter().collect()),
+            NameVariable::Editor => {
+                self.editors().map(|a| a.iter().collect()).or_else(|| {
+                    self.get_container()
+                        .and_then(|e| e.editors())
+                        .map(|a| a.iter().collect())
+                })
+            }
             NameVariable::EditorialDirector => None,
             NameVariable::EditorTranslator => {
                 let translator = self.affiliated_with_role(PersonRole::Translator);
