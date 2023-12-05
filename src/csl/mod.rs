@@ -2390,6 +2390,11 @@ impl<'a, T: EntryLike> Context<'a, T> {
                     self.writing.buf.push_verbatim(&chunk.value);
                     self.writing.pull_punctuation = false;
                 }
+                ChunkKind::Quote => {
+                    self.push_quotes();
+                    self.push_str(&chunk.value);
+                    self.pop_quotes();
+                }
                 ChunkKind::Math => {
                     self.writing.buf.prevent_trimming();
                     self.writing.save_to_block();
