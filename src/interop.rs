@@ -524,6 +524,14 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        if let Some(abstract_) = map_res(entry.abstract_())? {
+            item.set_abstract_(abstract_.into())
+        }
+
+        if let Some(annote) = map_res(entry.annotation())? {
+            item.set_annote(annote.into())
+        }
+
         if let Some(series) = map_res(entry.series())? {
             let title: FormatString = series.into();
             let mut new = Entry::new(&entry.key, item.entry_type);

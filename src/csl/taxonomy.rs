@@ -209,8 +209,13 @@ impl EntryLike for Entry {
     ) -> Option<Cow<'_, ChunkedString>> {
         let entry = self;
         match variable {
-            StandardVariable::Abstract => None,
-            StandardVariable::Annote => None,
+            StandardVariable::Abstract => entry
+                .map(|e| e.abstract_())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::Annote => {
+                entry.map(|e| e.annote()).map(|f| f.select(form)).map(Cow::Borrowed)
+            }
             StandardVariable::Archive => {
                 entry.map(|e| e.archive()).map(|f| f.select(form)).map(Cow::Borrowed)
             }
@@ -264,7 +269,9 @@ impl EntryLike for Entry {
                 .and_then(Entry::location)
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
-            StandardVariable::Genre => None,
+            StandardVariable::Genre => {
+                entry.map(|e| e.genre()).map(|f| f.select(form)).map(Cow::Borrowed)
+            }
             StandardVariable::ISBN => {
                 entry.isbn().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
             }
