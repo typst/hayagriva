@@ -409,6 +409,58 @@ impl Display for QualifiedUrl {
     }
 }
 
+derive_or_from_str! {
+    /// A publisher, possibly with a location.
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct Publisher where "FormatString string or dictionary with \"name\" and \"location\"" {
+        /// Publisher of the item.
+        name: FormatString,
+        /// Physical location at which the item was published or created.
+        location: Option<FormatString>,
+    }
+}
+
+impl Serialize for Publisher {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if let Some(location) = &self.location {
+            let mut map = serializer.serialize_map(Some(2))?;
+            map.serialize_entry("name", &self.name)?;
+            map.serialize_entry("location", location)?;
+            map.end()
+        } else {
+            self.name.serialize(serializer)
+        }
+    }
+}
+
+impl Publisher {
+    /// Create a new publisher.
+    pub fn new(name: FormatString, location: Option<FormatString>) -> Self {
+        Self { name, location }
+    }
+
+    /// Publisher of the item.
+    pub fn name(&self) -> &FormatString {
+        &self.name
+    }
+
+    /// Physical location at which the item was published or created.
+    pub fn location(&self) -> Option<&FormatString> {
+        self.location.as_ref()
+    }
+}
+
+impl FromStr for Publisher {
+    type Err = ChunkedStrParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Publisher::new(FormatString::from_str(s)?, None))
+    }
+}
+
 /// A set of serial numbers like DOIs, ISBNs, or ISSNs.
 /// Keys should be lowercase.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Hash)]

@@ -291,11 +291,11 @@ impl EntryLike for Entry {
             StandardVariable::OriginalPublisher => entry
                 .get_original()
                 .and_then(|e| e.publisher())
-                .map(|f| f.select(form))
+                .map(|p| p.name().select(form))
                 .map(Cow::Borrowed),
             StandardVariable::OriginalPublisherPlace => entry
                 .get_original()
-                .and_then(|e| e.publisher().and_then(|_| e.location()))
+                .and_then(|e| e.publisher().and_then(|p| p.location()))
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::OriginalTitle => entry
@@ -312,11 +312,11 @@ impl EntryLike for Entry {
             }
             StandardVariable::Publisher => entry
                 .map(|e| e.publisher())
-                .map(|f| f.select(form))
+                .map(|p| p.name().select(form))
                 .map(Cow::Borrowed),
             StandardVariable::PublisherPlace => entry
-                .map(|e| if e.publisher().is_some() { Some(e) } else { None })
-                .and_then(|e| e.location())
+                .map(|e| e.publisher())
+                .and_then(|p| p.location())
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::References => None,

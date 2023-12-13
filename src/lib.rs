@@ -504,9 +504,10 @@ entry! {
     #[serde(serialize_with = "serialize_one_or_many_opt")]
     #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "affiliated" => affiliated: Vec<PersonsWithRoles> | [PersonsWithRoles],
-    /// Publisher of the item.
-    "publisher" => publisher: FormatString,
-    /// Physical location at which the item was published or created.
+    /// Publisher of the item. May be a string or a dictionary with `name` and
+    /// `location` (both strings).
+    "publisher" => publisher: Publisher,
+    /// Physical location at the event took place.
     "location" => location: FormatString,
     /// Organization at/for which the item was created.
     "organization" => organization: FormatString,
