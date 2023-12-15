@@ -414,7 +414,7 @@ derive_or_from_str! {
     #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct Publisher where "FormatString string or dictionary with \"name\" and \"location\"" {
         /// Publisher of the item.
-        name: FormatString,
+        name: Option<FormatString>,
         /// Physical location at which the item was published or created.
         location: Option<FormatString>,
     }
@@ -438,13 +438,13 @@ impl Serialize for Publisher {
 
 impl Publisher {
     /// Create a new publisher.
-    pub fn new(name: FormatString, location: Option<FormatString>) -> Self {
+    pub fn new(name: Option<FormatString>, location: Option<FormatString>) -> Self {
         Self { name, location }
     }
 
     /// Publisher of the item.
-    pub fn name(&self) -> &FormatString {
-        &self.name
+    pub fn name(&self) -> Option<&FormatString> {
+        self.name.as_ref()
     }
 
     /// Physical location at which the item was published or created.
@@ -457,7 +457,7 @@ impl FromStr for Publisher {
     type Err = ChunkedStrParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Publisher::new(FormatString::from_str(s)?, None))
+        Ok(Publisher::new(Some(FormatString::from_str(s)?), None))
     }
 }
 

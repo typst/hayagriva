@@ -431,7 +431,14 @@ impl TryFrom<&tex::Entry> for Entry {
             map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
         {
             let location = map_res(entry.location())?.map(|d| d.into());
-            let publisher = Publisher::new(publisher_name, location);
+            let publisher = Publisher::new(Some(publisher_name), location);
+            if let Some(parent) = book(&mut item, parent) {
+                parent.set_publisher(publisher);
+            } else {
+                item.set_publisher(publisher);
+            }
+        } else if let Some(location) = map_res(entry.location())?.map(|d| d.into()) {
+            let publisher = Publisher::new(None, Some(location));
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_publisher(publisher);
             } else {
