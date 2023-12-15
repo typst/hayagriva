@@ -115,7 +115,8 @@ quantized-vortex:
     title: Structure of a Quantized Vortex in Boson Systems
     date: 1961-05
     page-range: 454-477
-    doi: 10.1007/BF02731494
+    serial-number:
+        doi: 10.1007/BF02731494
     parent:
         issue: 3
         volume: 20
@@ -354,6 +355,7 @@ macro_rules! entry {
                 struct MyVisitor;
 
                 #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
                 struct NakedEntry {
                     #[serde(rename = "type")]
                     entry_type: Option<EntryType>,
