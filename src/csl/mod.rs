@@ -2835,23 +2835,25 @@ enum SpecialForm {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, path::Path};
+
     use citationberg::LocaleFile;
 
-    use crate::io::from_yaml_str;
-
     use super::*;
-    use std::fs;
+    use crate::io::from_yaml_str;
 
     #[test]
     fn test_csl() {
-        let en_locale = fs::read_to_string("tests/data/locales-en-US.xml").unwrap();
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let en_locale =
+            fs::read_to_string(workspace.join("tests/data/locales-en-US.xml")).unwrap();
         let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
 
-        let yaml = fs::read_to_string("tests/data/basic.yml").unwrap();
+        let yaml = fs::read_to_string(workspace.join("tests/data/basic.yml")).unwrap();
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 
-        for style_thing in fs::read_dir("../styles/").unwrap().take(100) {
+        for style_thing in fs::read_dir(workspace.join("styles/")).unwrap().take(100) {
             let thing = style_thing.unwrap();
             if thing.file_type().unwrap().is_dir() {
                 continue;
