@@ -1197,35 +1197,52 @@ impl<'a> StyleContext<'a> {
                 ctx.set_special_form(Some(SpecialForm::VarOnly(author_var)));
                 do_regular(ctx);
             } else {
-                // Render name from bibliography.
-                ctx.set_special_form(Some(SpecialForm::VarOnly(author_var)));
-                let needs_synthesis = if let Some(bibliography) = &self.csl.bibliography {
-                    if bibliography.layout.will_render(ctx, author_var) {
-                        ctx.writing.push_name_options(&bibliography.name_options);
-                        bibliography.layout.render(ctx);
-                        ctx.writing.pop_name_options();
-                        false
-                    } else {
-                        true
-                    }
-                } else {
-                    true
-                };
+                let mut needs_bibliography = true;
 
-                if needs_synthesis {
-                    // We build our own name and render it with the citation's
-                    // properties.
-                    let layout = Layout::new(
-                        vec![LayoutRenderingElement::Names(Names::with_variables(vec![
-                            NameVariable::Author,
-                        ]))],
-                        self.csl.citation.layout.to_formatting(),
-                        None,
-                        None,
-                    );
-                    ctx.writing.push_name_options(&self.csl.citation.name_options);
-                    layout.render(ctx);
-                    ctx.writing.pop_name_options();
+                // Render name from citation with ibid forced to Different.
+                if ctx.instance.cite_props.speculative.ibid != IbidState::Different {
+                    let prev_ibid = ctx.instance.cite_props.speculative.ibid;
+                    ctx.instance.cite_props.speculative.ibid = IbidState::Different;
+                    if self.csl.citation.layout.will_render(ctx, author_var) {
+                        ctx.set_special_form(Some(SpecialForm::VarOnly(author_var)));
+                        do_regular(ctx);
+                        needs_bibliography = false;
+                    }
+                    ctx.instance.cite_props.speculative.ibid = prev_ibid;
+                }
+
+                if needs_bibliography {
+                    // Render name from bibliography.
+                    ctx.set_special_form(Some(SpecialForm::VarOnly(author_var)));
+                    let needs_synthesis =
+                        if let Some(bibliography) = &self.csl.bibliography {
+                            if bibliography.layout.will_render(ctx, author_var) {
+                                ctx.writing.push_name_options(&bibliography.name_options);
+                                bibliography.layout.render(ctx);
+                                ctx.writing.pop_name_options();
+                                false
+                            } else {
+                                true
+                            }
+                        } else {
+                            true
+                        };
+
+                    if needs_synthesis {
+                        // We build our own name and render it with the citation's
+                        // properties.
+                        let layout = Layout::new(
+                            vec![LayoutRenderingElement::Names(Names::with_variables(
+                                vec![NameVariable::Author],
+                            ))],
+                            self.csl.citation.layout.to_formatting(),
+                            None,
+                            None,
+                        );
+                        ctx.writing.push_name_options(&self.csl.citation.name_options);
+                        layout.render(ctx);
+                        ctx.writing.pop_name_options();
+                    }
                 }
             }
             ctx.set_special_form(None);
