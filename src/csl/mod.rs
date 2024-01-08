@@ -2285,6 +2285,16 @@ impl<'a, T: EntryLike> Context<'a, T> {
                     .and_then(|p| p.0.last_mut())
                 {
                     Some(ElemChild::Text(f)) => &mut f.text,
+                    // Get the text element if it is contained in an `Elem`.
+                    Some(ElemChild::Elem(Elem { children, .. }))
+                        if children.0.len() == 1
+                            && matches!(children.0[0], ElemChild::Text(_)) =>
+                    {
+                        match &mut children.0[0] {
+                            ElemChild::Text(f) => &mut f.text,
+                            _ => unreachable!(),
+                        }
+                    }
                     _ => {
                         used_buf = true;
                         self.writing.buf.as_string_mut()
