@@ -355,7 +355,6 @@ macro_rules! entry {
                 struct MyVisitor;
 
                 #[derive(Deserialize)]
-                #[serde(deny_unknown_fields)]
                 struct NakedEntry {
                     #[serde(rename = "type")]
                     entry_type: Option<EntryType>,
