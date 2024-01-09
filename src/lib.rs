@@ -115,7 +115,8 @@ quantized-vortex:
     title: Structure of a Quantized Vortex in Boson Systems
     date: 1961-05
     page-range: 454-477
-    doi: 10.1007/BF02731494
+    serial-number:
+        doi: 10.1007/BF02731494
     parent:
         issue: 3
         volume: 20
