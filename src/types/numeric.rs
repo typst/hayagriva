@@ -392,6 +392,9 @@ impl NumericValue {
                                 && start + 1 == end))
                     {
                         Some(start..end)
+                    } else if first_delim == Some(NumericDelimiter::Hyphen) {
+                        // Handle shorthand notation like `100-4` for `100-104`
+                        Some(start..end)
                     } else {
                         None
                     }
