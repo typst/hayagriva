@@ -88,6 +88,7 @@ impl RenderCsl for citationberg::Text {
                 NumberVariableResult::Regular(n)
                     if matches!(var, NumberVariable::Page) =>
                 {
+                    // TODO: Remove this hack
                     ctx.push_str(&n.to_str().replace("-", "–"))
                 }
                 NumberVariableResult::Regular(n) => ctx.push_str(&n.to_str()),
