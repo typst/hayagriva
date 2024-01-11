@@ -16,7 +16,6 @@ use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
     Entry, LocatorPayload, SpecificLocator,
 };
-use unic_langid::LanguageIdentifier;
 use unscanny::Scanner;
 
 const TEST_REPO_NAME: &str = "test-suite";
@@ -663,11 +662,9 @@ fn language() {
 
     let mut locale: Option<LocaleCode> = None;
     if let Some(lang) = entry.language() {
-        let lang_string = lang.language.to_string();
-        if lang_string == "russian" {
-            locale = Some(LocaleCode(String::from("ru-RU")));
-        } else {
-            locale = Some(LocaleCode(String::from("en-US")));
+        let lang_string = lang.language.as_str();
+        if let Some(value) = hayagriva::lang::codes::get_mapping(lang_string) {
+            locale = Some(LocaleCode(String::from(value)));
         }
     }
 
@@ -686,5 +683,5 @@ fn language() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, "Retrieved 2021, from https://example.com/");
+    assert_eq!(buf, "aboba [электронный ресурс]. URL: https://example.com/ (дата обращения: 03.06.2023)");
 }

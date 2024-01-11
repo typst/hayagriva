@@ -4,6 +4,8 @@ use std::io::ErrorKind as IoErrorKind;
 use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
+#[macro_use]
+extern crate lazy_static;
 
 use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
@@ -14,6 +16,7 @@ use strum::{EnumVariantNames, VariantNames};
 use hayagriva::archive::{locales, ArchivedStyle};
 use hayagriva::{io, BibliographyDriver, CitationItem, CitationRequest};
 use hayagriva::{BibliographyRequest, Selector};
+use hayagriva::lang::get_mapping;
 
 #[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]

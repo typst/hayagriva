@@ -2,6 +2,7 @@
 
 pub(crate) mod en;
 pub(crate) mod name;
+pub mod codes;
 
 use std::{fmt::Write, mem};
 

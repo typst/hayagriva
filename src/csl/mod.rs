@@ -18,6 +18,7 @@ use citationberg::{
     StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
+use indexmap::IndexSet;
 
 use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
@@ -101,7 +102,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         let bib_style = request.style();
 
         // Only remember each entry once, even if it is cited multiple times.
-        let mut entry_set = HashSet::new();
+        let mut entry_set = IndexSet::new();
         for req in self.citations.iter() {
             for item in req.items.iter() {
                 entry_set.insert(CitationItem::new(
@@ -1538,7 +1539,7 @@ impl<'a> StyleContext<'a> {
     /// Get the locale for the given language in the style.
     fn lookup_locale<F, R>(&self, mut f: F, req: Option<&LocaleCode>) -> Option<R>
     where
-        F: FnMut(&'a Locale) -> Option<R>,
+        F: FnMut(&'a Locale) -> Option<R>
     {
         let mut lookup = |file: &'a [Locale], lang: Option<&LocaleCode>| {
             #[allow(clippy::redundant_closure)]
@@ -1547,6 +1548,7 @@ impl<'a> StyleContext<'a> {
 
         let locale = self.locale();
         let en_us = LocaleCode::en_us();
+
 
         for (i, resource) in [self.csl.locale.as_slice(), self.locale_files]
             .into_iter()
@@ -2269,7 +2271,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .into(),
             TermForm::default(),
             false,
-            None
+            None,
         );
 
         if let Some(mark) = mark {
@@ -2491,7 +2493,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
                 term = locator.0.into();
             }
         }
-
 
         let mut form = Some(form);
         while let Some(current_form) = form {
