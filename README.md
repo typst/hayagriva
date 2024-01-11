@@ -6,7 +6,7 @@
 
 Rusty bibliography management.
 
-Hayagriva is a tool that can help your or your apps deal with literature and
+Hayagriva is a tool that can help you or your apps deal with literature and
 other media. Its features include:
 
 - Data structures for literature collections
