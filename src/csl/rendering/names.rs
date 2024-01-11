@@ -179,7 +179,7 @@ impl RenderCsl for Names {
             && self.variable.contains(&NameVariable::Editor)
             && self.variable.contains(&NameVariable::Translator)
             && ctx
-                .term(NameVariable::EditorTranslator.into(), TermForm::default(), false)
+                .term(NameVariable::EditorTranslator.into(), TermForm::default(), false, None)
                 .is_some()
         {
             let editors = ctx.resolve_name_variable(NameVariable::Editor, false);
@@ -335,7 +335,7 @@ impl RenderCsl for Names {
                             render_label_with_var(
                                 label,
                                 ctx,
-                                ctx.term(variable.into(), label.form, plural)
+                                ctx.term(variable.into(), label.form, plural, None)
                                     .unwrap_or_default(),
                             )
                         }
@@ -444,7 +444,7 @@ fn add_names<T: EntryLike>(
                     ctx.push_str(" ");
                     ctx.push_str(match and {
                         NameAnd::Text => ctx
-                            .term(Term::Other(OtherTerm::And), TermForm::default(), false)
+                            .term(Term::Other(OtherTerm::And), TermForm::default(), false, None)
                             .unwrap_or_default(),
                         NameAnd::Symbol => "&",
                     });
@@ -454,7 +454,7 @@ fn add_names<T: EntryLike>(
                     ctx.push_str(name_opts.delimiter);
                     ctx.push_str(match and {
                         NameAnd::Text => ctx
-                            .term(Term::Other(OtherTerm::And), TermForm::default(), false)
+                            .term(Term::Other(OtherTerm::And), TermForm::default(), false, None)
                             .unwrap_or_default(),
                         NameAnd::Symbol => "&",
                     });
@@ -503,7 +503,7 @@ fn add_names<T: EntryLike>(
         }
     } else if has_et_al {
         let cs_et_al = names.et_al().cloned().unwrap_or_default();
-        if let Some(term) = ctx.term(cs_et_al.term.into(), TermForm::default(), false) {
+        if let Some(term) = ctx.term(cs_et_al.term.into(), TermForm::default(), false, None) {
             let delim = match name_opts.delimiter_precedes_et_al {
                 DelimiterBehavior::Always => true,
                 DelimiterBehavior::Contextual if take >= 2 => true,

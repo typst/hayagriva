@@ -16,6 +16,7 @@ use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
     Entry, LocatorPayload, SpecificLocator,
 };
+use unic_langid::LanguageIdentifier;
 use unscanny::Scanner;
 
 const TEST_REPO_NAME: &str = "test-suite";
@@ -624,6 +625,55 @@ fn access_date() {
     let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
     driver.citation(CitationRequest::new(
         vec![CitationItem::new(entry, None, None, false, None)],
+        &style,
+        None,
+        &locales,
+        Some(1),
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(&style, None, &locales));
+    let mut buf = String::new();
+    rendered.bibliography.unwrap().items[0]
+        .content
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, "Retrieved 2021, from https://example.com/");
+}
+
+#[test]
+fn language() {
+    let style = ArchivedStyle::by_name("gost-r-705-2008-numeric").unwrap().get();
+    let locales = locales();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let lib = from_biblatex_str(
+        r#"@online{test,
+        url={https://example.com},
+        title={aboba},
+        urldate={2023-06-03},
+        language={russian},
+        location={aboba},
+        note={aboooooba}
+      }"#,
+    )
+    .unwrap();
+    let entry = lib.get("test").unwrap();
+
+    let mut locale: Option<LocaleCode> = None;
+    if let Some(lang) = entry.language() {
+        let lang_string = lang.language.to_string();
+        if lang_string == "russian" {
+            locale = Some(LocaleCode(String::from("ru-RU")));
+        } else {
+            locale = Some(LocaleCode(String::from("en-US")));
+        }
+    }
+
+    let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(entry, None, locale, false, None)],
         &style,
         None,
         &locales,

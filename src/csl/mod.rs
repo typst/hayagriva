@@ -18,7 +18,6 @@ use citationberg::{
     StyleClass, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
-use indexmap::IndexSet;
 
 use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
@@ -102,15 +101,20 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         let bib_style = request.style();
 
         // Only remember each entry once, even if it is cited multiple times.
-        let mut entry_set = IndexSet::new();
+        let mut entry_set = HashSet::new();
         for req in self.citations.iter() {
             for item in req.items.iter() {
-                entry_set.insert(item.entry);
+                entry_set.insert(CitationItem::new(
+                    item.entry,
+                    item.locator,
+                    item.locale.clone(),
+                    item.hidden,
+                    item.purpose,
+                ));
             }
         }
 
-        let mut entries: Vec<_> =
-            entry_set.into_iter().map(CitationItem::with_entry).collect();
+        let mut entries: Vec<_> = entry_set.into_iter().collect();
         bib_style.sort(
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
@@ -639,7 +643,7 @@ fn date_replacement<T: EntryLike>(
             )
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
-            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false)
+            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false, None)
         {
             no_date.to_string()
         } else {
@@ -1452,7 +1456,7 @@ impl<'a> BibliographyRequest<'a> {
 }
 
 /// A reference to an [`crate::Entry`] within a [`CitationRequest`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CitationItem<'a, T: EntryLike> {
     /// The entry to format.
     pub entry: &'a T,
@@ -1470,6 +1474,11 @@ pub struct CitationItem<'a, T: EntryLike> {
     initial_idx: usize,
 }
 
+impl<'a, T: EntryLike> Hash for CitationItem<'a, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.entry.key().hash(state);
+    }
+}
 impl<'a, T: EntryLike> CitationItem<'a, T> {
     /// Create a new citation item for the given entry.
     pub fn with_entry(entry: &'a T) -> Self {
@@ -1527,7 +1536,7 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Get the locale for the given language in the style.
-    fn lookup_locale<F, R>(&self, mut f: F) -> Option<R>
+    fn lookup_locale<F, R>(&self, mut f: F, req: Option<&LocaleCode>) -> Option<R>
     where
         F: FnMut(&'a Locale) -> Option<R>,
     {
@@ -1555,6 +1564,10 @@ impl<'a> StyleContext<'a> {
                 locale.fallback()
             };
 
+            if let Some(output) = lookup(resource, req) {
+                return Some(output);
+            }
+
             if let Some(output) = lookup(resource, Some(&locale)) {
                 return Some(output);
             }
@@ -1579,7 +1592,7 @@ impl<'a> StyleContext<'a> {
 
     /// Check whether to do punctuation in quotes.
     fn punctuation_in_quotes(&self) -> bool {
-        self.lookup_locale(|f| f.style_options?.punctuation_in_quote)
+        self.lookup_locale(|f| f.style_options?.punctuation_in_quote, None)
             .unwrap_or_default()
     }
 }
@@ -2256,6 +2269,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .into(),
             TermForm::default(),
             false,
+            None
         );
 
         if let Some(mark) = mark {
@@ -2278,6 +2292,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .into(),
             TermForm::default(),
             false,
+            None,
         );
 
         if let Some(mark) = mark {
@@ -2289,9 +2304,13 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
         if self.writing.pull_punctuation && s.starts_with(['.', ',', ';', '!', '?']) {
             let close_quote =
-                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
-            let close_inner_quote =
-                self.term(OtherTerm::CloseInnerQuote.into(), TermForm::default(), false);
+                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false, None);
+            let close_inner_quote = self.term(
+                OtherTerm::CloseInnerQuote.into(),
+                TermForm::default(),
+                false,
+                None,
+            );
 
             let mut used_buf = false;
             let buf = if self.writing.buf.is_empty() {
@@ -2460,19 +2479,29 @@ impl<'a, T: EntryLike> Context<'a, T> {
     }
 
     /// Get a term from the style.
-    fn term(&self, mut term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
+    fn term(
+        &self,
+        mut term: Term,
+        form: TermForm,
+        plural: bool,
+        lang: Option<&LocaleCode>,
+    ) -> Option<&'a str> {
         if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator) {
             if let Some(locator) = self.instance.cite_props.speculative.locator {
                 term = locator.0.into();
             }
         }
 
+
         let mut form = Some(form);
         while let Some(current_form) = form {
-            if let Some(localization) = self.style.lookup_locale(|l| {
-                let term = l.term(term, current_form)?;
-                Some(if plural { term.multiple() } else { term.single() })
-            }) {
+            if let Some(localization) = self.style.lookup_locale(
+                |l| {
+                    let term = l.term(term, current_form)?;
+                    Some(if plural { term.multiple() } else { term.single() })
+                },
+                lang,
+            ) {
                 return localization;
             }
 
@@ -2485,7 +2514,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     /// Get the gender of a term.
     fn gender(&self, term: Term) -> Option<GrammarGender> {
         if let Some(localization) =
-            self.style.lookup_locale(|l| l.term(term, TermForm::default()))
+            self.style.lookup_locale(|l| l.term(term, TermForm::default()), None)
         {
             localization.gender
         } else {
@@ -2496,13 +2525,13 @@ impl<'a, T: EntryLike> Context<'a, T> {
     /// Get a localized date format.
     fn localized_date(&self, form: DateForm) -> Option<&'a citationberg::Date> {
         self.style
-            .lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)))
+            .lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)), None)
     }
 
     /// Get the ordinal lookup object.
     fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
         self.style
-            .lookup_locale(|l| l.ordinals())
+            .lookup_locale(|l| l.ordinals(), None)
             .unwrap_or_else(OrdinalLookup::empty)
     }
 
