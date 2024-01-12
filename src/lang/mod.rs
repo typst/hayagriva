@@ -2,6 +2,8 @@
 
 pub(crate) mod en;
 pub(crate) mod name;
+
+/// This modules contains functions to use locale codes
 pub mod codes;
 
 use std::{fmt::Write, mem};

@@ -1,8 +1,9 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
+
 lazy_static! {
-    pub static ref LANGUAGE_CODE_MAPPING: HashMap<&'static str, &'static str> =
+    static ref LANGUAGE_CODE_MAPPING: HashMap<&'static str, &'static str> =
         HashMap::from([
             ("english", "en"),
             ("german", "ge"),
@@ -15,6 +16,7 @@ lazy_static! {
         ]);
 }
 
+/// This function returns mapping for required language
 pub fn get_mapping(s: &str) -> Option<&str> {
     return LANGUAGE_CODE_MAPPING.get(s).copied();
 }
