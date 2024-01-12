@@ -1537,9 +1537,10 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Get the locale for the given language in the style.
-    fn lookup_locale<F, R>(&self, mut f: F, req: Option<&LocaleCode>) -> Option<R>
+    /// Lookup order: item language -> citation language -> fallback
+    fn lookup_locale<F, R>(&self, mut f: F, item_locale: Option<&LocaleCode>) -> Option<R>
     where
-        F: FnMut(&'a Locale) -> Option<R>
+        F: FnMut(&'a Locale) -> Option<R>,
     {
         let mut lookup = |file: &'a [Locale], lang: Option<&LocaleCode>| {
             #[allow(clippy::redundant_closure)]
@@ -1548,7 +1549,6 @@ impl<'a> StyleContext<'a> {
 
         let locale = self.locale();
         let en_us = LocaleCode::en_us();
-
 
         for (i, resource) in [self.csl.locale.as_slice(), self.locale_files]
             .into_iter()
@@ -1566,14 +1566,17 @@ impl<'a> StyleContext<'a> {
                 locale.fallback()
             };
 
-            if let Some(output) = lookup(resource, req) {
+            // First, we lookup for item language
+            if let Some(output) = lookup(resource, item_locale) {
                 return Some(output);
             }
 
+            // Then we look up for global language
             if let Some(output) = lookup(resource, Some(&locale)) {
                 return Some(output);
             }
 
+            // Then we try to use fallback
             if fallback.is_some() {
                 if let Some(output) = lookup(resource, fallback.as_ref()) {
                     return Some(output);
