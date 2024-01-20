@@ -245,10 +245,10 @@ you only want to obtain a list of matching keys, use the `--keys` flag.
 
 If you are working with BibTeX, you can use your `.bib` file with Hayagriva just
 like you would use a `.yml` file. If you want to convert your `.bib` file to a
-`.yml` file, you can the CLI without any additional arguments. It will then
-show the YAML-formatted bibliography with key and selector filters applied on
-standard output. If you therefore want to convert your `.bib` file and save the
-result somewhere, you can just use `>`:
+`.yml` file, you can. Simply pass the `.bib` file to the CLI without any additional
+arguments. It will then show the YAML-formatted bibliography with key and selector
+filters applied on standard output. If you therefore want to convert your `.bib`
+file and save the result somewhere, you can just use `>`:
 ```bash
 hayagriva literature.bib > converted.yml
 ```
