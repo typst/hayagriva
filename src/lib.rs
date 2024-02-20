@@ -204,7 +204,7 @@ impl Library {
 
     /// Remove an entry from the library.
     pub fn remove(&mut self, key: &str) -> Option<Entry> {
-        self.0.remove(key)
+        self.0.shift_remove(key)
     }
 
     /// Get the length of the library.

@@ -45,3 +45,6 @@ required-features = ["cli"]
 name = "citeproc"
 path = "tests/citeproc.rs"
 required-features = ["csl-json"]
+
+[patch.crates-io]
+citationberg = { git = "https://github.com/typst/citationberg", rev = "be28dd4241ca6d7204f0cf5cddb34e6abe31f9a4"}

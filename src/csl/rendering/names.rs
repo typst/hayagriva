@@ -253,7 +253,7 @@ impl RenderCsl for Names {
                 for child in &substitute.children {
                     let len = ctx.writing.len();
                     if let LayoutRenderingElement::Names(names_child) = child {
-                        self.from_names_substitue(names_child).render(ctx)
+                        self.from_names_substitute(names_child).render(ctx)
                     } else {
                         child.render(ctx);
                     }
@@ -308,7 +308,11 @@ impl RenderCsl for Names {
                     p.iter()
                         .enumerate()
                         .map(|(i, _)| {
-                            if options.is_suppressed(i, p.len()) {
+                            if options.is_suppressed(
+                                i,
+                                p.len(),
+                                !ctx.instance.cite_props.certain.is_first,
+                            ) {
                                 None
                             } else {
                                 Some(default_form)
