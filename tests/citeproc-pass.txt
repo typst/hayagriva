@@ -278,7 +278,6 @@ number_SimpleNumberOrdinalLong
 number_SimpleNumberOrdinalShort
 number_SimpleNumberRoman
 number_StrangeError
-page_NoOption
 page_NumberPageFirst
 page_PluralDetectWithEndash
 plural_LabelForced
