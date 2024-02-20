@@ -347,8 +347,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                 );
 
                 //     - Add final locator
-                res[i].items[j].cite_props.speculative.locator =
-                    mem::take(&mut res[i].items[j].locator);
+                res[i].items[j].cite_props.speculative.locator = res[i].items[j].locator;
             }
         }
 
