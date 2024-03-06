@@ -278,8 +278,11 @@ number_SimpleNumberOrdinalLong
 number_SimpleNumberOrdinalShort
 number_SimpleNumberRoman
 number_StrangeError
+page_Chicago
+page_Chicago16
 page_NumberPageFirst
 page_PluralDetectWithEndash
+page_WithLocaleAndWeirdDelimiter
 plural_LabelForced
 position_NearNoteUnsupported
 position_TrueInCitation
