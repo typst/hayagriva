@@ -2508,7 +2508,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_number_variable(
         &self,
         variable: NumberVariable,
-        silent: bool,
     ) -> Option<NumberVariableResult<'a>> {
         // Replace the citation label with citation number if necessary.
         if variable == NumberVariable::CitationNumber {
@@ -2547,7 +2546,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
         &self,
         form: LongShortForm,
         variable: csl_taxonomy::StandardVariable,
-        silent: bool,
     ) -> Option<Cow<'a, ChunkedString>> {
         // Replace the citation label with citation number if necessary.
         if variable == StandardVariable::CitationLabel {
@@ -2586,7 +2584,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_date_variable(
         &self,
         variable: csl_taxonomy::DateVariable,
-        silent: bool,
     ) -> Option<Cow<'a, Date>> {
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.entry.resolve_date_variable(variable);
@@ -2600,7 +2597,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn resolve_name_variable(
         &self,
         variable: csl_taxonomy::NameVariable,
-        silent: bool,
     ) -> Vec<Cow<'a, Person>> {
         if self.writing.prepare_variable_query(variable).is_none() {
             return Vec::new();

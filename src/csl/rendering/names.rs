@@ -172,7 +172,7 @@ impl NameDisambiguationProperties {
 
 fn renders_given_special_form<T: EntryLike>(
     names: &Names,
-    ctx: &Context<T>,
+    ctx: &mut Context<T>,
     is_empty: bool,
 ) -> bool {
     match &ctx.instance.kind {
@@ -200,7 +200,7 @@ fn renders_given_special_form<T: EntryLike>(
             | SpecialForm::OnlyYearSuffix,
         ) => return false,
         Some(SpecialForm::SuppressAuthor) => {
-            if names.variable.iter().any(|v| &NameVariable::Author == v) {
+            if names.will_render(ctx, Variable::Name(NameVariable::Author)) {
                 return false;
             }
         }
@@ -222,8 +222,8 @@ impl RenderCsl for Names {
                 .term(NameVariable::EditorTranslator.into(), TermForm::default(), false)
                 .is_some()
         {
-            let editors = ctx.resolve_name_variable(NameVariable::Editor, false);
-            let translators = ctx.resolve_name_variable(NameVariable::Translator, false);
+            let editors = ctx.resolve_name_variable(NameVariable::Editor);
+            let translators = ctx.resolve_name_variable(NameVariable::Translator);
 
             let mut res = Vec::new();
             if !editors.is_empty() && editors == translators {
@@ -242,7 +242,7 @@ impl RenderCsl for Names {
         } else {
             self.variable
                 .iter()
-                .map(|v| (ctx.resolve_name_variable(*v, false), *v))
+                .map(|v| (ctx.resolve_name_variable(*v), *v))
                 .collect()
         };
 
@@ -390,11 +390,7 @@ impl RenderCsl for Names {
             return true;
         }
 
-        if self
-            .variable
-            .iter()
-            .all(|v| ctx.resolve_name_variable(*v, false).is_empty())
-        {
+        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty()) {
             if let Some(substitute) = &self.substitute() {
                 return substitute.children.iter().any(|c| c.will_render(ctx, var));
             }
@@ -407,10 +403,11 @@ impl RenderCsl for Names {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
 
-        let is_empty = self
-            .variable
-            .iter()
-            .all(|v| ctx.resolve_name_variable(*v, false).is_empty());
+        let is_empty =
+            self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty());
+        if !renders_given_special_form(self, ctx, is_empty) {
+            return (false, UsageInfo::default());
+        }
 
         let substitute_info = self
             .substitute()
@@ -425,8 +422,7 @@ impl RenderCsl for Names {
             ctx.writing.start_suppressing_queried_variables();
         }
 
-        let visible = renders_given_special_form(self, ctx, is_empty)
-            && (!is_empty || substitute_info.0);
+        let visible = !is_empty || substitute_info.0;
 
         (
             visible,
