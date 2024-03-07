@@ -1617,8 +1617,6 @@ pub(crate) struct WritingContext {
     cases: NonEmptyStack<Option<TextCase>>,
     /// Inheritable name options.
     name_options: NonEmptyStack<InheritableNameOptions>,
-    /// Usage info for the current nesting level.
-    usage_info: RefCell<NonEmptyStack<UsageInfo>>,
 
     // Buffers.
     /// The buffer we're writing to. If block-level or formatting changes, we
@@ -1643,7 +1641,6 @@ impl Default for WritingContext {
             format_stack: NonEmptyStack::default(),
             cases: NonEmptyStack::default(),
             name_options: NonEmptyStack::default(),
-            usage_info: RefCell::default(),
             buf: CaseFolder::default(),
             elem_stack: NonEmptyStack::default(),
         }
@@ -1837,16 +1834,6 @@ impl WritingContext {
         self.elem_stack.finish()
     }
 
-    /// Note that we have used a macro that had non-empty content.
-    fn printed_non_empty_macro(&mut self) {
-        self.usage_info.get_mut().last_mut().has_used_macros = true;
-    }
-
-    /// Note that we have used a group that had non-empty content.
-    fn printed_non_empty_group(&mut self) {
-        self.usage_info.get_mut().last_mut().has_non_empty_group = true;
-    }
-
     /// Set whether to strip periods.
     fn may_strip_periods(&mut self, strip: bool) {
         self.strip_periods = strip;
@@ -1882,36 +1869,10 @@ impl WritingContext {
 
         self.cases.drain(idx.0).for_each(drop);
     }
-
-    /// Push an element on the usage info stack.
-    fn push_usage_info(&mut self) -> UsageInfoIdx {
-        let info = self.usage_info.get_mut();
-        let idx = info.len();
-        info.push(UsageInfo::new());
-        UsageInfoIdx(idx)
-    }
-
     /// Reconfigures the case folder's case to the current
     fn reconfigure(&mut self) {
         self.buf
             .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
-    }
-
-    /// Pop an element from the usage info stack.
-    fn pop_usage_info(&mut self, idx: UsageInfoIdx) -> UsageInfo {
-        let info = self.usage_info.get_mut();
-        let mut v = info.drain(idx.0).collect::<Vec<_>>();
-        if v.is_empty() {
-            return UsageInfo::default();
-        }
-
-        let mut first = v.remove(0);
-
-        for e in v.drain(0..v.len()) {
-            first = first.merge_child(e);
-        }
-
-        first
     }
 
     /// Push a new suppressed variable if we are suppressing queried variables.
@@ -1943,11 +1904,6 @@ impl WritingContext {
                 .iter()
                 .flat_map(|e| e.0.iter().map(ElemChild::str_len))
                 .sum::<usize>()
-    }
-
-    /// Check if the last subtree is empty.
-    fn last_is_empty(&self) -> bool {
-        !self.buf.has_content() && !self.elem_stack.last().has_content()
     }
 
     /// Write the [`NameDisambiguationProperties`] that the first `cs:name`
@@ -2554,10 +2510,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: NumberVariable,
         silent: bool,
     ) -> Option<NumberVariableResult<'a>> {
-        if !silent {
-            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
-        }
-
         // Replace the citation label with citation number if necessary.
         if variable == NumberVariable::CitationNumber {
             if self.bibliography {
@@ -2585,10 +2537,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_number_variable(variable);
-
-        if res.is_some() {
-            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
-        }
         res
     }
 
@@ -2601,10 +2549,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: csl_taxonomy::StandardVariable,
         silent: bool,
     ) -> Option<Cow<'a, ChunkedString>> {
-        if !silent {
-            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
-        }
-
         // Replace the citation label with citation number if necessary.
         if variable == StandardVariable::CitationLabel {
             if self.bibliography {
@@ -2633,9 +2577,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_standard_variable(form, variable);
 
-        if res.is_some() {
-            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
-        }
         res
     }
 
@@ -2647,16 +2588,9 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: csl_taxonomy::DateVariable,
         silent: bool,
     ) -> Option<Cow<'a, Date>> {
-        if !silent {
-            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
-        }
-
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.entry.resolve_date_variable(variable);
 
-        if res.is_some() {
-            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
-        }
         res
     }
 
@@ -2668,19 +2602,11 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: csl_taxonomy::NameVariable,
         silent: bool,
     ) -> Vec<Cow<'a, Person>> {
-        if !silent {
-            self.writing.usage_info.borrow_mut().last_mut().has_vars = true;
-        }
-
         if self.writing.prepare_variable_query(variable).is_none() {
             return Vec::new();
         }
 
         let res = self.instance.entry.resolve_name_variable(variable);
-
-        if !res.is_empty() {
-            self.writing.usage_info.borrow_mut().last_mut().has_non_empty_vars = true;
-        }
         res
     }
 
@@ -2766,9 +2692,6 @@ impl DisplayLoc {
 #[must_use = "case stack must be popped"]
 struct CaseIdx(NonZeroUsize);
 
-#[must_use = "usage info stack must be popped"]
-struct UsageInfoIdx(NonZeroUsize);
-
 impl<T: EntryLike> Write for Context<'_, T> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.push_str(s);
@@ -2785,11 +2708,6 @@ struct UsageInfo {
 }
 
 impl UsageInfo {
-    /// Create a new usage info object.
-    fn new() -> Self {
-        Self::default()
-    }
-
     /// Merge usage info with the info of a child.
     fn merge_child(self, child: Self) -> Self {
         Self {
@@ -2798,6 +2716,14 @@ impl UsageInfo {
             has_used_macros: self.has_used_macros || child.has_used_macros,
             has_non_empty_group: self.has_non_empty_group || child.has_non_empty_group,
         }
+    }
+
+    /// Whether a group with this usage info should be rendered.
+    fn should_render_group(&self) -> bool {
+        !self.has_vars
+            || (self.has_non_empty_vars
+                || self.has_used_macros
+                || self.has_non_empty_group)
     }
 }
 
