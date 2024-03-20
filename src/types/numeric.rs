@@ -379,7 +379,7 @@ impl NumericValue {
     pub fn range(&self) -> Option<std::ops::Range<i32>> {
         match self {
             // A single number is seen as a range of length 1. See #103.
-            Self::Number(n) => Some(*n..(*n + 1)),
+            Self::Number(n) => Some(*n..*n),
             Self::Set(vec) => {
                 if vec.len() == 2 {
                     let start = vec[0].0;
