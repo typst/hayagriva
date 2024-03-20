@@ -746,3 +746,52 @@ fn access_date() {
         .unwrap();
     assert_eq!(buf, "Retrieved 2021, from https://example.com/");
 }
+
+#[test]
+fn no_author() {
+    let style = ArchivedStyle::by_name("apa").unwrap().get();
+    let locales = locales();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let lib = from_biblatex_str(
+        r#"
+        @misc{test,
+          title = {Definition and objectives of systems development},
+          url = {https://www.opentextbooks.org.hk/ditatopic/25323},
+          language = {en},
+          urldate = {2023-11-24},
+          journal = {Open Textbooks for Hong Kong},
+          date = {2016-01-19},
+        }
+      }"#,
+    )
+    .unwrap();
+    let entry = lib.get("test").unwrap();
+
+    let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(entry, None, None, false, None)],
+        &style,
+        None,
+        &locales,
+        Some(1),
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(&style, None, &locales));
+    let mut buf = String::new();
+    rendered.bibliography.unwrap().items[0]
+        .content
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+
+    assert_eq!(buf, "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323");
+
+    let mut buf = String::new();
+    rendered.citations[0]
+        .citation
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, "(Definition and Objectives of Systems Development, 2016)");
+}
