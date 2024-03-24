@@ -4,7 +4,6 @@ use std::io::ErrorKind as IoErrorKind;
 use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
-extern crate lazy_static;
 
 use citationberg::taxonomy::Locator;
 use citationberg::{

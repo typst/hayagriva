@@ -760,7 +760,7 @@ fn language() {
         url={https://example.com},
         title={aboba},
         urldate={2023-06-03},
-        language={russian},
+        language={ru},
         location={aboba},
         note={aboooooba}
       }"#,
@@ -768,13 +768,9 @@ fn language() {
     .unwrap();
     let entry = lib.get("test").unwrap();
 
-    let mut locale: Option<LocaleCode> = None;
-    if let Some(lang) = entry.language() {
-        let lang_string = lang.language.as_str();
-        if let Some(value) = hayagriva::lang::codes::get_mapping(lang_string) {
-            locale = Some(LocaleCode(String::from(value)));
-        }
-    }
+    let locale = Some(LocaleCode(String::from(
+        entry.language().unwrap().language.as_str(),
+    )));
 
     let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
     driver.citation(CitationRequest::new(
