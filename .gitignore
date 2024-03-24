@@ -12,6 +12,3 @@ Cargo.lock
 
 # macOS
 .DS_Store
-
-# Tests
-archive/locales
