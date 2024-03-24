@@ -321,8 +321,12 @@ fn main() {
 
             let mut driver = BibliographyDriver::new();
             for entry in &bibliography {
+                let mut item = CitationItem::with_entry(entry);
+                item.locale = Some(LocaleCode(String::from(
+                    entry.language().unwrap().language.as_str(),
+                )));
                 driver.citation(CitationRequest::new(
-                    vec![CitationItem::with_entry(entry)],
+                    vec![item],
                     &style,
                     locale.clone(),
                     &locales,
