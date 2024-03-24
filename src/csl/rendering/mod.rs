@@ -694,7 +694,7 @@ fn render_date_part<T: EntryLike>(
                                         .unwrap_or_default(),
                                 )
                             },
-                            None,
+                            ctx.instance.locale,
                         )
                         .unwrap_or_default() =>
             {

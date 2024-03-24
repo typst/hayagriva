@@ -1566,8 +1566,10 @@ impl<'a> StyleContext<'a> {
             };
 
             // First, we lookup for item language
-            if let Some(output) = lookup(resource, item_locale) {
-                return Some(output);
+            if item_locale.is_some() {
+                if let Some(output) = lookup(resource, item_locale) {
+                    return Some(output);
+                }
             }
 
             // Then we look up for global language
@@ -1595,8 +1597,8 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Check whether to do punctuation in quotes.
-    fn punctuation_in_quotes(&self) -> bool {
-        self.lookup_locale(|f| f.style_options?.punctuation_in_quote, None)
+    fn punctuation_in_quotes(&self, item_lang: Option<&'a LocaleCode>) -> bool {
+        self.lookup_locale(|f| f.style_options?.punctuation_in_quote, item_lang)
             .unwrap_or_default()
     }
 }
@@ -2252,7 +2254,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .into(),
             TermForm::default(),
             false,
-            None,
+            self.instance.locale,
         );
 
         if let Some(mark) = mark {
@@ -2269,7 +2271,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
                 OtherTerm::CloseInnerQuote.into(),
                 TermForm::default(),
                 false,
-                None,
+                self.instance.locale,
             );
 
             let mut used_buf = false;
@@ -2444,7 +2446,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
         mut term: Term,
         form: TermForm,
         plural: bool,
-        lang: Option<&LocaleCode>,
+        item_lang: Option<&LocaleCode>,
     ) -> Option<&'a str> {
         if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator) {
             if let Some(locator) = self.instance.cite_props.speculative.locator {
@@ -2459,7 +2461,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
                     let term = l.term(term, current_form)?;
                     Some(if plural { term.multiple() } else { term.single() })
                 },
-                lang,
+                item_lang,
             ) {
                 return localization;
             }
@@ -2472,8 +2474,9 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Get the gender of a term.
     fn gender(&self, term: Term) -> Option<GrammarGender> {
-        if let Some(localization) =
-            self.style.lookup_locale(|l| l.term(term, TermForm::default()), None)
+        if let Some(localization) = self
+            .style
+            .lookup_locale(|l| l.term(term, TermForm::default()), self.instance.locale)
         {
             localization.gender
         } else {
@@ -2483,21 +2486,24 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Get a localized date format.
     fn localized_date(&self, form: DateForm) -> Option<&'a citationberg::Date> {
-        self.style
-            .lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)), None)
+        self.style.lookup_locale(
+            |l| l.date.iter().find(|d| d.form == Some(form)),
+            self.instance.locale,
+        )
     }
 
     /// Get the ordinal lookup object.
     fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
         self.style
-            .lookup_locale(|l| l.ordinals(), None)
+            .lookup_locale(|l| l.ordinals(), self.instance.locale)
             .unwrap_or_else(OrdinalLookup::empty)
     }
 
     /// Pull the next punctuation character into the preceeding quoted content
     /// if appropriate for the locale.
     fn may_pull_punctuation(&mut self) {
-        self.writing.pull_punctuation |= self.style.punctuation_in_quotes();
+        self.writing.pull_punctuation |=
+            self.style.punctuation_in_quotes(self.instance.locale);
     }
 
     /// Set whether to strip periods.
