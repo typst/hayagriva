@@ -30,7 +30,6 @@ unscanny = "0.1.0"
 url = { version =  "2.4", features = ["serde"] }
 biblatex = { version = "0.9", optional = true }
 ciborium = { version = "0.2.1", optional = true }
-lazy_static = "1.4.0"
 clap = { version = "4", optional = true, features = ["cargo"] }
 strum = { version = "0.26", features = ["derive"], optional = true }
 
