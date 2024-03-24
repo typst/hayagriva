@@ -411,6 +411,15 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_issn(issn.format_verbatim());
         }
 
+        if let Some(eprint) = map_res(entry.eprint())? {
+            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
+                .as_deref()
+                == Some("arxiv")
+            {
+                item.set_arxiv(eprint);
+            }
+        }
+
         if let Some(isan) = map_res(entry.isan())? {
             item.set_keyed_serial_number("isan", isan.format_verbatim());
         }

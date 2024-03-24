@@ -6,17 +6,21 @@ use std::process::exit;
 use std::str::FromStr;
 extern crate lazy_static;
 
+use citationberg::taxonomy::Locator;
 use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
-use clap::{crate_version, Arg, Command};
-use strum::{EnumVariantNames, VariantNames};
+use clap::{crate_version, Arg, ArgAction, Command};
+use strum::VariantNames;
 
 use hayagriva::archive::{locales, ArchivedStyle};
-use hayagriva::{io, BibliographyDriver, CitationItem, CitationRequest};
+use hayagriva::{
+    io, BibliographyDriver, CitationItem, CitationRequest, LocatorPayload,
+    SpecificLocator,
+};
 use hayagriva::{BibliographyRequest, Selector};
 
-#[derive(Debug, Copy, Clone, PartialEq, EnumVariantNames)]
+#[derive(Debug, Copy, Clone, PartialEq, VariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Format {
     #[cfg(feature = "biblatex")]
@@ -56,15 +60,15 @@ fn main() {
                 Arg::new("format")
                     .long("format")
                     .help("What input file format to expect")
-                    .possible_values(Format::VARIANTS)
+                    .value_parser(clap::builder::PossibleValuesParser::new(Format::VARIANTS))
                     .ignore_case(true)
-                    .takes_value(true)
+                    .num_args(1)
                     .global(true),
             ).arg(
                 Arg::new("selector")
                     .long("select")
                     .help("Filter the bibliography using selectors")
-                    .takes_value(true)
+                    .num_args(1)
                     .global(true)
             )
             .arg(
@@ -72,19 +76,21 @@ fn main() {
                     .long("key")
                     .short('k')
                     .help("Filter the bibliography using a comma-separated list of keys")
-                    .takes_value(true)
+                    .num_args(1)
                     .global(true)
             )
             .arg(
                 Arg::new("show-keys")
                     .long("show-keys")
                     .help("Show the keys of all filtered entries")
+                    .action(ArgAction::SetTrue)
                     .global(true)
             )
             .arg(
                 Arg::new("show-bound")
                     .long("show-bound")
                     .help("Show the bound entries of your selector for each key")
+                    .action(ArgAction::SetTrue)
                     .global(true)
             )
             .arg(
@@ -92,6 +98,7 @@ fn main() {
                     .long("no-fmt")
                     .short('n')
                     .help("Suppress the formatting of output with ANSI / VT100 character sequences")
+                    .action(ArgAction::SetTrue)
                     .global(true)
             )
             .subcommand(
@@ -103,37 +110,38 @@ fn main() {
                             .short('s')
                             .help("Set the citation style")
                             .ignore_case(true)
-                            .takes_value(true)
+                            .num_args(1)
                             .required_unless_present("csl")
                     )
                     .arg(
                         Arg::new("csl")
                             .long("csl")
                             .help("Set a CSL file to use the style therein")
-                            .takes_value(true)
+                            .num_args(1)
                     )
                     .arg(
                         Arg::new("locale")
                             .long("locale")
                             .help("Which locale to force for the citation (e.g. `en-US`)")
-                            .takes_value(true)
+                            .num_args(1)
                     )
                     .arg(
                         Arg::new("locales")
                             .long("locales")
                             .help("Set a comma-separated list of CSL locales")
-                            .takes_value(true)
+                            .num_args(1)
                     )
                     .arg(
                         Arg::new("locators")
                             .long("locators")
                             .help("Specify additional information for the citations, e.g. \"p. 6,p. 4\", in a comma-separated list.")
-                            .takes_value(true)
+                            .num_args(1)
                     )
                     .arg(
                         Arg::new("combined")
                             .long("combined")
                             .short('c')
+                            .action(ArgAction::SetTrue)
                             .help("Combine all keys into one citation (ignored for Chicago Notes)")
                     )
             )
@@ -146,26 +154,26 @@ fn main() {
                             .short('s')
                             .help("Set the referencing style")
                             .ignore_case(true)
-                            .takes_value(true)
+                            .num_args(1)
                             .required_unless_present("csl")
                     )
                     .arg(
                         Arg::new("csl")
                             .long("csl")
                             .help("Set a CSL file to use the style therein")
-                            .takes_value(true)
+                            .num_args(1)
                     )
                     .arg(
                         Arg::new("locale")
                             .long("locale")
                             .help("Which locale to force for the citation (e.g. `en-US`)")
-                            .takes_value(true)
+                            .num_args(1)
                     )
                     .arg(
                         Arg::new("locales")
                             .long("locales")
-                            .help("Set a comma-separated list of CSL locales")
-                            .takes_value(true)
+                            .help("Set a space-separated list of CSL locales")
+                            .num_args(1)
                     )
             )
             .subcommand(
@@ -174,9 +182,9 @@ fn main() {
             )
             .get_matches();
 
-    let input = Path::new(matches.value_of("INPUT").unwrap());
+    let input = Path::new(matches.get_one::<String>("INPUT").unwrap());
 
-    let format = matches.value_of_t("format").unwrap_or_else(|_| {
+    let format = matches.get_one("format").cloned().unwrap_or_else(|| {
         #[allow(unused_mut)]
         let mut format = Format::Yaml;
 
@@ -225,15 +233,19 @@ fn main() {
 
     let bib_len = bibliography.len();
 
-    let selector = matches.value_of("selector").map(|src| match Selector::parse(src) {
-        Ok(selector) => selector,
-        Err(err) => {
-            eprintln!("Error while parsing selector: {}", err);
-            exit(7);
-        }
-    });
+    let selector =
+        matches
+            .get_one("selector")
+            .cloned()
+            .map(|src| match Selector::parse(src) {
+                Ok(selector) => selector,
+                Err(err) => {
+                    eprintln!("Error while parsing selector: {}", err);
+                    exit(7);
+                }
+            });
 
-    let bibliography = if let Some(keys) = matches.value_of("key") {
+    let bibliography = if let Some(keys) = matches.get_one::<String>("key") {
         let mut res = vec![];
         for key in keys.split(',') {
             if let Some(entry) = bibliography.iter().find(|e| e.key() == key) {
@@ -247,7 +259,7 @@ fn main() {
         bibliography
     };
 
-    if matches.is_present("show-keys") || matches.is_present("show-bound") {
+    if matches.get_flag("show-keys") || matches.get_flag("show-bound") {
         println!(
             "Selected {} of {} entries in the bibliography\n",
             bibliography.len(),
@@ -256,7 +268,7 @@ fn main() {
 
         for entry in &bibliography {
             println!("{}", entry.key());
-            if matches.is_present("show-bound") {
+            if matches.get_flag("show-bound") {
                 if let Some(selector) = &selector {
                     for (k, v) in selector.apply(entry).unwrap() {
                         println!(
@@ -295,7 +307,8 @@ fn main() {
         Some(("reference", sub_matches)) => {
             let style: Option<&String> = sub_matches.get_one("style");
             let csl: Option<&String> = sub_matches.get_one("csl");
-            let locale_path: Option<&String> = sub_matches.get_one("locales");
+            let locale_path =
+                sub_matches.get_one::<String>("locales").map(|s| s.split(','));
             let locale_str: Option<&String> = sub_matches.get_one("locale");
 
             let (style, locales, locale) =
@@ -323,7 +336,7 @@ fn main() {
                 .map(|b| b.items)
                 .unwrap_or_default()
             {
-                let alternate = matches.is_present("no-fmt");
+                let alternate = matches.get_flag("no-fmt");
 
                 if let Some(prefix) = row.first_field {
                     if alternate {
@@ -343,26 +356,43 @@ fn main() {
         Some(("cite", sub_matches)) => {
             let style: Option<&String> = sub_matches.get_one("style");
             let csl: Option<&String> = sub_matches.get_one("csl");
-            let locale_path: Option<&String> = sub_matches.get_one("locales");
+            let locale_path =
+                sub_matches.get_one::<String>("locales").map(|s| s.split(','));
             let locale_str: Option<&String> = sub_matches.get_one("locale");
-            let collapse = sub_matches.is_present("combined");
+            let collapse = sub_matches.get_flag("combined");
+            let locators: Vec<_> = sub_matches
+                .get_one::<String>("locators")
+                .into_iter()
+                .flat_map(|s| s.split(','))
+                .collect();
 
             let (style, locales, locale) =
                 retrieve_assets(style, csl, locale_path, locale_str);
 
+            let assign_locator = |(i, e)| {
+                let mut item = CitationItem::with_entry(e);
+                if let Some(&locator) = locators.get(i) {
+                    item.locator = Some(SpecificLocator(
+                        Locator::Custom,
+                        LocatorPayload::Str(locator),
+                    ));
+                }
+                item
+            };
+
             let mut driver = BibliographyDriver::new();
             if collapse {
                 driver.citation(CitationRequest::new(
-                    bibliography.iter().map(CitationItem::with_entry).collect(),
+                    bibliography.iter().enumerate().map(assign_locator).collect(),
                     &style,
                     locale.clone(),
                     &locales,
                     None,
                 ));
             } else {
-                for entry in &bibliography {
+                for (i, entry) in bibliography.iter().enumerate() {
                     driver.citation(CitationRequest::new(
-                        vec![CitationItem::with_entry(entry)],
+                        vec![assign_locator((i, entry))],
                         &style,
                         locale.clone(),
                         &locales,
@@ -377,7 +407,7 @@ fn main() {
                 .map(|b| b.items)
                 .unwrap_or_default()
             {
-                let alternate = matches.is_present("no-fmt");
+                let alternate = matches.get_flag("no-fmt");
 
                 if let Some(prefix) = row.first_field {
                     if alternate {
@@ -420,10 +450,10 @@ fn main() {
     }
 }
 
-fn retrieve_assets(
+fn retrieve_assets<'a>(
     style: Option<&String>,
     csl: Option<&String>,
-    locale_path: Option<&String>,
+    locale_paths: Option<impl Iterator<Item = &'a str>>,
     locale_str: Option<&String>,
 ) -> (IndependentStyle, Vec<Locale>, Option<LocaleCode>) {
     let locale: Option<_> = locale_str.map(|l: &String| LocaleCode(l.into()));
@@ -444,12 +474,15 @@ fn retrieve_assets(
         (None, None) => panic!("must specify style or CSL file"),
     };
 
-    let locales: Vec<Locale> = match locale_path {
-        Some(locale_path) => {
-            let file_str =
-                fs::read_to_string(locale_path).expect("could not read locale file");
-            vec![LocaleFile::from_xml(&file_str).expect("locale file malformed").into()]
-        }
+    let locales: Vec<Locale> = match locale_paths {
+        Some(locale_paths) => locale_paths
+            .into_iter()
+            .map(|locale_path| {
+                let file_str =
+                    fs::read_to_string(locale_path).expect("could not read locale file");
+                LocaleFile::from_xml(&file_str).expect("locale file malformed").into()
+            })
+            .collect(),
         None => locales(),
     };
 

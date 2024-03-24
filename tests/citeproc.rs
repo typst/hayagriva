@@ -1,8 +1,9 @@
 //! Parse and execute the citeproc test suite.
 
-use std::fmt;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::{fmt, fs};
 
 mod common;
 use citationberg::taxonomy::Locator;
@@ -304,52 +305,124 @@ impl<'s> TestCaseBuilder<'s> {
 
 #[test]
 fn test_parse_tests() {
-    let locales = locales();
-    ensure_repo(TEST_REPO, TEST_REPO_NAME, "master").unwrap();
-    let test_path = PathBuf::from(CACHE_PATH)
-        .join(TEST_REPO_NAME)
-        .join("processor-tests/humans/");
+    let mut results = TestSuiteResults::obtain();
 
-    let mut total = 0;
-    let mut skipped = 0;
-    let mut passed = 0;
+    eprintln!(
+        "Total: {}, skipped: {}, passed: {}",
+        results.total,
+        results.skipped,
+        results.passed.len()
+    );
+    let percentage =
+        results.passed.len() as f64 / (results.total - results.skipped) as f64 * 100.0;
+    eprintln!("{:.2}% passed", percentage);
 
-    for path in iter_files_with_name(&test_path, "txt", |name| {
-        ![
-            "bugreports_EnvAndUrb",
-            "affix_PrefixFullCitationTextOnly",
-            "affix_PrefixWithDecorations",
-            "flipflop_ApostropheInsideTag",
-            "date_OtherAlone",
-            // Upstream bug: https://github.com/tafia/quick-xml/issues/674
-            "bugreports_SelfLink",
-            "bugreports_SingleQuoteXml",
-            "number_SpacesMakeIsNumericFalse",
-            "textcase_LocaleUnicode",
-            "date_YearSuffixImplicitWithNoDateOneOnly",
-            "position_NearNoteWithPlugin",
-        ]
-        .contains(&name)
-            && !name.starts_with("magic_")
-    }) {
-        let str = std::fs::read_to_string(&path).unwrap();
-        let case = build_case(&str);
-        total += 1;
+    let should_pass = load_passing_tests();
+    // Enable binary search.
+    results.passed.sort_unstable();
+    results.failed.sort_unstable();
 
-        if !can_test(&case, || path.display(), false) {
-            skipped += 1;
-            continue;
-        }
+    let mut fail = false;
 
-        // eprintln!("Running test {}", path.display());
-        if test_file(case, &locales, || path.display()) {
-            passed += 1;
+    // Check that all tests that should pass actually passed.
+    for test in &should_pass {
+        if results.passed.binary_search(test).is_err() {
+            if results.failed.binary_search(test).is_ok() {
+                eprintln!("❌ Test {} should pass but failed", test);
+            } else {
+                eprintln!("🤨 Test {} should pass but was not found", test);
+            }
+
+            fail = true;
         }
     }
 
-    eprintln!("Total: {}, skipped: {}, passed: {}", total, skipped, passed);
-    let percentage = passed as f64 / (total - skipped) as f64 * 100.0;
-    eprintln!("{:.2}% passed", percentage);
+    if fail {
+        panic!("Some tests that should pass failed or were not found");
+    }
+
+    // Only retain the tests that were not marked as passing.
+    results.passed.retain(|t| !should_pass.contains(t));
+
+    // Check that the `passing` file contains all passed tests.
+    for test in &results.passed {
+        eprintln!("👁️ Test {} passed but is not in the `passing` file", test);
+        fail = true;
+    }
+
+    if fail {
+        panic!("⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`")
+    }
+
+    eprintln!("✅ All tests expected to pass passed");
+}
+
+#[test]
+#[ignore]
+fn write_passing() {
+    let results = TestSuiteResults::obtain();
+    let mut passing = results.passed;
+    passing.sort_unstable();
+    write_passing_test(passing.as_ref());
+}
+
+struct TestSuiteResults {
+    pub total: usize,
+    pub skipped: usize,
+    pub passed: Vec<String>,
+    pub failed: Vec<String>,
+}
+
+impl TestSuiteResults {
+    fn obtain() -> Self {
+        let locales = locales();
+        ensure_repo(TEST_REPO, TEST_REPO_NAME, "master").unwrap();
+        let test_path = PathBuf::from(CACHE_PATH)
+            .join(TEST_REPO_NAME)
+            .join("processor-tests/humans/");
+
+        let mut total = 0;
+        let mut skipped = 0;
+        let mut passed = vec![];
+        let mut failed = vec![];
+
+        for path in iter_files_with_name(&test_path, "txt", |name| {
+            ![
+                "bugreports_EnvAndUrb",
+                "affix_PrefixFullCitationTextOnly",
+                "affix_PrefixWithDecorations",
+                "flipflop_ApostropheInsideTag",
+                "date_OtherAlone",
+                // Upstream bug: https://github.com/tafia/quick-xml/issues/674
+                "bugreports_SelfLink",
+                "bugreports_SingleQuoteXml",
+                "number_SpacesMakeIsNumericFalse",
+                "textcase_LocaleUnicode",
+                "date_YearSuffixImplicitWithNoDateOneOnly",
+                "position_NearNoteWithPlugin",
+            ]
+            .contains(&name)
+                && !name.starts_with("magic_")
+        }) {
+            let str = std::fs::read_to_string(&path).unwrap();
+            let case = build_case(&str);
+            total += 1;
+
+            if !can_test(&case, || path.display(), false) {
+                skipped += 1;
+                continue;
+            }
+
+            let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
+            if test_file(case, &locales, || path.display()) {
+                passed.push(file_stem);
+            } else {
+                failed.push(file_stem);
+            }
+        }
+
+        Self { total, skipped, passed, failed }
+    }
 }
 
 #[test]
@@ -563,6 +636,41 @@ fn purposes() {
             .unwrap();
         assert_eq!(buf, res);
     }
+}
+
+/// Load the file with the names of the test cases that should pass.
+/// The file should be located at `tests/citeproc-pass.txt`.
+/// It contains one test case name per line.
+fn load_passing_tests() -> Vec<String> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("citeproc-pass.txt");
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(ToString::to_string)
+        .collect()
+}
+
+/// Write the names of the test cases that should pass to the file
+/// `tests/citeproc-pass.txt`.
+fn write_passing_test(tests: &[String]) {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("citeproc-pass.txt");
+    let comment = "# This file contains all test cases that should pass.\n\
+        # The test fails if a test case in this file fails or if a test case\n\
+        # that is not in this file passes.\n#\n\
+        # This file is automatically generated by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`.\n\n";
+
+    let mut w = BufWriter::new(fs::File::create(path).unwrap());
+    w.write_all(comment.as_bytes()).unwrap();
+    for test in tests {
+        w.write_all(test.as_bytes()).unwrap();
+        w.write_all(b"\n").unwrap();
+    }
+    w.flush().unwrap();
 }
 
 #[test]
