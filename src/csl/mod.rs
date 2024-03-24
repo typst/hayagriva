@@ -643,7 +643,7 @@ fn date_replacement<T: EntryLike>(
             )
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
-            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false, None)
+            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false, term_locale)
         {
             no_date.to_string()
         } else {
@@ -1456,7 +1456,7 @@ impl<'a> BibliographyRequest<'a> {
 }
 
 /// A reference to an [`crate::Entry`] within a [`CitationRequest`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CitationItem<'a, T: EntryLike> {
     /// The entry to format.
     pub entry: &'a T,
@@ -1474,11 +1474,6 @@ pub struct CitationItem<'a, T: EntryLike> {
     initial_idx: usize,
 }
 
-impl<'a, T: EntryLike> Hash for CitationItem<'a, T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.entry.key().hash(state);
-    }
-}
 impl<'a, T: EntryLike> CitationItem<'a, T> {
     /// Create a new citation item for the given entry.
     pub fn with_entry(entry: &'a T) -> Self {
