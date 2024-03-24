@@ -2261,7 +2261,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
         if self.writing.pull_punctuation && s.starts_with(['.', ',', ';', '!', '?']) {
             let close_quote =
-                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false, None);
+                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false, self.instance.locale);
             let close_inner_quote = self.term(
                 OtherTerm::CloseInnerQuote.into(),
                 TermForm::default(),
