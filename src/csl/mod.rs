@@ -643,7 +643,7 @@ fn date_replacement<T: EntryLike>(
             )
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
-            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false, term_locale)
+            .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false)
         {
             no_date.to_string()
         } else {
@@ -2225,8 +2225,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             }
             .into(),
             TermForm::default(),
-            false,
-            None,
+            false
         );
 
         if let Some(mark) = mark {
@@ -2249,7 +2248,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .into(),
             TermForm::default(),
             false,
-            self.instance.locale,
         );
 
         if let Some(mark) = mark {
@@ -2261,13 +2259,9 @@ impl<'a, T: EntryLike> Context<'a, T> {
     fn do_pull_punctuation<'s>(&mut self, mut s: &'s str) -> &'s str {
         if self.writing.pull_punctuation && s.starts_with(['.', ',', ';', '!', '?']) {
             let close_quote =
-                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false, self.instance.locale);
-            let close_inner_quote = self.term(
-                OtherTerm::CloseInnerQuote.into(),
-                TermForm::default(),
-                false,
-                self.instance.locale,
-            );
+                self.term(OtherTerm::CloseQuote.into(), TermForm::default(), false);
+            let close_inner_quote =
+                self.term(OtherTerm::CloseInnerQuote.into(), TermForm::default(), false);
 
             let mut used_buf = false;
             let buf = if self.writing.buf.is_empty() {
@@ -2436,13 +2430,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     }
 
     /// Get a term from the style.
-    fn term(
-        &self,
-        mut term: Term,
-        form: TermForm,
-        plural: bool,
-        item_lang: Option<&LocaleCode>,
-    ) -> Option<&'a str> {
+    fn term(&self, mut term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
         if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator) {
             if let Some(locator) = self.instance.cite_props.speculative.locator {
                 term = locator.0.into();
@@ -2456,7 +2444,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
                     let term = l.term(term, current_form)?;
                     Some(if plural { term.multiple() } else { term.single() })
                 },
-                item_lang,
+                self.instance.locale,
             ) {
                 return localization;
             }

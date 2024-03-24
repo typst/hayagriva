@@ -248,7 +248,7 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                 ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)
             }
             TextTarget::Term { term, form, plural } => {
-                ctx.term(*term, *form, *plural, ctx.instance.locale)
+                ctx.term(*term, *form, *plural)
                     .map(ResolvedTextTarget::Term)
             }
             TextTarget::Value { val } => Some(ResolvedTextTarget::Value(val)),
@@ -378,8 +378,7 @@ fn render_page_range<T: EntryLike>(range: std::ops::Range<i32>, ctx: &mut Contex
             ctx.term(
                 OtherTerm::PageRangeDelimiter.into(),
                 TermForm::default(),
-                false,
-                None,
+                false
             )
             .or(Some("–")),
         )
@@ -417,7 +416,7 @@ impl RenderCsl for citationberg::Label {
         let plural = label_pluralization(self, variable);
 
         let content = ctx
-            .term(Term::from(self.variable), self.label.form, plural, None)
+            .term(Term::from(self.variable), self.label.form, plural)
             .unwrap_or_default();
 
         render_label_with_var(&self.label, ctx, content);
@@ -460,7 +459,7 @@ impl RenderCsl for citationberg::Label {
         if let Some(num) = ctx.resolve_number_variable(self.variable) {
             let plural = label_pluralization(self, num);
             (
-                ctx.term(Term::from(self.variable), self.label.form, plural, None).is_some(),
+                ctx.term(Term::from(self.variable), self.label.form, plural).is_some(),
                 UsageInfo::default(),
             )
         } else {
@@ -717,7 +716,7 @@ fn render_date_part<T: EntryLike>(
             }
             DateStrongAnyForm::Month(DateMonthForm::Long) => {
                 if let Some(month) = OtherTerm::month((val - 1) as u8)
-                    .and_then(|m| ctx.term(m.into(), TermForm::Long, false, None))
+                    .and_then(|m| ctx.term(m.into(), TermForm::Long, false))
                 {
                     ctx.push_str(month);
                 } else {
@@ -726,7 +725,7 @@ fn render_date_part<T: EntryLike>(
             }
             DateStrongAnyForm::Month(DateMonthForm::Short) => {
                 if let Some(month) = OtherTerm::month((val - 1) as u8)
-                    .and_then(|m| ctx.term(m.into(), TermForm::Short, false, None))
+                    .and_then(|m| ctx.term(m.into(), TermForm::Short, false))
                 {
                     ctx.push_str(month);
                 } else {

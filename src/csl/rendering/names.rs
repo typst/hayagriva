@@ -222,8 +222,7 @@ impl RenderCsl for Names {
                 .term(
                     NameVariable::EditorTranslator.into(),
                     TermForm::default(),
-                    false,
-                    ctx.instance.locale,
+                    false
                 )
                 .is_some()
         {
@@ -355,7 +354,7 @@ impl RenderCsl for Names {
                             render_label_with_var(
                                 label,
                                 ctx,
-                                ctx.term(variable.into(), label.form, plural, None)
+                                ctx.term(variable.into(), label.form, plural)
                                     .unwrap_or_default(),
                             )
                         }
@@ -502,8 +501,7 @@ fn add_names<T: EntryLike>(
                             .term(
                                 Term::Other(OtherTerm::And),
                                 TermForm::default(),
-                                false,
-                                None,
+                                false
                             )
                             .unwrap_or_default(),
                         NameAnd::Symbol => "&",
@@ -518,7 +516,6 @@ fn add_names<T: EntryLike>(
                                 Term::Other(OtherTerm::And),
                                 TermForm::default(),
                                 false,
-                                None,
                             )
                             .unwrap_or_default(),
                         NameAnd::Symbol => "&",
@@ -569,7 +566,7 @@ fn add_names<T: EntryLike>(
     } else if has_et_al {
         let cs_et_al = names.et_al().cloned().unwrap_or_default();
         if let Some(term) =
-            ctx.term(cs_et_al.term.into(), TermForm::default(), false, None)
+            ctx.term(cs_et_al.term.into(), TermForm::default(), false)
         {
             let delim = match name_opts.delimiter_precedes_et_al {
                 DelimiterBehavior::Always => true,
