@@ -746,3 +746,46 @@ fn access_date() {
         .unwrap();
     assert_eq!(buf, "Retrieved 2021, from https://example.com/");
 }
+
+#[test]
+fn language() {
+    let style = ArchivedStyle::by_name("gost-r-705-2008-numeric").unwrap().get();
+    let locales = locales();
+    let Style::Independent(style) = style else {
+        panic!("test has dependent style");
+    };
+
+    let lib = from_biblatex_str(
+        r#"@online{test,
+        url={https://example.com},
+        title={aboba},
+        urldate={2023-06-03},
+        language={ru},
+        location={aboba},
+        note={aboooooba}
+      }"#,
+    )
+    .unwrap();
+    let entry = lib.get("test").unwrap();
+
+    let locale = Some(LocaleCode(String::from(
+        entry.language().unwrap().language.as_str(),
+    )));
+
+    let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
+    driver.citation(CitationRequest::new(
+        vec![CitationItem::new(entry, None, locale, false, None)],
+        &style,
+        None,
+        &locales,
+        Some(1),
+    ));
+
+    let rendered = driver.finish(BibliographyRequest::new(&style, None, &locales));
+    let mut buf = String::new();
+    rendered.bibliography.unwrap().items[0]
+        .content
+        .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
+        .unwrap();
+    assert_eq!(buf, "aboba [электронный ресурс]. URL: https://example.com/ (дата обращения: 03.06.2023)");
+}

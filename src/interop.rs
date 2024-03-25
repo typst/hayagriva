@@ -257,6 +257,12 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         // TODO: entry.orig_language into item.language = Some()
+        //
+        if let Some(Ok(lang)) =
+            map_res(entry.language())?.map(|l| l.parse())
+        {
+            item.set_language(lang);
+        }
 
         if let Some(a) =
             map_res(entry.afterword())?.map(|a| a.iter().map(Into::into).collect())

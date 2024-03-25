@@ -105,12 +105,17 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         let mut entry_set = IndexSet::new();
         for req in self.citations.iter() {
             for item in req.items.iter() {
-                entry_set.insert(item.entry);
+                entry_set.insert(CitationItem::new(
+                    item.entry,
+                    item.locator,
+                    item.locale.clone(),
+                    item.hidden,
+                    item.purpose,
+                ));
             }
         }
 
-        let mut entries: Vec<_> =
-            entry_set.into_iter().map(CitationItem::with_entry).collect();
+        let mut entries: Vec<_> = entry_set.into_iter().collect();
         bib_style.sort(
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
@@ -1526,7 +1531,8 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Get the locale for the given language in the style.
-    fn lookup_locale<F, R>(&self, mut f: F) -> Option<R>
+    /// Lookup order: item language -> citation language -> fallback
+    fn lookup_locale<F, R>(&self, mut f: F, item_locale: Option<&LocaleCode>) -> Option<R>
     where
         F: FnMut(&'a Locale) -> Option<R>,
     {
@@ -1554,10 +1560,19 @@ impl<'a> StyleContext<'a> {
                 locale.fallback()
             };
 
+            // First, we lookup for item language
+            if item_locale.is_some() {
+                if let Some(output) = lookup(resource, item_locale) {
+                    return Some(output);
+                }
+            }
+
+            // Then we look up for global language
             if let Some(output) = lookup(resource, Some(&locale)) {
                 return Some(output);
             }
 
+            // Then we try to use fallback
             if fallback.is_some() {
                 if let Some(output) = lookup(resource, fallback.as_ref()) {
                     return Some(output);
@@ -1577,8 +1592,8 @@ impl<'a> StyleContext<'a> {
     }
 
     /// Check whether to do punctuation in quotes.
-    fn punctuation_in_quotes(&self) -> bool {
-        self.lookup_locale(|f| f.style_options?.punctuation_in_quote)
+    fn punctuation_in_quotes(&self, item_lang: Option<&'a LocaleCode>) -> bool {
+        self.lookup_locale(|f| f.style_options?.punctuation_in_quote, item_lang)
             .unwrap_or_default()
     }
 }
@@ -2210,7 +2225,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             }
             .into(),
             TermForm::default(),
-            false,
+            false
         );
 
         if let Some(mark) = mark {
@@ -2424,10 +2439,13 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
         let mut form = Some(form);
         while let Some(current_form) = form {
-            if let Some(localization) = self.style.lookup_locale(|l| {
-                let term = l.term(term, current_form)?;
-                Some(if plural { term.multiple() } else { term.single() })
-            }) {
+            if let Some(localization) = self.style.lookup_locale(
+                |l| {
+                    let term = l.term(term, current_form)?;
+                    Some(if plural { term.multiple() } else { term.single() })
+                },
+                self.instance.locale,
+            ) {
                 return localization;
             }
 
@@ -2439,8 +2457,9 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Get the gender of a term.
     fn gender(&self, term: Term) -> Option<GrammarGender> {
-        if let Some(localization) =
-            self.style.lookup_locale(|l| l.term(term, TermForm::default()))
+        if let Some(localization) = self
+            .style
+            .lookup_locale(|l| l.term(term, TermForm::default()), self.instance.locale)
         {
             localization.gender
         } else {
@@ -2450,21 +2469,24 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Get a localized date format.
     fn localized_date(&self, form: DateForm) -> Option<&'a citationberg::Date> {
-        self.style
-            .lookup_locale(|l| l.date.iter().find(|d| d.form == Some(form)))
+        self.style.lookup_locale(
+            |l| l.date.iter().find(|d| d.form == Some(form)),
+            self.instance.locale,
+        )
     }
 
     /// Get the ordinal lookup object.
     fn ordinal_lookup(&self) -> OrdinalLookup<'a> {
         self.style
-            .lookup_locale(|l| l.ordinals())
+            .lookup_locale(|l| l.ordinals(), self.instance.locale)
             .unwrap_or_else(OrdinalLookup::empty)
     }
 
     /// Pull the next punctuation character into the preceeding quoted content
     /// if appropriate for the locale.
     fn may_pull_punctuation(&mut self) {
-        self.writing.pull_punctuation |= self.style.punctuation_in_quotes();
+        self.writing.pull_punctuation |=
+            self.style.punctuation_in_quotes(self.instance.locale);
     }
 
     /// Set whether to strip periods.
