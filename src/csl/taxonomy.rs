@@ -209,8 +209,13 @@ impl EntryLike for Entry {
     ) -> Option<Cow<'_, ChunkedString>> {
         let entry = self;
         match variable {
-            StandardVariable::Abstract => None,
-            StandardVariable::Annote => None,
+            StandardVariable::Abstract => entry
+                .map(|e| e.abstract_())
+                .map(|f| f.select(form))
+                .map(Cow::Borrowed),
+            StandardVariable::Annote => {
+                entry.map(|e| e.annote()).map(|f| f.select(form)).map(Cow::Borrowed)
+            }
             StandardVariable::Archive => {
                 entry.map(|e| e.archive()).map(|f| f.select(form)).map(Cow::Borrowed)
             }
@@ -264,7 +269,9 @@ impl EntryLike for Entry {
                 .and_then(Entry::location)
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
-            StandardVariable::Genre => None,
+            StandardVariable::Genre => {
+                entry.map(|e| e.genre()).map(|f| f.select(form)).map(Cow::Borrowed)
+            }
             StandardVariable::ISBN => {
                 entry.isbn().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
             }
@@ -409,7 +416,13 @@ impl EntryLike for Entry {
                     "p",
                 )
                 .map(|e| e.affiliated_with_role(PersonRole::Director)),
-            NameVariable::Editor => self.editors().map(|a| a.iter().collect()),
+            NameVariable::Editor => {
+                self.editors().map(|a| a.iter().collect()).or_else(|| {
+                    self.get_container()
+                        .and_then(|e| e.editors())
+                        .map(|a| a.iter().collect())
+                })
+            }
             NameVariable::EditorialDirector => None,
             NameVariable::EditorTranslator => {
                 let translator = self.affiliated_with_role(PersonRole::Translator);
@@ -746,6 +759,15 @@ impl EntryLike for citationberg::json::Item {
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
+        if matches!(variable, NumberVariable::PageFirst) {
+            if let Some(MaybeTyped::Typed(Cow::Owned(n))) =
+                self.resolve_number_variable(NumberVariable::Page)
+            {
+                return n
+                    .range()
+                    .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start))));
+            }
+        }
         match self.0.get(&variable.to_string())? {
             csl_json::Value::Number(n) => {
                 Some(MaybeTyped::Typed(Cow::Owned(Numeric::from(*n as u32))))

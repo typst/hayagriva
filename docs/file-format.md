@@ -1,6 +1,6 @@
 # The Hayagriva YAML File Format
 
-The Hayagriva YAML file format enables you to feed a collection of literature items into Hayagriva. It is built on the [YAML standard](https://en.wikipedia.org/wiki/YAML). This documentation starts with a basic introduction with examples into the format, explains how to represent several types of literature with parents, and then explores all the possible fields and data types. An [example file](https://github.com/typst/hayagriva/blob/main/tests/basic.yml) covering many potential use cases can be found in the test directory of the repository.
+The Hayagriva YAML file format enables you to feed a collection of literature items into Hayagriva. It is built on the [YAML standard](https://en.wikipedia.org/wiki/YAML). This documentation starts with a basic introduction with examples into the format, explains how to represent several types of literature with parents, and then explores all the possible fields and data types. An [example file](https://github.com/typst/hayagriva/blob/main/tests/data/basic.yml) covering many potential use cases can be found in the test directory of the repository.
 
 ## Overview
 
@@ -298,21 +298,13 @@ This section lists all possible fields and data types for them.
 | **Description:** | canonical public URL of the item, can have access date    |
 | **Example:**     | `url: { value: https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/, date: 2020-12-29 }` |
 
-#### `doi`
-
-|                  |                                                           |
-|------------------|-----------------------------------------------------------|
-| **Data type:**   | string                                                    |
-| **Description:** | Digital Object Identifier (DOI) of the item (without resolver). Due to YAML's way of parsing strings, some DOIs have to be wrapped by double-quotes as shown below. |
-| **Example:**     | `doi: "10.22541/au.148771883.35456290"`                   |
-
 #### `serial-number`
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | string or dictionary of strings                           |
-| **Description:** | Any serial number. If you have serial numbers of well-known schemes like  `doi`, you can put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn` `issn`, `pmid`, `pmcid`, and `arxiv` |
-| **Example:**     | `serial-number: 2003.13722` or <pre>serial-number:<br>    doi: "10.22541/au.148771883.35456290"<br>    arxiv: "1906.00356"</pre> |
+| **Description:** | Any serial number, including article numbers. If you have serial numbers of well-known schemes like  `doi`, you should put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn` `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well. |
+| **Example:**     | `serial-number: 2003.13722` or <pre>serial-number:<br>    doi: "10.22541/au.148771883.35456290"<br>    arxiv: "1906.00356"<br>    serial: "8516"</pre> |
 
 #### `language`
 

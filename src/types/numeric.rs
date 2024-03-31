@@ -378,7 +378,8 @@ impl NumericValue {
     /// Returns a range if the value is a range.
     pub fn range(&self) -> Option<std::ops::Range<i32>> {
         match self {
-            Self::Number(_) => None,
+            // A single number is seen as a range of length 1. See #103.
+            Self::Number(n) => Some(*n..(*n + 1)),
             Self::Set(vec) => {
                 if vec.len() == 2 {
                     let start = vec[0].0;
@@ -390,6 +391,9 @@ impl NumericValue {
                             || (first_delim == Some(NumericDelimiter::Ampersand)
                                 && start + 1 == end))
                     {
+                        Some(start..end)
+                    } else if first_delim == Some(NumericDelimiter::Hyphen) {
+                        // Handle shorthand notation like `100-4` for `100-104`
                         Some(start..end)
                     } else {
                         None

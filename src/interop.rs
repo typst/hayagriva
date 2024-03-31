@@ -405,6 +405,15 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_issn(issn.format_verbatim());
         }
 
+        if let Some(eprint) = map_res(entry.eprint())? {
+            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
+                .as_deref()
+                == Some("arxiv")
+            {
+                item.set_arxiv(eprint);
+            }
+        }
+
         if let Some(isan) = map_res(entry.isan())? {
             item.set_keyed_serial_number("isan", isan.format_verbatim());
         }
@@ -522,6 +531,14 @@ impl TryFrom<&tex::Entry> for Entry {
             if item.note.is_none() {
                 item.set_note(note.into());
             }
+        }
+
+        if let Some(abstract_) = map_res(entry.abstract_())? {
+            item.set_abstract_(abstract_.into())
+        }
+
+        if let Some(annote) = map_res(entry.annotation())? {
+            item.set_annote(annote.into())
         }
 
         if let Some(series) = map_res(entry.series())? {

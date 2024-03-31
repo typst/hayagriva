@@ -115,7 +115,8 @@ quantized-vortex:
     title: Structure of a Quantized Vortex in Boson Systems
     date: 1961-05
     page-range: 454-477
-    doi: 10.1007/BF02731494
+    serial-number:
+        doi: 10.1007/BF02731494
     parent:
         issue: 3
         volume: 20
@@ -203,7 +204,7 @@ impl Library {
 
     /// Remove an entry from the library.
     pub fn remove(&mut self, key: &str) -> Option<Entry> {
-        self.0.remove(key)
+        self.0.shift_remove(key)
     }
 
     /// Get the length of the library.
@@ -545,6 +546,18 @@ entry! {
     "call-number" => call_number: FormatString,
     /// Additional description to be appended in the bibliographic entry.
     "note" => note: FormatString,
+    /// Abstract of the item (e.g. the abstract of a journal article).
+    "abstract" => abstract_: FormatString,
+    /// Short markup, decoration, or annotation to the item (e.g., to indicate
+    /// items included in a review);
+    ///
+    /// For descriptive text (e.g., in an annotated bibliography), use `note`
+    /// instead.
+    "annote" => annote: FormatString,
+    /// Type, class, or subtype of the item (e.g. “Doctoral dissertation” for
+    /// a PhD thesis; “NIH Publication” for an NIH technical report);
+    /// Do not use for topical descriptions or categories (e.g. “adventure” for an adventure movie).
+    "genre" => genre: FormatString,
 }
 
 impl Entry {
