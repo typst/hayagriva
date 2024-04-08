@@ -1,4 +1,4 @@
-use citationberg::{IndependentStyle, Style};
+use citationberg::{IndependentStyle, LocaleCode, Style};
 use citationberg::{Locale, LocaleFile, XmlError};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -43,7 +43,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
     let mut w = String::new();
-    let styles: Vec<_> = iter_files(&style_path, "csl")
+    let mut styles: Vec<_> = iter_files(&style_path, "csl")
         .chain(iter_files(&own_style_path, "csl"))
         .filter_map(|path| {
             {
@@ -70,11 +70,13 @@ fn create_archive() -> Result<(), ArchivalError> {
         })
         .collect();
 
+    styles.sort_by_key(|(_, _, names, _)| names[0].clone());
+
     write_styles_section(&mut w, styles.as_slice())
         .map_err(|e| ArchivalError::ValidationError(e.to_string()))?;
 
     let locales_path = PathBuf::from(CACHE_PATH).join(LOCALES_REPO_NAME);
-    let locales =
+    let mut locales =
         iter_files_with_name(&locales_path, "xml", |n| n.starts_with("locales-"))
             .map(|path| {
                 let locale: Locale =
@@ -85,6 +87,10 @@ fn create_archive() -> Result<(), ArchivalError> {
                 (bytes, locale)
             })
             .collect::<Vec<_>>();
+
+    locales.sort_by_cached_key(|(_, locale)| {
+        locale.lang.clone().unwrap_or(LocaleCode("und-ZZ".to_string())).0
+    });
 
     write_locales_section(&mut w, locales.as_slice())
         .map_err(|e| ArchivalError::LocaleValidationError(e.to_string()))?;
