@@ -586,6 +586,7 @@ where
 #[test]
 fn purposes() {
     let style = ArchivedStyle::by_name("apa").unwrap().get();
+    let locales = locales();
     let Style::Independent(style) = style else {
         panic!("test has dependent style");
     };
@@ -624,7 +625,7 @@ fn purposes() {
             vec![CitationItem::new(&item, None, None, false, Some(purpose))],
             &style,
             None,
-            &[],
+            &locales,
             Some(1),
         ));
 

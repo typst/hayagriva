@@ -544,6 +544,8 @@ impl RenderCsl for citationberg::Date {
         }
 
         let base = if let Some(form) = self.form {
+            // Localized date formats can fail to print anything at all,
+            // especially if no locale is set.
             let Some(base) = ctx.localized_date(form) else { return };
             Some(base)
         } else {
