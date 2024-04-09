@@ -36,6 +36,7 @@ use self::taxonomy::{EntryLike, NumberVariableResult};
 pub mod archive;
 mod citation_label;
 mod elem;
+mod quote;
 mod rendering;
 mod sort;
 mod taxonomy;
@@ -2371,11 +2372,6 @@ impl<'a, T: EntryLike> Context<'a, T> {
                 ChunkKind::Verbatim => {
                     self.writing.buf.push_verbatim(&chunk.value);
                     self.writing.pull_punctuation = false;
-                }
-                ChunkKind::Quote => {
-                    self.push_quotes();
-                    self.push_str(&chunk.value);
-                    self.pop_quotes();
                 }
                 ChunkKind::Math => {
                     self.writing.buf.prevent_trimming();

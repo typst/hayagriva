@@ -8,7 +8,10 @@ use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
-use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
+use crate::{
+    csl::Context,
+    lang::{Case, CaseFolder, SentenceCase, TitleCase},
+};
 
 /// A string for presentation.
 ///
@@ -357,7 +360,7 @@ impl ChunkedString {
         let config = c.case();
         for chunk in &self.0 {
             match chunk.kind {
-                ChunkKind::Normal | ChunkKind::Quote => c.reconfigure(config),
+                ChunkKind::Normal => c.reconfigure(config),
                 ChunkKind::Verbatim | ChunkKind::Math => c.reconfigure(Case::NoTransform),
             };
 
@@ -415,13 +418,6 @@ impl FromStr for ChunkedString {
                 }
                 '$' => {
                     kind = ChunkKind::Math;
-                }
-                '"' if kind == ChunkKind::Quote => {
-                    kind =
-                        if depth > 0 { ChunkKind::Verbatim } else { ChunkKind::Normal };
-                }
-                '"' => {
-                    kind = ChunkKind::Quote;
                 }
                 _ => chunks.push_char(c, kind),
             }
@@ -580,11 +576,6 @@ impl StringChunk {
                 write_escaped(self, buf)?;
                 buf.write_char('$')?;
             }
-            ChunkKind::Quote => {
-                buf.write_char('"')?;
-                write_escaped(self, buf)?;
-                buf.write_char('"')?;
-            }
         }
 
         Ok(())
@@ -602,8 +593,6 @@ pub enum ChunkKind {
     /// The contained markup is expected to be evaluated using
     /// [Typst](https://typst.app/).
     Math,
-    /// Quotation marks to be formatted according to the locale.
-    Quote,
 }
 
 /// The kind of a string chunk for use with the case folder.
@@ -623,7 +612,7 @@ impl TryFrom<ChunkKind> for FoldableKind {
         match value {
             ChunkKind::Normal => Ok(Self::Normal),
             ChunkKind::Verbatim => Ok(Self::Verbatim),
-            ChunkKind::Math | ChunkKind::Quote => Err(()),
+            ChunkKind::Math => Err(()),
         }
     }
 }
