@@ -164,7 +164,7 @@ impl EntryLike for Entry {
                     MaybeTyped::Typed(r) => r.range(),
                     MaybeTyped::String(_) => None,
                 })
-                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start)))),
+                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(*r.start())))),
             NumberVariable::PartNumber => self
                 .bound_select(
                     &select!(
