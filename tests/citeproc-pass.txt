@@ -17,6 +17,7 @@ bugreports_SingletonIfMatchNoneFail
 bugreports_TitleCase
 bugreports_YearSuffixLingers
 bugreports_disambiguate
+bugreports_effingBug
 bugreports_undefinedCrash
 collapse_AuthorCollapse
 collapse_AuthorCollapseDifferentAuthorsOneWithEtAl
