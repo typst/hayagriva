@@ -365,7 +365,10 @@ fn render_typed_num<T: EntryLike>(
     }
 }
 
-fn render_page_range<T: EntryLike>(range: std::ops::Range<i32>, ctx: &mut Context<T>) {
+fn render_page_range<T: EntryLike>(
+    range: std::ops::RangeInclusive<i32>,
+    ctx: &mut Context<T>,
+) {
     ctx.style
         .csl
         .settings
