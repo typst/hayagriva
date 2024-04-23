@@ -10,6 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
+use crate::PageRanges;
+
 use super::MaybeTyped;
 
 /// A numeric value that can be pluralized.
@@ -204,6 +206,7 @@ impl Numeric {
             NumericValue::Number(n) if is_number_of => n != &1,
             NumericValue::Number(_) => false,
             NumericValue::Set(vec) => vec.len() != 1,
+            NumericValue::PageRanges(PageRanges { ranges }) => todo!(),
         }
     }
 
@@ -218,7 +221,7 @@ impl Numeric {
     }
 
     /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<std::ops::RangeInclusive<i32>> {
+    pub fn range(&self) -> Option<&PageRanges> {
         self.value.range()
     }
 
@@ -228,6 +231,7 @@ impl Numeric {
             NumericValue::Number(val) if n == 0 => Some(*val),
             NumericValue::Number(_) => None,
             NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
+            NumericValue::PageRanges(_) => todo!(),
         }
     }
 
@@ -330,6 +334,16 @@ impl From<u32> for Numeric {
     }
 }
 
+impl From<PageRanges> for Numeric {
+    fn from(value: PageRanges) -> Self {
+        Self {
+            value: NumericValue::PageRanges(value),
+            prefix: None,
+            suffix: None,
+        }
+    }
+}
+
 /// Error when parsing a numeric value.
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum NumericError {
@@ -370,50 +384,18 @@ impl Display for Numeric {
 pub enum NumericValue {
     /// A single number.
     Number(i32),
+    /// Page ranges. Considered a number for compatability with CSL.
+    PageRanges(PageRanges),
     /// A set of numbers.
     Set(Vec<(i32, Option<NumericDelimiter>)>),
 }
 
 impl NumericValue {
     /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<std::ops::RangeInclusive<i32>> {
+    pub fn range(&self) -> Option<&PageRanges> {
         match self {
-            // A single number is seen as a range of length 1. See #103.
-            Self::Number(n) => Some(*n..=*n),
-            Self::Set(vec) => {
-                if vec.len() == 2 {
-                    let start = vec[0].0;
-                    let end = vec[1].0;
-                    let first_delim = vec[0].1;
-
-                    if start < end
-                        && (first_delim == Some(NumericDelimiter::Hyphen)
-                            || (first_delim == Some(NumericDelimiter::Ampersand)
-                                && start + 1 == end))
-                    {
-                        Some(start..=end)
-                    } else if first_delim == Some(NumericDelimiter::Hyphen) {
-                        // Handle shorthand notation like `100-4` for `100-104`
-                        Some(start..=end)
-                    } else {
-                        None
-                    }
-                } else if vec.len() > 2 {
-                    for i in 1..vec.len() {
-                        if vec[i - 1].1 != Some(NumericDelimiter::Ampersand) {
-                            return None;
-                        }
-
-                        if vec[i - 1].0 + 1 != vec[i].0 {
-                            return None;
-                        }
-                    }
-
-                    Some(vec[0].0..=vec[vec.len() - 1].0)
-                } else {
-                    None
-                }
-            }
+            Self::PageRanges(r) => Some(r),
+            _ => None,
         }
     }
 }

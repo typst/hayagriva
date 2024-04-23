@@ -8,13 +8,15 @@ use citationberg::taxonomy::{
 use citationberg::{
     ChooseBranch, CslMacro, DateDayForm, DateMonthForm, DatePartName, DateParts,
     DateStrongAnyForm, GrammarGender, LabelPluralize, LayoutRenderingElement,
-    LongShortForm, NumberForm, TestPosition, TextCase, ToAffixes, ToFormatting,
+    LongShortForm, NumberForm, PageRangeFormat, TestPosition, TextCase, ToAffixes,
+    ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
 use crate::csl::taxonomy::NumberVariableResult;
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
+use crate::PageRanges;
 
 use super::taxonomy::EntryLike;
 use super::{Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
@@ -365,21 +367,26 @@ fn render_typed_num<T: EntryLike>(
     }
 }
 
-fn render_page_range<T: EntryLike>(
-    range: std::ops::RangeInclusive<i32>,
-    ctx: &mut Context<T>,
-) {
-    ctx.style
-        .csl
-        .settings
-        .page_range_format
-        .unwrap_or_default()
-        .format(
-            range,
-            ctx,
-            ctx.term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
-                .or(Some("–")),
-        )
+fn render_page_range<T: EntryLike>(range: PageRanges, ctx: &mut Context<T>) {
+    let format = ctx.style.csl.settings.page_range_format.unwrap_or_default();
+    let delim = ctx
+        .term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
+        .or(Some("–"));
+
+    range
+        .ranges
+        .iter()
+        .map(|r| match r {
+            crate::PageRangesPart::Ampersand => ctx.write_str(" & "),
+            crate::PageRangesPart::Comma => ctx.write_str(", "),
+            crate::PageRangesPart::EscapedRange(start, end) => PageRangeFormat::Expanded
+                .format(ctx, &start.to_string(), &end.to_string(), delim),
+            crate::PageRangesPart::SinglePage(page) => ctx.write_str(&page.to_string()),
+            crate::PageRangesPart::Range(start, end) => {
+                format.format(ctx, &start.to_string(), &end.to_string(), delim)
+            }
+        })
+        .collect()
         .unwrap();
 }
 

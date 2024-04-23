@@ -12,11 +12,13 @@ use thiserror::Error;
 use url::Url;
 
 pub use numeric::*;
+pub use page::*;
 pub use persons::*;
 pub use strings::*;
 pub use time::*;
 
 mod numeric;
+mod page;
 mod persons;
 mod strings;
 mod time;

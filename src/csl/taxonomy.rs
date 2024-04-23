@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::types::{
     ChunkedString, Date, EntryType, MaybeTyped, Numeric, Person, PersonRole, StringChunk,
 };
-use crate::Entry;
+use crate::{Entry, PageRanges};
 use citationberg::taxonomy::{
     DateVariable, Kind, NameVariable, NumberVariable, StandardVariable,
 };
@@ -157,14 +157,13 @@ impl EntryLike for Entry {
             NumberVariable::NumberOfVolumes => {
                 self.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
-            NumberVariable::Page => self.page_range().map(MaybeTyped::to_cow),
+            NumberVariable::Page => self
+                .page_range()
+                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(*r)))),
             NumberVariable::PageFirst => self
                 .page_range()
-                .and_then(|r| match r {
-                    MaybeTyped::Typed(r) => r.range(),
-                    MaybeTyped::String(_) => None,
-                })
-                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(*r.start())))),
+                .and_then(PageRanges::first)
+                .map(|r| MaybeTyped::Typed(Cow::Owned(*r))),
             NumberVariable::PartNumber => self
                 .bound_select(
                     &select!(
