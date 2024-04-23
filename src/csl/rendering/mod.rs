@@ -554,6 +554,8 @@ impl RenderCsl for citationberg::Date {
         }
 
         let base = if let Some(form) = self.form {
+            // Localized date formats can fail to print anything at all,
+            // especially if no locale is set.
             let Some(base) = ctx.localized_date(form) else { return };
             Some(base)
         } else {
@@ -784,16 +786,17 @@ fn choose_children<F, R, T: EntryLike>(
 where
     F: FnMut(&[LayoutRenderingElement], &mut Context<T>) -> R,
 {
-    for branch in choose.branches() {
-        if branch.match_.test(BranchConditionIter::from_branch(branch, ctx)) {
-            return Some(f(&branch.children, ctx));
-        }
-    }
+    let supressed = ctx.writing.suppress_queried_variables;
+    ctx.writing.stop_suppressing_queried_variables();
+    let branch = choose
+        .branches()
+        .find(|branch| branch.match_.test(BranchConditionIter::from_branch(branch, ctx)));
+    ctx.writing.suppress_queried_variables = supressed;
 
-    choose
-        .otherwise
-        .as_ref()
-        .map(|fallthrough| f(&fallthrough.children, ctx))
+    branch
+        .map(|b| b.children.as_slice())
+        .or_else(|| choose.otherwise.as_ref().map(|f| f.children.as_slice()))
+        .map(|children| f(children, ctx))
 }
 
 impl RenderCsl for citationberg::Choose {
