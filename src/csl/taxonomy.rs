@@ -159,11 +159,11 @@ impl EntryLike for Entry {
             }
             NumberVariable::Page => self
                 .page_range()
-                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(*r)))),
+                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.clone())))),
             NumberVariable::PageFirst => self
                 .page_range()
                 .and_then(PageRanges::first)
-                .map(|r| MaybeTyped::Typed(Cow::Owned(*r))),
+                .map(|r| MaybeTyped::Typed(Cow::Owned(r.clone()))),
             NumberVariable::PartNumber => self
                 .bound_select(
                     &select!(

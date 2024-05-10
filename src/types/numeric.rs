@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
-use crate::PageRanges;
+use crate::{PageRanges, PageRangesPart};
 
 use super::MaybeTyped;
 
@@ -136,6 +136,31 @@ impl Numeric {
                     }
                 }
             }
+            NumericValue::PageRanges(r) => {
+                for p in &r.ranges {
+                    match p {
+                        crate::PageRangesPart::Ampersand => write!(buf, " & ")?,
+                        crate::PageRangesPart::Comma => write!(buf, ", ")?,
+                        crate::PageRangesPart::EscapedRange(s, e) => {
+                            s.fmt_value(buf, machine_readable)?;
+                            write!(buf, "-")?;
+                            e.fmt_value(buf, machine_readable)?
+                        }
+                        crate::PageRangesPart::SinglePage(s) => {
+                            s.fmt_value(buf, machine_readable)?
+                        }
+                        crate::PageRangesPart::Range(s, e) => {
+                            s.fmt_value(buf, machine_readable)?;
+                            if machine_readable {
+                                buf.write_char('–')?;
+                            } else {
+                                write!(buf, "–")?;
+                            }
+                            e.fmt_value(buf, machine_readable)?
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -162,7 +187,7 @@ impl Numeric {
         buf: &mut T,
         form: NumberForm,
         gender: Option<GrammarGender>,
-        ords: OrdinalLookup<'_>,
+        ords: &OrdinalLookup<'_>,
     ) -> std::fmt::Result
     where
         T: Write,
@@ -195,6 +220,27 @@ impl Numeric {
                     }
                 }
             }
+            NumericValue::PageRanges(r) => {
+                for p in &r.ranges {
+                    match p {
+                        crate::PageRangesPart::Ampersand => write!(buf, " & ")?,
+                        crate::PageRangesPart::Comma => write!(buf, ", ")?,
+                        crate::PageRangesPart::EscapedRange(s, e) => {
+                            s.with_form(buf, form, gender, ords)?;
+                            write!(buf, "-")?;
+                            e.with_form(buf, form, gender, ords)?
+                        }
+                        crate::PageRangesPart::SinglePage(s) => {
+                            s.with_form(buf, form, gender, ords)?
+                        }
+                        crate::PageRangesPart::Range(s, e) => {
+                            s.with_form(buf, form, gender, ords)?;
+                            write!(buf, "–")?;
+                            e.with_form(buf, form, gender, ords)?
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -206,7 +252,15 @@ impl Numeric {
             NumericValue::Number(n) if is_number_of => n != &1,
             NumericValue::Number(_) => false,
             NumericValue::Set(vec) => vec.len() != 1,
-            NumericValue::PageRanges(PageRanges { ranges }) => todo!(),
+            NumericValue::PageRanges(PageRanges { ranges }) => {
+                ranges.len() == 1
+                    && matches!(
+                        ranges[0],
+                        PageRangesPart::Ampersand
+                            | PageRangesPart::Comma
+                            | PageRangesPart::SinglePage(_)
+                    )
+            }
         }
     }
 

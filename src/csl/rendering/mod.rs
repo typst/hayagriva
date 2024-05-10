@@ -363,11 +363,11 @@ fn render_typed_num<T: EntryLike>(
     };
 
     if normal_num {
-        num.with_form(ctx, form, gender, ctx.ordinal_lookup()).unwrap();
+        num.with_form(ctx, form, gender, &ctx.ordinal_lookup()).unwrap();
     }
 }
 
-fn render_page_range<T: EntryLike>(range: PageRanges, ctx: &mut Context<T>) {
+fn render_page_range<T: EntryLike>(range: &PageRanges, ctx: &mut Context<T>) {
     let format = ctx.style.csl.settings.page_range_format.unwrap_or_default();
     let delim = ctx
         .term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
@@ -376,7 +376,7 @@ fn render_page_range<T: EntryLike>(range: PageRanges, ctx: &mut Context<T>) {
     range
         .ranges
         .iter()
-        .map(|r| match r {
+        .try_for_each(|r| match r {
             crate::PageRangesPart::Ampersand => ctx.write_str(" & "),
             crate::PageRangesPart::Comma => ctx.write_str(", "),
             crate::PageRangesPart::EscapedRange(start, end) => PageRangeFormat::Expanded
@@ -386,7 +386,6 @@ fn render_page_range<T: EntryLike>(range: PageRanges, ctx: &mut Context<T>) {
                 format.format(ctx, &start.to_string(), &end.to_string(), delim)
             }
         })
-        .collect()
         .unwrap();
 }
 

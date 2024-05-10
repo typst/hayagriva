@@ -6,16 +6,20 @@ use super::{deserialize_from_str, serialize_display};
 use serde::{de, Deserialize, Serialize};
 use thiserror::Error;
 
+/// Ranges of page numbers, e.g., `1-4, 5 & 6`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PageRanges {
+    /// The given ranges.
     pub ranges: Vec<PageRangesPart>,
 }
 
 impl PageRanges {
+    /// Create a new `PageRanges` struct.
     pub fn new(ranges: Vec<PageRangesPart>) -> Self {
         Self { ranges }
     }
 
+    /// Get the first page of the first range.
     pub fn first(&self) -> Option<&Numeric> {
         self.ranges.first().and_then(PageRangesPart::start)
     }
@@ -23,7 +27,7 @@ impl PageRanges {
 
 impl Display for PageRanges {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.ranges.iter().map(|r| r.fmt(f)).collect()
+        self.ranges.iter().try_for_each(|r| r.fmt(f))
     }
 }
 
@@ -40,16 +44,23 @@ impl FromStr for PageRanges {
     }
 }
 
+/// Parts of the page ranges.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PageRangesPart {
+    /// An and, i.e, `&`.
     Ampersand,
+    /// A comma, i.e., `,`.
     Comma,
+    /// An escaped range with start and end, e.g., `1\-4`.
     EscapedRange(Numeric, Numeric),
+    /// A single page, e.g., `5`.
     SinglePage(Numeric),
+    /// A full range, e.g., `1n8--1n14`.
     Range(Numeric, Numeric),
 }
 
 impl PageRangesPart {
+    /// The start of a range if any.
     pub fn start(&self) -> Option<&Numeric> {
         match self {
             Self::EscapedRange(s, _) => Some(s),
@@ -73,6 +84,7 @@ impl Display for PageRangesPart {
     }
 }
 
+/// Parsing error for page ranges.
 #[derive(Debug, Clone, Copy, Error)]
 pub enum PageRangesPartErr {
     /// The string is malformed.
@@ -81,6 +93,7 @@ pub enum PageRangesPartErr {
     /// The string is empty.
     #[error("page range is empty")]
     Empty,
+    /// An error from parsing a numeric value.
     #[error("todo")]
     NumericErr(NumericError),
 }
@@ -139,7 +152,7 @@ deserialize_from_str!(PageRanges);
 serialize_display!(PageRanges);
 
 fn parse_number(s: &str) -> Result<Numeric, NumericError> {
-    todo!()
+    Numeric::from_str(s)
 }
 
 /// Split `s` into maximal chunks such that two successive chars satisfy `pred`.

@@ -610,9 +610,7 @@ impl Entry {
             // Index parents with the items in path. If, at any level, the index
             // exceeds the number of parents, increment the index at the
             // previous level. If no other level remains, return.
-            let Some(first_path) = path.first() else {
-                return None;
-            };
+            let first_path = path.first()?;
 
             if self.parents.len() <= *first_path {
                 return None;
