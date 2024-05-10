@@ -71,7 +71,8 @@ kinetics:
     type: Article
     title: Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate
     author: ["Doan, T. D.", "Tran Thoai, D. B.", "Haug, Hartmut"]
-    doi: "10.1103/PhysRevB.102.165126"
+    serial-number:
+        doi: "10.1103/PhysRevB.102.165126"
     page-range: 165126-165139
     date: 2020-10-14
     parent:
