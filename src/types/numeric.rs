@@ -10,6 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
+use crate::{PageRanges, PageRangesPart};
+
 use super::MaybeTyped;
 
 /// A numeric value that can be pluralized.
@@ -134,6 +136,31 @@ impl Numeric {
                     }
                 }
             }
+            NumericValue::PageRanges(r) => {
+                for p in &r.ranges {
+                    match p {
+                        crate::PageRangesPart::Ampersand => write!(buf, " & ")?,
+                        crate::PageRangesPart::Comma => write!(buf, ", ")?,
+                        crate::PageRangesPart::EscapedRange(s, e) => {
+                            s.fmt_value(buf, machine_readable)?;
+                            write!(buf, "-")?;
+                            e.fmt_value(buf, machine_readable)?
+                        }
+                        crate::PageRangesPart::SinglePage(s) => {
+                            s.fmt_value(buf, machine_readable)?
+                        }
+                        crate::PageRangesPart::Range(s, e) => {
+                            s.fmt_value(buf, machine_readable)?;
+                            if machine_readable {
+                                buf.write_char('–')?;
+                            } else {
+                                write!(buf, "–")?;
+                            }
+                            e.fmt_value(buf, machine_readable)?
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -160,7 +187,7 @@ impl Numeric {
         buf: &mut T,
         form: NumberForm,
         gender: Option<GrammarGender>,
-        ords: OrdinalLookup<'_>,
+        ords: &OrdinalLookup<'_>,
     ) -> std::fmt::Result
     where
         T: Write,
@@ -193,6 +220,27 @@ impl Numeric {
                     }
                 }
             }
+            NumericValue::PageRanges(r) => {
+                for p in &r.ranges {
+                    match p {
+                        crate::PageRangesPart::Ampersand => write!(buf, " & ")?,
+                        crate::PageRangesPart::Comma => write!(buf, ", ")?,
+                        crate::PageRangesPart::EscapedRange(s, e) => {
+                            s.with_form(buf, form, gender, ords)?;
+                            write!(buf, "-")?;
+                            e.with_form(buf, form, gender, ords)?
+                        }
+                        crate::PageRangesPart::SinglePage(s) => {
+                            s.with_form(buf, form, gender, ords)?
+                        }
+                        crate::PageRangesPart::Range(s, e) => {
+                            s.with_form(buf, form, gender, ords)?;
+                            write!(buf, "–")?;
+                            e.with_form(buf, form, gender, ords)?
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -204,6 +252,15 @@ impl Numeric {
             NumericValue::Number(n) if is_number_of => n != &1,
             NumericValue::Number(_) => false,
             NumericValue::Set(vec) => vec.len() != 1,
+            NumericValue::PageRanges(PageRanges { ranges }) => {
+                ranges.len() == 1
+                    && matches!(
+                        ranges[0],
+                        PageRangesPart::Ampersand
+                            | PageRangesPart::Comma
+                            | PageRangesPart::SinglePage(_)
+                    )
+            }
         }
     }
 
@@ -218,7 +275,7 @@ impl Numeric {
     }
 
     /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<std::ops::RangeInclusive<i32>> {
+    pub fn range(&self) -> Option<&PageRanges> {
         self.value.range()
     }
 
@@ -228,6 +285,7 @@ impl Numeric {
             NumericValue::Number(val) if n == 0 => Some(*val),
             NumericValue::Number(_) => None,
             NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
+            NumericValue::PageRanges(_) => todo!(),
         }
     }
 
@@ -330,6 +388,16 @@ impl From<u32> for Numeric {
     }
 }
 
+impl From<PageRanges> for Numeric {
+    fn from(value: PageRanges) -> Self {
+        Self {
+            value: NumericValue::PageRanges(value),
+            prefix: None,
+            suffix: None,
+        }
+    }
+}
+
 /// Error when parsing a numeric value.
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum NumericError {
@@ -370,50 +438,18 @@ impl Display for Numeric {
 pub enum NumericValue {
     /// A single number.
     Number(i32),
+    /// Page ranges. Considered a number for compatability with CSL.
+    PageRanges(PageRanges),
     /// A set of numbers.
     Set(Vec<(i32, Option<NumericDelimiter>)>),
 }
 
 impl NumericValue {
     /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<std::ops::RangeInclusive<i32>> {
+    pub fn range(&self) -> Option<&PageRanges> {
         match self {
-            // A single number is seen as a range of length 1. See #103.
-            Self::Number(n) => Some(*n..=*n),
-            Self::Set(vec) => {
-                if vec.len() == 2 {
-                    let start = vec[0].0;
-                    let end = vec[1].0;
-                    let first_delim = vec[0].1;
-
-                    if start < end
-                        && (first_delim == Some(NumericDelimiter::Hyphen)
-                            || (first_delim == Some(NumericDelimiter::Ampersand)
-                                && start + 1 == end))
-                    {
-                        Some(start..=end)
-                    } else if first_delim == Some(NumericDelimiter::Hyphen) {
-                        // Handle shorthand notation like `100-4` for `100-104`
-                        Some(start..=end)
-                    } else {
-                        None
-                    }
-                } else if vec.len() > 2 {
-                    for i in 1..vec.len() {
-                        if vec[i - 1].1 != Some(NumericDelimiter::Ampersand) {
-                            return None;
-                        }
-
-                        if vec[i - 1].0 + 1 != vec[i].0 {
-                            return None;
-                        }
-                    }
-
-                    Some(vec[0].0..=vec[vec.len() - 1].0)
-                } else {
-                    None
-                }
-            }
+            Self::PageRanges(r) => Some(r),
+            _ => None,
         }
     }
 }
