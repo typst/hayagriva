@@ -329,13 +329,13 @@ impl EntryLike for Entry {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::Status => None,
-            StandardVariable::Title => entry
+            StandardVariable::Title => {
+                entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::TitleShort => entry
                 .title()
                 .map(|f| f.select(LongShortForm::Short))
                 .map(Cow::Borrowed),
-            StandardVariable::TitleShort => {
-                entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
-            }
             StandardVariable::URL => entry
                 .map(|e| e.url())
                 .map(|d| Cow::Owned(StringChunk::verbatim(d.to_string()).into())),
