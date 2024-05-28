@@ -2,7 +2,7 @@
 <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
   <info>
     <title>Numeric</title>
-    <id>http://typst.org/csl/alphanumeric</id>
+    <id>http://typst.org/csl/numeric</id>
     <author>
       <name>Martin Haug</name>
       <email>martin.haug@typst.app</email>
@@ -13,7 +13,7 @@
     </author>
     <category citation-format="label" />
     <rights>MIT OR Apache-2.0</rights>
-    <summary>Alphanumeric citations</summary>
+    <summary>Numeric citations</summary>
   </info>
   <citation collapse="citation-number" after-collapse-delimiter="; ">
     <sort>
