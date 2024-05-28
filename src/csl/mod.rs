@@ -2793,7 +2793,7 @@ enum SpecialForm {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path};
+    use std::{fs, io::Read, path::Path};
 
     use citationberg::LocaleFile;
 
@@ -2860,6 +2860,96 @@ mod tests {
             //         println!("{}", item.to_string(BufWriteFormat::Html))
             //     }
             // }
+        }
+    }
+
+    #[test]
+    fn test_citation_collapsing() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let en_locale =
+            fs::read_to_string(workspace.join("tests/data/locales-en-US.xml")).unwrap();
+        let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
+
+        let yaml = fs::read_to_string(workspace.join("tests/data/basic.yml")).unwrap();
+        let bib = from_yaml_str(&yaml).unwrap();
+        let en_locale = [en_locale.into()];
+
+        let style = {
+            let mut style = String::new();
+            let mut file = fs::File::open(workspace.join("styles/numeric.csl")).unwrap();
+            file.read_to_string(&mut style).unwrap();
+            style
+        };
+        let style = IndependentStyle::from_xml(&style).unwrap();
+        let mut driver = BibliographyDriver::new();
+
+        driver.citation(CitationRequest::new(
+            vec![
+                CitationItem::with_entry(bib.get("foia").unwrap()),
+                CitationItem::with_entry(bib.get("terminator-2").unwrap()),
+                CitationItem::with_entry(bib.get("oiseau").unwrap()),
+                CitationItem::with_entry(bib.get("renaissance").unwrap()),
+            ],
+            &style,
+            Some(LocaleCode::en_us()),
+            &en_locale,
+            None,
+        ));
+
+        driver.citation(CitationRequest::new(
+            vec![
+                CitationItem::with_entry(bib.get("kinetics").unwrap()),
+                CitationItem::with_entry(bib.get("house").unwrap()),
+                CitationItem::with_entry(bib.get("gedanken").unwrap()),
+                CitationItem::with_entry(bib.get("zygos").unwrap()),
+            ],
+            &style,
+            Some(LocaleCode::en_us()),
+            &en_locale,
+            None,
+        ));
+
+        let rendered = driver.finish(BibliographyRequest::new(
+            &style,
+            Some(LocaleCode::en_us()),
+            &en_locale,
+        ));
+
+        assert_eq!(
+            rendered
+                .bibliography
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|item| item.key.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "foia",
+                "terminator-2",
+                "oiseau",
+                "kinetics",
+                "renaissance",
+                "house",
+                "gedanken",
+                "zygos"
+            ]
+        );
+
+        println!("{}", rendered.citations[0].citation);
+        assert_eq!(format!("{:#}", rendered.citations[0].citation), "[1–3; 5]");
+        assert_eq!(format!("{:#}", rendered.citations[1].citation), "[4; 6–8]");
+
+        for cite in rendered.citations {
+            println!("{}", cite.citation);
+        }
+
+        if let Some(bib) = rendered.bibliography {
+            for item in bib.items {
+                println!("{}: {}", item.key, item.content);
+            }
+        } else {
+            println!("no bibliography?");
         }
     }
 }
