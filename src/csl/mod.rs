@@ -863,25 +863,39 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
     match style.citation.collapse {
         Some(Collapse::CitationNumber) => {
             // Option with the start and end of the range.
+            let after_collapse_delim =
+                after_collapse_delim.or(style.citation.layout.delimiter.as_deref());
             let mut range_start: Option<(usize, usize)> = None;
+            let mut ended_range = false;
 
-            let end_range =
-                |items: &mut [SpeculativeItemRender<'a, T>],
-                 range_start: &mut Option<(usize, usize)>| {
-                    if let &mut Some((start, end)) = range_start {
-                        // There should be at least three items in the range.
-                        if start + 1 < end {
-                            items[end].delim_override =
-                                after_collapse_delim.or(Some("–"));
+            let end_range = |items: &mut [SpeculativeItemRender<'a, T>],
+                             range_start: &mut Option<(usize, usize)>,
+                             ended_range: &mut bool| {
+                let use_after_collapse_delim = *ended_range;
+                *ended_range = false;
 
-                            for item in &mut items[start + 1..end] {
-                                item.hidden = true;
-                            }
-                        }
+                if let &mut Some((start, end)) = range_start {
+                    // If the previous citation range was collapsed,
+                    // then use the after-collapse delimiter
+                    // before the next item.
+                    if use_after_collapse_delim {
+                        items[start].delim_override = after_collapse_delim;
                     }
 
-                    *range_start = None;
-                };
+                    // There should be at least three items in the range.
+                    if start + 1 < end {
+                        items[end].delim_override = Some("–");
+
+                        for item in &mut items[start + 1..end] {
+                            item.hidden = true;
+                        }
+
+                        *ended_range = true;
+                    }
+                }
+
+                *range_start = None;
+            };
 
             for i in 0..cite.items.len() {
                 let citation_number = {
@@ -891,7 +905,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     if item.hidden
                         || item.rendered.get_meta(ElemMeta::CitationNumber).is_none()
                     {
-                        end_range(&mut cite.items, &mut range_start);
+                        end_range(&mut cite.items, &mut range_start, &mut ended_range);
                         continue;
                     }
 
@@ -914,13 +928,13 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                         range_start = Some((start, i));
                     }
                     _ => {
-                        end_range(&mut cite.items, &mut range_start);
+                        end_range(&mut cite.items, &mut range_start, &mut ended_range);
                         range_start = Some((i, i));
                     }
                 }
             }
 
-            end_range(&mut cite.items, &mut range_start);
+            end_range(&mut cite.items, &mut range_start, &mut ended_range);
         }
         Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
             let after_collapse_delim =
@@ -2883,31 +2897,20 @@ mod tests {
         let style = IndependentStyle::from_xml(&style).unwrap();
         let mut driver = BibliographyDriver::new();
 
-        driver.citation(CitationRequest::new(
-            vec![
-                CitationItem::with_entry(bib.get("foia").unwrap()),
-                CitationItem::with_entry(bib.get("terminator-2").unwrap()),
-                CitationItem::with_entry(bib.get("oiseau").unwrap()),
-                CitationItem::with_entry(bib.get("renaissance").unwrap()),
-            ],
-            &style,
-            Some(LocaleCode::en_us()),
-            &en_locale,
-            None,
-        ));
-
-        driver.citation(CitationRequest::new(
-            vec![
-                CitationItem::with_entry(bib.get("kinetics").unwrap()),
-                CitationItem::with_entry(bib.get("house").unwrap()),
-                CitationItem::with_entry(bib.get("gedanken").unwrap()),
-                CitationItem::with_entry(bib.get("zygos").unwrap()),
-            ],
-            &style,
-            Some(LocaleCode::en_us()),
-            &en_locale,
-            None,
-        ));
+        let mut cite = |keys: &[&str]| {
+            driver.citation(CitationRequest::new(
+                keys.iter()
+                    .map(|key| CitationItem::with_entry(bib.get(key).unwrap()))
+                    .collect(),
+                &style,
+                Some(LocaleCode::en_us()),
+                &en_locale,
+                None,
+            ));
+        };
+        cite(&["foia", "terminator-2", "oiseau", "renaissance"]);
+        cite(&["kinetics", "house", "gedanken", "zygos"]);
+        cite(&["terminator-2", "oiseau", "house"]);
 
         let rendered = driver.finish(BibliographyRequest::new(
             &style,
@@ -2938,18 +2941,7 @@ mod tests {
 
         println!("{}", rendered.citations[0].citation);
         assert_eq!(format!("{:#}", rendered.citations[0].citation), "[1–3; 5]");
-        assert_eq!(format!("{:#}", rendered.citations[1].citation), "[4; 6–8]");
-
-        for cite in rendered.citations {
-            println!("{}", cite.citation);
-        }
-
-        if let Some(bib) = rendered.bibliography {
-            for item in bib.items {
-                println!("{}: {}", item.key, item.content);
-            }
-        } else {
-            println!("no bibliography?");
-        }
+        assert_eq!(format!("{:#}", rendered.citations[1].citation), "[4, 6–8]");
+        assert_eq!(format!("{:#}", rendered.citations[2].citation), "[2, 3, 6]");
     }
 }
