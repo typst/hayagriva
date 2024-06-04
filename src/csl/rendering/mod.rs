@@ -1209,8 +1209,14 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 impl RenderCsl for citationberg::Layout {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         let fidx = ctx.push_format(self.to_formatting());
+        if let Some(ref prefix) = self.prefix {
+            ctx.push_str(prefix);
+        }
         for e in &self.elements {
             e.render(ctx);
+        }
+        if let Some(ref suffix) = self.suffix {
+            ctx.push_str(suffix);
         }
         ctx.pop_format(fidx);
     }
