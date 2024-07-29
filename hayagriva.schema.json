@@ -11,9 +11,34 @@
             "$comment": "The key for a reference item can be series of alphanumeric characters that are uninterrupted by whitespace.",
             "type": "object",
             "description": "An entry in the bibliography. The citation key for the entry can be any alphanumeric character.",
+            "examples": [
+                {
+                    "plaque": {
+                        "type": "Misc",
+                        "title": "Informational plaque about Jacoby's 1967 photos",
+                        "publisher": "Stiftung Reinbeckhallen",
+                        "location": "Berlin, Germany",
+                        "date": 2020,
+                        "parent": {
+                            "type": "Artwork",
+                            "date": 1967,
+                            "author": "Jacoby, Max",
+                            "parent": {
+                                "type": "Anthology",
+                                "title": "Bleibtreustraße",
+                                "archive": "Landesmuseum Koblenz",
+                                "archive-location": "Koblenz, Germany"
+                            }
+                        }
+                    }
+                }
+            ],
             "properties": {
                 "type": {
                     "type": "string",
+                    "examples": [
+                        "video"
+                    ],
                     "enum": [
                         "article",
                         "chapter",
@@ -50,7 +75,10 @@
                 },
                 "title": {
                     "type": "string",
-                    "description": "The title of the item."
+                    "description": "The title of the item.",
+                    "examples": [
+                        "Rick Astley: How An Internet Joke Revived My Career"
+                    ]
                 },
                 "author": {
                     "type": [
@@ -85,11 +113,21 @@
                     },
                     "minItems": 1,
                     "uniqueItems": true,
-                    "description": "The person or persons primarily responsible for the creation of the item."
+                    "description": "The person or persons primarily responsible for the creation of the item.",
+                    "examples": [
+                        [
+                            "Klocke, Iny",
+                            "Wohlrath, Elmar"
+                        ],
+                        "Klocke, Iny"
+                    ]
                 },
                 "date": {
                     "type": "string",
-                    "description": "The date at which the item was published."
+                    "description": "The date at which the item was published.",
+                    "examples": [
+                        "1949-05"
+                    ]
                 },
                 "parent": {
                     "anyOf": [
@@ -104,7 +142,17 @@
                             "minItems": 1,
                             "uniqueItems": true,
                             "description": "The item in which the item was published or to which it is strongly associated.",
-                            "$comment": "^ This references the it's parent entry based on the `id`."
+                            "$comment": "^ This references the it's parent entry based on the `id`.",
+                            "examples": [
+                                {
+                                    "type": "Anthology",
+                                    "title": "Automata studies",
+                                    "editor": [
+                                        "Shannon, C. E.",
+                                        "McCarthy, J."
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 },
@@ -118,11 +166,33 @@
                     },
                     "minItems": 1,
                     "uniqueItems": true,
-                    "description": "The person or persons responsible for selecting and revising the content of the item."
+                    "description": "The person or persons responsible for selecting and revising the content of the item.",
+                    "examples": [
+                        [
+                            "Stringer, Gary A.",
+                            "Pebworth, Ted-Larry"
+                        ]
+                    ]
                 },
                 "affiliated": {
                     "type": "array",
                     "description": "Persons involved with the item that do not fit `author` or `editor`.",
+                    "examples": [
+                        [
+                            {
+                                "role": "Director",
+                                "names": "Cameron, James"
+                            },
+                            {
+                                "role": "CastMember",
+                                "names": [
+                                    "Schwarzenegger, Arnold",
+                                    "Hamilton, Linda",
+                                    "Patrick, Robert"
+                                ]
+                            }
+                        ]
+                    ],
                     "items": {
                         "type": "object",
                         "properties": {
@@ -168,63 +238,104 @@
                 },
                 "call-number": {
                     "type": "string",
-                    "description": "The number of the item in a library, institution, or collection. Use with `archive`."
+                    "description": "The number of the item in a library, institution, or collection. Use with `archive`.",
+                    "examples": [
+                        "F16 D14"
+                    ]
                 },
                 "publisher": {
                     "type": "string",
-                    "description": "Publisher of the item."
+                    "description": "Publisher of the item.",
+                    "examples": [
+                        "Penguin Books"
+                    ]
                 },
                 "location": {
                     "type": "string",
-                    "description": "The location at which the item was published or created."
+                    "description": "The location at which the item was published or created.",
+                    "examples": [
+                        "Lahore, Pakistan"
+                    ]
                 },
                 "organization": {
                     "type": "string",
-                    "description": "The organization at or for which the item was produced."
+                    "description": "The organization at or for which the item was produced.",
+                    "examples": [
+                        "Technische Universität Berlin"
+                    ]
                 },
                 "issue": {
                     "type": [
                         "number",
                         "string"
                     ],
-                    "description": "For an item whose parent has multiple issues, indicates the position in the issue sequence. Also used to indicate the episode number for TV."
+                    "description": "For an item whose parent has multiple issues, indicates the position in the issue sequence. Also used to indicate the episode number for TV.",
+                    "examples": [
+                        5,
+                        "5"
+                    ]
                 },
                 "volume": {
                     "type": [
                         "number",
                         "string"
                     ],
-                    "description": "For an item whose parent has multiple volumes/parts/seasons ... of which this item is one."
+                    "description": "For an item whose parent has multiple volumes/parts/seasons ... of which this item is one.",
+                    "examples": [
+                        "2-3",
+                        2
+                    ]
                 },
                 "volume-total": {
                     "type": "number",
-                    "description": "Total number of volumes/parts/seasons this item consists of."
+                    "description": "Total number of volumes/parts/seasons this item consists of.",
+                    "examples": [
+                        12
+                    ]
                 },
                 "edition": {
                     "type": [
                         "number",
                         "string"
                     ],
-                    "description": "The published version of an item."
+                    "description": "The published version of an item.",
+                    "examples": [
+                        "expanded and revised edition",
+                        "second",
+                        3
+                    ]
                 },
                 "page-range": {
                     "type": [
                         "number",
                         "string"
                     ],
-                    "description": "The range of pages within the parent this item occupies."
+                    "description": "The range of pages within the parent this item occupies.",
+                    "examples": [
+                        "812 - 847",
+                        812
+                    ]
                 },
                 "page-total": {
                     "type": "number",
-                    "description": "total number of pages the item has"
+                    "description": "total number of pages the item has",
+                    "examples": [
+                        1103
+                    ]
                 },
                 "time-range": {
                     "type": "string",
-                    "description": "The time range within the parent this item starts and ends at."
+                    "description": "The time range within the parent this item starts and ends at.",
+                    "examples": [
+                        "00:57-06:21"
+                    ]
                 },
                 "runtime": {
                     "type": "string",
-                    "description": "The total runtime of the item."
+                    "description": "The total runtime of the item.",
+                    "examples": [
+                        "01:42:21,802"
+                    ]
                 },
                 "url": {
                     "type": [
@@ -239,7 +350,15 @@
                         "date": {
                             "type": "string"
                         }
-                    }
+                    },
+                    "examples": [
+                        {
+                            "url": {
+                                "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
+                                "date": "2020-12-29"
+                            }
+                        }
+                    ]
                 },
                 "serial-number": {
                     "type": [
@@ -249,23 +368,43 @@
                     "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like doi, you should put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
                     "additionalProperties": {
                         "type": "string"
-                    }
+                    },
+                    "examples": [
+                        "2003.13722",
+                        {
+                            "doi": "10.22541/au.148771883.35456290",
+                            "arxiv": "1906.00356",
+                            "serial": "8516"
+                        }
+                    ]
                 },
                 "language": {
                     "type": "string",
-                    "description": "The language of the item. Must be a Unicode language identifier."
+                    "description": "The language of the item. Must be a Unicode language identifier.",
+                    "examples": [
+                        "zh-Hans"
+                    ]
                 },
                 "archive": {
                     "type": "string",
-                    "description": "The name of the institution or collection where the item is kept."
+                    "description": "The name of the institution or collection where the item is kept.",
+                    "examples": [
+                        "National Library of New Zealand"
+                    ]
                 },
                 "arhcive-location": {
                     "type": "string",
-                    "description": "The location of the institution or collection where the item is kept."
+                    "description": "The location of the institution or collection where the item is kept.",
+                    "examples": [
+                        "Wellington, New Zealand"
+                    ]
                 },
                 "note": {
                     "type": "string",
-                    "description": "Any additional description to be appended after reference list entry."
+                    "description": "Any additional description to be appended after reference list entry.",
+                    "examples": [
+                        "microfilm version"
+                    ]
                 }
             }
         }
