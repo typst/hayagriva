@@ -1,0 +1,273 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/typst/hayagriva/main/hayagriva.schema.json",
+    "title": "Hayagriva Bibliography Format",
+    "description": "A bibliography management format for the modern age.",
+    "type": "object",
+    "additionalProperties": false,
+    "patternProperties": {
+        "([A-Z]|[a-z]|[0-9]|)+": {
+            "id": "entry",
+            "$comment": "The key for a reference item can be series of alphanumeric characters that are uninterrupted by whitespace.",
+            "type": "object",
+            "description": "An entry in the bibliography. The citation key for the entry can be any alphanumeric character.",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "article",
+                        "chapter",
+                        "entry",
+                        "anthos",
+                        "report",
+                        "thesis",
+                        "web",
+                        "scene",
+                        "artwork",
+                        "patent",
+                        "case",
+                        "newspaper",
+                        "legislation",
+                        "manuscript",
+                        "original",
+                        "post",
+                        "misc",
+                        "performance",
+                        "periodical",
+                        "proceedings",
+                        "book",
+                        "blog",
+                        "reference",
+                        "conference",
+                        "anthology",
+                        "repository",
+                        "thread",
+                        "video",
+                        "audio",
+                        "exhibition"
+                    ],
+                    "description": "The media type of the item. Often determines the structure of references."
+                },
+                "title": {
+                    "type": "string",
+                    "description": "The title of the item."
+                },
+                "author": {
+                    "type": [
+                        "array",
+                        "string"
+                    ],
+                    "items": {
+                        "type": [
+                            "string",
+                            "object"
+                        ],
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "given-name": {
+                                "type": "string"
+                            },
+                            "prefix": {
+                                "type": "string"
+                            },
+                            "suffix": {
+                                "type": "string"
+                            },
+                            "alias": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "name"
+                        ]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "description": "The person or persons primarily responsible for the creation of the item."
+                },
+                "date": {
+                    "type": "string",
+                    "description": "The date at which the item was published."
+                },
+                "parent": {
+                    "anyOf": [
+                        {
+                            "$ref": "entry"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "$ref": "entry"
+                            },
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "description": "The item in which the item was published or to which it is strongly associated.",
+                            "$comment": "^ This references the it's parent entry based on the `id`."
+                        }
+                    ]
+                },
+                "editor": {
+                    "type": [
+                        "array",
+                        "string"
+                    ],
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "description": "The person or persons responsible for selecting and revising the content of the item."
+                },
+                "affiliated": {
+                    "type": "array",
+                    "description": "Persons involved with the item that do not fit `author` or `editor`.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "role": {
+                                "type": "string",
+                                "enum": [
+                                    "translator",
+                                    "afterword",
+                                    "foreword",
+                                    "introduction",
+                                    "annotator",
+                                    "commentator",
+                                    "holder",
+                                    "compiler",
+                                    "founder",
+                                    "collaborator",
+                                    "organizer",
+                                    "cast-member",
+                                    "composer",
+                                    "producer",
+                                    "executive-producer",
+                                    "writer",
+                                    "cinematography",
+                                    "director",
+                                    "illustrator",
+                                    "narrator"
+                                ]
+                            },
+                            "names": {
+                                "type": [
+                                    "string",
+                                    "array"
+                                ],
+                                "items": {
+                                    "type": "string"
+                                },
+                                "uniqueItems": true
+                            }
+                        }
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                },
+                "call-number": {
+                    "type": "string",
+                    "description": "The number of the item in a library, institution, or collection. Use with `archive`."
+                },
+                "publisher": {
+                    "type": "string",
+                    "description": "Publisher of the item."
+                },
+                "location": {
+                    "type": "string",
+                    "description": "The location at which the item was published or created."
+                },
+                "organization": {
+                    "type": "string",
+                    "description": "The organization at or for which the item was produced."
+                },
+                "issue": {
+                    "type": [
+                        "number",
+                        "string"
+                    ],
+                    "description": "For an item whose parent has multiple issues, indicates the position in the issue sequence. Also used to indicate the episode number for TV."
+                },
+                "volume": {
+                    "type": [
+                        "number",
+                        "string"
+                    ],
+                    "description": "For an item whose parent has multiple volumes/parts/seasons ... of which this item is one."
+                },
+                "volume-total": {
+                    "type": "number",
+                    "description": "Total number of volumes/parts/seasons this item consists of."
+                },
+                "edition": {
+                    "type": [
+                        "number",
+                        "string"
+                    ],
+                    "description": "The published version of an item."
+                },
+                "page-range": {
+                    "type": [
+                        "number",
+                        "string"
+                    ],
+                    "description": "The range of pages within the parent this item occupies."
+                },
+                "page-total": {
+                    "type": "number",
+                    "description": "total number of pages the item has"
+                },
+                "time-range": {
+                    "type": "string",
+                    "description": "The time range within the parent this item starts and ends at."
+                },
+                "runtime": {
+                    "type": "string",
+                    "description": "The total runtime of the item."
+                },
+                "url": {
+                    "type": [
+                        "string",
+                        "object"
+                    ],
+                    "description": "The canonical public URL of the item. Can have access date.",
+                    "properties": {
+                        "value": {
+                            "type": "string"
+                        },
+                        "date": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "serial-number": {
+                    "type": [
+                        "string",
+                        "object"
+                    ],
+                    "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like doi, you should put them into the serial number as a dictionary like in the second example. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "language": {
+                    "type": "string",
+                    "description": "The language of the item. Must be a Unicode language identifier."
+                },
+                "archive": {
+                    "type": "string",
+                    "description": "The name of the institution or collection where the item is kept."
+                },
+                "arhcive-location": {
+                    "type": "string",
+                    "description": "The location of the institution or collection where the item is kept."
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Any additional description to be appended after reference list entry."
+                }
+            }
+        }
+    }
+}
