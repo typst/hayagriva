@@ -7,7 +7,7 @@
     "additionalProperties": false,
     "patternProperties": {
         "([A-Z]|[a-z]|[0-9]|)+": {
-            "id": "entry",
+            "$dynamicAnchor": "entry",
             "$comment": "The key for a reference item can be series of alphanumeric characters that are uninterrupted by whitespace.",
             "type": "object",
             "description": "An entry in the bibliography. The citation key for the entry can be any alphanumeric character.",
@@ -132,7 +132,7 @@
                 "parent": {
                     "anyOf": [
                         {
-                            "$ref": "entry"
+                            "$dynamicRef": "#entry"
                         },
                         {
                             "type": "array",
