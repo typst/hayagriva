@@ -94,14 +94,8 @@ pub enum PageRangesPartErr {
     #[error("page range is empty")]
     Empty,
     /// An error from parsing a numeric value.
-    #[error("todo")]
-    NumericErr(NumericError),
-}
-
-impl From<NumericError> for PageRangesPartErr {
-    fn from(value: NumericError) -> Self {
-        Self::NumericErr(value)
-    }
+    #[error("page range contained invalid numeric value")]
+    NumericErr(#[from] NumericError),
 }
 
 impl FromStr for PageRangesPart {
