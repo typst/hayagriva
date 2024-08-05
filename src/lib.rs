@@ -522,7 +522,7 @@ entry! {
     /// Published version of an item.
     "edition" => edition: MaybeTyped<Numeric>,
     /// The range of pages within the parent this item occupies
-    "page-range" => page_range: MaybeTyped<Numeric>,
+    "page-range" => page_range: PageRanges,
     /// The total number of pages the item has.
     "page-total" => page_total: Numeric,
     /// The time range within the parent this item starts and ends at.
@@ -610,9 +610,7 @@ impl Entry {
             // Index parents with the items in path. If, at any level, the index
             // exceeds the number of parents, increment the index at the
             // previous level. If no other level remains, return.
-            let Some(first_path) = path.first() else {
-                return None;
-            };
+            let first_path = path.first()?;
 
             if self.parents.len() <= *first_path {
                 return None;
