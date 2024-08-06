@@ -442,7 +442,7 @@ fn test_single_file() {
 #[test]
 fn test_local_files() {
     let locales = locales();
-    let test_path = PathBuf::from("tests/data/citeproc");
+    let test_path = PathBuf::from("tests/local");
 
     for path in iter_files_with_name(&test_path, "txt", |_| true) {
         let case = build_case(&std::fs::read_to_string(&path).unwrap());
