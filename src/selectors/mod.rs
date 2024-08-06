@@ -228,7 +228,7 @@ impl Selector {
             Self::Binding(binding, expr) => {
                 expr.apply_any(entries).map(|(mut bound, es)| {
                     if !es.is_empty() {
-                        bound.insert(binding.to_string(), es.get(0).unwrap());
+                        bound.insert(binding.to_string(), es.first().unwrap());
                     }
                     (bound, vec![])
                 })

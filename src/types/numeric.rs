@@ -386,14 +386,13 @@ impl NumericValue {
                     let end = vec[1].0;
                     let first_delim = vec[0].1;
 
-                    if start < end
-                        && (first_delim == Some(NumericDelimiter::Hyphen)
-                            || (first_delim == Some(NumericDelimiter::Ampersand)
-                                && start + 1 == end))
+                    let first_delim_ampersand_range = first_delim
+                        == Some(NumericDelimiter::Ampersand)
+                        && start + 1 == end;
+
+                    if (first_delim_ampersand_range)
+                        || first_delim == Some(NumericDelimiter::Hyphen)
                     {
-                        Some(start..=end)
-                    } else if first_delim == Some(NumericDelimiter::Hyphen) {
-                        // Handle shorthand notation like `100-4` for `100-104`
                         Some(start..=end)
                     } else {
                         None
