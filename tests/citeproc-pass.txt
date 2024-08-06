@@ -292,6 +292,7 @@ position_TrueInCitation
 punctuation_DateStripPeriods
 punctuation_DoNotSuppressColonAfterPeriod
 punctuation_NoSuppressOfPeriodBeforeSemicolon
+sort_CaseInsensitiveCitation
 sort_Citation
 sort_CitationSecondaryKey
 sort_CiteGroupDelimiter
