@@ -83,12 +83,9 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 
     /// Create a new citation with the given items.
     pub fn citation(&mut self, mut req: CitationRequest<'a, T>) {
-        let style = req.style();
-
         for (i, item) in req.items.iter_mut().enumerate() {
             item.initial_idx = i;
         }
-        style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
         self.citations.push(req);
     }
 }
@@ -96,7 +93,7 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 /// Implementations for finishing the bibliography.
 impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T> {
     /// Render the bibliography.
-    pub fn finish(self, request: BibliographyRequest<'_>) -> Rendered {
+    pub fn finish(mut self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
         //     order and render them a first time without their locators.
         let bib_style = request.style();
@@ -115,6 +112,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
             request.locale.as_ref(),
+            |_| 0,
         );
         let citation_number = |item: &T| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
@@ -124,10 +122,17 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         let mut res: Vec<SpeculativeCiteRender<T>> = Vec::new();
         let mut last_cite: Option<&CitationItem<T>> = None;
 
-        for citation in &self.citations {
-            let items = &citation.items;
+        for citation in &mut self.citations {
             let style = citation.style();
 
+            style.sort(
+                &mut citation.items,
+                style.csl.citation.sort.as_ref(),
+                citation.locale.as_ref(),
+                &citation_number,
+            );
+
+            let items = &citation.items;
             let mut renders: Vec<SpeculativeItemRender<'_, T>> = Vec::new();
 
             for item in items.iter() {
@@ -516,7 +521,12 @@ pub fn standalone_citation<T: EntryLike>(
     mut req: CitationRequest<'_, T>,
 ) -> ElemChildren {
     let style = req.style();
-    style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
+    style.sort(
+        &mut req.items,
+        style.csl.citation.sort.as_ref(),
+        req.locale.as_ref(),
+        |_| 0,
+    );
     let mut res = vec![];
     let mut all_hidden = true;
     for item in req.items {
