@@ -27,10 +27,10 @@ impl<'a> StyleContext<'a> {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
                 let a = InstanceContext::sort_instance(a, a_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string().to_lowercase());
                 let b = InstanceContext::sort_instance(b, b_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string().to_lowercase());
 
                 a.cmp(&b)
             }
