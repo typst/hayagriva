@@ -137,7 +137,7 @@ impl<'a> StyleContext<'a> {
         cites: &mut [CitationItem<T>],
         sort: Option<&Sort>,
         term_locale: Option<&LocaleCode>,
-        citation_number: &dyn Fn(&T) -> usize,
+        citation_number: impl Fn(&T) -> usize,
     ) {
         if let Some(sort) = sort {
             cites.sort_by(|a, b| {

@@ -112,7 +112,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
             request.locale.as_ref(),
-            &|_| 0,
+            |_| 0,
         );
         let citation_number = |item: &T| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
@@ -525,7 +525,7 @@ pub fn standalone_citation<T: EntryLike>(
         &mut req.items,
         style.csl.citation.sort.as_ref(),
         req.locale.as_ref(),
-        &|_| 0,
+        |_| 0,
     );
     let mut res = vec![];
     let mut all_hidden = true;
