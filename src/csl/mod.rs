@@ -856,17 +856,19 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
 fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
     let style = &cite.request.style;
 
-    let after_collapse_delim = style.citation.after_collapse_delimiter.as_deref();
+    let after_collapse_delim = style
+        .citation
+        .after_collapse_delimiter
+        .as_deref()
+        .or(style.citation.layout.delimiter.as_deref());
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
 
     match style.citation.collapse {
         Some(Collapse::CitationNumber) => {
             // Option with the start and end of the range.
-            let after_collapse_delim =
-                after_collapse_delim.or(style.citation.layout.delimiter.as_deref());
             let mut range_start: Option<(usize, usize)> = None;
-            let mut ended_range = false;
+            let mut just_collapsed = false;
 
             let end_range = |items: &mut [SpeculativeItemRender<'a, T>],
                              range_start: &mut Option<(usize, usize)>,
@@ -905,7 +907,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     if item.hidden
                         || item.rendered.get_meta(ElemMeta::CitationNumber).is_none()
                     {
-                        end_range(&mut cite.items, &mut range_start, &mut ended_range);
+                        end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         continue;
                     }
 
@@ -928,18 +930,15 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                         range_start = Some((start, i));
                     }
                     _ => {
-                        end_range(&mut cite.items, &mut range_start, &mut ended_range);
+                        end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         range_start = Some((i, i));
                     }
                 }
             }
 
-            end_range(&mut cite.items, &mut range_start, &mut ended_range);
+            end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
         }
         Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
-            let after_collapse_delim =
-                after_collapse_delim.or(style.citation.layout.delimiter.as_deref());
-
             // Index of where the current group started and the group we are
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
