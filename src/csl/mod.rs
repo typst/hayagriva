@@ -856,7 +856,11 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
 fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
     let style = &cite.request.style;
 
-    let after_collapse_delim = style.citation.after_collapse_delimiter.as_deref();
+    let after_collapse_delim = style
+        .citation
+        .after_collapse_delimiter
+        .as_deref()
+        .or(style.citation.layout.delimiter.as_deref());
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
 
@@ -864,24 +868,36 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         Some(Collapse::CitationNumber) => {
             // Option with the start and end of the range.
             let mut range_start: Option<(usize, usize)> = None;
+            let mut just_collapsed = false;
 
-            let end_range =
-                |items: &mut [SpeculativeItemRender<'a, T>],
-                 range_start: &mut Option<(usize, usize)>| {
-                    if let &mut Some((start, end)) = range_start {
-                        // There should be at least three items in the range.
-                        if start + 1 < end {
-                            items[end].delim_override =
-                                after_collapse_delim.or(Some("–"));
+            let end_range = |items: &mut [SpeculativeItemRender<'a, T>],
+                             range_start: &mut Option<(usize, usize)>,
+                             just_collapsed: &mut bool| {
+                let use_after_collapse_delim = *just_collapsed;
+                *just_collapsed = false;
 
-                            for item in &mut items[start + 1..end] {
-                                item.hidden = true;
-                            }
-                        }
+                if let &mut Some((start, end)) = range_start {
+                    // If the previous citation range was collapsed, use the
+                    // after-collapse delimiter before the next item.
+                    if use_after_collapse_delim {
+                        items[start].delim_override = after_collapse_delim;
                     }
 
-                    *range_start = None;
-                };
+                    // There should be at least three items in the range to
+                    // collapse.
+                    if start + 1 < end {
+                        items[end].delim_override = Some("–");
+
+                        for item in &mut items[start + 1..end] {
+                            item.hidden = true;
+                        }
+
+                        *just_collapsed = true;
+                    }
+                }
+
+                *range_start = None;
+            };
 
             for i in 0..cite.items.len() {
                 let citation_number = {
@@ -891,7 +907,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     if item.hidden
                         || item.rendered.get_meta(ElemMeta::CitationNumber).is_none()
                     {
-                        end_range(&mut cite.items, &mut range_start);
+                        end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         continue;
                     }
 
@@ -914,18 +930,15 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                         range_start = Some((start, i));
                     }
                     _ => {
-                        end_range(&mut cite.items, &mut range_start);
+                        end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         range_start = Some((i, i));
                     }
                 }
             }
 
-            end_range(&mut cite.items, &mut range_start);
+            end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
         }
         Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
-            let after_collapse_delim =
-                after_collapse_delim.or(style.citation.layout.delimiter.as_deref());
-
             // Index of where the current group started and the group we are
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
