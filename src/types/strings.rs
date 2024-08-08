@@ -251,6 +251,12 @@ impl Serialize for ChunkedString {
     }
 }
 
+impl Into<String> for ChunkedString {
+    fn into(self) -> String {
+        return self.to_string();
+    }
+}
+
 impl ChunkedString {
     /// Creates a new empty `ChunkedString`.
     pub fn new() -> Self {

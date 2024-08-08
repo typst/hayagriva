@@ -276,8 +276,14 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Introduction));
         }
 
-        if let Some(title) = map_res(entry.title())?.map(Into::into) {
-            item.set_title(title);
+        if let Some(title) = map_res(entry.title())?.map(Into::<ChunkedString>::into) {
+            if let Some(short_title) =
+                map_res(entry.short_title())?.map(Into::<ChunkedString>::into)
+            {
+                item.set_title(FormatString::with_short(title, short_title));
+            } else {
+                item.set_title(FormatString::with_value(title));
+            }
         }
 
         // NOTE: Ignoring subtitle and titleaddon for now
