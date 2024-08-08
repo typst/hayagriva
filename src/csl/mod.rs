@@ -872,9 +872,9 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
 
             let end_range = |items: &mut [SpeculativeItemRender<'a, T>],
                              range_start: &mut Option<(usize, usize)>,
-                             ended_range: &mut bool| {
-                let use_after_collapse_delim = *ended_range;
-                *ended_range = false;
+                             just_collapsed: &mut bool| {
+                let use_after_collapse_delim = *just_collapsed;
+                *just_collapsed = false;
 
                 if let &mut Some((start, end)) = range_start {
                     // If the previous citation range was collapsed,
@@ -884,7 +884,8 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                         items[start].delim_override = after_collapse_delim;
                     }
 
-                    // There should be at least three items in the range.
+                    // There should be at least three items in the range to
+                    // collapse.
                     if start + 1 < end {
                         items[end].delim_override = Some("–");
 
@@ -892,7 +893,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                             item.hidden = true;
                         }
 
-                        *ended_range = true;
+                        *just_collapsed = true;
                     }
                 }
 
