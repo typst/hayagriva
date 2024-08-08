@@ -7,9 +7,9 @@ Simplified from collapse_CitationNumberRangesInsert.txt
 
 >>===== RESULT =====>>
 [1–8]
-[1–3; 5]
-[4, 6–8]
-[2, 3, 6]
+[1–3;5]
+[4,6–8]
+[2,3,6]
 <<===== RESULT =====<<
 
 >>===== CITATION-ITEMS =====>>
@@ -84,45 +84,21 @@ Simplified from collapse_CitationNumberRangesInsert.txt
 
 
 >>===== CSL =====>>
-<?xml version="1.0" encoding="utf-8"?>
 <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
   <info>
-    <title>Numeric</title>
-    <id>http://typst.org/csl/numeric</id>
-    <author>
-      <name>Martin Haug</name>
-      <email>martin.haug@typst.app</email>
-    </author>
-    <author>
-      <name>Laurenz Mädje</name>
-      <email>laurenz.maedje@typst.app</email>
-    </author>
-    <category citation-format="label" />
-    <rights>MIT OR Apache-2.0</rights>
-    <summary>Numeric citations</summary>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
   </info>
-  <citation collapse="citation-number" after-collapse-delimiter="; ">
+  <citation collapse="citation-number" after-collapse-delimiter=";">
     <sort>
       <key variable="author" />
       <key variable="issued" />
     </sort>
-    <layout prefix="[" suffix="]" delimiter=", ">
+    <layout prefix="[" suffix="]" delimiter=",">
       <text variable="citation-number" />
     </layout>
   </citation>
-  <bibliography>
-    <sort>
-      <key variable="author" />
-      <key variable="issued" />
-    </sort>
-    <layout>
-        <group delimiter=". ">
-        <text variable="author"/>
-        <text variable="title"/>
-        <text variable="issued"/>
-        </group>
-    </layout>
-  </bibliography>
 </style>
 <<===== CSL =====<<
 
