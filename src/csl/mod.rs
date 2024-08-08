@@ -877,9 +877,8 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                 *just_collapsed = false;
 
                 if let &mut Some((start, end)) = range_start {
-                    // If the previous citation range was collapsed,
-                    // then use the after-collapse delimiter
-                    // before the next item.
+                    // If the previous citation range was collapsed, use the
+                    // after-collapse delimiter before the next item.
                     if use_after_collapse_delim {
                         items[start].delim_override = after_collapse_delim;
                     }
