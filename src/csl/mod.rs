@@ -2807,7 +2807,7 @@ enum SpecialForm {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Read, path::Path};
+    use std::{fs, path::Path};
 
     use citationberg::LocaleFile;
 
