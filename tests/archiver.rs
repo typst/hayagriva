@@ -2,10 +2,10 @@ use citationberg::{IndependentStyle, LocaleCode, Style};
 use citationberg::{Locale, LocaleFile, XmlError};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
+use std::fmt::{Display, Write};
 use std::fs;
-use std::io;
-use std::path::PathBuf;
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
 use std::{fmt, iter};
 
 mod common;
@@ -18,6 +18,7 @@ const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
 const LOCALES_REPO_NAME: &str = "locales";
 const OWN_STYLES: &str = "styles";
+const ARCHIVER_SRC_PATH: &str = "src/csl/archive.rs";
 
 /// Always archive.
 #[test]
@@ -38,10 +39,44 @@ fn ensure_repos() -> Result<(), ArchivalError> {
     Ok(ensure_repo(LOCALES_REPO, LOCALES_REPO_NAME, "master")?)
 }
 
+fn ensure_archive_up_to_date(
+    path: impl AsRef<Path>,
+    item: impl Display,
+    expected: &[u8],
+) -> Result<(), ArchivalError> {
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            // The archive file simply wasn't created yet.
+            return Err(ArchivalError::NeedsUpdate(item.to_string()));
+        }
+        Err(err) => return Err(ArchivalError::Io(err)),
+    };
+
+    let mut position = 0;
+    let mut buf = vec![0u8; 4096];
+    while position < expected.len() {
+        let read_bytes = file.read(&mut buf)?;
+        if read_bytes == 0
+            || buf[..read_bytes] != expected[position..position + read_bytes]
+        {
+            return Err(ArchivalError::NeedsUpdate(item.to_string()));
+        }
+        position += read_bytes;
+    }
+
+    Ok(())
+}
+
 /// Create an archive of CSL and its locales as CBOR.
 fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
+
+    // Without the '--update' flag, we only check if the archive files are
+    // up-to-date.
+    let should_write = std::env::args_os().any(|arg| arg == "--update");
+
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
         .chain(iter_files(&own_style_path, "csl"))
@@ -97,21 +132,34 @@ fn create_archive() -> Result<(), ArchivalError> {
 
     for (bytes, indep, _, _) in styles {
         let stripped_id = strip_id(indep.info.id.as_str());
-        fs::write(
-            PathBuf::from("archive/styles/").join(format!("{}.cbor", stripped_id)),
-            bytes,
-        )?;
+        let path = PathBuf::from("archive/styles/").join(format!("{}.cbor", stripped_id));
+
+        if should_write {
+            fs::write(path, bytes)?;
+        } else {
+            let item = format!("style '{}.cbor'", stripped_id);
+            ensure_archive_up_to_date(&path, item, &bytes)?;
+        }
     }
 
     for (bytes, locale) in locales {
-        fs::write(
-            PathBuf::from("archive/locales/")
-                .join(format!("{}.cbor", locale.lang.unwrap())),
-            bytes,
-        )?;
+        let lang = locale.lang.unwrap();
+        let path = PathBuf::from("archive/locales/").join(format!("{}.cbor", lang));
+
+        if should_write {
+            fs::write(path, bytes)?;
+        } else {
+            let item = format!("locale '{}.cbor'", lang);
+            ensure_archive_up_to_date(&path, item, &bytes)?;
+        }
     }
 
-    fs::write("src/csl/archive.rs", w)?;
+    if should_write {
+        fs::write(ARCHIVER_SRC_PATH, w)?;
+    } else {
+        let item = format!("file '{}'", ARCHIVER_SRC_PATH);
+        ensure_archive_up_to_date(ARCHIVER_SRC_PATH, item, w.as_bytes())?;
+    }
 
     Ok(())
 }
@@ -331,6 +379,7 @@ pub enum ArchivalError {
     CborDeserialize(ciborium::de::Error<std::io::Error>),
     ValidationError(String),
     LocaleValidationError(String),
+    NeedsUpdate(String),
 }
 
 impl From<io::Error> for ArchivalError {
@@ -366,6 +415,13 @@ impl fmt::Display for ArchivalError {
             Self::ValidationError(id) => write!(f, "error when validating style {}", id),
             Self::LocaleValidationError(id) => {
                 write!(f, "error when validating locale {}", id)
+            }
+            Self::NeedsUpdate(item) => {
+                write!(
+                    f,
+                    "{} is outdated, run archiver tests with '--update' to update",
+                    item
+                )
             }
         }
     }
