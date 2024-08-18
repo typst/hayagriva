@@ -289,7 +289,7 @@ fn get_names<'a>(id: &'a str, over: Option<&'a Override>) -> Vec<String> {
     }
     .to_string();
 
-    let other = if let Some(alias) = over.and_then(|o| o.alias) { alias } else { &[] };
+    let other = over.and_then(|o| o.alias).unwrap_or_default();
     iter::once(main)
         .chain(other.iter().map(ToString::to_string))
         .collect()
