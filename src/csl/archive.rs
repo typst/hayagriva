@@ -335,6 +335,7 @@ pub enum ArchivedStyle {
     VancouverSuperscript,
 }
 
+#[rustfmt::skip]
 impl ArchivedStyle {
     /// Retrieve this style by name.
     pub fn by_name(name: &str) -> Option<Self> {
@@ -426,7 +427,7 @@ impl ArchivedStyle {
             "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
             "vancouver" => Some(Self::Vancouver),
             "vancouver-superscript" => Some(Self::VancouverSuperscript),
-            _ => None
+            _ => None,
         }
     }
 
@@ -1125,7 +1126,6 @@ impl ArchivedStyle {
             Self::VancouverSuperscript => "http://www.zotero.org/styles/vancouver-superscript",
         }
     }
-
 }
 fn from_cbor<T: DeserializeOwned>(
     reader: &[u8],
@@ -1195,7 +1195,8 @@ pub const LOCALES: &[&[u8]] = &[
 
 /// Get all CSL locales.
 pub fn locales() -> Vec<Locale> {
-    LOCALES.iter().map(|bytes| {
-        from_cbor::<Locale>(bytes).unwrap()
-    }).collect()
+    LOCALES
+        .iter()
+        .map(|bytes| from_cbor::<Locale>(bytes).unwrap())
+        .collect()
 }
