@@ -439,6 +439,18 @@ fn test_single_file() {
     assert!(test_file(case, &locales, || path.display()));
 }
 
+#[test]
+fn test_local_files() {
+    let locales = locales();
+    let test_path = PathBuf::from("tests/local");
+
+    for path in iter_files_with_name(&test_path, "txt", |_| true) {
+        let case = build_case(&std::fs::read_to_string(&path).unwrap());
+        assert!(can_test(&case, || path.display(), true));
+        assert!(test_file(case, &locales, || path.display()));
+    }
+}
+
 fn build_case(s: &str) -> TestCase {
     let mut s = Scanner::new(s);
     let mut builder = TestCaseBuilder::new();

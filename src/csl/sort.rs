@@ -27,10 +27,10 @@ impl<'a> StyleContext<'a> {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
                 let a = InstanceContext::sort_instance(a, a_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string().to_lowercase());
                 let b = InstanceContext::sort_instance(b, b_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string().to_lowercase());
 
                 a.cmp(&b)
             }
@@ -137,12 +137,20 @@ impl<'a> StyleContext<'a> {
         cites: &mut [CitationItem<T>],
         sort: Option<&Sort>,
         term_locale: Option<&LocaleCode>,
+        citation_number: impl Fn(&T) -> usize,
     ) {
         if let Some(sort) = sort {
             cites.sort_by(|a, b| {
                 let mut ordering = Ordering::Equal;
                 for key in &sort.keys {
-                    ordering = self.cmp_entries(a, 0, b, 0, key, term_locale);
+                    ordering = self.cmp_entries(
+                        a,
+                        citation_number(a.entry),
+                        b,
+                        citation_number(b.entry),
+                        key,
+                        term_locale,
+                    );
                     if ordering != Ordering::Equal {
                         break;
                     }
