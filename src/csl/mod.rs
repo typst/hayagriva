@@ -9,7 +9,7 @@ use std::{mem, vec};
 
 use citationberg::taxonomy::{
     DateVariable, Locator, NameVariable, NumberVariable, OtherTerm, StandardVariable,
-    Term, Variable,
+    Term, Variable, PageVariable
 };
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
@@ -30,7 +30,7 @@ use self::elem::last_text_mut_child;
 pub use self::elem::{
     BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
 };
-use self::taxonomy::{EntryLike, NumberVariableResult};
+use self::taxonomy::{EntryLike, NumberVariableResult, PageVariableResult};
 
 #[cfg(feature = "archive")]
 pub mod archive;
@@ -2560,6 +2560,11 @@ impl<'a, T: EntryLike> Context<'a, T> {
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_number_variable(variable);
         res
+    }
+
+    fn resolve_page_variable(&self) -> Option<PageVariableResult> {
+        self.writing.prepare_variable_query(PageVariable::Page)?;
+        self.instance.resolve_page_variable()
     }
 
     /// Resolve a name variable.

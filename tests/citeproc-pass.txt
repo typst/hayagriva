@@ -274,6 +274,7 @@ nameorder_ShortDemoteDisplayAndSort
 nameorder_ShortNameAsSortDemoteNever
 namespaces_NonNada3
 number_IsNumericWithAlpha
+number_MixedPageRange
 number_PageFirst
 number_PageRange
 number_SimpleNumberArabic

@@ -10,8 +10,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
-use crate::{PageRanges, PageRangesPart};
-
 use super::MaybeTyped;
 
 /// A numeric value that can be pluralized.
@@ -136,31 +134,6 @@ impl Numeric {
                     }
                 }
             }
-            NumericValue::PageRanges(r) => {
-                for p in &r.ranges {
-                    match p {
-                        crate::PageRangesPart::Ampersand => write!(buf, " & ")?,
-                        crate::PageRangesPart::Comma => write!(buf, ", ")?,
-                        crate::PageRangesPart::EscapedRange(s, e) => {
-                            s.fmt_value(buf, machine_readable)?;
-                            write!(buf, "-")?;
-                            e.fmt_value(buf, machine_readable)?
-                        }
-                        crate::PageRangesPart::SinglePage(s) => {
-                            s.fmt_value(buf, machine_readable)?
-                        }
-                        crate::PageRangesPart::Range(s, e) => {
-                            s.fmt_value(buf, machine_readable)?;
-                            if machine_readable {
-                                buf.write_char('–')?;
-                            } else {
-                                write!(buf, "–")?;
-                            }
-                            e.fmt_value(buf, machine_readable)?
-                        }
-                    }
-                }
-            }
         }
 
         Ok(())
@@ -220,27 +193,6 @@ impl Numeric {
                     }
                 }
             }
-            NumericValue::PageRanges(r) => {
-                for p in &r.ranges {
-                    match p {
-                        crate::PageRangesPart::Ampersand => write!(buf, " & ")?,
-                        crate::PageRangesPart::Comma => write!(buf, ", ")?,
-                        crate::PageRangesPart::EscapedRange(s, e) => {
-                            s.with_form(buf, form, gender, ords)?;
-                            write!(buf, "-")?;
-                            e.with_form(buf, form, gender, ords)?
-                        }
-                        crate::PageRangesPart::SinglePage(s) => {
-                            s.with_form(buf, form, gender, ords)?
-                        }
-                        crate::PageRangesPart::Range(s, e) => {
-                            s.with_form(buf, form, gender, ords)?;
-                            write!(buf, "–")?;
-                            e.with_form(buf, form, gender, ords)?
-                        }
-                    }
-                }
-            }
         }
 
         Ok(())
@@ -252,15 +204,6 @@ impl Numeric {
             NumericValue::Number(n) if is_number_of => n != &1,
             NumericValue::Number(_) => false,
             NumericValue::Set(vec) => vec.len() != 1,
-            NumericValue::PageRanges(PageRanges { ranges }) => {
-                ranges.len() == 1
-                    && matches!(
-                        ranges[0],
-                        PageRangesPart::Ampersand
-                            | PageRangesPart::Comma
-                            | PageRangesPart::SinglePage(_)
-                    )
-            }
         }
     }
 
@@ -274,18 +217,12 @@ impl Numeric {
             .flatten()
     }
 
-    /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<&PageRanges> {
-        self.value.range()
-    }
-
     /// Returns the nth number in the set.
     pub fn nth(&self, n: usize) -> Option<i32> {
         match &self.value {
             NumericValue::Number(val) if n == 0 => Some(*val),
             NumericValue::Number(_) => None,
             NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
-            NumericValue::PageRanges(_) => todo!(),
         }
     }
 
@@ -388,16 +325,6 @@ impl From<u32> for Numeric {
     }
 }
 
-impl From<PageRanges> for Numeric {
-    fn from(value: PageRanges) -> Self {
-        Self {
-            value: NumericValue::PageRanges(value),
-            prefix: None,
-            suffix: None,
-        }
-    }
-}
-
 /// Error when parsing a numeric value.
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum NumericError {
@@ -438,20 +365,8 @@ impl Display for Numeric {
 pub enum NumericValue {
     /// A single number.
     Number(i32),
-    /// Page ranges. Considered a number for compatability with CSL.
-    PageRanges(PageRanges),
     /// A set of numbers.
     Set(Vec<(i32, Option<NumericDelimiter>)>),
-}
-
-impl NumericValue {
-    /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<&PageRanges> {
-        match self {
-            Self::PageRanges(r) => Some(r),
-            _ => None,
-        }
-    }
 }
 
 /// Delimits individual numbers in a numeric value.

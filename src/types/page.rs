@@ -1,10 +1,20 @@
-use std::{fmt::Display, num::NonZeroUsize, str::FromStr};
+use std::{cmp::Ordering, fmt::Display, num::NonZeroUsize, str::FromStr};
 
-use crate::{Numeric, NumericError};
+use crate::{MaybeTyped, Numeric, NumericError};
 
 use super::{deserialize_from_str, serialize_display};
 use serde::{de, Deserialize, Serialize};
 use thiserror::Error;
+
+impl MaybeTyped<PageRanges> {
+    /// Order the values according to CSL rules.
+    pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (MaybeTyped::Typed(a), MaybeTyped::Typed(b)) => a.csl_cmp(b),
+            _ => self.to_string().cmp(&other.to_string()),
+        }
+    }
+}
 
 /// Ranges of page numbers, e.g., `1-4, 5 & 6`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,6 +32,35 @@ impl PageRanges {
     /// Get the first page of the first range.
     pub fn first(&self) -> Option<&Numeric> {
         self.ranges.first().and_then(PageRangesPart::start)
+    }
+
+    /// Order the values according to CSL rules.
+    pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let mut i = 0;
+        loop {
+            let a = self.ranges.get(i);
+            let b = other.ranges.get(i);
+
+            match (a, b) {
+                (Some(a), Some(b)) => {
+                    let ord = a.csl_cmp(&b);
+                    if ord != std::cmp::Ordering::Equal {
+                        return ord;
+                    }
+                }
+                (Some(_), None) => return std::cmp::Ordering::Greater,
+                (None, Some(_)) => return std::cmp::Ordering::Less,
+                (None, None) => return std::cmp::Ordering::Equal,
+            }
+
+            i += 1;
+        }
+    }
+}
+
+impl From<u64> for PageRanges {
+    fn from(value: u64) -> Self {
+        Self { ranges: vec![value.into()] }
     }
 }
 
@@ -68,6 +107,43 @@ impl PageRangesPart {
             Self::Range(s, _) => Some(s),
             _ => None,
         }
+    }
+
+    /// Order the values according to CSL rules.
+    pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Self::Ampersand, Self::Ampersand) => Ordering::Equal,
+            (Self::Ampersand, _) => Ordering::Less,
+            (_, Self::Ampersand) => Ordering::Greater,
+            (Self::Comma, Self::Comma) => Ordering::Equal,
+            (Self::Comma, _) => Ordering::Less,
+            (_, Self::Comma) => Ordering::Greater,
+            (Self::SinglePage(n1), Self::SinglePage(n2)) => n1.csl_cmp(n2),
+            (Self::SinglePage(_),_) => Ordering::Less,
+            (_, Self::SinglePage(_)) => Ordering::Greater,
+            (Self::EscapedRange(s1, e1), Self::EscapedRange(s2, e2)) => {
+                let ord = s1.csl_cmp(s2);
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+                e1.csl_cmp(e2)
+            }
+            (Self::EscapedRange(_, _), _) => Ordering::Less,
+            (_, Self::EscapedRange(_, _)) => Ordering::Greater,
+            (Self::Range(s1, e1), Self::Range(s2, e2)) => {
+                let ord = s1.csl_cmp(s2);
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+                e1.csl_cmp(e2)
+            }
+        }
+    }
+}
+
+impl From<u64> for PageRangesPart {
+    fn from(value: u64) -> Self {
+        Self::SinglePage((value as u32).into())
     }
 }
 
@@ -189,7 +265,7 @@ where
                 let chars: Vec<_> = w.chars().collect();
                 let (c, d) = (chars[0], chars[1]);
                 if (self.predicate)(c, d) {
-                    len += 1
+                    len += c.len_utf8();
                 } else {
                     break;
                 }
@@ -234,12 +310,24 @@ impl<'a> Iterator for Windows<'a> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.size.get() > self.string.len() {
+        let size = self.size.get();
+        if size > self.string.len() {
             None
         } else {
-            let ret = Some(&self.string[..self.size.get()]);
-            self.string = &self.string[1..];
-            ret
+            let mut indices = self.string.char_indices();
+            let next = indices.nth(1).unwrap().0;
+            match indices.nth(size - 2) {
+                Some((idx, _)) => {
+                    let ret = Some(&self.string[..idx]);
+                    self.string = &self.string[next..];
+                    ret
+                }
+                None => {
+                    let ret = Some(self.string);
+                    self.string = "";
+                    ret
+                }
+            }
         }
     }
 }
