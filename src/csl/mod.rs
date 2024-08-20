@@ -129,7 +129,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                 &mut citation.items,
                 style.csl.citation.sort.as_ref(),
                 citation.locale.as_ref(),
-                &citation_number,
+                citation_number,
             );
 
             let items = &citation.items;

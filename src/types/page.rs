@@ -43,7 +43,7 @@ impl PageRanges {
 
             match (a, b) {
                 (Some(a), Some(b)) => {
-                    let ord = a.csl_cmp(&b);
+                    let ord = a.csl_cmp(b);
                     if ord != std::cmp::Ordering::Equal {
                         return ord;
                     }
