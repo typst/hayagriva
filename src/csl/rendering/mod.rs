@@ -249,9 +249,9 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
             TextTarget::Variable { var: Variable::Number(var), .. } => ctx
                 .resolve_number_variable(*var)
                 .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
-            TextTarget::Variable { var: Variable::Page(_), .. } => ctx
-                .resolve_page_variable()
-                .map(ResolvedTextTarget::PageVariable),
+            TextTarget::Variable { var: Variable::Page(_), .. } => {
+                ctx.resolve_page_variable().map(ResolvedTextTarget::PageVariable)
+            }
             TextTarget::Variable { .. } => None,
             TextTarget::Macro { name } => {
                 ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)

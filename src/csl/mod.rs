@@ -8,8 +8,8 @@ use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
 
 use citationberg::taxonomy::{
-    DateVariable, Locator, NameVariable, NumberVariable, OtherTerm, StandardVariable,
-    Term, Variable, PageVariable
+    DateVariable, Locator, NameVariable, NumberVariable, OtherTerm, PageVariable,
+    StandardVariable, Term, Variable,
 };
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,

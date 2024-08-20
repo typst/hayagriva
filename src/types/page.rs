@@ -119,7 +119,7 @@ impl PageRangesPart {
             (Self::Comma, _) => Ordering::Less,
             (_, Self::Comma) => Ordering::Greater,
             (Self::SinglePage(n1), Self::SinglePage(n2)) => n1.csl_cmp(n2),
-            (Self::SinglePage(_),_) => Ordering::Less,
+            (Self::SinglePage(_), _) => Ordering::Less,
             (_, Self::SinglePage(_)) => Ordering::Greater,
             (Self::EscapedRange(s1, e1), Self::EscapedRange(s2, e2)) => {
                 let ord = s1.csl_cmp(s2);
