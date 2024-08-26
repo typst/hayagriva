@@ -193,7 +193,7 @@ This section lists all possible fields and data types for them.
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                |
 | **Description:** | Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review); For descriptive text (e.g., in an annotated bibliography), use `note` instead. |
-| **Example:**     | `annote:` |
+| **Example:**     | `annote: The researchers at NYU explore in this paper ...` |
 
 #### `genre`
 
