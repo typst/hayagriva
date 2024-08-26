@@ -168,7 +168,10 @@
                 },
                 "annote": {
                     "type": "string",
-                    "description": "Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review); For descriptive text (e.g., in an annotated bibliography), use `note` instead."
+                    "description": "Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review); For descriptive text (e.g., in an annotated bibliography), use `note` instead.",
+                    "examples": [
+                        "The researchers at NYU explore in this paper ..."
+                    ]
                 },
                 "genre": {
                     "type": "string",
