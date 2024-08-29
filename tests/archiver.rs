@@ -150,6 +150,7 @@ fn write_styles_section(
     writeln!(w, "}}")?;
     writeln!(w)?;
 
+    writeln!(w, "#[rustfmt::skip]")?;
     writeln!(w, "impl ArchivedStyle {{")?;
     writeln!(w, "    /// Retrieve this style by name.")?;
     writeln!(w, "    pub fn by_name(name: &str) -> Option<Self> {{")?;
@@ -159,7 +160,7 @@ fn write_styles_section(
             writeln!(w, "            {:?} => Some(Self::{}),", name, variant)?;
         }
     }
-    writeln!(w, "            _ => None")?;
+    writeln!(w, "            _ => None,")?;
     writeln!(w, "        }}")?;
     writeln!(w, "    }}")?;
     writeln!(w)?;
@@ -239,7 +240,6 @@ fn write_styles_section(
     }
     writeln!(w, "        }}")?;
     writeln!(w, "    }}")?;
-    writeln!(w)?;
     writeln!(w, "}}")?;
 
     writeln!(w, "fn from_cbor<T: DeserializeOwned>(")?;
@@ -268,9 +268,10 @@ fn write_locales_section(w: &mut String, items: &[(Vec<u8>, Locale)]) -> fmt::Re
 
     writeln!(w, "/// Get all CSL locales.")?;
     writeln!(w, "pub fn locales() -> Vec<Locale> {{")?;
-    writeln!(w, "    LOCALES.iter().map(|bytes| {{")?;
-    writeln!(w, "        from_cbor::<Locale>(bytes).unwrap()")?;
-    writeln!(w, "    }}).collect()")?;
+    writeln!(w, "    LOCALES")?;
+    writeln!(w, "        .iter()")?;
+    writeln!(w, "        .map(|bytes| from_cbor::<Locale>(bytes).unwrap())")?;
+    writeln!(w, "        .collect()")?;
     writeln!(w, "}}")?;
 
     Ok(())
@@ -288,7 +289,7 @@ fn get_names<'a>(id: &'a str, over: Option<&'a Override>) -> Vec<String> {
     }
     .to_string();
 
-    let other = if let Some(alias) = over.and_then(|o| o.alias) { alias } else { &[] };
+    let other = over.and_then(|o| o.alias).unwrap_or_default();
     iter::once(main)
         .chain(other.iter().map(ToString::to_string))
         .collect()
