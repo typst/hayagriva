@@ -95,7 +95,7 @@ impl RenderCsl for citationberg::Text {
             },
             ResolvedTextTarget::PageVariable(p) => match p {
                 MaybeTyped::Typed(r) => render_page_range(&r, ctx),
-                MaybeTyped::String(s) => ctx.push_str(&s.replace("-", "–")),
+                MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
             },
             ResolvedTextTarget::Macro(mac) => {
                 for child in &mac.children {
@@ -492,7 +492,7 @@ impl RenderCsl for citationberg::Label {
                 }
             }
             NumberOrPageVariable::Page(pv) => {
-                if let Some(_) = ctx.resolve_page_variable() {
+                if ctx.resolve_page_variable().is_some() {
                     // TODO
                     let plural = false;
                     (

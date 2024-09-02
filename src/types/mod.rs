@@ -438,13 +438,13 @@ impl<'de> Deserialize<'de> for SerialNumber {
             Float(f64),
         }
 
-        impl ToString for StringOrNumber {
-            fn to_string(&self) -> String {
+        impl fmt::Display for StringOrNumber {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 match self {
-                    Self::String(s) => s.clone(),
-                    Self::Number(n) => n.to_string(),
-                    Self::UnsignedNumber(n) => n.to_string(),
-                    Self::Float(f) => f.to_string(),
+                    StringOrNumber::String(s) => s.fmt(f),
+                    StringOrNumber::Number(n) => n.fmt(f),
+                    StringOrNumber::UnsignedNumber(n) => n.fmt(f),
+                    StringOrNumber::Float(n) => n.fmt(f),
                 }
             }
         }
