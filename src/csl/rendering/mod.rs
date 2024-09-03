@@ -433,10 +433,9 @@ impl RenderCsl for citationberg::Label {
                 let depth = ctx.push_elem(citationberg::Formatting::default());
                 let plural = match p {
                     MaybeTyped::Typed(p) => p.is_plural(),
-                    _ => false
+                    _ => false,
                 };
 
-                // TODO: when to pluralize?
                 let content =
                     ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
 
@@ -499,7 +498,7 @@ impl RenderCsl for citationberg::Label {
                 if let Some(p) = ctx.resolve_page_variable() {
                     let plural = match p {
                         MaybeTyped::Typed(p) => p.is_plural(),
-                        _ => false
+                        _ => false,
                     };
                     (
                         ctx.term(Term::from(pv), self.label.form, plural).is_some(),
