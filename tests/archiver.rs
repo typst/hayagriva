@@ -23,8 +23,8 @@ const ARCHIVER_SRC_PATH: &str = "src/csl/archive.rs";
 /// Always archive.
 #[test]
 fn always_archive() {
-    ensure_repos().unwrap();
-    create_archive().unwrap();
+    ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {}", err));
+    create_archive().unwrap_or_else(|err| panic!("{}", err));
 }
 
 #[test]
@@ -73,9 +73,10 @@ fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
 
-    // Without the '--update' flag, we only check if the archive files are
-    // up-to-date.
-    let should_write = std::env::args_os().any(|arg| arg == "--update");
+    // Without "HAYAGRIVA_ARCHIVE_UPDATE=1", we only check if the archive files
+    // are up-to-date.
+    let should_write =
+        std::env::var_os("HAYAGRIVA_ARCHIVER_UPDATE").is_some_and(|var| var == "1");
 
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
@@ -408,10 +409,12 @@ impl From<ciborium::de::Error<std::io::Error>> for ArchivalError {
 impl fmt::Display for ArchivalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(io) => fmt::Display::fmt(io, f),
-            Self::Deserialize(deser) => fmt::Display::fmt(deser, f),
-            Self::Serialize(ser) => fmt::Display::fmt(ser, f),
-            Self::CborDeserialize(deser) => fmt::Display::fmt(deser, f),
+            Self::Io(io) => write!(f, "io error: {}", io),
+            Self::Deserialize(deser) => write!(f, "deserialization error: {}", deser),
+            Self::Serialize(ser) => write!(f, "serialization error: {}", ser),
+            Self::CborDeserialize(deser) => {
+                write!(f, "cbor deserialization error: {}", deser)
+            }
             Self::ValidationError(id) => write!(f, "error when validating style {}", id),
             Self::LocaleValidationError(id) => {
                 write!(f, "error when validating locale {}", id)
@@ -419,7 +422,7 @@ impl fmt::Display for ArchivalError {
             Self::NeedsUpdate(item) => {
                 write!(
                     f,
-                    "{} is outdated, run archiver tests with '--update' to update",
+                    "{} is outdated, run archiver tests with env var 'HAYAGRIVA_ARCHIVER_UPDATE=1' to update",
                     item
                 )
             }
