@@ -56,6 +56,11 @@ impl PageRanges {
             i += 1;
         }
     }
+
+    /// Whether to pluralize the `pages` term, when used with this page range.
+    pub fn is_plural(&self) -> bool {
+        self.ranges.len() != 1
+    }
 }
 
 impl From<u64> for PageRanges {
@@ -202,7 +207,7 @@ impl FromStr for PageRangesPart {
             // Otherwise, split into the two halves of the dash.
             let mut parts = s.split(|c| c == '-' || c == '–').map(str::trim);
             let r = match (parts.next(), parts.next()) {
-                (None, None) => todo!(),
+                (None, None) => unreachable!(),
                 (Some(start), None) => Self::SinglePage(parse_number(start)?),
                 (Some(start), Some(end)) => {
                     Self::Range(parse_number(start)?, parse_number(end)?)

@@ -426,15 +426,19 @@ impl RenderCsl for citationberg::Label {
                 ctx.commit_elem(depth, None, Some(ElemMeta::Label));
             }
             NumberOrPageVariable::Page(pv) => {
-                let Some(_) = ctx.resolve_page_variable() else {
+                let Some(p) = ctx.resolve_page_variable() else {
                     return;
                 };
 
                 let depth = ctx.push_elem(citationberg::Formatting::default());
+                let plural = match p {
+                    MaybeTyped::Typed(p) => p.is_plural(),
+                    _ => false
+                };
 
                 // TODO: when to pluralize?
                 let content =
-                    ctx.term(Term::from(pv), self.label.form, false).unwrap_or_default();
+                    ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
 
                 render_label_with_var(&self.label, ctx, content);
                 ctx.commit_elem(depth, None, Some(ElemMeta::Label));
@@ -492,9 +496,11 @@ impl RenderCsl for citationberg::Label {
                 }
             }
             NumberOrPageVariable::Page(pv) => {
-                if ctx.resolve_page_variable().is_some() {
-                    // TODO
-                    let plural = false;
+                if let Some(p) = ctx.resolve_page_variable() {
+                    let plural = match p {
+                        MaybeTyped::Typed(p) => p.is_plural(),
+                        _ => false
+                    };
                     (
                         ctx.term(Term::from(pv), self.label.form, plural).is_some(),
                         UsageInfo::default(),
