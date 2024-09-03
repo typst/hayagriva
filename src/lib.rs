@@ -155,9 +155,9 @@ use std::collections::BTreeMap;
 pub use crate::csl::archive;
 pub use citationberg;
 pub use csl::{
-    standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
-    BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem, ElemChild,
-    ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
+    standalone_citation, BibliographyDriver, BibliographyItem, BibliographyRequest,
+    Brackets, BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem,
+    ElemChild, ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
     RenderedBibliography, RenderedCitation, SpecificLocator,
 };
 pub use selectors::{Selector, SelectorError};

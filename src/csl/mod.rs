@@ -1005,10 +1005,15 @@ pub struct RenderedBibliography {
     pub items: Vec<BibliographyItem>,
 }
 
+/// A fully rendered bibliography item.
 #[derive(Debug, Clone)]
 pub struct BibliographyItem {
+    /// The item's key as specified in the bibliography.
     pub key: String,
+    /// The item's first field. Only available when required by the
+    /// `second-field-align` CSL property.
     pub first_field: Option<ElemChild>,
+    /// The rendered item.
     pub content: ElemChildren,
 }
 
