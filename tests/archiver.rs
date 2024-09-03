@@ -18,7 +18,7 @@ const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
 const LOCALES_REPO_NAME: &str = "locales";
 const OWN_STYLES: &str = "styles";
-const ARCHIVER_SRC_PATH: &str = "src/csl/archive.rs";
+const ARCHIVE_SRC_PATH: &str = "src/csl/archive.rs";
 
 /// Always archive.
 #[test]
@@ -58,6 +58,7 @@ fn ensure_archive_up_to_date(
     while position < expected.len() {
         let read_bytes = file.read(&mut buf)?;
         if read_bytes == 0
+            || position + read_bytes > expected.len()
             || buf[..read_bytes] != expected[position..position + read_bytes]
         {
             return Err(ArchivalError::NeedsUpdate(item.to_string()));
@@ -156,10 +157,10 @@ fn create_archive() -> Result<(), ArchivalError> {
     }
 
     if should_write {
-        fs::write(ARCHIVER_SRC_PATH, w)?;
+        fs::write(ARCHIVE_SRC_PATH, w)?;
     } else {
-        let item = format!("file '{}'", ARCHIVER_SRC_PATH);
-        ensure_archive_up_to_date(ARCHIVER_SRC_PATH, item, w.as_bytes())?;
+        let item = format!("file '{}'", ARCHIVE_SRC_PATH);
+        ensure_archive_up_to_date(ARCHIVE_SRC_PATH, item, w.as_bytes())?;
     }
 
     Ok(())
