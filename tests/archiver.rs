@@ -1,8 +1,20 @@
+//! Generates the archive of locales and styles for the 'archive' feature, as
+//! well as the source code of 'src/csl/archive.rs', used to retrieve those
+//! assets. The archive is downloaded from upstream CSL repositories into a
+//! `target` subfolder, where it's ready to be copied into the `archive`
+//! folder.
+//!
+//! By default, these tests simply check if the existing files in `archive/`
+//! are up-to-date, failing with an error if not. Specify
+//! `HAYAGRIVA_ARCHIVER_UPDATE=1` as an environment variable while running
+//! these tests (with `--test archiver`) to update the otherwise outdated
+//! files.
+
 use citationberg::{IndependentStyle, LocaleCode, Style};
 use citationberg::{Locale, LocaleFile, XmlError};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Display, Write};
+use std::fmt::Write;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -18,6 +30,8 @@ const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
 const LOCALES_REPO_NAME: &str = "locales";
 const OWN_STYLES: &str = "styles";
+const ARCHIVE_STYLES_PATH: &str = "archive/styles/";
+const ARCHIVE_LOCALES_PATH: &str = "archive/locales/";
 const ARCHIVE_SRC_PATH: &str = "src/csl/archive.rs";
 
 /// Always archive.
@@ -39,9 +53,11 @@ fn ensure_repos() -> Result<(), ArchivalError> {
     Ok(ensure_repo(LOCALES_REPO, LOCALES_REPO_NAME, "master")?)
 }
 
+/// Checks if the contents of the file at the given path match the expected byte
+/// buffer exactly, returning an error if not.
 fn ensure_archive_up_to_date(
     path: impl AsRef<Path>,
-    item: impl Display,
+    item: String,
     expected: &[u8],
 ) -> Result<(), ArchivalError> {
     let mut file = match fs::File::open(path) {
@@ -134,7 +150,8 @@ fn create_archive() -> Result<(), ArchivalError> {
 
     for (bytes, indep, _, _) in styles {
         let stripped_id = strip_id(indep.info.id.as_str());
-        let path = PathBuf::from("archive/styles/").join(format!("{}.cbor", stripped_id));
+        let path =
+            PathBuf::from(ARCHIVE_STYLES_PATH).join(format!("{}.cbor", stripped_id));
 
         if should_write {
             fs::write(path, bytes)?;
@@ -146,7 +163,7 @@ fn create_archive() -> Result<(), ArchivalError> {
 
     for (bytes, locale) in locales {
         let lang = locale.lang.unwrap();
-        let path = PathBuf::from("archive/locales/").join(format!("{}.cbor", lang));
+        let path = PathBuf::from(ARCHIVE_LOCALES_PATH).join(format!("{}.cbor", lang));
 
         if should_write {
             fs::write(path, bytes)?;
