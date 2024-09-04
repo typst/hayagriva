@@ -64,11 +64,23 @@ fn ensure_archive_up_to_date(
         Ok(file) => file,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             // The archive file simply wasn't created yet.
-            return Err(ArchivalError::NeedsUpdate(item.to_string()));
+            return Err(ArchivalError::NeedsUpdate(item));
         }
         Err(err) => return Err(ArchivalError::Io(err)),
     };
 
+    // Special case for when we're expecting an empty file to avoid
+    // overcomplicating the rest of the code. Just check if the file has a
+    // single byte.
+    if expected.is_empty() {
+        if file.bytes().next().transpose()?.is_some() {
+            return Err(ArchivalError::NeedsUpdate(item));
+        }
+
+        return Ok(());
+    }
+
+    // Read and compare the contents of the file in chunks for efficiency.
     let mut position = 0;
     let mut buf = vec![0u8; 4096];
     while position < expected.len() {
@@ -77,7 +89,7 @@ fn ensure_archive_up_to_date(
             || position + read_bytes > expected.len()
             || buf[..read_bytes] != expected[position..position + read_bytes]
         {
-            return Err(ArchivalError::NeedsUpdate(item.to_string()));
+            return Err(ArchivalError::NeedsUpdate(item));
         }
         position += read_bytes;
     }
