@@ -54,7 +54,8 @@ fn ensure_repos() -> Result<(), ArchivalError> {
 }
 
 /// Checks if the contents of the file at the given path match the expected byte
-/// buffer exactly, returning an error if not.
+/// buffer exactly, returning an error if not. The given `item` describes the
+/// file being checked and will be part of the returned error if there is one.
 fn ensure_archive_up_to_date(
     path: impl AsRef<Path>,
     item: String,
@@ -102,8 +103,8 @@ fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
 
-    // Without "HAYAGRIVA_ARCHIVE_UPDATE=1", we only check if the archive files
-    // are up-to-date.
+    // Without "HAYAGRIVA_ARCHIVER_UPDATE=1", we only check if the archive
+    // files are up-to-date.
     let should_write =
         std::env::var_os("HAYAGRIVA_ARCHIVER_UPDATE").is_some_and(|var| var == "1");
 
