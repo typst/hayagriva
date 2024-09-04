@@ -217,7 +217,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Patrick O'Brien.
     MaryAnnLiebertVancouver,
-    /// Modern Humanities Research Association 3rd edition (note with bibliography).
+    /// Modern Humanities Research Association 4th edition (note with bibliography).
     ///
     /// Authors: Rintze Zelle.
     ModernHumanitiesResearchAssociation,
@@ -1008,7 +1008,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "ISO-690 (numeric, English)",
             Self::Karger => "Karger journals",
             Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
-            Self::ModernHumanitiesResearchAssociation => "Modern Humanities Research Association 3rd edition (note with bibliography)",
+            Self::ModernHumanitiesResearchAssociation => "Modern Humanities Research Association 4th edition (note with bibliography)",
             Self::ModernLanguageAssociation => "Modern Language Association 9th edition",
             Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
             Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
