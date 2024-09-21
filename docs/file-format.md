@@ -47,13 +47,13 @@ Sometimes, fields accept composite data. If, for example, you would want to save
 ```yaml
 url:
     value: http://www.techno.org/electronic-music-guide/
-    date: 2020-11-12
+    date: 2020-11-30
 ```
 
 There is also a more compact form of this that might look familiar if you know JSON:
 
 ```yaml
-url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-12 }
+url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-30 }
 ```
 
 By now, you must surely think that there must be an abundance of fields to represent all the possible information that could be attached to any piece of literature: For example, an article could have been published in an anthology whose title you would want to save, and that anthology belongs to a series that has a title itself... For this, you would already need three different title-fields? Hayagriva's data model was engineered to prevent this kind of field bloat, read the next section to learn how to represent various literature.
