@@ -125,6 +125,8 @@ fn ed_role(role: EditorType) -> Option<PersonRole> {
         EditorType::Reviser => None,
         EditorType::Collaborator => Some(PersonRole::Collaborator),
         EditorType::Organizer => Some(PersonRole::Organizer),
+        EditorType::Director => Some(PersonRole::Director),
+        EditorType::Unknown(role) => Some(PersonRole::Unknown(role)),
     }
 }
 
