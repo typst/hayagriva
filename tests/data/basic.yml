@@ -146,6 +146,9 @@ wire:
     date: 2002
     publisher: Blown Deadline Productions
     volume-total: 5
+    abstract: Video about wire
+    annote: The wire is noted to be solid
+    genre: Important video
     affiliated:
         - role: executive-producer
           names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
