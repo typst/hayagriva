@@ -974,6 +974,7 @@ mod tests {
                 "barb",
             ]
         );
+        select_all!("*[abstract, annote, genre]", entries, ["wire"]);
     }
 
     #[test]
