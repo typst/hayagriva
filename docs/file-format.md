@@ -192,7 +192,7 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                |
-| **Description:** | Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review); For descriptive text (e.g., in an annotated bibliography), use `note` instead. |
+| **Description:** | Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review). For descriptive text (e.g., in an annotated bibliography), use `note` instead. |
 | **Example:**     | `annote: The researchers at NYU explore in this paper ...` |
 
 #### `genre`
@@ -200,7 +200,7 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                |
-| **Description:** | Type, class, or subtype of the item (e.g. “Doctoral dissertation” for a PhD thesis; “NIH Publication” for an NIH technical report); Do not use for topical descriptions or categories (e.g. “adventure” for an adventure movie). |
+| **Description:** | Type, class, or subtype of the item (e.g. "Doctoral dissertation" for a PhD thesis; "NIH Publication" for an NIH technical report). Do not use for topical descriptions or categories (e.g. "adventure" for an adventure movie). |
 | **Example:**     | `genre: Doctoral dissertation` |
 
 #### `editor`
