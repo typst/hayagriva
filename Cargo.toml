@@ -28,7 +28,7 @@ unic-langid = { version = "0.9.0", features = ["serde"] }
 unicode-segmentation = "1.6.0"
 unscanny = "0.1.0"
 url = { version = "2.4", features = ["serde"] }
-biblatex = { git = "https://github.com/typst/biblatex.git", branch = "fix-dollar-sign-in-url", optional = true }
+biblatex = { git = "https://github.com/typst/biblatex.git", rev = "06d0c2b10a749fd3b2c799b32077382b796a5609", optional = true }
 ciborium = { version = "0.2.1", optional = true }
 clap = { version = "4", optional = true, features = ["cargo"] }
 strum = { version = "0.26", features = ["derive"], optional = true }
