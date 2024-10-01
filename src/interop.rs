@@ -1,6 +1,7 @@
 //! Provides conversion methods for BibLaTeX.
 
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use biblatex as tex;
 use tex::{
@@ -125,6 +126,8 @@ fn ed_role(role: EditorType) -> Option<PersonRole> {
         EditorType::Reviser => None,
         EditorType::Collaborator => Some(PersonRole::Collaborator),
         EditorType::Organizer => Some(PersonRole::Organizer),
+        EditorType::Director => Some(PersonRole::Director),
+        EditorType::Unknown(role) => Some(PersonRole::Unknown(role)),
     }
 }
 
@@ -277,7 +280,14 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(title) = map_res(entry.title())?.map(Into::into) {
-            item.set_title(title);
+            if let Some(short_title) = map_res(entry.short_title())?.map(Into::into) {
+                item.set_title(FormatString {
+                    value: title,
+                    short: Some(Box::new(short_title)),
+                });
+            } else {
+                item.set_title(FormatString { value: title, short: None });
+            }
         }
 
         // NOTE: Ignoring subtitle and titleaddon for now
@@ -405,6 +415,15 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_issn(issn.format_verbatim());
         }
 
+        if let Some(eprint) = map_res(entry.eprint())? {
+            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
+                .as_deref()
+                == Some("arxiv")
+            {
+                item.set_arxiv(eprint);
+            }
+        }
+
         if let Some(isan) = map_res(entry.isan())? {
             item.set_keyed_serial_number("isan", isan.format_verbatim());
         }
@@ -472,37 +491,23 @@ impl TryFrom<&tex::Entry> for Entry {
 
         if let Some(pages) = map_res(entry.pages())? {
             item.set_page_range(match pages {
-                PermissiveType::Typed(pages) => {
-                    if let Some(n) =
-                        pages.first().filter(|f| pages.len() == 1 && f.start == f.end)
-                    {
-                        MaybeTyped::Typed(Numeric::new(n.start as i32))
-                    } else {
-                        let mut items = vec![];
-                        for (i, pair) in pages.iter().enumerate() {
-                            let last = i + 1 == pages.len();
-                            let last_delim = (!last).then_some(NumericDelimiter::Comma);
-
-                            if pair.start == pair.end {
-                                items.push((pair.start as i32, last_delim));
+                PermissiveType::Typed(pages) => PageRanges::new(
+                    pages
+                        .into_iter()
+                        .map(|p| {
+                            if p.start == p.end {
+                                PageRangesPart::SinglePage(Numeric::from(p.start))
                             } else {
-                                items.push((
-                                    pair.start as i32,
-                                    Some(NumericDelimiter::Hyphen),
-                                ));
-                                items.push((pair.end as i32, last_delim));
+                                PageRangesPart::Range(
+                                    Numeric::from(p.start),
+                                    Numeric::from(p.end),
+                                )
                             }
-                        }
-
-                        MaybeTyped::Typed(Numeric {
-                            value: NumericValue::Set(items),
-                            prefix: None,
-                            suffix: None,
                         })
-                    }
-                }
+                        .collect(),
+                ),
                 PermissiveType::Chunks(chunks) => {
-                    MaybeTyped::infallible_from_str(&chunks.format_verbatim())
+                    PageRanges::from_str(&chunks.format_verbatim()).unwrap()
                 }
             });
         }

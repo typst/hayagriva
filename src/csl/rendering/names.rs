@@ -11,7 +11,7 @@ use citationberg::{
 use citationberg::{DisambiguationRule, TermForm};
 
 use crate::csl::taxonomy::EntryLike;
-use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm};
+use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm, UsageInfo};
 use crate::types::Person;
 
 use super::{render_label_with_var, RenderCsl};
@@ -170,6 +170,46 @@ impl NameDisambiguationProperties {
     }
 }
 
+fn renders_given_special_form<T: EntryLike>(
+    names: &Names,
+    ctx: &mut Context<T>,
+    is_empty: bool,
+) -> bool {
+    match &ctx.instance.kind {
+        Some(SpecialForm::VarOnly(Variable::Name(var))) => {
+            // Skip if none of the variables are the author and the supplement does not contain the author either.
+            let contains_v = names.variable.iter().any(|v| var == v);
+            let substitute_will_render_v = is_empty
+                && names.substitute().map_or(false, |s| {
+                    s.children
+                        .iter()
+                        .filter_map(|c| match c {
+                            LayoutRenderingElement::Names(n) => Some(n.variable.iter()),
+                            _ => None,
+                        })
+                        .flatten()
+                        .any(|v| var == v)
+                });
+            if !contains_v && !substitute_will_render_v {
+                return false;
+            }
+        }
+        Some(
+            SpecialForm::VarOnly(_)
+            | SpecialForm::OnlyFirstDate
+            | SpecialForm::OnlyYearSuffix,
+        ) => return false,
+        Some(SpecialForm::SuppressAuthor) => {
+            if names.will_render(ctx, Variable::Name(NameVariable::Author)) {
+                return false;
+            }
+        }
+        None => {}
+    }
+
+    true
+}
+
 impl RenderCsl for Names {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         // The editor and translator variables need to be merged if they are
@@ -182,8 +222,8 @@ impl RenderCsl for Names {
                 .term(NameVariable::EditorTranslator.into(), TermForm::default(), false)
                 .is_some()
         {
-            let editors = ctx.resolve_name_variable(NameVariable::Editor, false);
-            let translators = ctx.resolve_name_variable(NameVariable::Translator, false);
+            let editors = ctx.resolve_name_variable(NameVariable::Editor);
+            let translators = ctx.resolve_name_variable(NameVariable::Translator);
 
             let mut res = Vec::new();
             if !editors.is_empty() && editors == translators {
@@ -202,7 +242,7 @@ impl RenderCsl for Names {
         } else {
             self.variable
                 .iter()
-                .map(|v| (ctx.resolve_name_variable(*v, false), *v))
+                .map(|v| (ctx.resolve_name_variable(*v), *v))
                 .collect()
         };
 
@@ -212,38 +252,9 @@ impl RenderCsl for Names {
         // Write the substitute if all variables are empty.
         let is_empty = people.iter().all(|(p, _)| p.is_empty());
         // Suppress this variable if we are in a special form.
-        match &ctx.instance.kind {
-            Some(SpecialForm::VarOnly(Variable::Name(var))) => {
-                // Skip if none of the variables are the author and the supplement does not contain the author either.
-                let contains_v = self.variable.iter().any(|v| var == v);
-                let substitute_will_render_v = is_empty
-                    && self.substitute().map_or(false, |s| {
-                        s.children
-                            .iter()
-                            .filter_map(|c| match c {
-                                LayoutRenderingElement::Names(n) => {
-                                    Some(n.variable.iter())
-                                }
-                                _ => None,
-                            })
-                            .flatten()
-                            .any(|v| var == v)
-                    });
-                if !contains_v && !substitute_will_render_v {
-                    return;
-                }
-            }
-            Some(
-                SpecialForm::VarOnly(_)
-                | SpecialForm::OnlyFirstDate
-                | SpecialForm::OnlyYearSuffix,
-            ) => return,
-            Some(SpecialForm::SuppressAuthor) => {
-                if self.variable.iter().any(|v| &NameVariable::Author == v) {
-                    return;
-                }
-            }
-            None => {}
+        if !renders_given_special_form(self, ctx, is_empty) {
+            ctx.writing.pop_name_options();
+            return;
         }
 
         if is_empty {
@@ -253,7 +264,7 @@ impl RenderCsl for Names {
                 for child in &substitute.children {
                     let len = ctx.writing.len();
                     if let LayoutRenderingElement::Names(names_child) = child {
-                        self.from_names_substitue(names_child).render(ctx)
+                        self.from_names_substitute(names_child).render(ctx)
                     } else {
                         child.render(ctx);
                     }
@@ -308,7 +319,11 @@ impl RenderCsl for Names {
                     p.iter()
                         .enumerate()
                         .map(|(i, _)| {
-                            if options.is_suppressed(i, p.len()) {
+                            if options.is_suppressed(
+                                i,
+                                p.len(),
+                                !ctx.instance.cite_props.certain.is_first,
+                            ) {
                                 None
                             } else {
                                 Some(default_form)
@@ -375,17 +390,52 @@ impl RenderCsl for Names {
             return true;
         }
 
-        if self
-            .variable
-            .iter()
-            .all(|v| ctx.resolve_name_variable(*v, false).is_empty())
-        {
+        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty()) {
             if let Some(substitute) = &self.substitute() {
                 return substitute.children.iter().any(|c| c.will_render(ctx, var));
             }
         }
 
         false
+    }
+
+    fn will_have_info<T: EntryLike>(&self, ctx: &mut Context<T>) -> (bool, UsageInfo) {
+        let suppressing = ctx.writing.suppress_queried_variables;
+        ctx.writing.stop_suppressing_queried_variables();
+
+        let is_empty =
+            self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty());
+        if !renders_given_special_form(self, ctx, is_empty) {
+            return (false, UsageInfo::default());
+        }
+
+        let substitute_info = self
+            .substitute()
+            .iter()
+            .flat_map(|s| s.children.iter())
+            .map(|c| c.will_have_info(ctx))
+            .fold((false, UsageInfo::default()), |(a, b), (c, d)| {
+                (a || c, b.merge_child(d))
+            });
+
+        if suppressing {
+            ctx.writing.start_suppressing_queried_variables();
+        }
+
+        let visible = !is_empty || substitute_info.0;
+
+        (
+            visible,
+            if is_empty {
+                substitute_info.1
+            } else {
+                UsageInfo {
+                    has_vars: true,
+                    has_non_empty_vars: !is_empty,
+                    ..UsageInfo::default()
+                }
+            },
+        )
     }
 }
 
@@ -604,7 +654,6 @@ fn write_name<T: EntryLike>(
 
         if name.given_name.is_some() {
             ctx.push_str(sort_sep);
-            ctx.ensure_space();
 
             let idx = ctx.push_format(first_format);
             let cidx = ctx.push_case(first_case);
@@ -630,7 +679,6 @@ fn write_name<T: EntryLike>(
 
         if let Some(suffix) = &name.suffix {
             ctx.push_str(sort_sep);
-            ctx.ensure_space();
             ctx.push_str(suffix);
         }
     };
@@ -654,7 +702,6 @@ fn write_name<T: EntryLike>(
 
         if name.given_name.is_some() {
             ctx.push_str(sort_sep);
-            ctx.ensure_space();
 
             let idx = ctx.push_format(first_format);
             let cidx = ctx.push_case(first_case);
@@ -685,7 +732,6 @@ fn write_name<T: EntryLike>(
 
         if let Some(suffix) = &name.suffix {
             ctx.push_str(sort_sep);
-            ctx.ensure_space();
             ctx.push_str(suffix);
         }
     };

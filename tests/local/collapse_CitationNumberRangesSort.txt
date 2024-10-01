@@ -1,0 +1,98 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+Simplified from collapse_CitationNumberRangesInsert.txt
+
+
+>>===== RESULT =====>>
+[1]–[4]
+[1]–[4]
+<<===== RESULT =====<<
+
+>>===== CITATION-ITEMS =====>>
+[
+    [
+        {
+            "id": "ITEM-1"
+        },
+        {
+            "id": "ITEM-2"
+        },
+        {
+            "id": "ITEM-3"
+        },
+        {
+            "id": "ITEM-4"
+        }
+    ],
+    [
+        {
+            "id": "ITEM-2"
+        },
+        {
+            "id": "ITEM-1"
+        },
+        {
+            "id": "ITEM-4"
+        },
+        {
+            "id": "ITEM-3"
+        }
+    ]
+]
+<<===== CITATION-ITEMS =====<<
+
+
+>>===== CSL =====>>
+<style
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation
+         collapse="citation-number">
+    <sort>
+      <key variable="citation-number" />
+    </sort>
+    <layout delimiter=", ">
+      <text prefix="[" suffix="]" variable="citation-number" />
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "ITEM-1",
+        "title": "Paper 1",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-2",
+        "title": "Paper 2",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-3",
+        "title": "Paper 3",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-4",
+        "title": "Paper 4",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<

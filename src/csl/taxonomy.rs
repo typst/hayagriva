@@ -6,9 +6,9 @@ use crate::types::{
     ChunkedString, Date, EntryType, MaybeTyped, Numeric, Person, PersonRole, Publisher,
     StringChunk,
 };
-use crate::Entry;
+use crate::{Entry, PageRanges};
 use citationberg::taxonomy::{
-    DateVariable, Kind, NameVariable, NumberVariable, StandardVariable,
+    DateVariable, Kind, NameVariable, NumberVariable, PageVariable, StandardVariable,
 };
 use citationberg::{taxonomy, LongShortForm};
 use unic_langid::LanguageIdentifier;
@@ -24,6 +24,10 @@ pub trait EntryLike {
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>>;
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<MaybeTyped<PageRanges>>;
     fn resolve_standard_variable(
         &self,
         form: LongShortForm,
@@ -71,6 +75,13 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
         }
     }
 
+    pub(super) fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<PageVariableResult> {
+        self.entry.resolve_page_variable(variable)
+    }
+
     // Number variables are standard variables.
     pub(super) fn resolve_standard_variable(
         &self,
@@ -97,6 +108,8 @@ pub(super) enum NumberVariableResult<'a> {
     Regular(MaybeTyped<Cow<'a, Numeric>>),
     Transparent(usize),
 }
+
+pub(super) type PageVariableResult = MaybeTyped<PageRanges>;
 
 impl<'a> NumberVariableResult<'a> {
     pub(super) fn from_regular(regular: MaybeTyped<Cow<'a, Numeric>>) -> Self {
@@ -158,14 +171,10 @@ impl EntryLike for Entry {
             NumberVariable::NumberOfVolumes => {
                 self.volume_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
-            NumberVariable::Page => self.page_range().map(MaybeTyped::to_cow),
             NumberVariable::PageFirst => self
                 .page_range()
-                .and_then(|r| match r {
-                    MaybeTyped::Typed(r) => r.range(),
-                    MaybeTyped::String(_) => None,
-                })
-                .map(|r| MaybeTyped::Typed(Cow::Owned(Numeric::from(r.start)))),
+                .and_then(PageRanges::first)
+                .map(|r| MaybeTyped::Typed(Cow::Owned(r.clone()))),
             NumberVariable::PartNumber => self
                 .bound_select(
                     &select!(
@@ -199,6 +208,15 @@ impl EntryLike for Entry {
                 .and_then(|e| e.volume())
                 .or_else(|| self.volume())
                 .map(MaybeTyped::to_cow),
+        }
+    }
+
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<MaybeTyped<PageRanges>> {
+        match variable {
+            PageVariable::Page => self.page_range().map(|r| MaybeTyped::Typed(r.clone())),
         }
     }
 
@@ -332,13 +350,13 @@ impl EntryLike for Entry {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::Status => None,
-            StandardVariable::Title => entry
+            StandardVariable::Title => {
+                entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
+            }
+            StandardVariable::TitleShort => entry
                 .title()
                 .map(|f| f.select(LongShortForm::Short))
                 .map(Cow::Borrowed),
-            StandardVariable::TitleShort => {
-                entry.title().map(|f| f.select(form)).map(Cow::Borrowed)
-            }
             StandardVariable::URL => entry
                 .map(|e| e.url())
                 .map(|d| Cow::Owned(StringChunk::verbatim(d.to_string()).into())),
@@ -665,20 +683,47 @@ impl EntryLike for Entry {
 }
 
 #[cfg(feature = "csl-json")]
+fn resolve_csl_json_standard_variable(
+    item: &citationberg::json::Item,
+    variable: StandardVariable,
+) -> Option<Cow<'_, ChunkedString>> {
+    match item.0.get(&variable.to_string())? {
+        csl_json::Value::String(s) => {
+            Some(Cow::Owned(StringChunk::normal(s.clone()).into()))
+        }
+        csl_json::Value::Number(n) => {
+            Some(Cow::Owned(StringChunk::normal(n.to_string()).into()))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(feature = "csl-json")]
 impl EntryLike for citationberg::json::Item {
     fn resolve_standard_variable(
         &self,
-        _: LongShortForm,
+        form: LongShortForm,
         variable: StandardVariable,
     ) -> Option<Cow<'_, ChunkedString>> {
-        match self.0.get(&variable.to_string())? {
-            csl_json::Value::String(s) => {
-                Some(Cow::Owned(StringChunk::normal(s.clone()).into()))
-            }
-            csl_json::Value::Number(n) => {
-                Some(Cow::Owned(StringChunk::normal(n.to_string()).into()))
-            }
-            _ => None,
+        match variable {
+            StandardVariable::Title => match form {
+                LongShortForm::Short => {
+                    // Per citeproc tests, a 'title-short' without 'title' is
+                    // valid and should be used when the short form is
+                    // selected.
+                    resolve_csl_json_standard_variable(self, StandardVariable::TitleShort)
+                        .or_else(|| {
+                            resolve_csl_json_standard_variable(
+                                self,
+                                StandardVariable::Title,
+                            )
+                        })
+                }
+                LongShortForm::Long => {
+                    resolve_csl_json_standard_variable(self, StandardVariable::Title)
+                }
+            },
+            _ => resolve_csl_json_standard_variable(self, variable),
         }
     }
 
@@ -758,10 +803,38 @@ impl EntryLike for citationberg::json::Item {
         }
     }
 
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<MaybeTyped<PageRanges>> {
+        match variable {
+            PageVariable::Page => match self.0.get("page")? {
+                csl_json::Value::Number(n) => {
+                    Some(MaybeTyped::Typed(PageRanges::from(*n as u64)))
+                }
+                csl_json::Value::String(s) => {
+                    let res = MaybeTyped::<PageRanges>::infallible_from_str(s);
+                    Some(match res {
+                        MaybeTyped::String(s) => MaybeTyped::String(s),
+                        MaybeTyped::Typed(r) => MaybeTyped::Typed(r),
+                    })
+                }
+                _ => None,
+            },
+        }
+    }
+
     fn resolve_number_variable(
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
+        if matches!(variable, NumberVariable::PageFirst) {
+            if let Some(MaybeTyped::Typed(n)) =
+                self.resolve_page_variable(PageVariable::Page)
+            {
+                return n.first().map(|r| MaybeTyped::Typed(Cow::Owned(r.clone())));
+            }
+        }
         match self.0.get(&variable.to_string())? {
             csl_json::Value::Number(n) => {
                 Some(MaybeTyped::Typed(Cow::Owned(Numeric::from(*n as u32))))

@@ -12,11 +12,13 @@ use thiserror::Error;
 use url::Url;
 
 pub use numeric::*;
+pub use page::*;
 pub use persons::*;
 pub use strings::*;
 pub use time::*;
 
 mod numeric;
+mod page;
 mod persons;
 mod strings;
 mod time;
@@ -488,13 +490,13 @@ impl<'de> Deserialize<'de> for SerialNumber {
             Float(f64),
         }
 
-        impl ToString for StringOrNumber {
-            fn to_string(&self) -> String {
+        impl Display for StringOrNumber {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 match self {
-                    Self::String(s) => s.clone(),
-                    Self::Number(n) => n.to_string(),
-                    Self::UnsignedNumber(n) => n.to_string(),
-                    Self::Float(f) => f.to_string(),
+                    Self::String(s) => s.fmt(formatter),
+                    Self::Number(n) => n.fmt(formatter),
+                    Self::UnsignedNumber(n) => n.fmt(formatter),
+                    Self::Float(f) => f.fmt(formatter),
                 }
             }
         }

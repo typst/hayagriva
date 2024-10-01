@@ -3,7 +3,9 @@
 #[cfg(feature = "biblatex")]
 use biblatex::{Bibliography, TypeError};
 
-use crate::{Entry, Library};
+#[cfg(feature = "biblatex")]
+use crate::Entry;
+use crate::Library;
 
 /// Parse a bibliography from a YAML string.
 ///

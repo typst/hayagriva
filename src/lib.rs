@@ -63,7 +63,7 @@ let result = driver.finish(BibliographyRequest {
 });
 
 for cite in result.citations {
-    println!("{}", cite.citation.to_string())
+    println!("{}", cite.citation)
 }
 ```
 
@@ -115,7 +115,8 @@ quantized-vortex:
     title: Structure of a Quantized Vortex in Boson Systems
     date: 1961-05
     page-range: 454-477
-    doi: 10.1007/BF02731494
+    serial-number:
+        doi: 10.1007/BF02731494
     parent:
         issue: 3
         volume: 20
@@ -154,9 +155,9 @@ use std::collections::BTreeMap;
 pub use crate::csl::archive;
 pub use citationberg;
 pub use csl::{
-    standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
-    BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem, ElemChild,
-    ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
+    standalone_citation, BibliographyDriver, BibliographyItem, BibliographyRequest,
+    Brackets, BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem,
+    ElemChild, ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
     RenderedBibliography, RenderedCitation, SpecificLocator,
 };
 pub use selectors::{Selector, SelectorError};
@@ -203,7 +204,7 @@ impl Library {
 
     /// Remove an entry from the library.
     pub fn remove(&mut self, key: &str) -> Option<Entry> {
-        self.0.remove(key)
+        self.0.shift_remove(key)
     }
 
     /// Get the length of the library.
@@ -522,7 +523,7 @@ entry! {
     /// Published version of an item.
     "edition" => edition: MaybeTyped<Numeric>,
     /// The range of pages within the parent this item occupies
-    "page-range" => page_range: MaybeTyped<Numeric>,
+    "page-range" => page_range: PageRanges,
     /// The total number of pages the item has.
     "page-total" => page_total: Numeric,
     /// The time range within the parent this item starts and ends at.
@@ -610,9 +611,7 @@ impl Entry {
             // Index parents with the items in path. If, at any level, the index
             // exceeds the number of parents, increment the index at the
             // previous level. If no other level remains, return.
-            let Some(first_path) = path.first() else {
-                return None;
-            };
+            let first_path = path.first()?;
 
             if self.parents.len() <= *first_path {
                 return None;
@@ -976,6 +975,7 @@ mod tests {
                 "barb",
             ]
         );
+        select_all!("*[abstract, annote, genre]", entries, ["wire"]);
     }
 
     #[test]

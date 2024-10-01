@@ -257,7 +257,11 @@ impl Person {
                         }
 
                         collect = true;
-                        buf.write_char(if with_hyphen { c } else { ' ' })?;
+                        if with_hyphen && c == '-' {
+                            buf.write_char(c)?;
+                        } else if delimiter.is_some() {
+                            buf.write_char(' ')?;
+                        }
                     }
                     continue;
                 }
@@ -532,6 +536,11 @@ mod tests {
         let p = Person::from_strings(vec!["Dissmer", "Courtney Deliah"]).unwrap();
         p.initials(&mut s, Some("."), true).unwrap();
         assert_eq!("C. D.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Dissmer", "Courtney Deliah"]).unwrap();
+        p.initials(&mut s, None, true).unwrap();
+        assert_eq!("CD", s);
 
         let mut s = String::new();
         let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
