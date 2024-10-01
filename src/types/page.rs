@@ -36,25 +36,25 @@ impl PageRanges {
 
     /// Order the values according to CSL rules.
     pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let mut i = 0;
-        loop {
-            let a = self.ranges.get(i);
-            let b = other.ranges.get(i);
+        #[derive(PartialEq, Eq)]
+        struct OrderablePageRangesPart<'a>(&'a PageRangesPart);
 
-            match (a, b) {
-                (Some(a), Some(b)) => {
-                    let ord = a.csl_cmp(b);
-                    if ord != std::cmp::Ordering::Equal {
-                        return ord;
-                    }
-                }
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (None, None) => return std::cmp::Ordering::Equal,
+        impl Ord for OrderablePageRangesPart<'_> {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.0.csl_cmp(other.0)
             }
-
-            i += 1;
         }
+
+        impl PartialOrd for OrderablePageRangesPart<'_> {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        self.ranges
+            .iter()
+            .map(OrderablePageRangesPart)
+            .cmp(other.ranges.iter().map(OrderablePageRangesPart))
     }
 
     /// Whether to pluralize the `pages` term, when used with this page range.

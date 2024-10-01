@@ -219,34 +219,12 @@ impl Numeric {
 
     /// Returns the nth number in the set.
     pub fn nth(&self, n: usize) -> Option<i32> {
-        match &self.value {
-            NumericValue::Number(val) if n == 0 => Some(*val),
-            NumericValue::Number(_) => None,
-            NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
-        }
+        self.value.nth(n)
     }
 
     /// Order the values according to CSL rules.
     pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let mut i = 0;
-        loop {
-            let a = self.nth(i);
-            let b = other.nth(i);
-
-            match (a, b) {
-                (Some(a), Some(b)) => {
-                    let ord = a.cmp(&b);
-                    if ord != std::cmp::Ordering::Equal {
-                        return ord;
-                    }
-                }
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-
-            i += 1;
-        }
+        self.value.into_iter().cmp(&other.value)
     }
 }
 
@@ -367,6 +345,66 @@ pub enum NumericValue {
     Number(i32),
     /// A set of numbers.
     Set(Vec<(i32, Option<NumericDelimiter>)>),
+}
+
+impl NumericValue {
+    /// Return the length of the numeric value.
+    pub fn len(&self) -> usize {
+        match self {
+            NumericValue::Number(_) => 1,
+            NumericValue::Set(vec) => vec.len(),
+        }
+    }
+
+    /// Whether the numeric value is an empty set.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the nth number in the set.
+    fn nth(&self, n: usize) -> Option<i32> {
+        match self {
+            NumericValue::Number(val) if n == 0 => Some(*val),
+            NumericValue::Number(_) => None,
+            NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
+        }
+    }
+}
+
+/// An iterator over the numbers in a numeric value.
+pub struct NumIterator<'a> {
+    num: &'a NumericValue,
+    idx: usize,
+}
+
+impl<'a> Iterator for NumIterator<'a> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let val = self.num.nth(self.idx);
+        self.idx += 1;
+        val
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.num.len() - self.idx;
+        (len, Some(len))
+    }
+}
+
+impl<'a> ExactSizeIterator for NumIterator<'a> {
+    fn len(&self) -> usize {
+        self.size_hint().0
+    }
+}
+
+impl<'a> IntoIterator for &'a NumericValue {
+    type Item = i32;
+    type IntoIter = NumIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        NumIterator { num: self, idx: 0 }
+    }
 }
 
 /// Delimits individual numbers in a numeric value.
