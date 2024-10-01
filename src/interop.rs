@@ -529,6 +529,12 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        if let Some(note) = map_res(entry.note())?.map(|d| d.format_verbatim()) {
+            if item.note.is_none() {
+                item.set_note(note.into());
+            }
+        }
+
         if let Some(abstract_) = map_res(entry.abstract_())? {
             item.set_abstract_(abstract_.into())
         }
