@@ -402,24 +402,22 @@ fn main() {
 
             for row in driver
                 .finish(BibliographyRequest::new(&style, locale, &locales))
-                .bibliography
-                .map(|b| b.items)
-                .unwrap_or_default()
+                .citations
             {
                 let alternate = matches.get_flag("no-fmt");
 
-                if let Some(prefix) = row.first_field {
+                if let Some(note_number) = row.note_number {
                     if alternate {
-                        println!("{:#}", prefix)
+                        println!("{:#}", note_number)
                     } else {
-                        println!("{}", prefix)
+                        println!("{}.", note_number)
                     }
                 }
 
                 if alternate {
-                    println!("{:#}", row.content)
+                    println!("{:#}", row.citation)
                 } else {
-                    println!("{}", row.content)
+                    println!("{}", row.citation)
                 }
             }
         }
