@@ -680,20 +680,47 @@ impl EntryLike for Entry {
 }
 
 #[cfg(feature = "csl-json")]
+fn resolve_csl_json_standard_variable(
+    item: &citationberg::json::Item,
+    variable: StandardVariable,
+) -> Option<Cow<'_, ChunkedString>> {
+    match item.0.get(&variable.to_string())? {
+        csl_json::Value::String(s) => {
+            Some(Cow::Owned(StringChunk::normal(s.clone()).into()))
+        }
+        csl_json::Value::Number(n) => {
+            Some(Cow::Owned(StringChunk::normal(n.to_string()).into()))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(feature = "csl-json")]
 impl EntryLike for citationberg::json::Item {
     fn resolve_standard_variable(
         &self,
-        _: LongShortForm,
+        form: LongShortForm,
         variable: StandardVariable,
     ) -> Option<Cow<'_, ChunkedString>> {
-        match self.0.get(&variable.to_string())? {
-            csl_json::Value::String(s) => {
-                Some(Cow::Owned(StringChunk::normal(s.clone()).into()))
-            }
-            csl_json::Value::Number(n) => {
-                Some(Cow::Owned(StringChunk::normal(n.to_string()).into()))
-            }
-            _ => None,
+        match variable {
+            StandardVariable::Title => match form {
+                LongShortForm::Short => {
+                    // Per citeproc tests, a 'title-short' without 'title' is
+                    // valid and should be used when the short form is
+                    // selected.
+                    resolve_csl_json_standard_variable(self, StandardVariable::TitleShort)
+                        .or_else(|| {
+                            resolve_csl_json_standard_variable(
+                                self,
+                                StandardVariable::Title,
+                            )
+                        })
+                }
+                LongShortForm::Long => {
+                    resolve_csl_json_standard_variable(self, StandardVariable::Title)
+                }
+            },
+            _ => resolve_csl_json_standard_variable(self, variable),
         }
     }
 
