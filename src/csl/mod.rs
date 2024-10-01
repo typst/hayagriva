@@ -2567,9 +2567,12 @@ impl<'a, T: EntryLike> Context<'a, T> {
         res
     }
 
-    fn resolve_page_variable(&self) -> Option<PageVariableResult> {
-        self.writing.prepare_variable_query(PageVariable::Page)?;
-        self.instance.resolve_page_variable()
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<PageVariableResult> {
+        self.writing.prepare_variable_query(variable)?;
+        self.instance.resolve_page_variable(variable)
     }
 
     /// Resolve a name variable.

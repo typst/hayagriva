@@ -249,8 +249,8 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
             TextTarget::Variable { var: Variable::Number(var), .. } => ctx
                 .resolve_number_variable(*var)
                 .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
-            TextTarget::Variable { var: Variable::Page(_), .. } => {
-                ctx.resolve_page_variable().map(ResolvedTextTarget::PageVariable)
+            TextTarget::Variable { var: Variable::Page(pv), .. } => {
+                ctx.resolve_page_variable(*pv).map(ResolvedTextTarget::PageVariable)
             }
             TextTarget::Variable { .. } => None,
             TextTarget::Macro { name } => {
@@ -426,7 +426,7 @@ impl RenderCsl for citationberg::Label {
                 ctx.commit_elem(depth, None, Some(ElemMeta::Label));
             }
             NumberOrPageVariable::Page(pv) => {
-                let Some(p) = ctx.resolve_page_variable() else {
+                let Some(p) = ctx.resolve_page_variable(pv) else {
                     return;
                 };
 
@@ -495,7 +495,7 @@ impl RenderCsl for citationberg::Label {
                 }
             }
             NumberOrPageVariable::Page(pv) => {
-                if let Some(p) = ctx.resolve_page_variable() {
+                if let Some(p) = ctx.resolve_page_variable(pv) {
                     let plural = match p {
                         MaybeTyped::Typed(p) => p.is_plural(),
                         _ => false,
@@ -1137,7 +1137,9 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
                         Variable::Name(n) => {
                             !self.ctx.resolve_name_variable(n).is_empty()
                         }
-                        Variable::Page(_) => self.ctx.resolve_page_variable().is_some(),
+                        Variable::Page(pv) => {
+                            self.ctx.resolve_page_variable(pv).is_some()
+                        }
                     })
                 } else {
                     None

@@ -7,7 +7,7 @@ use crate::types::{
 };
 use crate::{Entry, PageRanges};
 use citationberg::taxonomy::{
-    DateVariable, Kind, NameVariable, NumberVariable, StandardVariable,
+    DateVariable, Kind, NameVariable, NumberVariable, PageVariable, StandardVariable,
 };
 use citationberg::{taxonomy, LongShortForm};
 use unic_langid::LanguageIdentifier;
@@ -23,7 +23,10 @@ pub trait EntryLike {
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>>;
-    fn resolve_page_variable(&self) -> Option<MaybeTyped<PageRanges>>;
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<MaybeTyped<PageRanges>>;
     fn resolve_standard_variable(
         &self,
         form: LongShortForm,
@@ -71,8 +74,11 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
         }
     }
 
-    pub(super) fn resolve_page_variable(&self) -> Option<PageVariableResult> {
-        self.entry.resolve_page_variable()
+    pub(super) fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<PageVariableResult> {
+        self.entry.resolve_page_variable(variable)
     }
 
     // Number variables are standard variables.
@@ -204,8 +210,13 @@ impl EntryLike for Entry {
         }
     }
 
-    fn resolve_page_variable(&self) -> Option<MaybeTyped<PageRanges>> {
-        self.page_range().map(|r| MaybeTyped::Typed(r.clone()))
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<MaybeTyped<PageRanges>> {
+        match variable {
+            PageVariable::Page => self.page_range().map(|r| MaybeTyped::Typed(r.clone())),
+        }
     }
 
     // Number variables are standard variables.
@@ -762,19 +773,24 @@ impl EntryLike for citationberg::json::Item {
         }
     }
 
-    fn resolve_page_variable(&self) -> Option<MaybeTyped<PageRanges>> {
-        match self.0.get("page")? {
-            csl_json::Value::Number(n) => {
-                Some(MaybeTyped::Typed(PageRanges::from(*n as u64)))
-            }
-            csl_json::Value::String(s) => {
-                let res = MaybeTyped::<PageRanges>::infallible_from_str(s);
-                Some(match res {
-                    MaybeTyped::String(s) => MaybeTyped::String(s),
-                    MaybeTyped::Typed(r) => MaybeTyped::Typed(r),
-                })
-            }
-            _ => None,
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<MaybeTyped<PageRanges>> {
+        match variable {
+            PageVariable::Page => match self.0.get("page")? {
+                csl_json::Value::Number(n) => {
+                    Some(MaybeTyped::Typed(PageRanges::from(*n as u64)))
+                }
+                csl_json::Value::String(s) => {
+                    let res = MaybeTyped::<PageRanges>::infallible_from_str(s);
+                    Some(match res {
+                        MaybeTyped::String(s) => MaybeTyped::String(s),
+                        MaybeTyped::Typed(r) => MaybeTyped::Typed(r),
+                    })
+                }
+                _ => None,
+            },
         }
     }
 
@@ -783,7 +799,9 @@ impl EntryLike for citationberg::json::Item {
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
         if matches!(variable, NumberVariable::PageFirst) {
-            if let Some(MaybeTyped::Typed(n)) = self.resolve_page_variable() {
+            if let Some(MaybeTyped::Typed(n)) =
+                self.resolve_page_variable(PageVariable::Page)
+            {
                 return n.first().map(|r| MaybeTyped::Typed(Cow::Owned(r.clone())));
             }
         }
