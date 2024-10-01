@@ -31,7 +31,7 @@ impl PageRanges {
 
     /// Get the first page of the first range.
     pub fn first(&self) -> Option<&Numeric> {
-        self.ranges.first().and_then(PageRangesPart::start)
+        self.ranges.iter().find_map(PageRangesPart::start)
     }
 
     /// Order the values according to CSL rules.
@@ -59,7 +59,20 @@ impl PageRanges {
 
     /// Whether to pluralize the `pages` term, when used with this page range.
     pub fn is_plural(&self) -> bool {
-        self.ranges.len() != 1
+        let mut count = 0;
+        for range in &self.ranges {
+            match range {
+                PageRangesPart::SinglePage(_) => count += 1,
+                PageRangesPart::Range(s, e) | PageRangesPart::EscapedRange(s, e) => {
+                    if s != e {
+                        return true;
+                    }
+                    count += 1
+                }
+                _ => {}
+            }
+        }
+        count > 1
     }
 }
 
@@ -104,12 +117,22 @@ pub enum PageRangesPart {
 }
 
 impl PageRangesPart {
-    /// The start of a range if any.
+    /// The start of a range, if any.
     pub fn start(&self) -> Option<&Numeric> {
         match self {
             Self::EscapedRange(s, _) => Some(s),
             Self::SinglePage(s) => Some(s),
             Self::Range(s, _) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The end of a range, if any.
+    pub fn end(&self) -> Option<&Numeric> {
+        match self {
+            Self::EscapedRange(_, e) => Some(e),
+            Self::Range(_, e) => Some(e),
+            Self::SinglePage(_) => None,
             _ => None,
         }
     }
