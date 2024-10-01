@@ -205,7 +205,7 @@ impl FromStr for PageRangesPart {
             r
         } else {
             // Otherwise, split into the two halves of the dash.
-            let mut parts = s.split(|c| c == '-' || c == '–').map(str::trim);
+            let mut parts = s.split(['-', '–']).map(str::trim);
             let r = match (parts.next(), parts.next()) {
                 (None, None) => unreachable!(),
                 (Some(start), None) => Self::SinglePage(parse_number(start)?),
