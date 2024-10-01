@@ -251,9 +251,9 @@ impl Serialize for ChunkedString {
     }
 }
 
-impl Into<String> for ChunkedString {
-    fn into(self) -> String {
-        return self.to_string();
+impl From<ChunkedString> for String {
+    fn from(value: ChunkedString) -> Self {
+        value.to_string()
     }
 }
 
