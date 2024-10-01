@@ -146,9 +146,18 @@ wire:
     date: 2002
     publisher: Blown Deadline Productions
     volume-total: 5
-    abstract: Video about wire
+    # From Wikipedia, the free encyclopedia: https://en.wikipedia.org/wiki/The_Wire
+    abstract: |
+        The Wire is an American crime drama television series created and
+        primarily written by American author and former police reporter David
+        Simon. The series was broadcast by the cable network HBO in the United
+        States. The Wire premiered on June 2, 2002, and ended on March 9, 2008,
+        comprising sixty episodes over five seasons. The idea for the show
+        started out as a police drama loosely based on the experiences of
+        Simon's writing partner Ed Burns, a former homicide detective and
+        public school teacher.
     annote: The wire is noted to be solid
-    genre: Important video
+    genre: Drama
     affiliated:
         - role: executive-producer
           names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
