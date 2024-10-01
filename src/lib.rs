@@ -63,7 +63,7 @@ let result = driver.finish(BibliographyRequest {
 });
 
 for cite in result.citations {
-    println!("{}", cite.citation.to_string())
+    println!("{}", cite.citation)
 }
 ```
 
