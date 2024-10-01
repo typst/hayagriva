@@ -680,7 +680,7 @@ impl EntryLike for Entry {
 }
 
 #[cfg(feature = "csl-json")]
-fn resolve_csl_json_variable(
+fn resolve_csl_json_standard_variable(
     item: &citationberg::json::Item,
     variable: StandardVariable,
 ) -> Option<Cow<'_, ChunkedString>> {
@@ -708,15 +708,19 @@ impl EntryLike for citationberg::json::Item {
                     // Per citeproc tests, a 'title-short' without 'title' is
                     // valid and should be used when the short form is
                     // selected.
-                    resolve_csl_json_variable(self, StandardVariable::TitleShort).or_else(
-                        || resolve_csl_json_variable(self, StandardVariable::Title),
-                    )
+                    resolve_csl_json_standard_variable(self, StandardVariable::TitleShort)
+                        .or_else(|| {
+                            resolve_csl_json_standard_variable(
+                                self,
+                                StandardVariable::Title,
+                            )
+                        })
                 }
                 LongShortForm::Long => {
-                    resolve_csl_json_variable(self, StandardVariable::Title)
+                    resolve_csl_json_standard_variable(self, StandardVariable::Title)
                 }
             },
-            _ => resolve_csl_json_variable(self, variable),
+            _ => resolve_csl_json_standard_variable(self, variable),
         }
     }
 
