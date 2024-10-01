@@ -47,13 +47,13 @@ Sometimes, fields accept composite data. If, for example, you would want to save
 ```yaml
 url:
     value: http://www.techno.org/electronic-music-guide/
-    date: 2020-11-12
+    date: 2020-11-30
 ```
 
 There is also a more compact form of this that might look familiar if you know JSON:
 
 ```yaml
-url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-12 }
+url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-30 }
 ```
 
 By now, you must surely think that there must be an abundance of fields to represent all the possible information that could be attached to any piece of literature: For example, an article could have been published in an anthology whose title you would want to save, and that anthology belongs to a series that has a title itself... For this, you would already need three different title-fields? Hayagriva's data model was engineered to prevent this kind of field bloat, read the next section to learn how to represent various literature.
@@ -178,6 +178,30 @@ This section lists all possible fields and data types for them.
 | **Data type:**   | entry                                                     |
 | **Description:** | item in which the item was published / to which it is strongly associated to |
 | **Example:**     | <pre>parent:<br>    type: Anthology<br>    title: Automata studies<br>    editor: ["Shannon, C. E.", "McCarthy, J."]</pre> |
+
+#### `abstract`
+
+|                  |                                                           |
+|------------------|-----------------------------------------------------------|
+| **Data type:**   | formattable string                                |
+| **Description:** | Abstract of the item (e.g. the abstract of a journal article). |
+| **Example:**     | `abstract: The dominant sequence transduction models are based on complex...` |
+
+#### `annote`
+
+|                  |                                                           |
+|------------------|-----------------------------------------------------------|
+| **Data type:**   | formattable string                                |
+| **Description:** | Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review). For descriptive text (e.g., in an annotated bibliography), use `note` instead. |
+| **Example:**     | `annote: The researchers at NYU explore in this paper ...` |
+
+#### `genre`
+
+|                  |                                                           |
+|------------------|-----------------------------------------------------------|
+| **Data type:**   | formattable string                                |
+| **Description:** | Type, class, or subtype of the item (e.g. "Doctoral dissertation" for a PhD thesis; "NIH Publication" for an NIH technical report). Do not use for topical descriptions or categories (e.g. "adventure" for an adventure movie). |
+| **Example:**     | `genre: Doctoral dissertation` |
 
 #### `editor`
 
@@ -400,7 +424,6 @@ whole string in quotes if you do this.
 publisher: "{imagiNary} Publishing"
 ```
 
-
 To disable formatting altogether and instead preserve the casing as it appears
 in the source string, put the string in the `value` sub-field and specify
 another sub-field as `verbatim: true`:
@@ -479,7 +502,6 @@ names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
 - `director`. Directed the cited item.
 - `illustrator`. Illustrated the cited item.
 - `narrator`. Provided narration or voice-over for the cited item.
-
 
 The `role` field is case insensitive.
 
