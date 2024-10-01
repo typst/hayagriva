@@ -160,7 +160,7 @@ impl Numeric {
         buf: &mut T,
         form: NumberForm,
         gender: Option<GrammarGender>,
-        ords: OrdinalLookup<'_>,
+        ords: &OrdinalLookup<'_>,
     ) -> std::fmt::Result
     where
         T: Write,
@@ -217,41 +217,14 @@ impl Numeric {
             .flatten()
     }
 
-    /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<std::ops::RangeInclusive<i32>> {
-        self.value.range()
-    }
-
     /// Returns the nth number in the set.
     pub fn nth(&self, n: usize) -> Option<i32> {
-        match &self.value {
-            NumericValue::Number(val) if n == 0 => Some(*val),
-            NumericValue::Number(_) => None,
-            NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
-        }
+        self.value.nth(n)
     }
 
     /// Order the values according to CSL rules.
     pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let mut i = 0;
-        loop {
-            let a = self.nth(i);
-            let b = other.nth(i);
-
-            match (a, b) {
-                (Some(a), Some(b)) => {
-                    let ord = a.cmp(&b);
-                    if ord != std::cmp::Ordering::Equal {
-                        return ord;
-                    }
-                }
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-
-            i += 1;
-        }
+        self.value.into_iter().cmp(&other.value)
     }
 }
 
@@ -375,45 +348,62 @@ pub enum NumericValue {
 }
 
 impl NumericValue {
-    /// Returns a range if the value is a range.
-    pub fn range(&self) -> Option<std::ops::RangeInclusive<i32>> {
+    /// Return the length of the numeric value.
+    pub fn len(&self) -> usize {
         match self {
-            // A single number is seen as a range of length 1. See #103.
-            Self::Number(n) => Some(*n..=*n),
-            Self::Set(vec) => {
-                if vec.len() == 2 {
-                    let start = vec[0].0;
-                    let end = vec[1].0;
-                    let first_delim = vec[0].1;
-
-                    let first_delim_ampersand_range = first_delim
-                        == Some(NumericDelimiter::Ampersand)
-                        && start + 1 == end;
-
-                    if (first_delim_ampersand_range)
-                        || first_delim == Some(NumericDelimiter::Hyphen)
-                    {
-                        Some(start..=end)
-                    } else {
-                        None
-                    }
-                } else if vec.len() > 2 {
-                    for i in 1..vec.len() {
-                        if vec[i - 1].1 != Some(NumericDelimiter::Ampersand) {
-                            return None;
-                        }
-
-                        if vec[i - 1].0 + 1 != vec[i].0 {
-                            return None;
-                        }
-                    }
-
-                    Some(vec[0].0..=vec[vec.len() - 1].0)
-                } else {
-                    None
-                }
-            }
+            NumericValue::Number(_) => 1,
+            NumericValue::Set(vec) => vec.len(),
         }
+    }
+
+    /// Whether the numeric value is an empty set.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the nth number in the set.
+    fn nth(&self, n: usize) -> Option<i32> {
+        match self {
+            NumericValue::Number(val) if n == 0 => Some(*val),
+            NumericValue::Number(_) => None,
+            NumericValue::Set(vec) => vec.get(n).map(|(val, _)| *val),
+        }
+    }
+}
+
+/// An iterator over the numbers in a numeric value.
+pub struct NumIterator<'a> {
+    num: &'a NumericValue,
+    idx: usize,
+}
+
+impl<'a> Iterator for NumIterator<'a> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let val = self.num.nth(self.idx);
+        self.idx += 1;
+        val
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.num.len() - self.idx;
+        (len, Some(len))
+    }
+}
+
+impl<'a> ExactSizeIterator for NumIterator<'a> {
+    fn len(&self) -> usize {
+        self.size_hint().0
+    }
+}
+
+impl<'a> IntoIterator for &'a NumericValue {
+    type Item = i32;
+    type IntoIter = NumIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        NumIterator { num: self, idx: 0 }
     }
 }
 

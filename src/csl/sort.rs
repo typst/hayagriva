@@ -82,6 +82,19 @@ impl<'a> StyleContext<'a> {
                     (None, None) => Ordering::Equal,
                 }
             }
+            SortKey::Variable { variable: Variable::Page(pv), .. } => {
+                let a =
+                    InstanceContext::sort_instance(a, a_idx).resolve_page_variable(*pv);
+                let b =
+                    InstanceContext::sort_instance(b, b_idx).resolve_page_variable(*pv);
+
+                match (a, b) {
+                    (Some(a), Some(b)) => a.csl_cmp(&b),
+                    (Some(_), None) => Ordering::Greater,
+                    (None, Some(_)) => Ordering::Less,
+                    (None, None) => Ordering::Equal,
+                }
+            }
             SortKey::MacroName {
                 name,
                 names_min,

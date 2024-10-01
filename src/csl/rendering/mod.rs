@@ -3,18 +3,21 @@ use std::fmt::Write;
 use std::str::FromStr;
 
 use citationberg::taxonomy::{
-    Locator, NumberVariable, OtherTerm, StandardVariable, Term, Variable,
+    Locator, NumberOrPageVariable, NumberVariable, OtherTerm, PageVariable,
+    StandardVariable, Term, Variable,
 };
 use citationberg::{
     ChooseBranch, CslMacro, DateDayForm, DateMonthForm, DatePartName, DateParts,
     DateStrongAnyForm, GrammarGender, LabelPluralize, LayoutRenderingElement,
-    LongShortForm, NumberForm, TestPosition, TextCase, ToAffixes, ToFormatting,
+    LongShortForm, NumberForm, PageRangeFormat, TestPosition, TextCase, ToAffixes,
+    ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
-use crate::csl::taxonomy::NumberVariableResult;
+use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
+use crate::PageRanges;
 
 use super::taxonomy::EntryLike;
 use super::{Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
@@ -81,20 +84,18 @@ impl RenderCsl for citationberg::Text {
                 }
                 _ => ctx.push_chunked(&val),
             },
-            ResolvedTextTarget::NumberVariable(var, n) => match n {
+            ResolvedTextTarget::NumberVariable(_, n) => match n {
                 NumberVariableResult::Regular(MaybeTyped::Typed(num))
                     if num.will_transform() =>
                 {
-                    render_typed_num(num.as_ref(), NumberForm::default(), var, None, ctx);
-                }
-                NumberVariableResult::Regular(n)
-                    if matches!(var, NumberVariable::Page) =>
-                {
-                    // TODO: Remove this hack
-                    ctx.push_str(&n.to_str().replace('-', "–"))
+                    render_typed_num(num.as_ref(), NumberForm::default(), None, ctx);
                 }
                 NumberVariableResult::Regular(n) => ctx.push_str(&n.to_str()),
                 NumberVariableResult::Transparent(n) => ctx.push_transparent(n),
+            },
+            ResolvedTextTarget::PageVariable(p) => match p {
+                MaybeTyped::Typed(r) => render_page_range(&r, ctx),
+                MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
             },
             ResolvedTextTarget::Macro(mac) => {
                 for child in &mac.children {
@@ -138,6 +139,9 @@ impl RenderCsl for citationberg::Text {
         match target {
             ResolvedTextTarget::StandardVariable(s, _) => var == Variable::Standard(s),
             ResolvedTextTarget::NumberVariable(n, _) => var == Variable::Number(n),
+            ResolvedTextTarget::PageVariable(_) => {
+                var == Variable::Page(PageVariable::Page)
+            }
             ResolvedTextTarget::Macro(mac) => {
                 mac.children.iter().any(|c| c.will_render(ctx, var))
             }
@@ -170,7 +174,8 @@ impl RenderCsl for citationberg::Text {
                 (false, UsageInfo { has_vars: true, ..Default::default() })
             }
             ResolvedTextTarget::StandardVariable(_, _)
-            | ResolvedTextTarget::NumberVariable(_, _) => (
+            | ResolvedTextTarget::NumberVariable(_, _)
+            | ResolvedTextTarget::PageVariable(_) => (
                 true,
                 UsageInfo {
                     has_vars: true,
@@ -198,6 +203,7 @@ impl RenderCsl for citationberg::Text {
 enum ResolvedTextTarget<'a, 'b> {
     StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
     NumberVariable(NumberVariable, NumberVariableResult<'a>),
+    PageVariable(PageVariableResult),
     Macro(&'a CslMacro),
     Term(&'a str),
     Value(&'b str),
@@ -243,6 +249,9 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
             TextTarget::Variable { var: Variable::Number(var), .. } => ctx
                 .resolve_number_variable(*var)
                 .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
+            TextTarget::Variable { var: Variable::Page(pv), .. } => {
+                ctx.resolve_page_variable(*pv).map(ResolvedTextTarget::PageVariable)
+            }
             TextTarget::Variable { .. } => None,
             TextTarget::Macro { name } => {
                 ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)
@@ -278,7 +287,7 @@ impl RenderCsl for citationberg::Number {
             Some(NumberVariableResult::Regular(MaybeTyped::Typed(num)))
                 if num.will_transform() =>
             {
-                render_typed_num(num.as_ref(), self.form, self.variable, gender, ctx);
+                render_typed_num(num.as_ref(), self.form, gender, ctx);
             }
             Some(NumberVariableResult::Regular(MaybeTyped::Typed(num))) => {
                 write!(ctx, "{}", num).unwrap()
@@ -345,41 +354,31 @@ impl RenderCsl for citationberg::Number {
 fn render_typed_num<T: EntryLike>(
     num: &Numeric,
     form: NumberForm,
-    variable: NumberVariable,
     gender: Option<GrammarGender>,
     ctx: &mut Context<T>,
 ) {
-    let normal_num = if form == NumberForm::Numeric && variable == NumberVariable::Page {
-        if let Some(range) = num.range() {
-            render_page_range(range, ctx);
-            false
-        } else {
-            true
-        }
-    } else {
-        true
-    };
-
-    if normal_num {
-        num.with_form(ctx, form, gender, ctx.ordinal_lookup()).unwrap();
-    }
+    num.with_form(ctx, form, gender, &ctx.ordinal_lookup()).unwrap();
 }
 
-fn render_page_range<T: EntryLike>(
-    range: std::ops::RangeInclusive<i32>,
-    ctx: &mut Context<T>,
-) {
-    ctx.style
-        .csl
-        .settings
-        .page_range_format
-        .unwrap_or_default()
-        .format(
-            range,
-            ctx,
-            ctx.term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
-                .or(Some("–")),
-        )
+fn render_page_range<T: EntryLike>(range: &PageRanges, ctx: &mut Context<T>) {
+    let format = ctx.style.csl.settings.page_range_format.unwrap_or_default();
+    let delim = ctx
+        .term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
+        .or(Some("–"));
+
+    range
+        .ranges
+        .iter()
+        .try_for_each(|r| match r {
+            crate::PageRangesPart::Ampersand => ctx.write_str(" & "),
+            crate::PageRangesPart::Comma => ctx.write_str(", "),
+            crate::PageRangesPart::EscapedRange(start, end) => PageRangeFormat::Expanded
+                .format(ctx, &start.to_string(), &end.to_string(), delim),
+            crate::PageRangesPart::SinglePage(page) => ctx.write_str(&page.to_string()),
+            crate::PageRangesPart::Range(start, end) => {
+                format.format(ctx, &start.to_string(), &end.to_string(), delim)
+            }
+        })
         .unwrap();
 }
 
@@ -393,7 +392,11 @@ fn label_pluralization(
         LabelPluralize::Contextual => match variable {
             NumberVariableResult::Regular(MaybeTyped::String(_)) => false,
             NumberVariableResult::Regular(MaybeTyped::Typed(n)) => {
-                n.is_plural(label.variable.is_number_of_variable())
+                if let NumberOrPageVariable::Number(v) = label.variable {
+                    n.is_plural(v.is_number_of_variable())
+                } else {
+                    panic!("Incompatiable variable types")
+                }
             }
             NumberVariableResult::Transparent(_) => false,
         },
@@ -406,19 +409,40 @@ impl RenderCsl for citationberg::Label {
             return;
         }
 
-        let Some(variable) = ctx.resolve_number_variable(self.variable) else {
-            return;
-        };
+        match self.variable {
+            NumberOrPageVariable::Number(n) => {
+                let Some(variable) = ctx.resolve_number_variable(n) else {
+                    return;
+                };
 
-        let depth = ctx.push_elem(citationberg::Formatting::default());
-        let plural = label_pluralization(self, variable);
+                let depth = ctx.push_elem(citationberg::Formatting::default());
+                let plural = label_pluralization(self, variable);
 
-        let content = ctx
-            .term(Term::from(self.variable), self.label.form, plural)
-            .unwrap_or_default();
+                let content = ctx
+                    .term(Term::from(self.variable), self.label.form, plural)
+                    .unwrap_or_default();
 
-        render_label_with_var(&self.label, ctx, content);
-        ctx.commit_elem(depth, None, Some(ElemMeta::Label));
+                render_label_with_var(&self.label, ctx, content);
+                ctx.commit_elem(depth, None, Some(ElemMeta::Label));
+            }
+            NumberOrPageVariable::Page(pv) => {
+                let Some(p) = ctx.resolve_page_variable(pv) else {
+                    return;
+                };
+
+                let depth = ctx.push_elem(citationberg::Formatting::default());
+                let plural = match p {
+                    MaybeTyped::Typed(p) => p.is_plural(),
+                    _ => false,
+                };
+
+                let content =
+                    ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
+
+                render_label_with_var(&self.label, ctx, content);
+                ctx.commit_elem(depth, None, Some(ElemMeta::Label));
+            }
+        }
     }
 
     fn will_render<T: EntryLike>(&self, _ctx: &mut Context<T>, _var: Variable) -> bool {
@@ -427,7 +451,9 @@ impl RenderCsl for citationberg::Label {
 
     fn will_have_info<T: EntryLike>(&self, ctx: &mut Context<T>) -> (bool, UsageInfo) {
         match ctx.instance.kind {
-            Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
+            Some(SpecialForm::VarOnly(Variable::Number(n)))
+                if self.variable != NumberOrPageVariable::Number(n) =>
+            {
                 return (false, UsageInfo::default());
             }
             Some(
@@ -435,7 +461,8 @@ impl RenderCsl for citationberg::Label {
                 | SpecialForm::OnlyFirstDate
                 | SpecialForm::OnlyYearSuffix,
             ) => {
-                if self.variable != NumberVariable::Locator {
+                if self.variable != NumberOrPageVariable::Number(NumberVariable::Locator)
+                {
                     return (true, UsageInfo::default());
                 }
             }
@@ -443,7 +470,7 @@ impl RenderCsl for citationberg::Label {
         }
 
         // Never yield a label if the locator is set to custom.
-        if self.variable == NumberVariable::Locator
+        if self.variable == NumberOrPageVariable::Number(NumberVariable::Locator)
             && ctx
                 .instance
                 .cite_props
@@ -454,14 +481,33 @@ impl RenderCsl for citationberg::Label {
             return (false, UsageInfo::default());
         }
 
-        if let Some(num) = ctx.resolve_number_variable(self.variable) {
-            let plural = label_pluralization(self, num);
-            (
-                ctx.term(Term::from(self.variable), self.label.form, plural).is_some(),
-                UsageInfo::default(),
-            )
-        } else {
-            (false, UsageInfo::default())
+        match self.variable {
+            NumberOrPageVariable::Number(n) => {
+                if let Some(num) = ctx.resolve_number_variable(n) {
+                    let plural = label_pluralization(self, num);
+                    (
+                        ctx.term(Term::from(self.variable), self.label.form, plural)
+                            .is_some(),
+                        UsageInfo::default(),
+                    )
+                } else {
+                    (false, UsageInfo::default())
+                }
+            }
+            NumberOrPageVariable::Page(pv) => {
+                if let Some(p) = ctx.resolve_page_variable(pv) {
+                    let plural = match p {
+                        MaybeTyped::Typed(p) => p.is_plural(),
+                        _ => false,
+                    };
+                    (
+                        ctx.term(Term::from(pv), self.label.form, plural).is_some(),
+                        UsageInfo::default(),
+                    )
+                } else {
+                    (false, UsageInfo::default())
+                }
+            }
         }
     }
 }
@@ -1090,6 +1136,9 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
                         Variable::Date(d) => self.ctx.resolve_date_variable(d).is_some(),
                         Variable::Name(n) => {
                             !self.ctx.resolve_name_variable(n).is_empty()
+                        }
+                        Variable::Page(pv) => {
+                            self.ctx.resolve_page_variable(pv).is_some()
                         }
                     })
                 } else {
