@@ -118,8 +118,8 @@ plaque:
     type: Misc
     title: Informational plaque about Jacoby's 1967 photos
     publisher:
-	name: Stiftung Reinbeckhallen
-    	location: Berlin, Germany
+        name: Stiftung Reinbeckhallen
+        location: Berlin, Germany
     date: 2020
     parent:
         type: Artwork
@@ -226,7 +226,7 @@ This section lists all possible fields and data types for them.
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | publisher                                                 |
 | **Description:** | publisher of the item                                     |
-| **Example:**     | `publisher: Penguin Books` or `publisher:<br>    name: Penguin Books<br>    location: London` |
+| **Example:**     | <pre>publisher: Penguin Books</pre> or <pre>publisher:<br>    name: Penguin Books<br>    location: London</pre> |
 
 #### `location`
 
