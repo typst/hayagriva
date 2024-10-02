@@ -188,14 +188,6 @@ This section lists all possible fields and data types for them.
 | **Description:** | Abstract of the item (e.g. the abstract of a journal article). |
 | **Example:**     | `abstract: The dominant sequence transduction models are based on complex...` |
 
-#### `annote`
-
-|                  |                                                           |
-|------------------|-----------------------------------------------------------|
-| **Data type:**   | formattable string                                |
-| **Description:** | Short markup, decoration, or annotation to the item (e.g., to indicate items included in a review). For descriptive text (e.g., in an annotated bibliography), use `note` instead. |
-| **Example:**     | `annote: The researchers at NYU explore in this paper ...` |
-
 #### `genre`
 
 |                  |                                                           |
@@ -361,8 +353,8 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                        |
-| **Description:** | additional description to be appended after reference list entry |
-| **Example:**     | `note: microfilm version`                                 |
+| **Description:** | short markup, decoration, or annotation to the item (e.g., to indicate items included in a review). |
+| **Example:**     | `microfilm version`                                       |
 
 ### Data types
 
