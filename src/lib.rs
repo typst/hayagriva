@@ -548,12 +548,6 @@ entry! {
     "note" => note: FormatString,
     /// Abstract of the item (e.g. the abstract of a journal article).
     "abstract" => abstract_: FormatString,
-    /// Short markup, decoration, or annotation to the item (e.g., to indicate
-    /// items included in a review);
-    ///
-    /// For descriptive text (e.g., in an annotated bibliography), use `note`
-    /// instead.
-    "annote" => annote: FormatString,
     /// Type, class, or subtype of the item (e.g. “Doctoral dissertation” for
     /// a PhD thesis; “NIH Publication” for an NIH technical report);
     /// Do not use for topical descriptions or categories (e.g. “adventure” for an adventure movie).
@@ -974,7 +968,7 @@ mod tests {
                 "barb",
             ]
         );
-        select_all!("*[abstract, annote, genre]", entries, ["wire"]);
+        select_all!("*[abstract, note, genre]", entries, ["wire"]);
     }
 
     #[test]

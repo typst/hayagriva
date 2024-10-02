@@ -520,21 +520,21 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        if let Some(note) = map_res(entry.note())?.map(Into::into) {
+            item.set_note(note);
+        }
+
         if let Some(note) = map_res(entry.annotation())?
             .or_else(|| entry.addendum().ok())
-            .map(|d| d.format_verbatim())
+            .map(Into::into)
         {
             if item.note.is_none() {
-                item.set_note(note.into());
+                item.set_note(note);
             }
         }
 
         if let Some(abstract_) = map_res(entry.abstract_())? {
             item.set_abstract_(abstract_.into())
-        }
-
-        if let Some(annote) = map_res(entry.annotation())? {
-            item.set_annote(annote.into())
         }
 
         if let Some(series) = map_res(entry.series())? {
