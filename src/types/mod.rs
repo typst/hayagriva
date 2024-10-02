@@ -458,6 +458,7 @@ impl Publisher {
 impl FromStr for Publisher {
     type Err = ChunkedStrParseError;
 
+    /// Creates a new publisher with `s` as its name and no location.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Publisher::new(Some(FormatString::from_str(s)?), None))
     }
