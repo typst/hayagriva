@@ -507,7 +507,7 @@ entry! {
     "affiliated" => affiliated: Vec<PersonsWithRoles> | [PersonsWithRoles],
     /// Publisher of the item, which may have a name and a location.
     "publisher" => publisher: Publisher,
-    /// Physical location at which the event took place.
+    /// Physical location at which an entry is physically located or took place.
     "location" => location: FormatString,
     /// Organization at/for which the item was created.
     "organization" => organization: FormatString,

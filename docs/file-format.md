@@ -234,14 +234,14 @@ This section lists all possible fields and data types for them.
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | publisher                                                 |
 | **Description:** | publisher of the item                                     |
-| **Example:**     | `publisher: Penguin Books` or `publisher:<br>    name: Penguin Books<br>    location: London`                            |
+| **Example:**     | `publisher: Penguin Books` or `publisher:<br>    name: Penguin Books<br>    location: London` |
 
 #### `location`
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                        |
-| **Description:** | location at which an event took place. For the location where an item was published, see `publisher`.       |
+| **Description:** | location at which an entry is physically located or took place. For the location where an item was published, see `publisher`. |
 | **Example:**     | `location: Lahore, Pakistan`                              |
 
 #### `organization`
