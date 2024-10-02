@@ -446,16 +446,18 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_url(QualifiedUrl { value: url, visit_date: date });
         }
 
-        if let Some(location) = map_res(entry.location())?.map(|d| d.into()) {
-            if let Some(parent) = book(&mut item, parent) {
-                parent.set_location(location);
-            } else {
-                item.set_location(location);
-            }
-        }
-
-        if let Some(publisher) = map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
+        if let Some(publisher_name) =
+            map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
         {
+            let location = map_res(entry.location())?.map(|d| d.into());
+            let publisher = Publisher::new(Some(publisher_name), location);
+            if let Some(parent) = book(&mut item, parent) {
+                parent.set_publisher(publisher);
+            } else {
+                item.set_publisher(publisher);
+            }
+        } else if let Some(location) = map_res(entry.location())?.map(|d| d.into()) {
+            let publisher = Publisher::new(None, Some(location));
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_publisher(publisher);
             } else {
