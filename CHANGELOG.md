@@ -1,3 +1,33 @@
+# 0.6.0
+
+- **Breaking change:** Fix that the page range labels were not pluralized,
+  `NumericValue::Range` now returns an inclusive range (#142)
+- Allow multiple page ranges with prefixes and suffixes
+- Fixes with sorting bibliography entries
+- Fix sorting citations by their number (#115)
+- Fix how citation number ranges collapse (#154)
+- `BibliographyItem` is now exported (#157)
+- Fix when the short form of a title was used (#173)
+
+We also updated our collection of Citation Styles.
+
+# 0.5.3
+
+- Fixed a bug with initials (#150)
+- Fixed suppression of title when no author was provided (#144)
+- Fixed et al handling on subsequent citations by [bumping citationberg](https://github.com/typst/citationberg/releases/tag/v0.3.1)
+
+# 0.5.2
+
+- Allow the `abstract`, `annote`, and `genre` fields to Hayagriva files and process them from BibTeX files. 
+- Fix retrieval of an item's editor (#94)
+- Fixed issue with pulling punctuation into quotation marks (#85)
+- Allow non-range values in the `pages` field (#103)
+- Fix multiple subsequent prose citations to the same item (#122)
+- Interpret the `eprint` BibTeX key as `serial-number.arxiv` if the `eprinttype` is set to `arxiv`
+- Fixed issue with multiple subsequent citations (#122)
+- Improved handling of empty CSL objects
+
 # 0.5.1
 
 - Fixed spacing around math blocks
