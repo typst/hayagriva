@@ -233,7 +233,7 @@ impl EntryLike for Entry {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::Annote => {
-                entry.map(|e| e.annote()).map(|f| f.select(form)).map(Cow::Borrowed)
+                entry.map(|e| e.note()).map(|f| f.select(form)).map(Cow::Borrowed)
             }
             StandardVariable::Archive => {
                 entry.map(|e| e.archive()).map(|f| f.select(form)).map(Cow::Borrowed)
