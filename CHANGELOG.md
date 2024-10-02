@@ -2,12 +2,19 @@
 
 - **Breaking change:** Fix that the page range labels were not pluralized,
   `NumericValue::Range` now returns an inclusive range (#142)
+- **Breaking change:** The field `publisher` can now accept a dictionary with a
+  `location`. The top-level `location` key is now primarily for event and item
+  locations.
+- **Breaking change:** The field `annote` has been removed
 - Allow multiple page ranges with prefixes and suffixes
 - Fixes with sorting bibliography entries
 - Fix sorting citations by their number (#115)
 - Fix how citation number ranges collapse (#154)
 - `BibliographyItem` is now exported (#157)
 - Fix when the short form of a title was used (#173)
+- Bumped the `biblatex` crate to 0.10.0 to fix a BibLaTeX parsing bug
+  (https://github.com/typst/biblatex/issues/53) and allow the Unknown and
+  Director editor types (https://github.com/typst/biblatex/issues/52).
 
 We also updated our collection of Citation Styles.
 
