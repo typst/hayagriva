@@ -117,8 +117,9 @@ Parents can also appear as standalone items and can have parents themselves. Thi
 plaque:
     type: Misc
     title: Informational plaque about Jacoby's 1967 photos
-    publisher: Stiftung Reinbeckhallen
-    location: Berlin, Germany
+    publisher:
+	name: Stiftung Reinbeckhallen
+    	location: Berlin, Germany
     date: 2020
     parent:
         type: Artwork
@@ -231,16 +232,16 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | formattable string                                        |
+| **Data type:**   | publisher                                                 |
 | **Description:** | publisher of the item                                     |
-| **Example:**     | `publisher: Penguin Books`                                |
+| **Example:**     | `publisher: Penguin Books` or `publisher:<br>    name: Penguin Books<br>    location: London` |
 
 #### `location`
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                        |
-| **Description:** | location at which the item was published or created       |
+| **Description:** | location at which an entry is physically located or took place. For the location where an item was published, see `publisher`. |
 | **Example:**     | `location: Lahore, Pakistan`                              |
 
 #### `organization`
