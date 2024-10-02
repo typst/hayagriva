@@ -508,7 +508,7 @@ entry! {
     /// Publisher of the item. May be a string or a dictionary with `name` and
     /// `location` (both strings).
     "publisher" => publisher: Publisher,
-    /// Physical location at the event took place.
+    /// Physical location at which the event took place.
     "location" => location: FormatString,
     /// Organization at/for which the item was created.
     "organization" => organization: FormatString,
