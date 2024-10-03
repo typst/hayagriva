@@ -1,3 +1,10 @@
+# 0.7.0
+
+- **Breaking change:** `Entry::page_range` now returns
+  `Option<&MaybeTyped<PageRanges>>` instead of `Option<&PageRanges>`. This fixes
+  a panic that occurred when a page range had an unknown format
+- `MaybeTyped` now has an `as_typed` method
+
 # 0.6.0
 
 - **Breaking change:** Fix that the page range labels were not pluralized,
