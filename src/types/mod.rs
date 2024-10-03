@@ -304,6 +304,16 @@ pub enum MaybeTyped<T> {
     String(String),
 }
 
+impl<T> MaybeTyped<T> {
+    /// Get the typed value, if it is present.
+    pub fn as_typed(&self) -> Option<&T> {
+        match self {
+            MaybeTyped::Typed(t) => Some(t),
+            MaybeTyped::String(_) => None,
+        }
+    }
+}
+
 impl<T: ToOwned> MaybeTyped<T> {
     /// Wrap the typed value in a [`Cow`]'s borrowed variant.
     pub fn to_cow(&self) -> MaybeTyped<Cow<T>> {

@@ -173,6 +173,7 @@ impl EntryLike for Entry {
             }
             NumberVariable::PageFirst => self
                 .page_range()
+                .and_then(MaybeTyped::as_typed)
                 .and_then(PageRanges::first)
                 .map(|r| MaybeTyped::Typed(Cow::Owned(r.clone()))),
             NumberVariable::PartNumber => self
@@ -216,7 +217,7 @@ impl EntryLike for Entry {
         variable: PageVariable,
     ) -> Option<MaybeTyped<PageRanges>> {
         match variable {
-            PageVariable::Page => self.page_range().map(|r| MaybeTyped::Typed(r.clone())),
+            PageVariable::Page => self.page_range().cloned(),
         }
     }
 

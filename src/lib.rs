@@ -522,7 +522,7 @@ entry! {
     /// Published version of an item.
     "edition" => edition: MaybeTyped<Numeric>,
     /// The range of pages within the parent this item occupies
-    "page-range" => page_range: PageRanges,
+    "page-range" => page_range: MaybeTyped<PageRanges>,
     /// The total number of pages the item has.
     "page-total" => page_total: Numeric,
     /// The time range within the parent this item starts and ends at.
@@ -981,5 +981,24 @@ mod tests {
             entries >> "wwdc-network",
             ["a", "b", "c"]
         );
+    }
+
+    #[test]
+    #[cfg(feature = "biblatex")]
+    fn test_troublesome_page_ranges() {
+        use io::from_biblatex_str;
+
+        let bibtex = r#"
+            @article{b, 
+                title={My page ranges},
+                pages={150--es}
+            }
+        "#;
+
+        let library = from_biblatex_str(bibtex).unwrap();
+
+        for entry in library.iter() {
+            assert!(entry.page_range.is_some())
+        }
     }
 }
