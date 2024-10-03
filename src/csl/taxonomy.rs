@@ -752,8 +752,8 @@ impl EntryLike for citationberg::json::Item {
         match self.0.get(&variable.to_string()) {
             Some(csl_json::Value::Names(names)) => names
                 .iter()
-                .map(|name| {
-                    Cow::Owned(match name {
+                .filter_map(|name| {
+                    Some(Cow::Owned(match name {
                         csl_json::NameValue::Literal(l) => Person {
                             name: l.literal.clone(),
                             prefix: None,
@@ -772,7 +772,7 @@ impl EntryLike for citationberg::json::Item {
                             if let Some(given) = given {
                                 parts.push(given.as_str());
                             }
-                            let mut p = Person::from_strings(parts).unwrap();
+                            let mut p = Person::from_strings(parts).ok()?;
                             if let Some(suffix) = suffix {
                                 p.suffix = Some(suffix.as_str().to_owned());
                             }
@@ -796,7 +796,7 @@ impl EntryLike for citationberg::json::Item {
                             given_name: given.clone(),
                             alias: None,
                         },
-                    })
+                    }))
                 })
                 .collect(),
             _ => vec![],

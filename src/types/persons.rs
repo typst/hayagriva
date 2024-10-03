@@ -175,8 +175,9 @@ impl Person {
         }
 
         let last_pre = parts[0];
-        let given_name =
-            if parts.len() > 1 { Some(parts.last().unwrap().to_string()) } else { None };
+        let given_name = (parts.len() > 1)
+            .then(|| parts.last().map(|last| last.to_string()))
+            .flatten();
 
         let suffix = if parts.len() > 2 { Some(parts[1].to_string()) } else { None };
 
