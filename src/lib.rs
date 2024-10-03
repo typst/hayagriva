@@ -13,8 +13,8 @@ Language Association-style citation.
 
 Hayagriva supports all styles provided in the
 [official Citation Style Language repository](https://github.com/citation-style-language/styles),
-currently over 2,600. You must provide your own style file, which can be
-obtained there.
+currently over 2,600. You can provide your own style files or use the ones
+bundled with this library in the [`archive`] module.
 
 # Usage
 
@@ -91,7 +91,7 @@ default features by writing this in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hayagriva = { version = "0.6", default-features = false }
+hayagriva = { version = "0.7", default-features = false }
 ```
 
 # Selectors
