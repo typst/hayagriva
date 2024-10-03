@@ -1275,12 +1275,11 @@ impl<'a> StyleContext<'a> {
             ctx.set_special_form(None);
         };
 
-        match kind {
-            Some(CitePurpose::Author) => {
+        match (kind, self.csl.bibliography.as_ref()) {
+            (Some(CitePurpose::Author), _) => {
                 do_author(&mut ctx);
             }
-            Some(CitePurpose::Full) if self.csl.bibliography.is_some() => {
-                let bib = self.csl.bibliography.as_ref().unwrap();
+            (Some(CitePurpose::Full), Some(bib)) => {
                 ctx.writing.push_name_options(&bib.name_options);
                 bib.layout.render(&mut ctx);
                 ctx.writing.pop_name_options();
@@ -1301,7 +1300,7 @@ impl<'a> StyleContext<'a> {
                     }
                 }
             }
-            Some(CitePurpose::Prose) => {
+            (Some(CitePurpose::Prose), _) => {
                 do_author(&mut ctx);
                 if !self.csl.citation.layout.prefix.as_ref().map_or(false, |f| {
                     f.chars().next().map_or(false, char::is_whitespace)
@@ -1339,7 +1338,7 @@ impl<'a> StyleContext<'a> {
                     );
                 }
             }
-            Some(CitePurpose::Year) | Some(CitePurpose::Full) | None => {
+            (Some(CitePurpose::Year) | Some(CitePurpose::Full) | None, _) => {
                 do_regular(&mut ctx);
             }
         }
@@ -1573,7 +1572,7 @@ impl<'a> StyleContext<'a> {
             let fallback = if i == 0 {
                 locale.parse_base().and_then(|base| match base {
                     BaseLanguage::Iso639_1(lang) => {
-                        Some(LocaleCode(String::from_utf8(lang.to_vec()).unwrap()))
+                        Some(LocaleCode(String::from_utf8(lang.to_vec()).ok()?))
                     }
                     BaseLanguage::Iana(lang) => Some(LocaleCode(lang)),
                     _ => None,

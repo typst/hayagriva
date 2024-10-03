@@ -72,10 +72,10 @@ impl Alphanumerical {
                 year
             });
 
-        year.map(|y| {
+        year.and_then(|y| {
             let mut num = String::with_capacity(2);
-            write!(&mut num, "{:02}", y).unwrap();
-            num
+            write!(&mut num, "{:02}", y).ok()?;
+            Some(num)
         })
     }
 
