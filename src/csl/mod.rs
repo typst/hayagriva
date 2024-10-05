@@ -12,10 +12,7 @@ use citationberg::taxonomy::{
     StandardVariable, Term, Variable,
 };
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
-    CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
-    LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, TermForm, ToFormatting,
+    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout, LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory, StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToFormatting
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -487,6 +484,10 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                     entry.entry.key().to_string(),
                 ))
             }
+
+            substitute_subsequent_authors(bibliography.subsequent_author_substitute.as_ref(),
+                bibliography.subsequent_author_substitute_rule,
+                &mut items);
 
             Some(RenderedBibliography {
                 hanging_indent: bibliography.hanging_indent,
@@ -965,6 +966,72 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
             // TODO: Year Suffix and Year Suffix ranged.
         }
         None => {}
+    }
+}
+
+fn substitute_subsequent_authors(subs: Option<&String>, rule: SubsequentAuthorSubstituteRule, items: &mut Vec<(ElemChildren, String)>) {  
+    if let Some(subs) = subs {
+        let subs = Formatting::default().add_text(subs.clone());
+
+        fn replace_all(names: &mut Elem, subs: &Formatted) {
+            fn remove_name(mut child: Elem) -> Option<ElemChild> {
+                if matches!(child.meta, Some(ElemMeta::Name(_, _))) {
+                    return None;
+                }
+                child.children.0 = child.children.0.into_iter().filter_map(|e| match e {
+                    ElemChild::Elem(e) => remove_name(e),
+                    _ => Some(e)
+                }).collect();
+                Some(ElemChild::Elem(child))
+            }
+            let old_children = std::mem::replace(&mut names.children, ElemChildren(vec![ElemChild::Text(subs.clone())]));
+            for child in old_children.0 {
+                match child {
+                    ElemChild::Elem(e) => if let Some(c) = remove_name(e) {
+                        names.children.0.push(c);
+                    },
+                    _ => names.children.0.push(child)
+                }
+            }
+            
+        }
+        
+        let mut i = 0;
+        let mut last_names = None;
+        let len = items.len();
+        
+        while i < len {
+            let ec = &mut items[i].0;
+            let Some(xnames) = ec.get_meta(ElemMeta::Names) else {
+                i += 1;
+                continue;
+            };
+            let lnames = if let Some(ns) = &last_names {
+                ns
+            } else {
+                // No previous name; nothing to replace. Save and skip
+                last_names = Some(xnames.clone());
+                i += 1;
+                continue;
+            };
+            match rule {
+                SubsequentAuthorSubstituteRule::CompleteAll => {
+                    if lnames == xnames {
+                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        replace_all(names, &subs);
+                    } else {
+                        last_names = Some(xnames.clone());
+                        i += 1;
+                        continue;
+                    }
+                }
+                    SubsequentAuthorSubstituteRule::CompleteEach => {},
+                SubsequentAuthorSubstituteRule::PartialEach => {},
+                SubsequentAuthorSubstituteRule::PartialFirst => {},
+            }
+
+            i += 1;
+        }
     }
 }
 
