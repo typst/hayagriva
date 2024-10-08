@@ -12,7 +12,10 @@ use citationberg::taxonomy::{
     StandardVariable, Term, Variable,
 };
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout, LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory, StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToFormatting
+    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
+    CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
+    LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
+    StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -485,9 +488,11 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                 ))
             }
 
-            substitute_subsequent_authors(bibliography.subsequent_author_substitute.as_ref(),
+            substitute_subsequent_authors(
+                bibliography.subsequent_author_substitute.as_ref(),
                 bibliography.subsequent_author_substitute_rule,
-                &mut items);
+                &mut items,
+            );
 
             Some(RenderedBibliography {
                 hanging_indent: bibliography.hanging_indent,
@@ -969,7 +974,11 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
     }
 }
 
-fn substitute_subsequent_authors(subs: Option<&String>, rule: SubsequentAuthorSubstituteRule, items: &mut Vec<(ElemChildren, String)>) {  
+fn substitute_subsequent_authors(
+    subs: Option<&String>,
+    rule: SubsequentAuthorSubstituteRule,
+    items: &mut Vec<(ElemChildren, String)>,
+) {
     if let Some(subs) = subs {
         let subs = Formatting::default().add_text(subs.clone());
 
@@ -978,45 +987,149 @@ fn substitute_subsequent_authors(subs: Option<&String>, rule: SubsequentAuthorSu
                 if matches!(child.meta, Some(ElemMeta::Name(_, _))) {
                     return None;
                 }
-                child.children.0 = child.children.0.into_iter().filter_map(|e| match e {
-                    ElemChild::Elem(e) => remove_name(e),
-                    _ => Some(e)
-                }).collect();
+                child.children.0 = child
+                    .children
+                    .0
+                    .into_iter()
+                    .filter_map(|e| match e {
+                        ElemChild::Elem(e) => remove_name(e),
+                        _ => Some(e),
+                    })
+                    .collect();
                 Some(ElemChild::Elem(child))
             }
-            let old_children = std::mem::replace(&mut names.children, ElemChildren(vec![ElemChild::Text(subs.clone())]));
+            let old_children = std::mem::replace(
+                &mut names.children,
+                ElemChildren(vec![ElemChild::Text(subs.clone())]),
+            );
             for child in old_children.0 {
                 match child {
-                    ElemChild::Elem(e) => if let Some(c) = remove_name(e) {
-                        names.children.0.push(c);
-                    },
-                    _ => names.children.0.push(child)
+                    ElemChild::Elem(e) => {
+                        if let Some(c) = remove_name(e) {
+                            names.children.0.push(c);
+                        }
+                    }
+                    _ => names.children.0.push(child),
                 }
             }
-            
         }
-        
+
+        fn replace_name(e: Elem, subs: &Formatted) -> (ElemChild, bool) {
+            if matches!(e.meta, Some(ElemMeta::Name(_, _))) {
+                return (
+                    ElemChild::Elem(Elem {
+                        children: ElemChildren(vec![ElemChild::Text(subs.clone())]),
+                        display: e.display,
+                        meta: e.meta,
+                    }),
+                    true,
+                );
+            }
+
+            let len = e.children.0.len();
+            let mut iter = e.children.0.into_iter();
+            let mut children = Vec::with_capacity(len);
+            let mut changed = false;
+            while let Some(c) = iter.next() {
+                match c {
+                    ElemChild::Elem(ec) => {
+                        let (nc, ch) = replace_name(ec, subs);
+                        children.push(nc);
+                        if ch {
+                            changed = true;
+                            break;
+                        }
+                    }
+                    _ => children.push(c),
+                }
+            }
+            children.extend(iter);
+            (
+                ElemChild::Elem(Elem {
+                    display: e.display,
+                    meta: e.meta,
+                    children: ElemChildren(children),
+                }),
+                changed,
+            )
+        }
+
+        fn replace_each(names: &mut Elem, subs: &Formatted) {
+            let old_children = std::mem::replace(
+                &mut names.children,
+                ElemChildren(vec![ElemChild::Text(subs.clone())]),
+            );
+            for child in old_children.0 {
+                match child {
+                    ElemChild::Elem(e) => {
+                        names.children.0.push(replace_name(e, subs).0);
+                    }
+                    _ => names.children.0.push(child),
+                }
+            }
+        }
+
+        fn get_names(elem: &Elem, names: &mut Vec<Elem>) {
+            if matches!(elem.meta, Some(ElemMeta::Name(_,_))) {
+                names.push(elem.clone());
+            } else {
+                for c in &elem.children.0 {
+                    if let ElemChild::Elem(e) = c {
+                        get_names(e, names);
+                    }
+                }
+            }
+        }
+
+        fn replace_first_n(mut num: usize, names: &mut Elem, subs: &Formatted) {
+            let old_children = std::mem::replace(
+                &mut names.children,
+                ElemChildren(vec![ElemChild::Text(subs.clone())]),
+            );
+            for child in old_children.0.into_iter() {
+                if num == 0 {
+                    break;
+                }
+                match child {
+                    ElemChild::Elem(e) => {
+                        let (c, changed) = replace_name(e, subs);
+                        names.children.0.push(c);
+                        if changed {
+                            num -= 1;
+                        }
+                    }
+                    _ => names.children.0.push(child),
+                }
+            }
+        }
+
+        fn num_of_matches(ns1: &Vec<Elem>, ns2: &Vec<Elem>) -> usize {            
+            ns1.iter().zip(ns2.iter()).take_while(|(a, b)| a == b).count()
+        }
+
         let mut i = 0;
         let mut last_names = None;
         let len = items.len();
-        
+
         while i < len {
             let ec = &mut items[i].0;
-            let Some(xnames) = ec.get_meta(ElemMeta::Names) else {
+            let Some(names_elem) = ec.get_meta(ElemMeta::Names) else {
                 i += 1;
                 continue;
             };
+            let mut xnames = Vec::new();
+            get_names(names_elem, &mut xnames);
             let lnames = if let Some(ns) = &last_names {
                 ns
             } else {
                 // No previous name; nothing to replace. Save and skip
-                last_names = Some(xnames.clone());
+                last_names = Some(xnames);
                 i += 1;
                 continue;
             };
             match rule {
                 SubsequentAuthorSubstituteRule::CompleteAll => {
-                    if lnames == xnames {
+                    if lnames == &xnames {
                         let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
                         replace_all(names, &subs);
                     } else {
@@ -1025,9 +1138,38 @@ fn substitute_subsequent_authors(subs: Option<&String>, rule: SubsequentAuthorSu
                         continue;
                     }
                 }
-                    SubsequentAuthorSubstituteRule::CompleteEach => {},
-                SubsequentAuthorSubstituteRule::PartialEach => {},
-                SubsequentAuthorSubstituteRule::PartialFirst => {},
+                SubsequentAuthorSubstituteRule::CompleteEach => {
+                    if lnames == &xnames {
+                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        replace_each(names, &subs);
+                    } else {
+                        last_names = Some(xnames.clone());
+                        i += 1;
+                        continue;
+                    }
+                }
+                SubsequentAuthorSubstituteRule::PartialEach => {
+                    let nom = num_of_matches(&xnames, lnames);
+                    if nom > 0 {
+                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        replace_first_n(nom, names, &subs);
+                    } else {
+                        last_names = Some(xnames.clone());
+                        i += 1;
+                        continue;
+                    }
+                }
+                SubsequentAuthorSubstituteRule::PartialFirst => {
+                    let nom = num_of_matches(&xnames, lnames);
+                    if nom > 0 {
+                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        replace_first_n(1, names, &subs);
+                    } else {
+                        last_names = Some(xnames.clone());
+                        i += 1;
+                        continue;
+                    }
+                }
             }
 
             i += 1;

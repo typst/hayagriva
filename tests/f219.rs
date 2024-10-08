@@ -1,10 +1,13 @@
-use hayagriva::{BibliographyDriver, CitationRequest, CitationItem, archive::locales, BibliographyRequest};
+use hayagriva::citationberg::IndependentStyle;
 use hayagriva::io::from_yaml_str;
-use hayagriva::citationberg::{IndependentStyle};
+use hayagriva::{
+    archive::locales, BibliographyDriver, BibliographyRequest, CitationItem,
+    CitationRequest,
+};
 
 #[test]
 fn test_219() {
-let yaml = r#"
+    let yaml = r#"
 ITEM1:
     type: book
     author: Bumke, Joachim
@@ -15,10 +18,11 @@ ITEM2:
     title: Höfische
 "#;
 
-// Parse a bibliography
+    // Parse a bibliography
     let bib = from_yaml_str(yaml).unwrap();
 
-    let style = IndependentStyle::from_xml(r#"
+    let style = IndependentStyle::from_xml(
+        r#"
 <style 
       xmlns="http://purl.org/net/xbiblio/csl"
       class="note"
@@ -48,7 +52,9 @@ ITEM2:
     </layout>
   </bibliography>
 </style>
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let item1 = bib.get("ITEM1").unwrap();
     let item2 = bib.get("ITEM2").unwrap();
@@ -56,18 +62,24 @@ ITEM2:
     let locs = locales();
 
     let mut driver = BibliographyDriver::new();
-    driver.citation(CitationRequest::from_items(vec![CitationItem::with_entry(item1)], &style, &locs));
-    driver.citation(CitationRequest::from_items(vec![CitationItem::with_entry(item2)], &style, &locs));
+    driver.citation(CitationRequest::from_items(
+        vec![CitationItem::with_entry(item1)],
+        &style,
+        &locs,
+    ));
+    driver.citation(CitationRequest::from_items(
+        vec![CitationItem::with_entry(item2)],
+        &style,
+        &locs,
+    ));
 
     let result = driver.finish(BibliographyRequest {
         style: &style,
         locale: None,
-        locale_files: &locs
+        locale_files: &locs,
     });
 
     for i in result.bibliography.unwrap().items {
         eprintln!("{}", i.content.to_string());
     }
-
-    assert!(false)
 }
