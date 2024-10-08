@@ -80,6 +80,6 @@ ITEM2:
     });
 
     for i in result.bibliography.unwrap().items {
-        eprintln!("{}", i.content.to_string());
+        eprintln!("{}", i.content);
     }
 }

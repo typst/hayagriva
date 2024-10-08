@@ -977,7 +977,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
 fn substitute_subsequent_authors(
     subs: Option<&String>,
     rule: SubsequentAuthorSubstituteRule,
-    items: &mut Vec<(ElemChildren, String)>,
+    items: &mut [(ElemChildren, String)],
 ) {
     if let Some(subs) = subs {
         let subs = Formatting::default().add_text(subs.clone());
@@ -1030,7 +1030,7 @@ fn substitute_subsequent_authors(
             let mut iter = e.children.0.into_iter();
             let mut children = Vec::with_capacity(len);
             let mut changed = false;
-            while let Some(c) = iter.next() {
+            for c in iter.by_ref() {
                 match c {
                     ElemChild::Elem(ec) => {
                         let (nc, ch) = replace_name(ec, subs);
@@ -1070,7 +1070,7 @@ fn substitute_subsequent_authors(
         }
 
         fn get_names(elem: &Elem, names: &mut Vec<Elem>) {
-            if matches!(elem.meta, Some(ElemMeta::Name(_,_))) {
+            if matches!(elem.meta, Some(ElemMeta::Name(_, _))) {
                 names.push(elem.clone());
             } else {
                 for c in &elem.children.0 {
@@ -1103,7 +1103,7 @@ fn substitute_subsequent_authors(
             }
         }
 
-        fn num_of_matches(ns1: &Vec<Elem>, ns2: &Vec<Elem>) -> usize {            
+        fn num_of_matches(ns1: &[Elem], ns2: &[Elem]) -> usize {
             ns1.iter().zip(ns2.iter()).take_while(|(a, b)| a == b).count()
         }
 
