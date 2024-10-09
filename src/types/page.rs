@@ -2,8 +2,8 @@ use std::{cmp::Ordering, fmt::Display, num::NonZeroUsize, str::FromStr};
 
 use crate::{MaybeTyped, Numeric, NumericError};
 
-use super::{deserialize_from_str, serialize_display};
-use serde::{de, Deserialize, Serialize};
+use super::{derive_or_from_str, serialize_display};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 impl MaybeTyped<PageRanges> {
@@ -22,6 +22,31 @@ pub struct PageRanges {
     /// The given ranges.
     pub ranges: Vec<PageRangesPart>,
 }
+
+derive_or_from_str!(@deser_impl PageRanges where "pages, page ranges, ampesands, and commas",
+    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where A: serde::de::MapAccess<'de>, {
+        use serde::{de, Deserialize};
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Inner {
+            ranges: Vec<PageRangesPart>,
+        }
+
+        Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
+            .map(|inner: Inner| PageRanges { ranges: inner.ranges })
+    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        Ok(PageRanges::from(v))
+    }, fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        Ok(PageRanges::from(v))
+    }, fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        Ok(PageRanges::from(v))
+    }
+);
 
 impl PageRanges {
     /// Create a new `PageRanges` struct.
@@ -76,6 +101,18 @@ impl PageRanges {
     }
 }
 
+impl From<i32> for PageRanges {
+    fn from(value: i32) -> Self {
+        Self { ranges: vec![value.into()] }
+    }
+}
+
+impl From<u32> for PageRanges {
+    fn from(value: u32) -> Self {
+        Self { ranges: vec![value.into()] }
+    }
+}
+
 impl From<u64> for PageRanges {
     fn from(value: u64) -> Self {
         Self { ranges: vec![value.into()] }
@@ -115,6 +152,41 @@ pub enum PageRangesPart {
     /// A full range, e.g., `1n8--1n14`.
     Range(Numeric, Numeric),
 }
+
+derive_or_from_str!(@deser_impl PageRangesPart where "a page, a page range, or a separator",
+    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where A: serde::de::MapAccess<'de>, {
+        use serde::{de, Deserialize};
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        enum Inner {
+            Ampersand,
+            Comma,
+            EscapedRange(Numeric, Numeric),
+            SinglePage(Numeric),
+            Range(Numeric, Numeric),
+        }
+
+        Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
+            .map(|inner: Inner| match inner {
+                Inner::Ampersand => PageRangesPart::Ampersand,
+                Inner::Comma => PageRangesPart::Comma,
+                Inner::EscapedRange(s, e) => PageRangesPart::EscapedRange(s, e),
+                Inner::SinglePage(n) => PageRangesPart::SinglePage(n),
+                Inner::Range(s, e) => PageRangesPart::Range(s, e),
+            })
+    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        Ok(PageRangesPart::from(v))
+    }, fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        Ok(PageRangesPart::from(v))
+    }, fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        Ok(PageRangesPart::from(v))
+    }
+);
 
 impl PageRangesPart {
     /// The start of a range, if any.
@@ -166,6 +238,18 @@ impl PageRangesPart {
                 e1.csl_cmp(e2)
             }
         }
+    }
+}
+
+impl From<i32> for PageRangesPart {
+    fn from(value: i32) -> Self {
+        Self::SinglePage(value.into())
+    }
+}
+
+impl From<u32> for PageRangesPart {
+    fn from(value: u32) -> Self {
+        Self::SinglePage(value.into())
     }
 }
 
@@ -246,7 +330,6 @@ impl FromStr for PageRangesPart {
     }
 }
 
-deserialize_from_str!(PageRanges);
 serialize_display!(PageRanges);
 
 fn parse_number(s: &str) -> Result<Numeric, NumericError> {
