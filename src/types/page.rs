@@ -1,4 +1,9 @@
-use std::{cmp::Ordering, fmt::Display, num::NonZeroUsize, str::FromStr};
+use std::{
+    cmp::Ordering,
+    fmt::Display,
+    num::{NonZeroUsize, TryFromIntError},
+    str::FromStr,
+};
 
 use crate::{MaybeTyped, Numeric, NumericError};
 
@@ -36,15 +41,18 @@ derive_or_from_str!(@deser_impl PageRanges where "pages, page ranges, ampesands,
 
         Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
             .map(|inner: Inner| PageRanges { ranges: inner.ranges })
-    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
-        Ok(PageRanges::from(v))
     }, fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
         where E: serde::de::Error, {
         Ok(PageRanges::from(v))
     }, fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
         where E: serde::de::Error, {
-        Ok(PageRanges::from(v))
+        PageRanges::try_from(v).map_err(|_| E::custom("value too large"))
+    }, fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        PageRanges::try_from(v).map_err(|_| E::custom("value out of bounds"))
+    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        PageRanges::try_from(v).map_err(|_| E::custom("value too large"))
     }
 );
 
@@ -107,15 +115,27 @@ impl From<i32> for PageRanges {
     }
 }
 
-impl From<u32> for PageRanges {
-    fn from(value: u32) -> Self {
-        Self { ranges: vec![value.into()] }
+impl TryFrom<u32> for PageRanges {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Ok(Self { ranges: vec![value.try_into()?] })
     }
 }
 
-impl From<u64> for PageRanges {
-    fn from(value: u64) -> Self {
-        Self { ranges: vec![value.into()] }
+impl TryFrom<i64> for PageRanges {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        Ok(Self { ranges: vec![value.try_into()?] })
+    }
+}
+
+impl TryFrom<u64> for PageRanges {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Ok(Self { ranges: vec![value.try_into()?] })
     }
 }
 
@@ -176,15 +196,18 @@ derive_or_from_str!(@deser_impl PageRangesPart where "a page, a page range, or a
                 Inner::SinglePage(n) => PageRangesPart::SinglePage(n),
                 Inner::Range(s, e) => PageRangesPart::Range(s, e),
             })
-    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
-        Ok(PageRangesPart::from(v))
     }, fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
         where E: serde::de::Error, {
         Ok(PageRangesPart::from(v))
     }, fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
         where E: serde::de::Error, {
-        Ok(PageRangesPart::from(v))
+        PageRangesPart::try_from(v).map_err(|_| E::custom("value too large"))
+    }, fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        PageRangesPart::try_from(v).map_err(|_| E::custom("value out of bounds"))
+    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where E: serde::de::Error, {
+        PageRangesPart::try_from(v).map_err(|_| E::custom("value too large"))
     }
 );
 
@@ -247,15 +270,30 @@ impl From<i32> for PageRangesPart {
     }
 }
 
-impl From<u32> for PageRangesPart {
-    fn from(value: u32) -> Self {
-        Self::SinglePage(value.into())
+impl TryFrom<u32> for PageRangesPart {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        let value: i32 = value.try_into()?;
+        Ok(Self::SinglePage(value.into()))
     }
 }
 
-impl From<u64> for PageRangesPart {
-    fn from(value: u64) -> Self {
-        Self::SinglePage((value as u32).into())
+impl TryFrom<i64> for PageRangesPart {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        let value: i32 = value.try_into()?;
+        Ok(Self::SinglePage(value.into()))
+    }
+}
+
+impl TryFrom<u64> for PageRangesPart {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        let value: i32 = value.try_into()?;
+        Ok(Self::SinglePage(value.into()))
     }
 }
 
