@@ -126,6 +126,11 @@ impl RenderCsl for citationberg::Text {
                 {
                     Some(ElemMeta::CitationNumber)
                 }
+                TextTarget::Variable { var, .. }
+                    if var == StandardVariable::CitationLabel.into() =>
+                {
+                    Some(ElemMeta::CitationLabel)
+                }
                 TextTarget::Variable { .. } => Some(ElemMeta::Text),
                 _ => None,
             },
