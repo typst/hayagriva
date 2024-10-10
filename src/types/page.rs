@@ -1,9 +1,14 @@
-use std::{cmp::Ordering, fmt::Display, num::NonZeroUsize, str::FromStr};
+use std::{
+    cmp::Ordering,
+    fmt::Display,
+    num::{NonZeroUsize, TryFromIntError},
+    str::FromStr,
+};
 
 use crate::{MaybeTyped, Numeric, NumericError};
 
-use super::{deserialize_from_str, serialize_display};
-use serde::{de, Deserialize, Serialize};
+use super::{custom_deserialize, serialize_display};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 impl MaybeTyped<PageRanges> {
@@ -22,6 +27,22 @@ pub struct PageRanges {
     /// The given ranges.
     pub ranges: Vec<PageRangesPart>,
 }
+
+custom_deserialize!(
+    PageRanges where "pages, page ranges, ampersands, and commas"
+    fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
+        Ok(PageRanges::from(v))
+    }
+    fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
+        PageRanges::try_from(v).map_err(|_| E::custom("value too large"))
+    }
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        PageRanges::try_from(v).map_err(|_| E::custom("value out of bounds"))
+    }
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        PageRanges::try_from(v).map_err(|_| E::custom("value too large"))
+    }
+);
 
 impl PageRanges {
     /// Create a new `PageRanges` struct.
@@ -76,9 +97,33 @@ impl PageRanges {
     }
 }
 
-impl From<u64> for PageRanges {
-    fn from(value: u64) -> Self {
+impl From<i32> for PageRanges {
+    fn from(value: i32) -> Self {
         Self { ranges: vec![value.into()] }
+    }
+}
+
+impl TryFrom<u32> for PageRanges {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Ok(Self { ranges: vec![value.try_into()?] })
+    }
+}
+
+impl TryFrom<i64> for PageRanges {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        Ok(Self { ranges: vec![value.try_into()?] })
+    }
+}
+
+impl TryFrom<u64> for PageRanges {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Ok(Self { ranges: vec![value.try_into()?] })
     }
 }
 
@@ -115,6 +160,22 @@ pub enum PageRangesPart {
     /// A full range, e.g., `1n8--1n14`.
     Range(Numeric, Numeric),
 }
+
+custom_deserialize!(
+    PageRangesPart where "a page, a page range, or a separator"
+    fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
+        Ok(PageRangesPart::from(v))
+    }
+    fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
+        PageRangesPart::try_from(v).map_err(|_| E::custom("value too large"))
+    }
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        PageRangesPart::try_from(v).map_err(|_| E::custom("value out of bounds"))
+    }
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        PageRangesPart::try_from(v).map_err(|_| E::custom("value too large"))
+    }
+);
 
 impl PageRangesPart {
     /// The start of a range, if any.
@@ -169,9 +230,36 @@ impl PageRangesPart {
     }
 }
 
-impl From<u64> for PageRangesPart {
-    fn from(value: u64) -> Self {
-        Self::SinglePage((value as u32).into())
+impl From<i32> for PageRangesPart {
+    fn from(value: i32) -> Self {
+        Self::SinglePage(value.into())
+    }
+}
+
+impl TryFrom<u32> for PageRangesPart {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        let value: i32 = value.try_into()?;
+        Ok(Self::SinglePage(value.into()))
+    }
+}
+
+impl TryFrom<i64> for PageRangesPart {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        let value: i32 = value.try_into()?;
+        Ok(Self::SinglePage(value.into()))
+    }
+}
+
+impl TryFrom<u64> for PageRangesPart {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        let value: i32 = value.try_into()?;
+        Ok(Self::SinglePage(value.into()))
     }
 }
 
@@ -246,7 +334,6 @@ impl FromStr for PageRangesPart {
     }
 }
 
-deserialize_from_str!(PageRanges);
 serialize_display!(PageRanges);
 
 fn parse_number(s: &str) -> Result<Numeric, NumericError> {

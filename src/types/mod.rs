@@ -46,7 +46,41 @@ macro_rules! deserialize_from_str {
                 D: serde::Deserializer<'de>,
             {
                 let s = <&'de str>::deserialize(deserializer)?;
-                FromStr::from_str(s).map_err(de::Error::custom)
+                FromStr::from_str(s).map_err(serde::de::Error::custom)
+            }
+        }
+    };
+}
+
+macro_rules! custom_deserialize {
+    ($type_name:ident where $expect:literal $($additional_visitors:item)+) => {
+        impl<'de> Deserialize<'de> for $type_name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+            D: serde::Deserializer<'de>,
+            {
+                use std::fmt;
+                use serde::de::{Visitor};
+                struct OurVisitor;
+
+                impl<'de> Visitor<'de> for OurVisitor {
+                    type Value = $type_name;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str($expect)
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        Self::Value::from_str(value).map_err(|e| E::custom(e.to_string()))
+                    }
+
+                    $($additional_visitors)*
+                }
+
+                deserializer.deserialize_any(OurVisitor)
             }
         }
     };
@@ -75,53 +109,29 @@ macro_rules! derive_or_from_str {
         }
 
 
-        impl<'de> Deserialize<'de> for $s {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-            D: serde::Deserializer<'de>,
-            {
-                use std::fmt;
-                use serde::de::{self, Visitor};
-                struct OurVisitor;
+        crate::types::custom_deserialize!(
+            $s where $expect
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+                where A: serde::de::MapAccess<'de>, {
+                use serde::{de, Deserialize};
 
-                impl<'de> Visitor<'de> for OurVisitor {
-                    type Value = $s;
-
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str($expect)
-                    }
-
-                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        Self::Value::from_str(value).map_err(|e| E::custom(e.to_string()))
-                    }
-
-                    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-                    where
-                        A: serde::de::MapAccess<'de>,
-                    {
-                        #[derive(Deserialize)]
-                        #[serde(rename_all = "kebab-case")]
-                        struct Inner {
-                            $(
-                                $(#[serde $serde])*
-                                $i: $t,
-                            )*
-                        }
-
-                        Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-                            .map(|inner: Inner| $s { $($i: inner.$i),* })
-                    }
+                #[derive(Deserialize)]
+                #[serde(rename_all = "kebab-case")]
+                struct Inner {
+                    $(
+                        $(#[serde $serde])*
+                        $i: $t,
+                    )*
                 }
 
-                deserializer.deserialize_any(OurVisitor)
+                Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
+                    .map(|inner: Inner| $s { $($i: inner.$i),* })
             }
-        }
+        );
     };
 }
 
+use custom_deserialize;
 use derive_or_from_str;
 use deserialize_from_str;
 use serialize_display;
@@ -594,5 +604,28 @@ mod tests {
 
         assert!(Numeric::from_str("second").is_err());
         assert!(Numeric::from_str("2nd edition").is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "biblatex")]
+    fn test_issue_227() {
+        let yaml = r#"
+AAAnonymous_AventureMortevielle_1987:
+  type: Book
+  page-range: 100"#;
+
+        let library = crate::io::from_yaml_str(yaml).unwrap();
+        let entry = library.get("AAAnonymous_AventureMortevielle_1987").unwrap();
+        assert_eq!(
+            entry
+                .page_range
+                .as_ref()
+                .unwrap()
+                .as_typed()
+                .unwrap()
+                .first()
+                .unwrap(),
+            &Numeric::new(100)
+        );
     }
 }

@@ -46,7 +46,9 @@ impl<'de> Deserialize<'de> for Numeric {
 
             /// A default serde fallthrough handler for signed integers.
             fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
-                Ok(Numeric::new(v.try_into().map_err(|_| E::custom("value too large"))?))
+                Ok(Numeric::new(
+                    v.try_into().map_err(|_| E::custom("value out of bounds"))?,
+                ))
             }
 
             fn visit_i32<E: Error>(self, v: i32) -> Result<Self::Value, E> {
