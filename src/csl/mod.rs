@@ -2935,7 +2935,8 @@ mod tests {
         assert_eq!(yield_year(-1, true), "2BC");
         assert_eq!(yield_year(1, true), "1AD");
     }
-  
+
+    #[test]
     #[cfg(feature = "archive")]
     fn test_alphanumeric_disambiguation() {
         let bibtex = r#"@article{chenTransMorphTransformerUnsupervised2021,
