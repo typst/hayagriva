@@ -212,7 +212,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         //
         // If we have set the disambiguation state for an item, we need to set
         // the same state for all entries referencing that item.
-        for _ in 0..6 {
+        for _ in 0..16 {
             let ambiguous = find_ambiguous_sets(&res);
             if ambiguous.is_empty() {
                 break;
