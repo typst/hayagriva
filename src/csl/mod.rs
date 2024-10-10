@@ -633,19 +633,9 @@ fn date_replacement<T: EntryLike>(
 
     ElemChildren(vec![ElemChild::Text(Formatted {
         text: if let Some(date) = date {
-            format!(
-                "{}{}",
-                if date.year > 0 { date.year } else { date.year.abs() + 1 },
-                if date.year < 1000 {
-                    if date.year < 0 {
-                        "BC"
-                    } else {
-                        "AD"
-                    }
-                } else {
-                    ""
-                }
-            )
+            let mut s = String::with_capacity(4);
+            write_year(date.year, false, &mut s).unwrap();
+            s
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
             .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false)
@@ -656,6 +646,33 @@ fn date_replacement<T: EntryLike>(
         },
         formatting: Formatting::default(),
     })])
+}
+
+pub fn write_year<W: std::fmt::Write>(
+    year: i32,
+    short: bool,
+    w: &mut W,
+) -> std::fmt::Result {
+    if short && year >= 1000 {
+        return write!(w, "{:02}", year % 100);
+    }
+
+    write!(
+        w,
+        "{}{}",
+        if year > 0 { year } else { year.abs() + 1 },
+        if year < 1000 {
+            if year <= 0 {
+                "BC"
+            } else {
+                // AD is used as a postfix, see
+                // https://docs.citationstyles.org/en/stable/specification.html?#ad-and-bc
+                "AD"
+            }
+        } else {
+            ""
+        }
+    )
 }
 
 fn last_purpose_render<T: EntryLike + Debug>(
@@ -2899,6 +2916,24 @@ mod tests {
             //     }
             // }
         }
+    }
+
+    #[test]
+    fn low_year_test() {
+        let yield_year = |year, short| {
+            let mut s = String::new();
+            write_year(year, short, &mut s).unwrap();
+            s
+        };
+
+        assert_eq!(yield_year(2021, false), "2021");
+        assert_eq!(yield_year(2021, true), "21");
+        assert_eq!(yield_year(0, false), "1BC");
+        assert_eq!(yield_year(-1, false), "2BC");
+        assert_eq!(yield_year(1, false), "1AD");
+        assert_eq!(yield_year(0, true), "1BC");
+        assert_eq!(yield_year(-1, true), "2BC");
+        assert_eq!(yield_year(1, true), "1AD");
     }
 
     #[test]
