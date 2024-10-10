@@ -296,7 +296,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
 
                 let Some(name_elem) = cite.items[i]
                     .rendered
-                    .get_meta(ElemMeta::Names)
+                    .find_meta(ElemMeta::Names)
                     .map(|e| format!("{:?}", e))
                 else {
                     continue;
@@ -758,19 +758,20 @@ fn disambiguate_year_suffix<F, T>(
     T: EntryLike + PartialEq,
     F: FnMut(&T, DisambiguateState),
 {
-    if renders
-        .iter()
-        .flat_map(|r| r.items.iter())
-        .any(|i| i.rendered.get_meta(ElemMeta::Date).is_some())
-        && group.iter().any(|&(cite_idx, item_idx)| {
-            renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
-                && renders[cite_idx].items[item_idx]
-                    .cite_props
-                    .speculative
-                    .disambiguation
-                    .may_disambiguate_with_year_suffix()
-        })
-    {
+    if renders.iter().flat_map(|r| r.items.iter()).any(|i| {
+        i.rendered
+            .find_elem_by(&|e| {
+                e.meta == Some(ElemMeta::Date) || e.meta == Some(ElemMeta::CitationLabel)
+            })
+            .is_some()
+    }) && group.iter().any(|&(cite_idx, item_idx)| {
+        renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
+            && renders[cite_idx].items[item_idx]
+                .cite_props
+                .speculative
+                .disambiguation
+                .may_disambiguate_with_year_suffix()
+    }) {
         let mut entries = Vec::new();
         for &(cite_idx, item_idx) in group.iter() {
             let item = &renders[cite_idx].items[item_idx];
@@ -905,7 +906,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     // cannot be mutably borrowed below otherwise.
                     let item = &cite.items[i];
                     if item.hidden
-                        || item.rendered.get_meta(ElemMeta::CitationNumber).is_none()
+                        || item.rendered.find_meta(ElemMeta::CitationNumber).is_none()
                     {
                         end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         continue;
@@ -2886,5 +2887,59 @@ mod tests {
             //     }
             // }
         }
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    fn test_alphanumeric_disambiguation() {
+        let bibtex = r#"@article{chenTransMorphTransformerUnsupervised2021,
+  title = {{{TransMorph}}: {{Transformer}} for Unsupervised Medical Image Registration},
+  author = {Chen, Junyu and Frey, Eric C. and He, Yufan and Segars, William P. and Li, Ye and Du, Yong},
+  date = {2021},
+}
+
+@article{chenViTVNetVisionTransformer2021,
+  title = {{{ViT-V-Net}}: {{Vision Transformer}} for {{Unsupervised Volumetric Medical Image Registration}}},
+  author = {Chen, Junyu and He, Yufan and Frey, Eric C. and Li, Ye and Du, Yong},
+  date = {2021},
+}"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let alphanumeric = archive::ArchivedStyle::Alphanumeric.get();
+        let citationberg::Style::Independent(alphanumeric) = alphanumeric else {
+            unreachable!()
+        };
+
+        let mut driver = BibliographyDriver::new();
+        for entry in library.iter() {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_entry(entry)],
+                &alphanumeric,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &alphanumeric,
+            locale: None,
+            locale_files: &[],
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "[Che+21a]");
+        assert_eq!(c2, "[Che+21b]");
     }
 }

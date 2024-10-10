@@ -141,6 +141,9 @@ pub enum ElemMeta {
     Name(NameVariable, usize),
     /// The entry corresponds to a citation item.
     Entry(usize),
+    /// The element is the output of `cs:text` with a `variable` set to
+    /// `citation-label`.
+    CitationLabel,
 }
 
 /// A container for element children with useful methods.
@@ -165,20 +168,18 @@ impl ElemChildren {
 
     /// Retrieve a reference to the first child with a matching meta by
     /// DFS.
-    pub fn get_meta(&self, meta: ElemMeta) -> Option<&Elem> {
-        for child in &self.0 {
-            match child {
-                ElemChild::Elem(e) if e.meta == Some(meta) => return Some(e),
-                ElemChild::Elem(e) => {
-                    if let Some(e) = e.children.get_meta(meta) {
-                        return Some(e);
-                    }
-                }
-                _ => {}
-            }
-        }
+    pub fn find_meta(&self, meta: ElemMeta) -> Option<&Elem> {
+        self.find_elem_by(&|e| e.meta == Some(meta))
+    }
 
-        None
+    /// Retrieve a mutable reference to the first child matching the predicate
+    /// by DFS.
+    pub fn find_elem_by<F: Fn(&Elem) -> bool>(&self, f: &F) -> Option<&Elem> {
+        self.0.iter().find_map(|child| match child {
+            ElemChild::Elem(e) if f(e) => Some(e),
+            ElemChild::Elem(e) => e.children.find_elem_by(f),
+            _ => None,
+        })
     }
 
     /// Remove the first child with any meta by DFS.
