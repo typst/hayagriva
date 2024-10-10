@@ -759,9 +759,21 @@ fn disambiguate_year_suffix<F, T>(
     F: FnMut(&T, DisambiguateState),
 {
     if renders.iter().flat_map(|r| r.items.iter()).any(|i| {
+        let entry_has_date = i
+            .entry
+            .resolve_date_variable(DateVariable::Issued)
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::Accessed))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::AvailableDate))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::EventDate))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::Submitted))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::OriginalDate))
+            .is_some();
+
         i.rendered
             .find_elem_by(&|e| {
-                e.meta == Some(ElemMeta::Date) || e.meta == Some(ElemMeta::CitationLabel)
+                // The citation label will contain the date if there is one.
+                e.meta == Some(ElemMeta::Date)
+                    || (entry_has_date && e.meta == Some(ElemMeta::CitationLabel))
             })
             .is_some()
     }) && group.iter().any(|&(cite_idx, item_idx)| {
