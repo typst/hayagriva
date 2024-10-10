@@ -15,13 +15,15 @@
     <rights>MIT OR Apache-2.0</rights>
     <summary>Alphanumeric citations</summary>
   </info>
-  <citation collapse="citation-number" after-collapse-delimiter="; ">
+  <citation collapse="citation-number" after-collapse-delimiter="; "
+    disambiguate-add-year-suffix="true">
     <sort>
       <key variable="author" />
       <key variable="issued" />
     </sort>
     <layout prefix="[" suffix="]" delimiter=", ">
       <text variable="citation-label" />
+      <text variable="year-suffix" />
     </layout>
   </citation>
 </style>
