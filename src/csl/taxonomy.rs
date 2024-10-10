@@ -810,8 +810,15 @@ impl EntryLike for citationberg::json::Item {
     ) -> Option<MaybeTyped<PageRanges>> {
         match variable {
             PageVariable::Page => match self.0.get("page")? {
-                csl_json::Value::Number(n) => {
-                    Some(MaybeTyped::Typed(PageRanges::from(*n as u64)))
+                &csl_json::Value::Number(n) => {
+                    // Page ranges use i32 internally, so we check whether the
+                    // number is in range.
+                    Some(match i32::try_from(n) {
+                        Ok(n) => MaybeTyped::Typed(PageRanges::from(n)),
+                        // If the number is not in range, we degrade to a
+                        // string, which disables some CSL features.
+                        Err(_) => MaybeTyped::String(n.to_string()),
+                    })
                 }
                 csl_json::Value::String(s) => {
                     let res = MaybeTyped::<PageRanges>::infallible_from_str(s);

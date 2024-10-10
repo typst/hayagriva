@@ -7,7 +7,7 @@ use std::{
 
 use crate::{MaybeTyped, Numeric, NumericError};
 
-use super::{derive_or_from_str, serialize_display};
+use super::{custom_deserialize, serialize_display};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -28,30 +28,18 @@ pub struct PageRanges {
     pub ranges: Vec<PageRangesPart>,
 }
 
-derive_or_from_str!(@deser_impl PageRanges where "pages, page ranges, ampesands, and commas",
-    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-        where A: serde::de::MapAccess<'de>, {
-        use serde::{de, Deserialize};
-
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct Inner {
-            ranges: Vec<PageRangesPart>,
-        }
-
-        Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-            .map(|inner: Inner| PageRanges { ranges: inner.ranges })
-    }, fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+custom_deserialize!(
+    PageRanges where "pages, page ranges, ampersands, and commas"
+    fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
         Ok(PageRanges::from(v))
-    }, fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+    }
+    fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
         PageRanges::try_from(v).map_err(|_| E::custom("value too large"))
-    }, fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+    }
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
         PageRanges::try_from(v).map_err(|_| E::custom("value out of bounds"))
-    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+    }
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
         PageRanges::try_from(v).map_err(|_| E::custom("value too large"))
     }
 );
@@ -173,40 +161,18 @@ pub enum PageRangesPart {
     Range(Numeric, Numeric),
 }
 
-derive_or_from_str!(@deser_impl PageRangesPart where "a page, a page range, or a separator",
-    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-        where A: serde::de::MapAccess<'de>, {
-        use serde::{de, Deserialize};
-
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        enum Inner {
-            Ampersand,
-            Comma,
-            EscapedRange(Numeric, Numeric),
-            SinglePage(Numeric),
-            Range(Numeric, Numeric),
-        }
-
-        Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-            .map(|inner: Inner| match inner {
-                Inner::Ampersand => PageRangesPart::Ampersand,
-                Inner::Comma => PageRangesPart::Comma,
-                Inner::EscapedRange(s, e) => PageRangesPart::EscapedRange(s, e),
-                Inner::SinglePage(n) => PageRangesPart::SinglePage(n),
-                Inner::Range(s, e) => PageRangesPart::Range(s, e),
-            })
-    }, fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+custom_deserialize!(
+    PageRangesPart where "a page, a page range, or a separator"
+    fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
         Ok(PageRangesPart::from(v))
-    }, fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+    }
+    fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
         PageRangesPart::try_from(v).map_err(|_| E::custom("value too large"))
-    }, fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+    }
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
         PageRangesPart::try_from(v).map_err(|_| E::custom("value out of bounds"))
-    }, fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where E: serde::de::Error, {
+    }
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
         PageRangesPart::try_from(v).map_err(|_| E::custom("value too large"))
     }
 );

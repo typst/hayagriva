@@ -52,49 +52,8 @@ macro_rules! deserialize_from_str {
     };
 }
 
-/// Use the [`FromStr`] implementation of a type for deserialization if it is a
-/// string.
-macro_rules! derive_or_from_str {
-    (
-        $(#[$global:meta])*
-        $gv:vis struct $s:ident where $expect:literal {
-            $(
-                $(#[doc = $doc:literal])*
-                $(#[serde $serde:tt])*
-                $v:vis $i:ident : $t:ty
-            ),*
-            $(,)?
-        }
-    ) => {
-        $(#[$global])*
-        $gv struct $s {
-            $(
-                $(#[doc = $doc])*
-                $v $i: $t,
-            )*
-        }
-
-        derive_or_from_str!(@deser_impl $s where $expect,
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-                where A: serde::de::MapAccess<'de>, {
-                use serde::{de, Deserialize};
-
-                #[derive(Deserialize)]
-                #[serde(rename_all = "kebab-case")]
-                struct Inner {
-                    $(
-                        $(#[serde $serde])*
-                        $i: $t,
-                    )*
-                }
-
-                Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-                    .map(|inner: Inner| $s { $($i: inner.$i),* })
-            }
-        );
-    };
-
-    (@deser_impl $type_name:ident where $expect:literal, $visit_map:item $(, $additional_visitors:item)*) => {
+macro_rules! custom_deserialize {
+    ($type_name:ident where $expect:literal $($additional_visitors:item)+) => {
         impl<'de> Deserialize<'de> for $type_name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
@@ -118,8 +77,6 @@ macro_rules! derive_or_from_str {
                         Self::Value::from_str(value).map_err(|e| E::custom(e.to_string()))
                     }
 
-                    $visit_map
-
                     $($additional_visitors)*
                 }
 
@@ -129,6 +86,52 @@ macro_rules! derive_or_from_str {
     };
 }
 
+/// Use the [`FromStr`] implementation of a type for deserialization if it is a
+/// string.
+macro_rules! derive_or_from_str {
+    (
+        $(#[$global:meta])*
+        $gv:vis struct $s:ident where $expect:literal {
+            $(
+                $(#[doc = $doc:literal])*
+                $(#[serde $serde:tt])*
+                $v:vis $i:ident : $t:ty
+            ),*
+            $(,)?
+        }
+    ) => {
+        $(#[$global])*
+        $gv struct $s {
+            $(
+                $(#[doc = $doc])*
+                $v $i: $t,
+            )*
+        }
+
+
+        crate::types::custom_deserialize!(
+            $s where $expect
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+                where A: serde::de::MapAccess<'de>, {
+                use serde::{de, Deserialize};
+
+                #[derive(Deserialize)]
+                #[serde(rename_all = "kebab-case")]
+                struct Inner {
+                    $(
+                        $(#[serde $serde])*
+                        $i: $t,
+                    )*
+                }
+
+                Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
+                    .map(|inner: Inner| $s { $($i: inner.$i),* })
+            }
+        );
+    };
+}
+
+use custom_deserialize;
 use derive_or_from_str;
 use deserialize_from_str;
 use serialize_display;
