@@ -1,3 +1,11 @@
+# 0.8.0
+
+- **Breaking change:** Fixed deserialization of page ranges,
+  removing `From<u64> for PageRanges`
+- Added support for disambiguation to alphanumeric citation style
+- Raised limit for disambiguation resolving in complex cases
+- The year 0 will now render as 1BC for CSL
+
 # 0.7.0
 
 - **Breaking change:** `Entry::page_range` now returns
