@@ -17,6 +17,7 @@ use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
     Entry, LocatorPayload, SpecificLocator,
 };
+use html_parser::{Dom, Element, Node};
 use unscanny::Scanner;
 
 const TEST_REPO_NAME: &str = "test-suite";
@@ -270,14 +271,20 @@ impl<'s> TestCaseBuilder<'s> {
     }
 
     fn finish(self) -> Result<TestCase, TestParseError> {
+        let mode = self
+            .mode
+            .ok_or(TestParseError::MissingRequiredSection(SectionTag::Mode))?;
+        let result = self
+            .result
+            .ok_or(TestParseError::MissingRequiredSection(SectionTag::Result))?
+            .replace("&#38;", "&");
         Ok(TestCase {
-            mode: self
-                .mode
-                .ok_or(TestParseError::MissingRequiredSection(SectionTag::Mode))?,
-            result: self
-                .result
-                .ok_or(TestParseError::MissingRequiredSection(SectionTag::Result))?
-                .replace("&#38;", "&"),
+            mode,
+            result: if mode == TestMode::Bibliography && result.starts_with("<div") {
+                extract_from_html(&result)
+            } else {
+                result
+            },
             csl: Style::from_xml(
                 self.csl
                     .ok_or(TestParseError::MissingRequiredSection(SectionTag::Csl))?,
@@ -301,6 +308,37 @@ impl<'s> TestCaseBuilder<'s> {
             citations: self.citations.map(ToString::to_string),
         })
     }
+}
+
+fn extract_from_html(html: &str) -> String {
+    let mut res = String::new();
+    let dom = Dom::parse(html).expect("Could not parse HTML");
+    assert_eq!(1, dom.children.len());
+    let node = &dom.children[0];
+    let mut item = String::new();
+    for child in node.into_iter() {
+        match child {
+            Node::Element(Element { name, classes, .. })
+                if name == "div"
+                    && classes.get(0).map(|c| c == "csl-entry").unwrap_or(false) =>
+            {
+                if !item.is_empty() {
+                    res.push_str(&item);
+                    res.push('\n');
+                    item = String::new();
+                }
+            }
+            Node::Text(s) => item.push_str(s),
+            _ => {}
+        }
+    }
+
+    if !item.is_empty() {
+        res.push_str(&item);
+        item = String::new();
+    }
+
+    res
 }
 
 #[test]
@@ -489,12 +527,7 @@ where
                 .map_or(false, |d| d.end.is_some())
         });
 
-    if case.mode == TestMode::Bibliography {
-        if print {
-            eprintln!("Skipping test {}\t(cause: Bibliography mode)", display());
-        }
-        false
-    } else if !can_test {
+    if !can_test {
         if print {
             eprintln!("Skipping test {}\t(cause: unsupported test feature)", display());
         }
@@ -577,12 +610,27 @@ where
 
     let rendered = driver.finish(BibliographyRequest::new(&style, None, locales));
 
-    for citation in rendered.citations {
-        citation
-            .citation
-            .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
-            .unwrap();
-        output.push('\n');
+    match case.mode {
+        TestMode::Citation => {
+            for citation in rendered.citations {
+                citation
+                    .citation
+                    .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
+                    .unwrap();
+                output.push('\n');
+            }
+        }
+        TestMode::Bibliography => {
+            let bib = rendered
+                .bibliography
+                .expect("Bibliography mode test but no bibliography was rendered");
+            for item in bib.items {
+                item.content
+                    .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
+                    .unwrap();
+                output.push('\n');
+            }
+        }
     }
 
     if output.trim() == case.result.trim() {
