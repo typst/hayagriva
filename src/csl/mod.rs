@@ -1137,14 +1137,11 @@ fn substitute_subsequent_authors(
             ns1.iter().zip(ns2.iter()).take_while(|(a, b)| a == b).count()
         }
 
-        let mut i = 0;
         let mut last_names = None;
-        let len = items.len();
 
-        while i < len {
-            let ec = &mut items[i].0;
+        for item in items.iter_mut() {
+            let ec = &mut item.0;
             let Some(names_elem) = ec.find_meta(ElemMeta::Names) else {
-                i += 1;
                 continue;
             };
             let mut xnames = Vec::new();
@@ -1154,7 +1151,6 @@ fn substitute_subsequent_authors(
             } else {
                 // No previous name; nothing to replace. Save and skip
                 last_names = Some(xnames);
-                i += 1;
                 continue;
             };
             match rule {
@@ -1164,8 +1160,6 @@ fn substitute_subsequent_authors(
                         replace_all(names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
-                        i += 1;
-                        continue;
                     }
                 }
                 SubsequentAuthorSubstituteRule::CompleteEach => {
@@ -1174,8 +1168,6 @@ fn substitute_subsequent_authors(
                         replace_each(names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
-                        i += 1;
-                        continue;
                     }
                 }
                 SubsequentAuthorSubstituteRule::PartialEach => {
@@ -1185,8 +1177,6 @@ fn substitute_subsequent_authors(
                         replace_first_n(nom, names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
-                        i += 1;
-                        continue;
                     }
                 }
                 SubsequentAuthorSubstituteRule::PartialFirst => {
@@ -1196,13 +1186,9 @@ fn substitute_subsequent_authors(
                         replace_first_n(1, names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
-                        i += 1;
-                        continue;
                     }
                 }
             }
-
-            i += 1;
         }
     }
 }
