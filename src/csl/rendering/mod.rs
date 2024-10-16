@@ -20,7 +20,7 @@ use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
 use crate::PageRanges;
 
 use super::taxonomy::EntryLike;
-use super::{Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
+use super::{write_year, Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
 
 pub mod names;
 
@@ -125,6 +125,11 @@ impl RenderCsl for citationberg::Text {
                     if var == NumberVariable::CitationNumber.into() =>
                 {
                     Some(ElemMeta::CitationNumber)
+                }
+                TextTarget::Variable { var, .. }
+                    if var == StandardVariable::CitationLabel.into() =>
+                {
+                    Some(ElemMeta::CitationLabel)
                 }
                 TextTarget::Variable { .. } => Some(ElemMeta::Text),
                 _ => None,
@@ -769,17 +774,8 @@ fn render_date_part<T: EntryLike>(
                     write!(ctx, "{}", val).unwrap();
                 }
             }
-            DateStrongAnyForm::Year(LongShortForm::Short) => {
-                write!(ctx, "{:02}", (val % 100).abs()).unwrap();
-            }
-            DateStrongAnyForm::Year(LongShortForm::Long) => {
-                write!(ctx, "{}", val.abs()).unwrap();
-            }
-        }
-
-        if let DateStrongAnyForm::Year(_) = form {
-            if date.year < 1000 {
-                ctx.push_str(if date.year < 0 { "BC" } else { "AD" });
+            DateStrongAnyForm::Year(brevity) => {
+                write_year(val, brevity == LongShortForm::Short, ctx).unwrap();
             }
         }
     }

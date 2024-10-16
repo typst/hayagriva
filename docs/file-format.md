@@ -154,7 +154,7 @@ This section lists all possible fields and data types for them.
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | formattable string                                        |
 | **Description:** | title of the item                                         |
-| **Example:**     | `title: Rick Astley: How An Internet Joke Revived My Career` |
+| **Example:**     | `title: "Rick Astley: How An Internet Joke Revived My Career"` |
 
 #### `author`
 
