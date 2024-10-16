@@ -184,7 +184,7 @@ impl ElemChildren {
 
     /// Retrieve a mutable reference to the first child with a matching meta by
     /// DFS.
-    pub fn get_meta_mut(&mut self, meta: ElemMeta) -> Option<&mut Elem> {
+    pub fn find_meta_mut(&mut self, meta: ElemMeta) -> Option<&mut Elem> {
         self.0
             .iter_mut()
             .filter_map(|c| match c {
@@ -192,7 +192,7 @@ impl ElemChildren {
                     if e.meta == Some(meta) {
                         Some(e)
                     } else {
-                        e.children.get_meta_mut(meta)
+                        e.children.find_meta_mut(meta)
                     }
                 }
                 _ => None,

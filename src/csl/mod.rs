@@ -1143,7 +1143,7 @@ fn substitute_subsequent_authors(
 
         while i < len {
             let ec = &mut items[i].0;
-            let Some(names_elem) = ec.get_meta(ElemMeta::Names) else {
+            let Some(names_elem) = ec.find_meta(ElemMeta::Names) else {
                 i += 1;
                 continue;
             };
@@ -1160,7 +1160,7 @@ fn substitute_subsequent_authors(
             match rule {
                 SubsequentAuthorSubstituteRule::CompleteAll => {
                     if lnames == &xnames {
-                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_all(names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
@@ -1170,7 +1170,7 @@ fn substitute_subsequent_authors(
                 }
                 SubsequentAuthorSubstituteRule::CompleteEach => {
                     if lnames == &xnames {
-                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_each(names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
@@ -1181,7 +1181,7 @@ fn substitute_subsequent_authors(
                 SubsequentAuthorSubstituteRule::PartialEach => {
                     let nom = num_of_matches(&xnames, lnames);
                     if nom > 0 {
-                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_first_n(nom, names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
@@ -1192,7 +1192,7 @@ fn substitute_subsequent_authors(
                 SubsequentAuthorSubstituteRule::PartialFirst => {
                     let nom = num_of_matches(&xnames, lnames);
                     if nom > 0 {
-                        let names = ec.get_meta_mut(ElemMeta::Names).unwrap();
+                        let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_first_n(1, names, &subs);
                     } else {
                         last_names = Some(xnames.clone());
