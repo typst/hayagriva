@@ -320,7 +320,7 @@ fn extract_from_html(html: &str) -> String {
         match child {
             Node::Element(Element { name, classes, .. })
                 if name == "div"
-                    && classes.get(0).map(|c| c == "csl-entry").unwrap_or(false) =>
+                    && classes.first().map(|c| c == "csl-entry").unwrap_or(false) =>
             {
                 if !item.is_empty() {
                     res.push_str(&item);
@@ -335,7 +335,6 @@ fn extract_from_html(html: &str) -> String {
 
     if !item.is_empty() {
         res.push_str(&item);
-        item = String::new();
     }
 
     res
