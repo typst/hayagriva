@@ -1386,7 +1386,15 @@ impl<'a> StyleContext<'a> {
         let mut ctx = self.ctx(entry, props, locale, term_locale, true);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
-        self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
+
+        let layout = &self.csl.bibliography.as_ref()?.layout;
+        if let Some(prefix) = layout.prefix.as_ref() {
+            ctx.push_str(prefix);
+        }
+        layout.render(&mut ctx);
+        if let Some(suffix) = layout.suffix.as_ref() {
+            ctx.push_str(suffix);
+        }
         Some(ctx)
     }
 
