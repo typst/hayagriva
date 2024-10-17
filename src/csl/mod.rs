@@ -1006,13 +1006,13 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
 
 fn substitute_subsequent_authors(
     subs: Option<&String>,
-    rule: SubsequentAuthorSubstituteRule,
+    mut rule: SubsequentAuthorSubstituteRule,
     items: &mut [(ElemChildren, String)],
 ) {
     if let Some(subs) = subs {
         let subs = Formatting::default().add_text(subs.clone());
 
-        fn replace_all(names: &mut Elem, subs: &Formatted) {
+        fn replace_all(names: &mut Elem, is_empty: bool, subs: &Formatted) {
             fn remove_name(mut child: Elem) -> Option<ElemChild> {
                 if matches!(child.meta, Some(ElemMeta::Name(_, _))) {
                     return None;
@@ -1032,14 +1032,16 @@ fn substitute_subsequent_authors(
                 &mut names.children,
                 ElemChildren(vec![ElemChild::Text(subs.clone())]),
             );
-            for child in old_children.0 {
-                match child {
-                    ElemChild::Elem(e) => {
-                        if let Some(c) = remove_name(e) {
-                            names.children.0.push(c);
+            if !is_empty {
+                for child in old_children.0 {
+                    match child {
+                        ElemChild::Elem(e) => {
+                            if let Some(c) = remove_name(e) {
+                                names.children.0.push(c);
+                            }
                         }
+                        _ => names.children.0.push(child),
                     }
-                    _ => names.children.0.push(child),
                 }
             }
         }
@@ -1146,20 +1148,25 @@ fn substitute_subsequent_authors(
             };
             let mut xnames = Vec::new();
             get_names(names_elem, &mut xnames);
-            let lnames = if let Some(ns) = &last_names {
+            let (lnames_elem, lnames) = if let Some(ns) = &last_names {
                 ns
             } else {
                 // No previous name; nothing to replace. Save and skip
-                last_names = Some(xnames);
+                last_names = Some((names_elem.clone(), xnames));
                 continue;
             };
+            if xnames.is_empty() {
+                rule = SubsequentAuthorSubstituteRule::CompleteAll;
+            }
             match rule {
                 SubsequentAuthorSubstituteRule::CompleteAll => {
-                    if lnames == &xnames {
+                    if lnames == &xnames
+                        && (!xnames.is_empty() || names_elem == lnames_elem)
+                    {
                         let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
-                        replace_all(names, &subs);
+                        replace_all(names, xnames.is_empty(), &subs);
                     } else {
-                        last_names = Some(xnames.clone());
+                        last_names = Some((names_elem.clone(), xnames.clone()));
                     }
                 }
                 SubsequentAuthorSubstituteRule::CompleteEach => {
@@ -1167,7 +1174,7 @@ fn substitute_subsequent_authors(
                         let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_each(names, &subs);
                     } else {
-                        last_names = Some(xnames.clone());
+                        last_names = Some((names_elem.clone(), xnames.clone()));
                     }
                 }
                 SubsequentAuthorSubstituteRule::PartialEach => {
@@ -1176,7 +1183,7 @@ fn substitute_subsequent_authors(
                         let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_first_n(nom, names, &subs);
                     } else {
-                        last_names = Some(xnames.clone());
+                        last_names = Some((names_elem.clone(), xnames.clone()));
                     }
                 }
                 SubsequentAuthorSubstituteRule::PartialFirst => {
@@ -1185,7 +1192,7 @@ fn substitute_subsequent_authors(
                         let names = ec.find_meta_mut(ElemMeta::Names).unwrap();
                         replace_first_n(1, names, &subs);
                     } else {
-                        last_names = Some(xnames.clone());
+                        last_names = Some((names_elem.clone(), xnames.clone()));
                     }
                 }
             }
