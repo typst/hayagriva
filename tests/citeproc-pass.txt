@@ -121,7 +121,6 @@ date_LocalizedTextYearWithAffixes
 date_LongMonth
 date_MaskNonexistentWithCondition
 date_NoDate
-decorations_Baseline
 decorations_SimpleQuotes
 disambiguate_AddNamesSuccess
 disambiguate_ByCiteGivennameNoShortFormInitializeWith

@@ -328,6 +328,9 @@ fn extract_from_html(html: &str) -> String {
                     item = String::new();
                 }
             }
+            Node::Element(Element { name, .. }) if name == "span" => {
+                item.push_str("SPANS ARE NOT SUPPORTED")
+            }
             Node::Text(s) => item.push_str(s),
             _ => {}
         }
