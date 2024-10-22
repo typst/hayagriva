@@ -1,9 +1,4 @@
-use std::{
-    cmp::Ordering,
-    fmt::Display,
-    num::{NonZeroUsize, TryFromIntError},
-    str::FromStr,
-};
+use std::{cmp::Ordering, fmt::Display, num::TryFromIntError, str::FromStr};
 
 use crate::{MaybeTyped, Numeric, NumericError};
 
@@ -375,12 +370,11 @@ where
         if self.string.is_empty() {
             None
         } else {
-            let mut len = 1;
-            for w in windows(self.string, 2) {
-                let chars: Vec<_> = w.chars().collect();
-                let (c, d) = (chars[0], chars[1]);
+            let mut len =
+                self.string.chars().next().map(char::len_utf8).unwrap_or_default();
+            for (c, d) in self.string.chars().zip(self.string.chars().skip(1)) {
                 if (self.predicate)(c, d) {
-                    len += c.len_utf8();
+                    len += d.len_utf8();
                 } else {
                     break;
                 }
@@ -397,52 +391,24 @@ where
     }
 }
 
-/// Return an iterator of sliding windows of size `size` over `string`.
-///
-/// # Panic
-///
-/// Panics if `size` is zero.
-pub(crate) fn windows(string: &str, size: usize) -> Windows<'_> {
-    assert!(size > 0);
-    Windows::new(string, NonZeroUsize::new(size).unwrap())
-}
-
-/// An iterator of sliding windows of size `size` over `string`.
-///
-/// Each call of `next` advanced the window by one.
-pub(crate) struct Windows<'a> {
-    string: &'a str,
-    size: NonZeroUsize,
-}
-
-impl<'a> Windows<'a> {
-    pub(crate) fn new(string: &'a str, size: NonZeroUsize) -> Self {
-        Self { string, size }
-    }
-}
-
-impl<'a> Iterator for Windows<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let size = self.size.get();
-        if size > self.string.len() {
-            None
-        } else {
-            let mut indices = self.string.char_indices();
-            let next = indices.nth(1).unwrap().0;
-            match indices.nth(size - 2) {
-                Some((idx, _)) => {
-                    let ret = Some(&self.string[..idx]);
-                    self.string = &self.string[next..];
-                    ret
-                }
-                None => {
-                    let ret = Some(self.string);
-                    self.string = "";
-                    ret
-                }
-            }
+#[cfg(test)]
+mod test {
+    #[test]
+    fn group_by() {
+        fn group(s: &str) -> Vec<&'_ str> {
+            super::group_by(s, |c, d| !(c == ',' || c == '&' || d == ',' || d == '&'))
+                .collect()
         }
+        assert_eq!(["a"], group("a").as_slice());
+        assert_eq!(["a", ","], group("a,").as_slice());
+        assert_eq!([",", "a"], group(",a").as_slice());
+        assert_eq!([",", "a", ","], group(",a,").as_slice());
+        assert_eq!(["a", ",", "b"], group("a,b").as_slice());
+        assert_eq!(["a-"], group("a-").as_slice());
+        // characters that are longer than 1 byte
+        assert_eq!(["a–"], group("a–").as_slice());
+        assert_eq!(["–a"], group("–a").as_slice());
+        assert_eq!(["–a", ","], group("–a,").as_slice());
+        assert_eq!(["a–", ",", "–b"], group("a–,–b").as_slice());
     }
 }
