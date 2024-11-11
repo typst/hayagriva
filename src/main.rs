@@ -9,7 +9,8 @@ use citationberg::taxonomy::Locator;
 use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
-use clap::{crate_version, Arg, ArgAction, Command};
+use clap::builder::PossibleValue;
+use clap::{crate_version, Arg, ArgAction, Command, ValueEnum};
 use strum::VariantNames;
 
 use hayagriva::archive::{locales, ArchivedStyle};
@@ -44,6 +45,28 @@ impl FromStr for Format {
     }
 }
 
+impl ValueEnum for Format {
+    fn value_variants<'a>() -> &'a [Self] {
+        if cfg!(feature = "biblatex") {
+            &[Self::Bibtex, Self::Biblatex, Self::Yaml]
+        } else {
+            &[Self::Yaml]
+        }
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        let value = match self {
+            #[cfg(feature = "biblatex")]
+            Format::Bibtex => "bibtex",
+            #[cfg(feature = "biblatex")]
+            Format::Biblatex => "biblatex",
+            Format::Yaml => "yaml",
+        };
+
+        Some(PossibleValue::new(value))
+    }
+}
+
 /// Main function of the Hayagriva CLI.
 fn main() {
     let matches = Command::new("Hayagriva CLI")
@@ -59,7 +82,7 @@ fn main() {
                 Arg::new("format")
                     .long("format")
                     .help("What input file format to expect")
-                    .value_parser(clap::builder::PossibleValuesParser::new(Format::VARIANTS))
+                    .value_parser(clap::value_parser!(Format))
                     .ignore_case(true)
                     .num_args(1)
                     .global(true),
