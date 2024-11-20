@@ -3,7 +3,6 @@ use std::fs::{self, read_to_string};
 use std::io::ErrorKind as IoErrorKind;
 use std::path::Path;
 use std::process::exit;
-use std::str::FromStr;
 
 use citationberg::taxonomy::Locator;
 use citationberg::{
@@ -28,21 +27,6 @@ pub enum Format {
     #[cfg(feature = "biblatex")]
     Biblatex,
     Yaml,
-}
-
-impl FromStr for Format {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, &'static str> {
-        match s.to_ascii_lowercase().as_ref() {
-            #[cfg(feature = "biblatex")]
-            "bibtex" => Ok(Format::Bibtex),
-            #[cfg(feature = "biblatex")]
-            "biblatex" => Ok(Format::Biblatex),
-            "yaml" => Ok(Format::Yaml),
-            _ => Err("unknown format"),
-        }
-    }
 }
 
 impl ValueEnum for Format {
