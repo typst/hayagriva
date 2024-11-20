@@ -367,11 +367,8 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.string.is_empty() {
-            None
-        } else {
-            let mut len =
-                self.string.chars().next().map(char::len_utf8).unwrap_or_default();
+        if let Some(first_char) = self.string.chars().next() {
+            let mut len = first_char.len_utf8();
             for (c, d) in self.string.chars().zip(self.string.chars().skip(1)) {
                 if (self.predicate)(c, d) {
                     len += d.len_utf8();
@@ -382,6 +379,8 @@ where
             let (head, tail) = self.string.split_at(len);
             self.string = tail;
             Some(head)
+        } else {
+            None
         }
     }
 
