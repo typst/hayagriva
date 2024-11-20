@@ -56,6 +56,7 @@ impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct SpeculativeItemRender<'a, T: EntryLike> {
     rendered: ElemChildren,
+    rendered_without_ibid: ElemChildren,
     entry: &'a T,
     cite_props: CiteProperties<'a>,
     checked_disambiguate: bool,
@@ -177,6 +178,17 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                     None,
                 );
 
+                let mut cite_props_without_ibid = cite_props.clone();
+                cite_props_without_ibid.speculative.ibid = IbidState::Different;
+                let ctx_without_ibid = style.do_citation(
+                    *entry,
+                    cite_props_without_ibid,
+                    item.locale.as_ref(),
+                    citation.locale.as_ref(),
+                    item.purpose,
+                    None,
+                );
+
                 // Copy the identifier usage from the context. Assume it does
                 // not change throughout disambiguation.
                 cite_props.speculative.identifier_usage =
@@ -191,6 +203,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
                     group_idx: None,
                     locator: item.locator,
                     rendered: ctx.flush(),
+                    rendered_without_ibid: ctx_without_ibid.flush(),
                     hidden: item.hidden,
                     locale: item.locale.clone(),
                     purpose: item.purpose,
@@ -811,7 +824,7 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
                 continue;
             }
 
-            let buf = format!("{:?}", item.rendered);
+            let buf = format!("{:?}", item.rendered_without_ibid);
             match map.entry(buf) {
                 HmEntry::Occupied(entry) => match *entry.get() {
                     PotentialDisambiguation::Single(pos) => {
