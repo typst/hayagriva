@@ -13,8 +13,8 @@ Language Association-style citation.
 
 Hayagriva supports all styles provided in the
 [official Citation Style Language repository](https://github.com/citation-style-language/styles),
-currently over 2,600. You must provide your own style file, which can be
-obtained there.
+currently over 2,600. You can provide your own style files or use the ones
+bundled with this library in the [`archive`] module.
 
 # Usage
 
@@ -63,7 +63,7 @@ let result = driver.finish(BibliographyRequest {
 });
 
 for cite in result.citations {
-    println!("{}", cite.citation.to_string())
+    println!("{}", cite.citation)
 }
 ```
 
@@ -91,7 +91,7 @@ default features by writing this in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hayagriva = { version = "0.2", default-features = false }
+hayagriva = { version = "0.8", default-features = false }
 ```
 
 # Selectors
@@ -115,7 +115,8 @@ quantized-vortex:
     title: Structure of a Quantized Vortex in Boson Systems
     date: 1961-05
     page-range: 454-477
-    doi: 10.1007/BF02731494
+    serial-number:
+        doi: 10.1007/BF02731494
     parent:
         issue: 3
         volume: 20
@@ -154,9 +155,9 @@ use std::collections::BTreeMap;
 pub use crate::csl::archive;
 pub use citationberg;
 pub use csl::{
-    standalone_citation, BibliographyDriver, BibliographyRequest, Brackets,
-    BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem, ElemChild,
-    ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
+    standalone_citation, BibliographyDriver, BibliographyItem, BibliographyRequest,
+    Brackets, BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem,
+    ElemChild, ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
     RenderedBibliography, RenderedCitation, SpecificLocator,
 };
 pub use selectors::{Selector, SelectorError};
@@ -203,7 +204,7 @@ impl Library {
 
     /// Remove an entry from the library.
     pub fn remove(&mut self, key: &str) -> Option<Entry> {
-        self.0.remove(key)
+        self.0.shift_remove(key)
     }
 
     /// Get the length of the library.
@@ -504,9 +505,9 @@ entry! {
     #[serde(serialize_with = "serialize_one_or_many_opt")]
     #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "affiliated" => affiliated: Vec<PersonsWithRoles> | [PersonsWithRoles],
-    /// Publisher of the item.
-    "publisher" => publisher: FormatString,
-    /// Physical location at which the item was published or created.
+    /// Publisher of the item, which may have a name and a location.
+    "publisher" => publisher: Publisher,
+    /// Physical location at which an entry is physically located or took place.
     "location" => location: FormatString,
     /// Organization at/for which the item was created.
     "organization" => organization: FormatString,
@@ -521,7 +522,7 @@ entry! {
     /// Published version of an item.
     "edition" => edition: MaybeTyped<Numeric>,
     /// The range of pages within the parent this item occupies
-    "page-range" => page_range: MaybeTyped<Numeric>,
+    "page-range" => page_range: MaybeTyped<PageRanges>,
     /// The total number of pages the item has.
     "page-total" => page_total: Numeric,
     /// The time range within the parent this item starts and ends at.
@@ -547,12 +548,6 @@ entry! {
     "note" => note: FormatString,
     /// Abstract of the item (e.g. the abstract of a journal article).
     "abstract" => abstract_: FormatString,
-    /// Short markup, decoration, or annotation to the item (e.g., to indicate
-    /// items included in a review);
-    ///
-    /// For descriptive text (e.g., in an annotated bibliography), use `note`
-    /// instead.
-    "annote" => annote: FormatString,
     /// Type, class, or subtype of the item (e.g. “Doctoral dissertation” for
     /// a PhD thesis; “NIH Publication” for an NIH technical report);
     /// Do not use for topical descriptions or categories (e.g. “adventure” for an adventure movie).
@@ -609,9 +604,7 @@ impl Entry {
             // Index parents with the items in path. If, at any level, the index
             // exceeds the number of parents, increment the index at the
             // previous level. If no other level remains, return.
-            let Some(first_path) = path.first() else {
-                return None;
-            };
+            let first_path = path.first()?;
 
             if self.parents.len() <= *first_path {
                 return None;
@@ -975,6 +968,7 @@ mod tests {
                 "barb",
             ]
         );
+        select_all!("*[abstract, note, genre]", entries, ["wire"]);
     }
 
     #[test]
@@ -987,5 +981,24 @@ mod tests {
             entries >> "wwdc-network",
             ["a", "b", "c"]
         );
+    }
+
+    #[test]
+    #[cfg(feature = "biblatex")]
+    fn test_troublesome_page_ranges() {
+        use io::from_biblatex_str;
+
+        let bibtex = r#"
+            @article{b, 
+                title={My page ranges},
+                pages={150--es}
+            }
+        "#;
+
+        let library = from_biblatex_str(bibtex).unwrap();
+
+        for entry in library.iter() {
+            assert!(entry.page_range.is_some())
+        }
     }
 }

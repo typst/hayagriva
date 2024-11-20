@@ -9,511 +9,512 @@ use serde::de::DeserializeOwned;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ArchivedStyle {
-    /// American Anthropological Association.
-    ///
-    /// Authors: Sebastian Karcher.
-    AmericanAnthropologicalAssociation,
-    /// Springer - Lecture Notes in Computer Science.
-    ///
-    /// Authors: Ammar Memari.
-    SpringerLectureNotesInComputerScience,
-    /// American Medical Association 11th edition.
-    ///
-    /// Authors: Julian Onions.
-    AmericanMedicalAssociation,
-    /// SAGE - Vancouver.
-    ///
-    /// Authors: Michael Berkowitz.
-    SageVancouver,
-    /// BioMed Central.
-    ///
-    /// Authors: Robert M Flight.
-    BiomedCentral,
-    /// American Society of Civil Engineers.
-    ///
-    /// Authors: Rintze Zelle.
-    AmericanSocietyOfCivilEngineers,
-    /// Taylor & Francis - Chicago Manual of Style (author-date).
-    ///
-    /// Authors: Sebastian Karcher.
-    TaylorAndFrancisChicagoAuthorDate,
-    /// China National Standard GB/T 7714-2015 (note, 中文).
-    ///
-    /// Authors: 牛耕田.
-    Gb77142015Note,
-    /// American Society for Microbiology.
-    ///
-    /// Authors: Julian Onions.
-    AmericanSocietyForMicrobiology,
-    /// American Meteorological Society.
-    ///
-    /// Authors: Carl J. Schreck, III.
-    AmericanMeteorologicalSociety,
-    /// Future Medicine journals.
-    ///
-    /// Authors: Patrick O'Bien.
-    FutureMedicine,
-    /// Bristol University Press.
-    ///
-    /// Authors: Patrick O'Brien.
-    BristolUniversityPress,
-    /// Public Library of Science.
-    ///
-    /// Authors: Sebastian Karcher.
-    PublicLibraryOfScience,
-    /// Pensoft Journals.
-    ///
-    /// Authors: Brian Stucky, Teodor Georgiev.
-    Pensoft,
-    /// American Institute of Aeronautics and Astronautics.
-    ///
-    /// Authors: Garrett Foster.
-    AmericanInstituteOfAeronauticsAndAstronautics,
-    /// Mary Ann Liebert - Vancouver.
-    ///
-    /// Authors: Patrick O'Brien.
-    MaryAnnLiebertVancouver,
-    /// Modern Humanities Research Association 3rd edition (note with bibliography).
-    ///
-    /// Authors: Rintze Zelle.
-    ModernHumanitiesResearchAssociation,
-    /// Springer - SocPsych (author-date).
-    ///
-    /// Authors: Charles Parnot.
-    SpringerSocpsychAuthorDate,
-    /// Trends journals.
-    ///
-    /// Authors: Adam Zeilinger.
-    Trends,
-    /// Russian GOST R 7.0.5-2008 (numeric).
-    ///
-    /// Authors: Yurkin Maxim.
-    GostR7052008Numeric,
-    /// American Political Science Association.
-    ///
-    /// Authors: Julian Onions.
-    AmericanPoliticalScienceAssociation,
-    /// Future Science Group.
-    ///
-    /// Authors: Sebastian Karcher.
-    FutureScience,
-    /// Association for Computing Machinery.
-    ///
-    /// Authors: Patrick O'Brien.
-    AssociationForComputingMachinery,
-    /// Elsevier - Harvard (with titles).
-    ///
-    /// Authors: David Kaplan.
-    ElsevierHarvard,
-    /// American Chemical Society.
-    ///
-    /// Authors: Julian Onions.
-    AmericanChemicalSociety,
-    /// Cell.
-    ///
-    /// Authors: Adam Mark.
-    Cell,
-    /// Royal Society of Chemistry.
-    ///
-    /// Authors: Julian Onions.
-    RoyalSocietyOfChemistry,
-    /// SIST02 (日本語).
-    ///
-    /// Authors: Shoji Takahashi.
-    Sist02,
-    /// China National Standard GB/T 7714-2005 (numeric, 中文).
-    ///
-    /// Authors: heromyth.
-    Gb77142005Numeric,
-    /// IEEE.
-    ///
-    /// Authors: Michael Berkowitz.
-    InstituteOfElectricalAndElectronicsEngineers,
-    /// Springer - Humanities (author-date).
-    ///
-    /// Authors: Sebastian Karcher.
-    SpringerHumanitiesAuthorDate,
-    /// Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch).
-    ///
-    /// Authors: Daniel Hirsbrunner.
-    DeutscheGesellschaftFRPsychologie,
-    /// Springer - Basic (author-date).
-    ///
-    /// Authors: Jens Allmer.
-    SpringerBasicAuthorDate,
-    /// Institute of Physics (numeric).
-    ///
-    /// Authors: Sebastian Karcher.
-    InstituteOfPhysicsNumeric,
-    /// Vancouver.
-    ///
-    /// Authors: Michael Berkowitz.
-    Vancouver,
-    /// Nature.
-    ///
-    /// Authors: Michael Berkowitz.
-    Nature,
-    /// Current Opinion journals.
-    ///
-    /// Authors: David M. Kaplan.
-    CurrentOpinion,
-    /// Annual Reviews (author-date).
-    ///
-    /// Authors: Michael Berkowitz.
-    AnnualReviewsAuthorDate,
-    /// American Institute of Physics 4th edition.
-    ///
-    /// Authors: Richard Karnesky.
-    AmericanInstituteOfPhysics,
-    /// China National Standard GB/T 7714-2015 (numeric, 中文).
-    ///
-    /// Authors: 牛耕田.
-    Gb77142015Numeric,
-    /// The Lancet.
-    ///
-    /// Authors: Sebastian Karcher.
-    TheLancet,
-    /// Springer - Basic (numeric, brackets).
-    ///
-    /// Authors: Charles Parnot.
-    SpringerBasic,
-    /// American Geophysical Union.
-    ///
-    /// Authors: Julian Onions, Simon Kornblith.
-    AmericanGeophysicalUnion,
-    /// Turabian 8th edition (full note).
-    ///
-    /// Authors: Elena Razlogova.
-    TurabianFullnote8,
-    /// Taylor & Francis - National Library of Medicine.
-    ///
-    /// Authors: Sebastian Karcher.
-    TaylorAndFrancisNationalLibraryOfMedicine,
-    /// American Physiological Society.
-    ///
-    /// Authors: Michael Berkowitz.
-    AmericanPhysiologicalSociety,
-    /// Thieme-German (Deutsch).
-    ///
-    /// Authors: Sebastian Karcher.
-    Thieme,
-    /// Copernicus Publications.
-    ///
-    /// Authors: Julian Onions.
-    Copernicus,
-    /// The Institution of Engineering and Technology.
-    ///
-    /// Authors: Sebastian Karcher.
-    TheInstitutionOfEngineeringAndTechnology,
-    /// Annual Reviews (sorted by order of appearance).
-    ///
-    /// Authors: Michael Berkowitz.
-    AnnualReviews,
-    /// Deutsche Sprache (Deutsch).
-    ///
-    /// Authors: Philipp Zumstein.
-    DeutscheSprache,
-    /// Cite Them Right 12th edition - Harvard.
-    ///
-    /// Authors: Patrick O'Brien.
-    HarvardCiteThemRight,
-    /// Chicago Manual of Style 17th edition (full note).
-    ///
-    /// Authors: Julian Onions.
-    ChicagoFullnotes,
-    /// ISO-690 (author-date, English).
-    ///
-    /// Authors: Laure Mellifluo, Raphael Grolimund, Michel Hardegger.
-    Iso690AuthorDate,
-    /// Council of Science Editors, Name-Year (author-date).
-    ///
-    /// Authors: Julian Onions.
-    CouncilOfScienceEditorsAuthorDate,
-    /// Springer - MathPhys (numeric, brackets).
-    ///
-    /// Authors: Charles Parnot.
-    SpringerMathphys,
-    /// American Society of Mechanical Engineers.
-    ///
-    /// Authors: Richard Karnesky.
-    AmericanSocietyOfMechanicalEngineers,
-    /// Karger journals.
-    ///
-    /// Authors: Sebastian Karcher.
-    Karger,
-    /// Multidisciplinary Digital Publishing Institute.
-    ///
-    /// Authors: Sebastian Karcher.
-    MultidisciplinaryDigitalPublishingInstitute,
-    /// American Psychological Association 7th edition.
-    ///
-    /// Authors: Brenton M. Wiernik.
-    AmericanPsychologicalAssociation,
-    /// Modern Language Association 8th edition.
-    ///
-    /// Authors: Sebastian Karcher.
-    ModernLanguageAssociation8,
-    /// China National Standard GB/T 7714-2015 (author-date, 中文).
-    ///
-    /// Authors: 牛耕田.
-    Gb77142015AuthorDate,
-    /// Springer - Vancouver (brackets).
-    ///
-    /// Authors: Charles Parnot.
-    SpringerVancouver,
-    /// BMJ.
-    ///
-    /// Authors: Sebastian Karcher.
-    BritishMedicalJournal,
-    /// Turabian 9th edition (author-date).
-    ///
-    /// Authors: Tony Chuang.
-    TurabianAuthorDate,
-    /// Chicago Manual of Style 17th edition (author-date).
-    ///
-    /// Authors: Julian Onions.
-    ChicagoAuthorDate,
-    /// Associação Brasileira de Normas Técnicas (Português - Brasil).
-    ///
-    /// Authors: Juliana Geyna Régis.
-    AssociacaoBrasileiraDeNormasTecnicas,
-    /// Vancouver (superscript).
-    ///
-    /// Authors: Michael Berkowitz.
-    VancouverSuperscript,
-    /// Angewandte Chemie International Edition.
-    ///
-    /// Authors: Richard Karnesky.
-    AngewandteChemie,
-    /// Elsevier (numeric, with titles).
-    ///
-    /// Authors: Richard Karnesky.
-    ElsevierWithTitles,
-    /// ISO-690 (numeric, English).
-    ///
-    /// Authors: Laure Mellifluo, Raphael Grolimund, Michel Hardegger.
-    Iso690Numeric,
-    /// Modern Language Association 9th edition.
-    ///
-    /// Authors: Sebastian Karcher.
-    ModernLanguageAssociation,
-    /// Council of Science Editors, Citation-Sequence (numeric, brackets).
-    ///
-    /// Authors: Pavel Giverts.
-    CouncilOfScienceEditors,
-    /// SPIE journals.
-    ///
-    /// Authors: Yurkin Maxim.
-    Spie,
-    /// Springer - Fachzeitschriften Medizin Psychologie (Deutsch).
-    ///
-    /// Authors: Philipp Zumstein.
-    SpringerFachzeitschriftenMedizinPsychologie,
-    /// Frontiers journals.
-    ///
-    /// Authors: Sebastian Karcher.
-    Frontiers,
-    /// American Physical Society.
-    ///
-    /// Authors: Richard Karnesky, Brenton M. Wiernik.
-    AmericanPhysicsSociety,
-    /// American Sociological Association 6th edition.
-    ///
-    /// Authors: Julian Onions.
-    AmericanSociologicalAssociation,
-    /// Elsevier - Vancouver.
-    ///
-    /// Authors: Richard Karnesky.
-    ElsevierVancouver,
-    /// Chicago Manual of Style 17th edition (note).
-    ///
-    /// Authors: Julian Onions.
-    ChicagoNotes,
     /// Alphanumeric.
     ///
     /// Authors: Martin Haug, Laurenz Mädje.
     Alphanumeric,
+    /// American Anthropological Association.
+    ///
+    /// Authors: Sebastian Karcher.
+    AmericanAnthropologicalAssociation,
+    /// American Chemical Society.
+    ///
+    /// Authors: Julian Onions.
+    AmericanChemicalSociety,
+    /// American Geophysical Union.
+    ///
+    /// Authors: Julian Onions, Simon Kornblith.
+    AmericanGeophysicalUnion,
+    /// American Institute of Aeronautics and Astronautics.
+    ///
+    /// Authors: Garrett Foster.
+    AmericanInstituteOfAeronauticsAndAstronautics,
+    /// American Institute of Physics 4th edition.
+    ///
+    /// Authors: Richard Karnesky.
+    AmericanInstituteOfPhysics,
+    /// American Medical Association 11th edition.
+    ///
+    /// Authors: Julian Onions.
+    AmericanMedicalAssociation,
+    /// American Meteorological Society.
+    ///
+    /// Authors: Carl J. Schreck, III.
+    AmericanMeteorologicalSociety,
+    /// American Physical Society.
+    ///
+    /// Authors: Richard Karnesky, Brenton M. Wiernik.
+    AmericanPhysicsSociety,
+    /// American Physiological Society.
+    ///
+    /// Authors: Michael Berkowitz.
+    AmericanPhysiologicalSociety,
+    /// American Political Science Association.
+    ///
+    /// Authors: Julian Onions.
+    AmericanPoliticalScienceAssociation,
+    /// American Psychological Association 7th edition.
+    ///
+    /// Authors: Brenton M. Wiernik.
+    AmericanPsychologicalAssociation,
+    /// American Society for Microbiology.
+    ///
+    /// Authors: Julian Onions.
+    AmericanSocietyForMicrobiology,
+    /// American Society of Civil Engineers.
+    ///
+    /// Authors: Rintze Zelle.
+    AmericanSocietyOfCivilEngineers,
+    /// American Society of Mechanical Engineers.
+    ///
+    /// Authors: Richard Karnesky.
+    AmericanSocietyOfMechanicalEngineers,
+    /// American Sociological Association 6th/7th edition.
+    ///
+    /// Authors: Julian Onions.
+    AmericanSociologicalAssociation,
+    /// Angewandte Chemie International Edition.
+    ///
+    /// Authors: Richard Karnesky.
+    AngewandteChemie,
+    /// Annual Reviews (sorted by order of appearance).
+    ///
+    /// Authors: Michael Berkowitz.
+    AnnualReviews,
+    /// Annual Reviews (author-date).
+    ///
+    /// Authors: Michael Berkowitz.
+    AnnualReviewsAuthorDate,
+    /// Associação Brasileira de Normas Técnicas (Português - Brasil).
+    ///
+    /// Authors: Juliana Geyna Régis.
+    AssociacaoBrasileiraDeNormasTecnicas,
+    /// Association for Computing Machinery.
+    ///
+    /// Authors: Patrick O'Brien.
+    AssociationForComputingMachinery,
+    /// BioMed Central.
+    ///
+    /// Authors: Robert M Flight.
+    BiomedCentral,
+    /// Bristol University Press.
+    ///
+    /// Authors: Patrick O'Brien.
+    BristolUniversityPress,
+    /// BMJ.
+    ///
+    /// Authors: Sebastian Karcher.
+    BritishMedicalJournal,
+    /// Cell.
+    ///
+    /// Authors: Adam Mark.
+    Cell,
+    /// Chicago Manual of Style 17th edition (author-date).
+    ///
+    /// Authors: Julian Onions.
+    ChicagoAuthorDate,
+    /// Chicago Manual of Style 17th edition (full note).
+    ///
+    /// Authors: Julian Onions.
+    ChicagoFullnotes,
+    /// Chicago Manual of Style 17th edition (note).
+    ///
+    /// Authors: Julian Onions.
+    ChicagoNotes,
+    /// Copernicus Publications.
+    ///
+    /// Authors: Julian Onions.
+    Copernicus,
+    /// Council of Science Editors, Citation-Sequence (numeric, brackets).
+    ///
+    /// Authors: Pavel Giverts.
+    CouncilOfScienceEditors,
+    /// Council of Science Editors, Name-Year (author-date).
+    ///
+    /// Authors: Julian Onions.
+    CouncilOfScienceEditorsAuthorDate,
+    /// Current Opinion journals.
+    ///
+    /// Authors: David M. Kaplan.
+    CurrentOpinion,
+    /// Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch).
+    ///
+    /// Authors: Daniel Hirsbrunner.
+    DeutscheGesellschaftFürPsychologie,
+    /// Deutsche Sprache (Deutsch).
+    ///
+    /// Authors: Philipp Zumstein.
+    DeutscheSprache,
+    /// Elsevier - Harvard (with titles).
+    ///
+    /// Authors: David Kaplan.
+    ElsevierHarvard,
+    /// Elsevier - Vancouver.
+    ///
+    /// Authors: Richard Karnesky.
+    ElsevierVancouver,
+    /// Elsevier (numeric, with titles).
+    ///
+    /// Authors: Richard Karnesky.
+    ElsevierWithTitles,
+    /// Frontiers journals.
+    ///
+    /// Authors: Sebastian Karcher.
+    Frontiers,
+    /// Future Medicine journals.
+    ///
+    /// Authors: Patrick O'Bien.
+    FutureMedicine,
+    /// Future Science Group.
+    ///
+    /// Authors: Sebastian Karcher.
+    FutureScience,
+    /// China National Standard GB/T 7714-2005 (numeric, 中文).
+    ///
+    /// Authors: heromyth.
+    Gb77142005Numeric,
+    /// China National Standard GB/T 7714-2015 (author-date, 中文).
+    ///
+    /// Authors: 牛耕田.
+    Gb77142015AuthorDate,
+    /// China National Standard GB/T 7714-2015 (note, 中文).
+    ///
+    /// Authors: 牛耕田.
+    Gb77142015Note,
+    /// China National Standard GB/T 7714-2015 (numeric, 中文).
+    ///
+    /// Authors: 牛耕田.
+    Gb77142015Numeric,
+    /// Russian GOST R 7.0.5-2008 (numeric).
+    ///
+    /// Authors: Yurkin Maxim.
+    GostR7052008Numeric,
+    /// Cite Them Right 12th edition - Harvard.
+    ///
+    /// Authors: Patrick O'Brien.
+    HarvardCiteThemRight,
+    /// IEEE.
+    ///
+    /// Authors: Michael Berkowitz.
+    InstituteOfElectricalAndElectronicsEngineers,
+    /// Institute of Physics (numeric).
+    ///
+    /// Authors: Sebastian Karcher.
+    InstituteOfPhysicsNumeric,
+    /// ISO-690 (author-date, English).
+    ///
+    /// Authors: Laure Mellifluo, Raphael Grolimund, Michel Hardegger.
+    Iso690AuthorDate,
+    /// ISO-690 (numeric, English).
+    ///
+    /// Authors: Laure Mellifluo, Raphael Grolimund, Michel Hardegger.
+    Iso690Numeric,
+    /// Karger journals.
+    ///
+    /// Authors: Sebastian Karcher.
+    Karger,
+    /// Mary Ann Liebert - Vancouver.
+    ///
+    /// Authors: Patrick O'Brien.
+    MaryAnnLiebertVancouver,
+    /// Modern Humanities Research Association 4th edition (note with bibliography).
+    ///
+    /// Authors: Rintze Zelle.
+    ModernHumanitiesResearchAssociation,
+    /// Modern Language Association 9th edition.
+    ///
+    /// Authors: Sebastian Karcher.
+    ModernLanguageAssociation,
+    /// Modern Language Association 8th edition.
+    ///
+    /// Authors: Sebastian Karcher.
+    ModernLanguageAssociation8,
+    /// Multidisciplinary Digital Publishing Institute.
+    ///
+    /// Authors: Sebastian Karcher.
+    MultidisciplinaryDigitalPublishingInstitute,
+    /// Nature.
+    ///
+    /// Authors: Michael Berkowitz.
+    Nature,
+    /// Pensoft Journals.
+    ///
+    /// Authors: Brian Stucky, Teodor Georgiev.
+    Pensoft,
+    /// Public Library of Science.
+    ///
+    /// Authors: Sebastian Karcher.
+    PublicLibraryOfScience,
+    /// Royal Society of Chemistry.
+    ///
+    /// Authors: Julian Onions.
+    RoyalSocietyOfChemistry,
+    /// SAGE - Vancouver.
+    ///
+    /// Authors: Michael Berkowitz.
+    SageVancouver,
+    /// SIST02 (日本語).
+    ///
+    /// Authors: Shoji Takahashi.
+    Sist02,
+    /// SPIE journals.
+    ///
+    /// Authors: Yurkin Maxim.
+    Spie,
+    /// Springer - Basic (numeric, brackets).
+    ///
+    /// Authors: Charles Parnot.
+    SpringerBasic,
+    /// Springer - Basic (author-date).
+    ///
+    /// Authors: Jens Allmer.
+    SpringerBasicAuthorDate,
+    /// Springer - Fachzeitschriften Medizin Psychologie (Deutsch).
+    ///
+    /// Authors: Philipp Zumstein.
+    SpringerFachzeitschriftenMedizinPsychologie,
+    /// Springer - Humanities (author-date).
+    ///
+    /// Authors: Sebastian Karcher.
+    SpringerHumanitiesAuthorDate,
+    /// Springer - Lecture Notes in Computer Science.
+    ///
+    /// Authors: Ammar Memari.
+    SpringerLectureNotesInComputerScience,
+    /// Springer - MathPhys (numeric, brackets).
+    ///
+    /// Authors: Charles Parnot.
+    SpringerMathphys,
+    /// Springer - SocPsych (author-date).
+    ///
+    /// Authors: Charles Parnot.
+    SpringerSocpsychAuthorDate,
+    /// Springer - Vancouver (brackets).
+    ///
+    /// Authors: Charles Parnot.
+    SpringerVancouver,
+    /// Taylor & Francis - Chicago Manual of Style (author-date).
+    ///
+    /// Authors: Sebastian Karcher.
+    TaylorAndFrancisChicagoAuthorDate,
+    /// Taylor & Francis - National Library of Medicine.
+    ///
+    /// Authors: Sebastian Karcher.
+    TaylorAndFrancisNationalLibraryOfMedicine,
+    /// The Institution of Engineering and Technology.
+    ///
+    /// Authors: Sebastian Karcher.
+    TheInstitutionOfEngineeringAndTechnology,
+    /// The Lancet.
+    ///
+    /// Authors: Sebastian Karcher.
+    TheLancet,
+    /// Thieme-German (Deutsch).
+    ///
+    /// Authors: Sebastian Karcher.
+    Thieme,
+    /// Trends journals.
+    ///
+    /// Authors: Adam Zeilinger.
+    Trends,
+    /// Turabian 9th edition (author-date).
+    ///
+    /// Authors: Tony Chuang.
+    TurabianAuthorDate,
+    /// Turabian 8th edition (full note).
+    ///
+    /// Authors: Elena Razlogova.
+    TurabianFullnote8,
+    /// Vancouver.
+    ///
+    /// Authors: Michael Berkowitz.
+    Vancouver,
+    /// Vancouver (superscript).
+    ///
+    /// Authors: Michael Berkowitz.
+    VancouverSuperscript,
 }
 
+#[rustfmt::skip]
 impl ArchivedStyle {
     /// Retrieve this style by name.
     pub fn by_name(name: &str) -> Option<Self> {
         match name {
+            "alphanumeric" => Some(Self::Alphanumeric),
             "american-anthropological-association" => Some(Self::AmericanAnthropologicalAssociation),
-            "springer-lecture-notes-in-computer-science" => Some(Self::SpringerLectureNotesInComputerScience),
-            "american-medical-association" => Some(Self::AmericanMedicalAssociation),
-            "sage-vancouver" => Some(Self::SageVancouver),
-            "biomed-central" => Some(Self::BiomedCentral),
-            "american-society-of-civil-engineers" => Some(Self::AmericanSocietyOfCivilEngineers),
-            "taylor-and-francis-chicago-author-date" => Some(Self::TaylorAndFrancisChicagoAuthorDate),
-            "gb-7714-2015-note" => Some(Self::Gb77142015Note),
-            "american-society-for-microbiology" => Some(Self::AmericanSocietyForMicrobiology),
-            "american-meteorological-society" => Some(Self::AmericanMeteorologicalSociety),
-            "future-medicine" => Some(Self::FutureMedicine),
-            "bristol-university-press" => Some(Self::BristolUniversityPress),
-            "public-library-of-science" => Some(Self::PublicLibraryOfScience),
-            "plos" => Some(Self::PublicLibraryOfScience),
-            "pensoft" => Some(Self::Pensoft),
-            "american-institute-of-aeronautics-and-astronautics" => Some(Self::AmericanInstituteOfAeronauticsAndAstronautics),
-            "mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
-            "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociation),
-            "springer-socpsych-author-date" => Some(Self::SpringerSocpsychAuthorDate),
-            "trends" => Some(Self::Trends),
-            "gost-r-705-2008-numeric" => Some(Self::GostR7052008Numeric),
-            "american-political-science-association" => Some(Self::AmericanPoliticalScienceAssociation),
-            "future-science" => Some(Self::FutureScience),
-            "association-for-computing-machinery" => Some(Self::AssociationForComputingMachinery),
-            "elsevier-harvard" => Some(Self::ElsevierHarvard),
             "american-chemical-society" => Some(Self::AmericanChemicalSociety),
-            "cell" => Some(Self::Cell),
-            "royal-society-of-chemistry" => Some(Self::RoyalSocietyOfChemistry),
-            "sist02" => Some(Self::Sist02),
-            "gb-7714-2005-numeric" => Some(Self::Gb77142005Numeric),
-            "institute-of-electrical-and-electronics-engineers" => Some(Self::InstituteOfElectricalAndElectronicsEngineers),
-            "ieee" => Some(Self::InstituteOfElectricalAndElectronicsEngineers),
-            "springer-humanities-author-date" => Some(Self::SpringerHumanitiesAuthorDate),
-            "deutsche-gesellschaft-für-psychologie" => Some(Self::DeutscheGesellschaftFRPsychologie),
-            "springer-basic-author-date" => Some(Self::SpringerBasicAuthorDate),
-            "institute-of-physics-numeric" => Some(Self::InstituteOfPhysicsNumeric),
-            "vancouver" => Some(Self::Vancouver),
-            "nature" => Some(Self::Nature),
-            "current-opinion" => Some(Self::CurrentOpinion),
-            "annual-reviews-author-date" => Some(Self::AnnualReviewsAuthorDate),
-            "american-institute-of-physics" => Some(Self::AmericanInstituteOfPhysics),
-            "gb-7714-2015-numeric" => Some(Self::Gb77142015Numeric),
-            "the-lancet" => Some(Self::TheLancet),
-            "springer-basic" => Some(Self::SpringerBasic),
             "american-geophysical-union" => Some(Self::AmericanGeophysicalUnion),
-            "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
-            "taylor-and-francis-national-library-of-medicine" => Some(Self::TaylorAndFrancisNationalLibraryOfMedicine),
+            "american-institute-of-aeronautics-and-astronautics" => Some(Self::AmericanInstituteOfAeronauticsAndAstronautics),
+            "american-institute-of-physics" => Some(Self::AmericanInstituteOfPhysics),
+            "american-medical-association" => Some(Self::AmericanMedicalAssociation),
+            "american-meteorological-society" => Some(Self::AmericanMeteorologicalSociety),
+            "american-physics-society" => Some(Self::AmericanPhysicsSociety),
             "american-physiological-society" => Some(Self::AmericanPhysiologicalSociety),
-            "thieme" => Some(Self::Thieme),
-            "copernicus" => Some(Self::Copernicus),
-            "the-institution-of-engineering-and-technology" => Some(Self::TheInstitutionOfEngineeringAndTechnology),
-            "annual-reviews" => Some(Self::AnnualReviews),
-            "deutsche-sprache" => Some(Self::DeutscheSprache),
-            "harvard-cite-them-right" => Some(Self::HarvardCiteThemRight),
-            "chicago-fullnotes" => Some(Self::ChicagoFullnotes),
-            "iso-690-author-date" => Some(Self::Iso690AuthorDate),
-            "council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
-            "springer-mathphys" => Some(Self::SpringerMathphys),
-            "american-society-of-mechanical-engineers" => Some(Self::AmericanSocietyOfMechanicalEngineers),
-            "karger" => Some(Self::Karger),
-            "multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
+            "american-political-science-association" => Some(Self::AmericanPoliticalScienceAssociation),
             "american-psychological-association" => Some(Self::AmericanPsychologicalAssociation),
             "apa" => Some(Self::AmericanPsychologicalAssociation),
-            "modern-language-association-8" => Some(Self::ModernLanguageAssociation8),
-            "mla-8" => Some(Self::ModernLanguageAssociation8),
-            "gb-7714-2015-author-date" => Some(Self::Gb77142015AuthorDate),
-            "springer-vancouver" => Some(Self::SpringerVancouver),
+            "american-society-for-microbiology" => Some(Self::AmericanSocietyForMicrobiology),
+            "american-society-of-civil-engineers" => Some(Self::AmericanSocietyOfCivilEngineers),
+            "american-society-of-mechanical-engineers" => Some(Self::AmericanSocietyOfMechanicalEngineers),
+            "american-sociological-association" => Some(Self::AmericanSociologicalAssociation),
+            "angewandte-chemie" => Some(Self::AngewandteChemie),
+            "annual-reviews" => Some(Self::AnnualReviews),
+            "annual-reviews-author-date" => Some(Self::AnnualReviewsAuthorDate),
+            "associacao-brasileira-de-normas-tecnicas" => Some(Self::AssociacaoBrasileiraDeNormasTecnicas),
+            "association-for-computing-machinery" => Some(Self::AssociationForComputingMachinery),
+            "biomed-central" => Some(Self::BiomedCentral),
+            "bristol-university-press" => Some(Self::BristolUniversityPress),
             "british-medical-journal" => Some(Self::BritishMedicalJournal),
             "bmj" => Some(Self::BritishMedicalJournal),
-            "turabian-author-date" => Some(Self::TurabianAuthorDate),
+            "cell" => Some(Self::Cell),
             "chicago-author-date" => Some(Self::ChicagoAuthorDate),
-            "associacao-brasileira-de-normas-tecnicas" => Some(Self::AssociacaoBrasileiraDeNormasTecnicas),
-            "vancouver-superscript" => Some(Self::VancouverSuperscript),
-            "angewandte-chemie" => Some(Self::AngewandteChemie),
+            "chicago-fullnotes" => Some(Self::ChicagoFullnotes),
+            "chicago-notes" => Some(Self::ChicagoNotes),
+            "copernicus" => Some(Self::Copernicus),
+            "council-of-science-editors" => Some(Self::CouncilOfScienceEditors),
+            "council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
+            "current-opinion" => Some(Self::CurrentOpinion),
+            "deutsche-gesellschaft-für-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
+            "deutsche-sprache" => Some(Self::DeutscheSprache),
+            "elsevier-harvard" => Some(Self::ElsevierHarvard),
+            "elsevier-vancouver" => Some(Self::ElsevierVancouver),
             "elsevier-with-titles" => Some(Self::ElsevierWithTitles),
+            "frontiers" => Some(Self::Frontiers),
+            "future-medicine" => Some(Self::FutureMedicine),
+            "future-science" => Some(Self::FutureScience),
+            "gb-7714-2005-numeric" => Some(Self::Gb77142005Numeric),
+            "gb-7714-2015-author-date" => Some(Self::Gb77142015AuthorDate),
+            "gb-7714-2015-note" => Some(Self::Gb77142015Note),
+            "gb-7714-2015-numeric" => Some(Self::Gb77142015Numeric),
+            "gost-r-705-2008-numeric" => Some(Self::GostR7052008Numeric),
+            "harvard-cite-them-right" => Some(Self::HarvardCiteThemRight),
+            "institute-of-electrical-and-electronics-engineers" => Some(Self::InstituteOfElectricalAndElectronicsEngineers),
+            "ieee" => Some(Self::InstituteOfElectricalAndElectronicsEngineers),
+            "institute-of-physics-numeric" => Some(Self::InstituteOfPhysicsNumeric),
+            "iso-690-author-date" => Some(Self::Iso690AuthorDate),
             "iso-690-numeric" => Some(Self::Iso690Numeric),
+            "karger" => Some(Self::Karger),
+            "mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
+            "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociation),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
-            "council-of-science-editors" => Some(Self::CouncilOfScienceEditors),
+            "modern-language-association-8" => Some(Self::ModernLanguageAssociation8),
+            "mla-8" => Some(Self::ModernLanguageAssociation8),
+            "multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
+            "nature" => Some(Self::Nature),
+            "pensoft" => Some(Self::Pensoft),
+            "public-library-of-science" => Some(Self::PublicLibraryOfScience),
+            "plos" => Some(Self::PublicLibraryOfScience),
+            "royal-society-of-chemistry" => Some(Self::RoyalSocietyOfChemistry),
+            "sage-vancouver" => Some(Self::SageVancouver),
+            "sist02" => Some(Self::Sist02),
             "spie" => Some(Self::Spie),
+            "springer-basic" => Some(Self::SpringerBasic),
+            "springer-basic-author-date" => Some(Self::SpringerBasicAuthorDate),
             "springer-fachzeitschriften-medizin-psychologie" => Some(Self::SpringerFachzeitschriftenMedizinPsychologie),
-            "frontiers" => Some(Self::Frontiers),
-            "american-physics-society" => Some(Self::AmericanPhysicsSociety),
-            "american-sociological-association" => Some(Self::AmericanSociologicalAssociation),
-            "elsevier-vancouver" => Some(Self::ElsevierVancouver),
-            "chicago-notes" => Some(Self::ChicagoNotes),
-            "alphanumeric" => Some(Self::Alphanumeric),
-            _ => None
+            "springer-humanities-author-date" => Some(Self::SpringerHumanitiesAuthorDate),
+            "springer-lecture-notes-in-computer-science" => Some(Self::SpringerLectureNotesInComputerScience),
+            "springer-mathphys" => Some(Self::SpringerMathphys),
+            "springer-socpsych-author-date" => Some(Self::SpringerSocpsychAuthorDate),
+            "springer-vancouver" => Some(Self::SpringerVancouver),
+            "taylor-and-francis-chicago-author-date" => Some(Self::TaylorAndFrancisChicagoAuthorDate),
+            "taylor-and-francis-national-library-of-medicine" => Some(Self::TaylorAndFrancisNationalLibraryOfMedicine),
+            "the-institution-of-engineering-and-technology" => Some(Self::TheInstitutionOfEngineeringAndTechnology),
+            "the-lancet" => Some(Self::TheLancet),
+            "thieme" => Some(Self::Thieme),
+            "trends" => Some(Self::Trends),
+            "turabian-author-date" => Some(Self::TurabianAuthorDate),
+            "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
+            "vancouver" => Some(Self::Vancouver),
+            "vancouver-superscript" => Some(Self::VancouverSuperscript),
+            _ => None,
         }
     }
 
     /// Retrieve this style by CSL ID.
     pub fn by_id(id: &str) -> Option<Self> {
         match id {
+            "http://typst.org/csl/alphanumeric" => Some(Self::Alphanumeric),
             "http://www.zotero.org/styles/american-anthropological-association" => Some(Self::AmericanAnthropologicalAssociation),
-            "http://www.zotero.org/styles/springer-lecture-notes-in-computer-science" => Some(Self::SpringerLectureNotesInComputerScience),
-            "http://www.zotero.org/styles/american-medical-association" => Some(Self::AmericanMedicalAssociation),
-            "http://www.zotero.org/styles/sage-vancouver" => Some(Self::SageVancouver),
-            "http://www.zotero.org/styles/biomed-central" => Some(Self::BiomedCentral),
-            "http://www.zotero.org/styles/american-society-of-civil-engineers" => Some(Self::AmericanSocietyOfCivilEngineers),
-            "http://www.zotero.org/styles/taylor-and-francis-chicago-author-date" => Some(Self::TaylorAndFrancisChicagoAuthorDate),
-            "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note" => Some(Self::Gb77142015Note),
-            "http://www.zotero.org/styles/american-society-for-microbiology" => Some(Self::AmericanSocietyForMicrobiology),
-            "http://www.zotero.org/styles/american-meteorological-society" => Some(Self::AmericanMeteorologicalSociety),
-            "http://www.zotero.org/styles/future-medicine" => Some(Self::FutureMedicine),
-            "http://www.zotero.org/styles/bristol-university-press" => Some(Self::BristolUniversityPress),
-            "http://www.zotero.org/styles/plos" => Some(Self::PublicLibraryOfScience),
-            "http://www.zotero.org/styles/pensoft-journals" => Some(Self::Pensoft),
+            "http://www.zotero.org/styles/american-chemical-society" => Some(Self::AmericanChemicalSociety),
+            "http://www.zotero.org/styles/american-geophysical-union" => Some(Self::AmericanGeophysicalUnion),
             "http://www.zotero.org/styles/american-institute-of-aeronautics-and-astronautics" => Some(Self::AmericanInstituteOfAeronauticsAndAstronautics),
+            "http://www.zotero.org/styles/american-institute-of-physics" => Some(Self::AmericanInstituteOfPhysics),
+            "http://www.zotero.org/styles/american-medical-association" => Some(Self::AmericanMedicalAssociation),
+            "http://www.zotero.org/styles/american-meteorological-society" => Some(Self::AmericanMeteorologicalSociety),
+            "http://www.zotero.org/styles/american-physics-society" => Some(Self::AmericanPhysicsSociety),
+            "http://www.zotero.org/styles/american-physiological-society" => Some(Self::AmericanPhysiologicalSociety),
+            "http://www.zotero.org/styles/american-political-science-association" => Some(Self::AmericanPoliticalScienceAssociation),
+            "http://www.zotero.org/styles/apa" => Some(Self::AmericanPsychologicalAssociation),
+            "http://www.zotero.org/styles/american-society-for-microbiology" => Some(Self::AmericanSocietyForMicrobiology),
+            "http://www.zotero.org/styles/american-society-of-civil-engineers" => Some(Self::AmericanSocietyOfCivilEngineers),
+            "http://www.zotero.org/styles/american-society-of-mechanical-engineers" => Some(Self::AmericanSocietyOfMechanicalEngineers),
+            "http://www.zotero.org/styles/american-sociological-association" => Some(Self::AmericanSociologicalAssociation),
+            "http://www.zotero.org/styles/angewandte-chemie" => Some(Self::AngewandteChemie),
+            "http://www.zotero.org/styles/annual-reviews" => Some(Self::AnnualReviews),
+            "http://www.zotero.org/styles/annual-reviews-author-date" => Some(Self::AnnualReviewsAuthorDate),
+            "http://www.zotero.org/styles/associacao-brasileira-de-normas-tecnicas" => Some(Self::AssociacaoBrasileiraDeNormasTecnicas),
+            "http://www.zotero.org/styles/association-for-computing-machinery" => Some(Self::AssociationForComputingMachinery),
+            "http://www.zotero.org/styles/biomed-central" => Some(Self::BiomedCentral),
+            "http://www.zotero.org/styles/bristol-university-press" => Some(Self::BristolUniversityPress),
+            "http://www.zotero.org/styles/bmj" => Some(Self::BritishMedicalJournal),
+            "http://www.zotero.org/styles/cell" => Some(Self::Cell),
+            "http://www.zotero.org/styles/chicago-author-date" => Some(Self::ChicagoAuthorDate),
+            "http://www.zotero.org/styles/chicago-fullnote-bibliography" => Some(Self::ChicagoFullnotes),
+            "http://www.zotero.org/styles/chicago-note-bibliography" => Some(Self::ChicagoNotes),
+            "http://www.zotero.org/styles/copernicus-publications" => Some(Self::Copernicus),
+            "http://www.zotero.org/styles/council-of-science-editors-brackets" => Some(Self::CouncilOfScienceEditors),
+            "http://www.zotero.org/styles/council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
+            "http://www.zotero.org/styles/current-opinion" => Some(Self::CurrentOpinion),
+            "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
+            "http://www.zotero.org/styles/deutsche-sprache" => Some(Self::DeutscheSprache),
+            "http://www.zotero.org/styles/elsevier-harvard" => Some(Self::ElsevierHarvard),
+            "http://www.zotero.org/styles/elsevier-vancouver" => Some(Self::ElsevierVancouver),
+            "http://www.zotero.org/styles/elsevier-with-titles" => Some(Self::ElsevierWithTitles),
+            "http://www.zotero.org/styles/frontiers" => Some(Self::Frontiers),
+            "http://www.zotero.org/styles/future-medicine" => Some(Self::FutureMedicine),
+            "http://www.zotero.org/styles/future-science-group" => Some(Self::FutureScience),
+            "http://www.zotero.org/styles/chinese-gb7714-2005-numeric" => Some(Self::Gb77142005Numeric),
+            "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date" => Some(Self::Gb77142015AuthorDate),
+            "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note" => Some(Self::Gb77142015Note),
+            "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric" => Some(Self::Gb77142015Numeric),
+            "http://www.zotero.org/styles/gost-r-7-0-5-2008-numeric" => Some(Self::GostR7052008Numeric),
+            "http://www.zotero.org/styles/harvard-cite-them-right" => Some(Self::HarvardCiteThemRight),
+            "http://www.zotero.org/styles/ieee" => Some(Self::InstituteOfElectricalAndElectronicsEngineers),
+            "http://www.zotero.org/styles/institute-of-physics-numeric" => Some(Self::InstituteOfPhysicsNumeric),
+            "http://www.zotero.org/styles/iso690-author-date-en" => Some(Self::Iso690AuthorDate),
+            "http://www.zotero.org/styles/iso690-numeric-en" => Some(Self::Iso690Numeric),
+            "http://www.zotero.org/styles/karger-journals" => Some(Self::Karger),
             "http://www.zotero.org/styles/mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
             "http://www.zotero.org/styles/modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociation),
-            "http://www.zotero.org/styles/springer-socpsych-author-date" => Some(Self::SpringerSocpsychAuthorDate),
-            "http://www.zotero.org/styles/trends-journals" => Some(Self::Trends),
-            "http://www.zotero.org/styles/gost-r-7-0-5-2008-numeric" => Some(Self::GostR7052008Numeric),
-            "http://www.zotero.org/styles/american-political-science-association" => Some(Self::AmericanPoliticalScienceAssociation),
-            "http://www.zotero.org/styles/future-science-group" => Some(Self::FutureScience),
-            "http://www.zotero.org/styles/association-for-computing-machinery" => Some(Self::AssociationForComputingMachinery),
-            "http://www.zotero.org/styles/elsevier-harvard" => Some(Self::ElsevierHarvard),
-            "http://www.zotero.org/styles/american-chemical-society" => Some(Self::AmericanChemicalSociety),
-            "http://www.zotero.org/styles/cell" => Some(Self::Cell),
-            "http://www.zotero.org/styles/royal-society-of-chemistry" => Some(Self::RoyalSocietyOfChemistry),
-            "http://www.zotero.org/styles/sist02" => Some(Self::Sist02),
-            "http://www.zotero.org/styles/chinese-gb7714-2005-numeric" => Some(Self::Gb77142005Numeric),
-            "http://www.zotero.org/styles/ieee" => Some(Self::InstituteOfElectricalAndElectronicsEngineers),
-            "http://www.zotero.org/styles/springer-humanities-author-date" => Some(Self::SpringerHumanitiesAuthorDate),
-            "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie" => Some(Self::DeutscheGesellschaftFRPsychologie),
-            "http://www.zotero.org/styles/springer-basic-author-date" => Some(Self::SpringerBasicAuthorDate),
-            "http://www.zotero.org/styles/institute-of-physics-numeric" => Some(Self::InstituteOfPhysicsNumeric),
-            "http://www.zotero.org/styles/vancouver" => Some(Self::Vancouver),
-            "http://www.zotero.org/styles/nature" => Some(Self::Nature),
-            "http://www.zotero.org/styles/current-opinion" => Some(Self::CurrentOpinion),
-            "http://www.zotero.org/styles/annual-reviews-author-date" => Some(Self::AnnualReviewsAuthorDate),
-            "http://www.zotero.org/styles/american-institute-of-physics" => Some(Self::AmericanInstituteOfPhysics),
-            "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric" => Some(Self::Gb77142015Numeric),
-            "http://www.zotero.org/styles/the-lancet" => Some(Self::TheLancet),
-            "http://www.zotero.org/styles/springer-basic-brackets" => Some(Self::SpringerBasic),
-            "http://www.zotero.org/styles/american-geophysical-union" => Some(Self::AmericanGeophysicalUnion),
-            "http://www.zotero.org/styles/turabian-fullnote-bibliography-8th-edition" => Some(Self::TurabianFullnote8),
-            "http://www.zotero.org/styles/taylor-and-francis-national-library-of-medicine" => Some(Self::TaylorAndFrancisNationalLibraryOfMedicine),
-            "http://www.zotero.org/styles/american-physiological-society" => Some(Self::AmericanPhysiologicalSociety),
-            "http://www.zotero.org/styles/thieme-german" => Some(Self::Thieme),
-            "http://www.zotero.org/styles/copernicus-publications" => Some(Self::Copernicus),
-            "http://www.zotero.org/styles/the-institution-of-engineering-and-technology" => Some(Self::TheInstitutionOfEngineeringAndTechnology),
-            "http://www.zotero.org/styles/annual-reviews" => Some(Self::AnnualReviews),
-            "http://www.zotero.org/styles/deutsche-sprache" => Some(Self::DeutscheSprache),
-            "http://www.zotero.org/styles/harvard-cite-them-right" => Some(Self::HarvardCiteThemRight),
-            "http://www.zotero.org/styles/chicago-fullnote-bibliography" => Some(Self::ChicagoFullnotes),
-            "http://www.zotero.org/styles/iso690-author-date-en" => Some(Self::Iso690AuthorDate),
-            "http://www.zotero.org/styles/council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
-            "http://www.zotero.org/styles/springer-mathphys-brackets" => Some(Self::SpringerMathphys),
-            "http://www.zotero.org/styles/american-society-of-mechanical-engineers" => Some(Self::AmericanSocietyOfMechanicalEngineers),
-            "http://www.zotero.org/styles/karger-journals" => Some(Self::Karger),
-            "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
-            "http://www.zotero.org/styles/apa" => Some(Self::AmericanPsychologicalAssociation),
-            "http://www.zotero.org/styles/modern-language-association-8th-edition" => Some(Self::ModernLanguageAssociation8),
-            "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date" => Some(Self::Gb77142015AuthorDate),
-            "http://www.zotero.org/styles/springer-vancouver-brackets" => Some(Self::SpringerVancouver),
-            "http://www.zotero.org/styles/bmj" => Some(Self::BritishMedicalJournal),
-            "http://www.zotero.org/styles/turabian-author-date" => Some(Self::TurabianAuthorDate),
-            "http://www.zotero.org/styles/chicago-author-date" => Some(Self::ChicagoAuthorDate),
-            "http://www.zotero.org/styles/associacao-brasileira-de-normas-tecnicas" => Some(Self::AssociacaoBrasileiraDeNormasTecnicas),
-            "http://www.zotero.org/styles/vancouver-superscript" => Some(Self::VancouverSuperscript),
-            "http://www.zotero.org/styles/angewandte-chemie" => Some(Self::AngewandteChemie),
-            "http://www.zotero.org/styles/elsevier-with-titles" => Some(Self::ElsevierWithTitles),
-            "http://www.zotero.org/styles/iso690-numeric-en" => Some(Self::Iso690Numeric),
             "http://www.zotero.org/styles/modern-language-association" => Some(Self::ModernLanguageAssociation),
-            "http://www.zotero.org/styles/council-of-science-editors-brackets" => Some(Self::CouncilOfScienceEditors),
+            "http://www.zotero.org/styles/modern-language-association-8th-edition" => Some(Self::ModernLanguageAssociation8),
+            "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
+            "http://www.zotero.org/styles/nature" => Some(Self::Nature),
+            "http://www.zotero.org/styles/pensoft-journals" => Some(Self::Pensoft),
+            "http://www.zotero.org/styles/plos" => Some(Self::PublicLibraryOfScience),
+            "http://www.zotero.org/styles/royal-society-of-chemistry" => Some(Self::RoyalSocietyOfChemistry),
+            "http://www.zotero.org/styles/sage-vancouver" => Some(Self::SageVancouver),
+            "http://www.zotero.org/styles/sist02" => Some(Self::Sist02),
             "http://www.zotero.org/styles/spie-journals" => Some(Self::Spie),
+            "http://www.zotero.org/styles/springer-basic-brackets" => Some(Self::SpringerBasic),
+            "http://www.zotero.org/styles/springer-basic-author-date" => Some(Self::SpringerBasicAuthorDate),
             "http://www.zotero.org/styles/springer-fachzeitschriften-medizin-psychologie" => Some(Self::SpringerFachzeitschriftenMedizinPsychologie),
-            "http://www.zotero.org/styles/frontiers" => Some(Self::Frontiers),
-            "http://www.zotero.org/styles/american-physics-society" => Some(Self::AmericanPhysicsSociety),
-            "http://www.zotero.org/styles/american-sociological-association" => Some(Self::AmericanSociologicalAssociation),
-            "http://www.zotero.org/styles/elsevier-vancouver" => Some(Self::ElsevierVancouver),
-            "http://www.zotero.org/styles/chicago-note-bibliography" => Some(Self::ChicagoNotes),
-            "http://typst.org/csl/alphanumeric" => Some(Self::Alphanumeric),
+            "http://www.zotero.org/styles/springer-humanities-author-date" => Some(Self::SpringerHumanitiesAuthorDate),
+            "http://www.zotero.org/styles/springer-lecture-notes-in-computer-science" => Some(Self::SpringerLectureNotesInComputerScience),
+            "http://www.zotero.org/styles/springer-mathphys-brackets" => Some(Self::SpringerMathphys),
+            "http://www.zotero.org/styles/springer-socpsych-author-date" => Some(Self::SpringerSocpsychAuthorDate),
+            "http://www.zotero.org/styles/springer-vancouver-brackets" => Some(Self::SpringerVancouver),
+            "http://www.zotero.org/styles/taylor-and-francis-chicago-author-date" => Some(Self::TaylorAndFrancisChicagoAuthorDate),
+            "http://www.zotero.org/styles/taylor-and-francis-national-library-of-medicine" => Some(Self::TaylorAndFrancisNationalLibraryOfMedicine),
+            "http://www.zotero.org/styles/the-institution-of-engineering-and-technology" => Some(Self::TheInstitutionOfEngineeringAndTechnology),
+            "http://www.zotero.org/styles/the-lancet" => Some(Self::TheLancet),
+            "http://www.zotero.org/styles/thieme-german" => Some(Self::Thieme),
+            "http://www.zotero.org/styles/trends-journals" => Some(Self::Trends),
+            "http://www.zotero.org/styles/turabian-author-date" => Some(Self::TurabianAuthorDate),
+            "http://www.zotero.org/styles/turabian-fullnote-bibliography-8th-edition" => Some(Self::TurabianFullnote8),
+            "http://www.zotero.org/styles/vancouver" => Some(Self::Vancouver),
+            "http://www.zotero.org/styles/vancouver-superscript" => Some(Self::VancouverSuperscript),
             _ => None
         }
     }
@@ -521,174 +522,174 @@ impl ArchivedStyle {
     /// Returns all variants.
     pub fn all() -> &'static [Self] {
         &[
+            Self::Alphanumeric,
             Self::AmericanAnthropologicalAssociation,
-            Self::SpringerLectureNotesInComputerScience,
-            Self::AmericanMedicalAssociation,
-            Self::SageVancouver,
-            Self::BiomedCentral,
-            Self::AmericanSocietyOfCivilEngineers,
-            Self::TaylorAndFrancisChicagoAuthorDate,
-            Self::Gb77142015Note,
-            Self::AmericanSocietyForMicrobiology,
-            Self::AmericanMeteorologicalSociety,
-            Self::FutureMedicine,
-            Self::BristolUniversityPress,
-            Self::PublicLibraryOfScience,
-            Self::Pensoft,
+            Self::AmericanChemicalSociety,
+            Self::AmericanGeophysicalUnion,
             Self::AmericanInstituteOfAeronauticsAndAstronautics,
+            Self::AmericanInstituteOfPhysics,
+            Self::AmericanMedicalAssociation,
+            Self::AmericanMeteorologicalSociety,
+            Self::AmericanPhysicsSociety,
+            Self::AmericanPhysiologicalSociety,
+            Self::AmericanPoliticalScienceAssociation,
+            Self::AmericanPsychologicalAssociation,
+            Self::AmericanSocietyForMicrobiology,
+            Self::AmericanSocietyOfCivilEngineers,
+            Self::AmericanSocietyOfMechanicalEngineers,
+            Self::AmericanSociologicalAssociation,
+            Self::AngewandteChemie,
+            Self::AnnualReviews,
+            Self::AnnualReviewsAuthorDate,
+            Self::AssociacaoBrasileiraDeNormasTecnicas,
+            Self::AssociationForComputingMachinery,
+            Self::BiomedCentral,
+            Self::BristolUniversityPress,
+            Self::BritishMedicalJournal,
+            Self::Cell,
+            Self::ChicagoAuthorDate,
+            Self::ChicagoFullnotes,
+            Self::ChicagoNotes,
+            Self::Copernicus,
+            Self::CouncilOfScienceEditors,
+            Self::CouncilOfScienceEditorsAuthorDate,
+            Self::CurrentOpinion,
+            Self::DeutscheGesellschaftFürPsychologie,
+            Self::DeutscheSprache,
+            Self::ElsevierHarvard,
+            Self::ElsevierVancouver,
+            Self::ElsevierWithTitles,
+            Self::Frontiers,
+            Self::FutureMedicine,
+            Self::FutureScience,
+            Self::Gb77142005Numeric,
+            Self::Gb77142015AuthorDate,
+            Self::Gb77142015Note,
+            Self::Gb77142015Numeric,
+            Self::GostR7052008Numeric,
+            Self::HarvardCiteThemRight,
+            Self::InstituteOfElectricalAndElectronicsEngineers,
+            Self::InstituteOfPhysicsNumeric,
+            Self::Iso690AuthorDate,
+            Self::Iso690Numeric,
+            Self::Karger,
             Self::MaryAnnLiebertVancouver,
             Self::ModernHumanitiesResearchAssociation,
-            Self::SpringerSocpsychAuthorDate,
-            Self::Trends,
-            Self::GostR7052008Numeric,
-            Self::AmericanPoliticalScienceAssociation,
-            Self::FutureScience,
-            Self::AssociationForComputingMachinery,
-            Self::ElsevierHarvard,
-            Self::AmericanChemicalSociety,
-            Self::Cell,
-            Self::RoyalSocietyOfChemistry,
-            Self::Sist02,
-            Self::Gb77142005Numeric,
-            Self::InstituteOfElectricalAndElectronicsEngineers,
-            Self::SpringerHumanitiesAuthorDate,
-            Self::DeutscheGesellschaftFRPsychologie,
-            Self::SpringerBasicAuthorDate,
-            Self::InstituteOfPhysicsNumeric,
-            Self::Vancouver,
-            Self::Nature,
-            Self::CurrentOpinion,
-            Self::AnnualReviewsAuthorDate,
-            Self::AmericanInstituteOfPhysics,
-            Self::Gb77142015Numeric,
-            Self::TheLancet,
-            Self::SpringerBasic,
-            Self::AmericanGeophysicalUnion,
-            Self::TurabianFullnote8,
-            Self::TaylorAndFrancisNationalLibraryOfMedicine,
-            Self::AmericanPhysiologicalSociety,
-            Self::Thieme,
-            Self::Copernicus,
-            Self::TheInstitutionOfEngineeringAndTechnology,
-            Self::AnnualReviews,
-            Self::DeutscheSprache,
-            Self::HarvardCiteThemRight,
-            Self::ChicagoFullnotes,
-            Self::Iso690AuthorDate,
-            Self::CouncilOfScienceEditorsAuthorDate,
-            Self::SpringerMathphys,
-            Self::AmericanSocietyOfMechanicalEngineers,
-            Self::Karger,
-            Self::MultidisciplinaryDigitalPublishingInstitute,
-            Self::AmericanPsychologicalAssociation,
-            Self::ModernLanguageAssociation8,
-            Self::Gb77142015AuthorDate,
-            Self::SpringerVancouver,
-            Self::BritishMedicalJournal,
-            Self::TurabianAuthorDate,
-            Self::ChicagoAuthorDate,
-            Self::AssociacaoBrasileiraDeNormasTecnicas,
-            Self::VancouverSuperscript,
-            Self::AngewandteChemie,
-            Self::ElsevierWithTitles,
-            Self::Iso690Numeric,
             Self::ModernLanguageAssociation,
-            Self::CouncilOfScienceEditors,
+            Self::ModernLanguageAssociation8,
+            Self::MultidisciplinaryDigitalPublishingInstitute,
+            Self::Nature,
+            Self::Pensoft,
+            Self::PublicLibraryOfScience,
+            Self::RoyalSocietyOfChemistry,
+            Self::SageVancouver,
+            Self::Sist02,
             Self::Spie,
+            Self::SpringerBasic,
+            Self::SpringerBasicAuthorDate,
             Self::SpringerFachzeitschriftenMedizinPsychologie,
-            Self::Frontiers,
-            Self::AmericanPhysicsSociety,
-            Self::AmericanSociologicalAssociation,
-            Self::ElsevierVancouver,
-            Self::ChicagoNotes,
-            Self::Alphanumeric,
+            Self::SpringerHumanitiesAuthorDate,
+            Self::SpringerLectureNotesInComputerScience,
+            Self::SpringerMathphys,
+            Self::SpringerSocpsychAuthorDate,
+            Self::SpringerVancouver,
+            Self::TaylorAndFrancisChicagoAuthorDate,
+            Self::TaylorAndFrancisNationalLibraryOfMedicine,
+            Self::TheInstitutionOfEngineeringAndTechnology,
+            Self::TheLancet,
+            Self::Thieme,
+            Self::Trends,
+            Self::TurabianAuthorDate,
+            Self::TurabianFullnote8,
+            Self::Vancouver,
+            Self::VancouverSuperscript,
         ]
     }
 
     /// Get the CBOR representation of this style.
     fn bytes(self) -> &'static [u8] {
         match self {
+            Self::Alphanumeric => include_bytes!("../../archive/styles/alphanumeric.cbor"),
             Self::AmericanAnthropologicalAssociation => include_bytes!("../../archive/styles/american-anthropological-association.cbor"),
-            Self::SpringerLectureNotesInComputerScience => include_bytes!("../../archive/styles/springer-lecture-notes-in-computer-science.cbor"),
-            Self::AmericanMedicalAssociation => include_bytes!("../../archive/styles/american-medical-association.cbor"),
-            Self::SageVancouver => include_bytes!("../../archive/styles/sage-vancouver.cbor"),
-            Self::BiomedCentral => include_bytes!("../../archive/styles/biomed-central.cbor"),
-            Self::AmericanSocietyOfCivilEngineers => include_bytes!("../../archive/styles/american-society-of-civil-engineers.cbor"),
-            Self::TaylorAndFrancisChicagoAuthorDate => include_bytes!("../../archive/styles/taylor-and-francis-chicago-author-date.cbor"),
-            Self::Gb77142015Note => include_bytes!("../../archive/styles/china-national-standard-gb-t-7714-2015-note.cbor"),
-            Self::AmericanSocietyForMicrobiology => include_bytes!("../../archive/styles/american-society-for-microbiology.cbor"),
-            Self::AmericanMeteorologicalSociety => include_bytes!("../../archive/styles/american-meteorological-society.cbor"),
-            Self::FutureMedicine => include_bytes!("../../archive/styles/future-medicine.cbor"),
-            Self::BristolUniversityPress => include_bytes!("../../archive/styles/bristol-university-press.cbor"),
-            Self::PublicLibraryOfScience => include_bytes!("../../archive/styles/plos.cbor"),
-            Self::Pensoft => include_bytes!("../../archive/styles/pensoft-journals.cbor"),
+            Self::AmericanChemicalSociety => include_bytes!("../../archive/styles/american-chemical-society.cbor"),
+            Self::AmericanGeophysicalUnion => include_bytes!("../../archive/styles/american-geophysical-union.cbor"),
             Self::AmericanInstituteOfAeronauticsAndAstronautics => include_bytes!("../../archive/styles/american-institute-of-aeronautics-and-astronautics.cbor"),
+            Self::AmericanInstituteOfPhysics => include_bytes!("../../archive/styles/american-institute-of-physics.cbor"),
+            Self::AmericanMedicalAssociation => include_bytes!("../../archive/styles/american-medical-association.cbor"),
+            Self::AmericanMeteorologicalSociety => include_bytes!("../../archive/styles/american-meteorological-society.cbor"),
+            Self::AmericanPhysicsSociety => include_bytes!("../../archive/styles/american-physics-society.cbor"),
+            Self::AmericanPhysiologicalSociety => include_bytes!("../../archive/styles/american-physiological-society.cbor"),
+            Self::AmericanPoliticalScienceAssociation => include_bytes!("../../archive/styles/american-political-science-association.cbor"),
+            Self::AmericanPsychologicalAssociation => include_bytes!("../../archive/styles/apa.cbor"),
+            Self::AmericanSocietyForMicrobiology => include_bytes!("../../archive/styles/american-society-for-microbiology.cbor"),
+            Self::AmericanSocietyOfCivilEngineers => include_bytes!("../../archive/styles/american-society-of-civil-engineers.cbor"),
+            Self::AmericanSocietyOfMechanicalEngineers => include_bytes!("../../archive/styles/american-society-of-mechanical-engineers.cbor"),
+            Self::AmericanSociologicalAssociation => include_bytes!("../../archive/styles/american-sociological-association.cbor"),
+            Self::AngewandteChemie => include_bytes!("../../archive/styles/angewandte-chemie.cbor"),
+            Self::AnnualReviews => include_bytes!("../../archive/styles/annual-reviews.cbor"),
+            Self::AnnualReviewsAuthorDate => include_bytes!("../../archive/styles/annual-reviews-author-date.cbor"),
+            Self::AssociacaoBrasileiraDeNormasTecnicas => include_bytes!("../../archive/styles/associacao-brasileira-de-normas-tecnicas.cbor"),
+            Self::AssociationForComputingMachinery => include_bytes!("../../archive/styles/association-for-computing-machinery.cbor"),
+            Self::BiomedCentral => include_bytes!("../../archive/styles/biomed-central.cbor"),
+            Self::BristolUniversityPress => include_bytes!("../../archive/styles/bristol-university-press.cbor"),
+            Self::BritishMedicalJournal => include_bytes!("../../archive/styles/bmj.cbor"),
+            Self::Cell => include_bytes!("../../archive/styles/cell.cbor"),
+            Self::ChicagoAuthorDate => include_bytes!("../../archive/styles/chicago-author-date.cbor"),
+            Self::ChicagoFullnotes => include_bytes!("../../archive/styles/chicago-fullnote-bibliography.cbor"),
+            Self::ChicagoNotes => include_bytes!("../../archive/styles/chicago-note-bibliography.cbor"),
+            Self::Copernicus => include_bytes!("../../archive/styles/copernicus-publications.cbor"),
+            Self::CouncilOfScienceEditors => include_bytes!("../../archive/styles/council-of-science-editors-brackets.cbor"),
+            Self::CouncilOfScienceEditorsAuthorDate => include_bytes!("../../archive/styles/council-of-science-editors-author-date.cbor"),
+            Self::CurrentOpinion => include_bytes!("../../archive/styles/current-opinion.cbor"),
+            Self::DeutscheGesellschaftFürPsychologie => include_bytes!("../../archive/styles/deutsche-gesellschaft-fur-psychologie.cbor"),
+            Self::DeutscheSprache => include_bytes!("../../archive/styles/deutsche-sprache.cbor"),
+            Self::ElsevierHarvard => include_bytes!("../../archive/styles/elsevier-harvard.cbor"),
+            Self::ElsevierVancouver => include_bytes!("../../archive/styles/elsevier-vancouver.cbor"),
+            Self::ElsevierWithTitles => include_bytes!("../../archive/styles/elsevier-with-titles.cbor"),
+            Self::Frontiers => include_bytes!("../../archive/styles/frontiers.cbor"),
+            Self::FutureMedicine => include_bytes!("../../archive/styles/future-medicine.cbor"),
+            Self::FutureScience => include_bytes!("../../archive/styles/future-science-group.cbor"),
+            Self::Gb77142005Numeric => include_bytes!("../../archive/styles/chinese-gb7714-2005-numeric.cbor"),
+            Self::Gb77142015AuthorDate => include_bytes!("../../archive/styles/china-national-standard-gb-t-7714-2015-author-date.cbor"),
+            Self::Gb77142015Note => include_bytes!("../../archive/styles/china-national-standard-gb-t-7714-2015-note.cbor"),
+            Self::Gb77142015Numeric => include_bytes!("../../archive/styles/china-national-standard-gb-t-7714-2015-numeric.cbor"),
+            Self::GostR7052008Numeric => include_bytes!("../../archive/styles/gost-r-7-0-5-2008-numeric.cbor"),
+            Self::HarvardCiteThemRight => include_bytes!("../../archive/styles/harvard-cite-them-right.cbor"),
+            Self::InstituteOfElectricalAndElectronicsEngineers => include_bytes!("../../archive/styles/ieee.cbor"),
+            Self::InstituteOfPhysicsNumeric => include_bytes!("../../archive/styles/institute-of-physics-numeric.cbor"),
+            Self::Iso690AuthorDate => include_bytes!("../../archive/styles/iso690-author-date-en.cbor"),
+            Self::Iso690Numeric => include_bytes!("../../archive/styles/iso690-numeric-en.cbor"),
+            Self::Karger => include_bytes!("../../archive/styles/karger-journals.cbor"),
             Self::MaryAnnLiebertVancouver => include_bytes!("../../archive/styles/mary-ann-liebert-vancouver.cbor"),
             Self::ModernHumanitiesResearchAssociation => include_bytes!("../../archive/styles/modern-humanities-research-association.cbor"),
-            Self::SpringerSocpsychAuthorDate => include_bytes!("../../archive/styles/springer-socpsych-author-date.cbor"),
-            Self::Trends => include_bytes!("../../archive/styles/trends-journals.cbor"),
-            Self::GostR7052008Numeric => include_bytes!("../../archive/styles/gost-r-7-0-5-2008-numeric.cbor"),
-            Self::AmericanPoliticalScienceAssociation => include_bytes!("../../archive/styles/american-political-science-association.cbor"),
-            Self::FutureScience => include_bytes!("../../archive/styles/future-science-group.cbor"),
-            Self::AssociationForComputingMachinery => include_bytes!("../../archive/styles/association-for-computing-machinery.cbor"),
-            Self::ElsevierHarvard => include_bytes!("../../archive/styles/elsevier-harvard.cbor"),
-            Self::AmericanChemicalSociety => include_bytes!("../../archive/styles/american-chemical-society.cbor"),
-            Self::Cell => include_bytes!("../../archive/styles/cell.cbor"),
-            Self::RoyalSocietyOfChemistry => include_bytes!("../../archive/styles/royal-society-of-chemistry.cbor"),
-            Self::Sist02 => include_bytes!("../../archive/styles/sist02.cbor"),
-            Self::Gb77142005Numeric => include_bytes!("../../archive/styles/chinese-gb7714-2005-numeric.cbor"),
-            Self::InstituteOfElectricalAndElectronicsEngineers => include_bytes!("../../archive/styles/ieee.cbor"),
-            Self::SpringerHumanitiesAuthorDate => include_bytes!("../../archive/styles/springer-humanities-author-date.cbor"),
-            Self::DeutscheGesellschaftFRPsychologie => include_bytes!("../../archive/styles/deutsche-gesellschaft-fur-psychologie.cbor"),
-            Self::SpringerBasicAuthorDate => include_bytes!("../../archive/styles/springer-basic-author-date.cbor"),
-            Self::InstituteOfPhysicsNumeric => include_bytes!("../../archive/styles/institute-of-physics-numeric.cbor"),
-            Self::Vancouver => include_bytes!("../../archive/styles/vancouver.cbor"),
-            Self::Nature => include_bytes!("../../archive/styles/nature.cbor"),
-            Self::CurrentOpinion => include_bytes!("../../archive/styles/current-opinion.cbor"),
-            Self::AnnualReviewsAuthorDate => include_bytes!("../../archive/styles/annual-reviews-author-date.cbor"),
-            Self::AmericanInstituteOfPhysics => include_bytes!("../../archive/styles/american-institute-of-physics.cbor"),
-            Self::Gb77142015Numeric => include_bytes!("../../archive/styles/china-national-standard-gb-t-7714-2015-numeric.cbor"),
-            Self::TheLancet => include_bytes!("../../archive/styles/the-lancet.cbor"),
-            Self::SpringerBasic => include_bytes!("../../archive/styles/springer-basic-brackets.cbor"),
-            Self::AmericanGeophysicalUnion => include_bytes!("../../archive/styles/american-geophysical-union.cbor"),
-            Self::TurabianFullnote8 => include_bytes!("../../archive/styles/turabian-fullnote-bibliography-8th-edition.cbor"),
-            Self::TaylorAndFrancisNationalLibraryOfMedicine => include_bytes!("../../archive/styles/taylor-and-francis-national-library-of-medicine.cbor"),
-            Self::AmericanPhysiologicalSociety => include_bytes!("../../archive/styles/american-physiological-society.cbor"),
-            Self::Thieme => include_bytes!("../../archive/styles/thieme-german.cbor"),
-            Self::Copernicus => include_bytes!("../../archive/styles/copernicus-publications.cbor"),
-            Self::TheInstitutionOfEngineeringAndTechnology => include_bytes!("../../archive/styles/the-institution-of-engineering-and-technology.cbor"),
-            Self::AnnualReviews => include_bytes!("../../archive/styles/annual-reviews.cbor"),
-            Self::DeutscheSprache => include_bytes!("../../archive/styles/deutsche-sprache.cbor"),
-            Self::HarvardCiteThemRight => include_bytes!("../../archive/styles/harvard-cite-them-right.cbor"),
-            Self::ChicagoFullnotes => include_bytes!("../../archive/styles/chicago-fullnote-bibliography.cbor"),
-            Self::Iso690AuthorDate => include_bytes!("../../archive/styles/iso690-author-date-en.cbor"),
-            Self::CouncilOfScienceEditorsAuthorDate => include_bytes!("../../archive/styles/council-of-science-editors-author-date.cbor"),
-            Self::SpringerMathphys => include_bytes!("../../archive/styles/springer-mathphys-brackets.cbor"),
-            Self::AmericanSocietyOfMechanicalEngineers => include_bytes!("../../archive/styles/american-society-of-mechanical-engineers.cbor"),
-            Self::Karger => include_bytes!("../../archive/styles/karger-journals.cbor"),
-            Self::MultidisciplinaryDigitalPublishingInstitute => include_bytes!("../../archive/styles/multidisciplinary-digital-publishing-institute.cbor"),
-            Self::AmericanPsychologicalAssociation => include_bytes!("../../archive/styles/apa.cbor"),
-            Self::ModernLanguageAssociation8 => include_bytes!("../../archive/styles/modern-language-association-8th-edition.cbor"),
-            Self::Gb77142015AuthorDate => include_bytes!("../../archive/styles/china-national-standard-gb-t-7714-2015-author-date.cbor"),
-            Self::SpringerVancouver => include_bytes!("../../archive/styles/springer-vancouver-brackets.cbor"),
-            Self::BritishMedicalJournal => include_bytes!("../../archive/styles/bmj.cbor"),
-            Self::TurabianAuthorDate => include_bytes!("../../archive/styles/turabian-author-date.cbor"),
-            Self::ChicagoAuthorDate => include_bytes!("../../archive/styles/chicago-author-date.cbor"),
-            Self::AssociacaoBrasileiraDeNormasTecnicas => include_bytes!("../../archive/styles/associacao-brasileira-de-normas-tecnicas.cbor"),
-            Self::VancouverSuperscript => include_bytes!("../../archive/styles/vancouver-superscript.cbor"),
-            Self::AngewandteChemie => include_bytes!("../../archive/styles/angewandte-chemie.cbor"),
-            Self::ElsevierWithTitles => include_bytes!("../../archive/styles/elsevier-with-titles.cbor"),
-            Self::Iso690Numeric => include_bytes!("../../archive/styles/iso690-numeric-en.cbor"),
             Self::ModernLanguageAssociation => include_bytes!("../../archive/styles/modern-language-association.cbor"),
-            Self::CouncilOfScienceEditors => include_bytes!("../../archive/styles/council-of-science-editors-brackets.cbor"),
+            Self::ModernLanguageAssociation8 => include_bytes!("../../archive/styles/modern-language-association-8th-edition.cbor"),
+            Self::MultidisciplinaryDigitalPublishingInstitute => include_bytes!("../../archive/styles/multidisciplinary-digital-publishing-institute.cbor"),
+            Self::Nature => include_bytes!("../../archive/styles/nature.cbor"),
+            Self::Pensoft => include_bytes!("../../archive/styles/pensoft-journals.cbor"),
+            Self::PublicLibraryOfScience => include_bytes!("../../archive/styles/plos.cbor"),
+            Self::RoyalSocietyOfChemistry => include_bytes!("../../archive/styles/royal-society-of-chemistry.cbor"),
+            Self::SageVancouver => include_bytes!("../../archive/styles/sage-vancouver.cbor"),
+            Self::Sist02 => include_bytes!("../../archive/styles/sist02.cbor"),
             Self::Spie => include_bytes!("../../archive/styles/spie-journals.cbor"),
+            Self::SpringerBasic => include_bytes!("../../archive/styles/springer-basic-brackets.cbor"),
+            Self::SpringerBasicAuthorDate => include_bytes!("../../archive/styles/springer-basic-author-date.cbor"),
             Self::SpringerFachzeitschriftenMedizinPsychologie => include_bytes!("../../archive/styles/springer-fachzeitschriften-medizin-psychologie.cbor"),
-            Self::Frontiers => include_bytes!("../../archive/styles/frontiers.cbor"),
-            Self::AmericanPhysicsSociety => include_bytes!("../../archive/styles/american-physics-society.cbor"),
-            Self::AmericanSociologicalAssociation => include_bytes!("../../archive/styles/american-sociological-association.cbor"),
-            Self::ElsevierVancouver => include_bytes!("../../archive/styles/elsevier-vancouver.cbor"),
-            Self::ChicagoNotes => include_bytes!("../../archive/styles/chicago-note-bibliography.cbor"),
-            Self::Alphanumeric => include_bytes!("../../archive/styles/alphanumeric.cbor"),
+            Self::SpringerHumanitiesAuthorDate => include_bytes!("../../archive/styles/springer-humanities-author-date.cbor"),
+            Self::SpringerLectureNotesInComputerScience => include_bytes!("../../archive/styles/springer-lecture-notes-in-computer-science.cbor"),
+            Self::SpringerMathphys => include_bytes!("../../archive/styles/springer-mathphys-brackets.cbor"),
+            Self::SpringerSocpsychAuthorDate => include_bytes!("../../archive/styles/springer-socpsych-author-date.cbor"),
+            Self::SpringerVancouver => include_bytes!("../../archive/styles/springer-vancouver-brackets.cbor"),
+            Self::TaylorAndFrancisChicagoAuthorDate => include_bytes!("../../archive/styles/taylor-and-francis-chicago-author-date.cbor"),
+            Self::TaylorAndFrancisNationalLibraryOfMedicine => include_bytes!("../../archive/styles/taylor-and-francis-national-library-of-medicine.cbor"),
+            Self::TheInstitutionOfEngineeringAndTechnology => include_bytes!("../../archive/styles/the-institution-of-engineering-and-technology.cbor"),
+            Self::TheLancet => include_bytes!("../../archive/styles/the-lancet.cbor"),
+            Self::Thieme => include_bytes!("../../archive/styles/thieme-german.cbor"),
+            Self::Trends => include_bytes!("../../archive/styles/trends-journals.cbor"),
+            Self::TurabianAuthorDate => include_bytes!("../../archive/styles/turabian-author-date.cbor"),
+            Self::TurabianFullnote8 => include_bytes!("../../archive/styles/turabian-fullnote-bibliography-8th-edition.cbor"),
+            Self::Vancouver => include_bytes!("../../archive/styles/vancouver.cbor"),
+            Self::VancouverSuperscript => include_bytes!("../../archive/styles/vancouver-superscript.cbor"),
         }
     }
 
@@ -700,51 +701,161 @@ impl ArchivedStyle {
     /// Get the style's names in Hayagriva.
     pub fn names(self) -> &'static [&'static str] {
         match self {
+            Self::Alphanumeric => &[
+                "alphanumeric",
+            ],
             Self::AmericanAnthropologicalAssociation => &[
                 "american-anthropological-association",
             ],
-            Self::SpringerLectureNotesInComputerScience => &[
-                "springer-lecture-notes-in-computer-science",
+            Self::AmericanChemicalSociety => &[
+                "american-chemical-society",
+            ],
+            Self::AmericanGeophysicalUnion => &[
+                "american-geophysical-union",
+            ],
+            Self::AmericanInstituteOfAeronauticsAndAstronautics => &[
+                "american-institute-of-aeronautics-and-astronautics",
+            ],
+            Self::AmericanInstituteOfPhysics => &[
+                "american-institute-of-physics",
             ],
             Self::AmericanMedicalAssociation => &[
                 "american-medical-association",
             ],
-            Self::SageVancouver => &[
-                "sage-vancouver",
+            Self::AmericanMeteorologicalSociety => &[
+                "american-meteorological-society",
             ],
-            Self::BiomedCentral => &[
-                "biomed-central",
+            Self::AmericanPhysicsSociety => &[
+                "american-physics-society",
             ],
-            Self::AmericanSocietyOfCivilEngineers => &[
-                "american-society-of-civil-engineers",
+            Self::AmericanPhysiologicalSociety => &[
+                "american-physiological-society",
             ],
-            Self::TaylorAndFrancisChicagoAuthorDate => &[
-                "taylor-and-francis-chicago-author-date",
+            Self::AmericanPoliticalScienceAssociation => &[
+                "american-political-science-association",
             ],
-            Self::Gb77142015Note => &[
-                "gb-7714-2015-note",
+            Self::AmericanPsychologicalAssociation => &[
+                "american-psychological-association",
+                "apa",
             ],
             Self::AmericanSocietyForMicrobiology => &[
                 "american-society-for-microbiology",
             ],
-            Self::AmericanMeteorologicalSociety => &[
-                "american-meteorological-society",
+            Self::AmericanSocietyOfCivilEngineers => &[
+                "american-society-of-civil-engineers",
             ],
-            Self::FutureMedicine => &[
-                "future-medicine",
+            Self::AmericanSocietyOfMechanicalEngineers => &[
+                "american-society-of-mechanical-engineers",
+            ],
+            Self::AmericanSociologicalAssociation => &[
+                "american-sociological-association",
+            ],
+            Self::AngewandteChemie => &[
+                "angewandte-chemie",
+            ],
+            Self::AnnualReviews => &[
+                "annual-reviews",
+            ],
+            Self::AnnualReviewsAuthorDate => &[
+                "annual-reviews-author-date",
+            ],
+            Self::AssociacaoBrasileiraDeNormasTecnicas => &[
+                "associacao-brasileira-de-normas-tecnicas",
+            ],
+            Self::AssociationForComputingMachinery => &[
+                "association-for-computing-machinery",
+            ],
+            Self::BiomedCentral => &[
+                "biomed-central",
             ],
             Self::BristolUniversityPress => &[
                 "bristol-university-press",
             ],
-            Self::PublicLibraryOfScience => &[
-                "public-library-of-science",
-                "plos",
+            Self::BritishMedicalJournal => &[
+                "british-medical-journal",
+                "bmj",
             ],
-            Self::Pensoft => &[
-                "pensoft",
+            Self::Cell => &[
+                "cell",
             ],
-            Self::AmericanInstituteOfAeronauticsAndAstronautics => &[
-                "american-institute-of-aeronautics-and-astronautics",
+            Self::ChicagoAuthorDate => &[
+                "chicago-author-date",
+            ],
+            Self::ChicagoFullnotes => &[
+                "chicago-fullnotes",
+            ],
+            Self::ChicagoNotes => &[
+                "chicago-notes",
+            ],
+            Self::Copernicus => &[
+                "copernicus",
+            ],
+            Self::CouncilOfScienceEditors => &[
+                "council-of-science-editors",
+            ],
+            Self::CouncilOfScienceEditorsAuthorDate => &[
+                "council-of-science-editors-author-date",
+            ],
+            Self::CurrentOpinion => &[
+                "current-opinion",
+            ],
+            Self::DeutscheGesellschaftFürPsychologie => &[
+                "deutsche-gesellschaft-für-psychologie",
+            ],
+            Self::DeutscheSprache => &[
+                "deutsche-sprache",
+            ],
+            Self::ElsevierHarvard => &[
+                "elsevier-harvard",
+            ],
+            Self::ElsevierVancouver => &[
+                "elsevier-vancouver",
+            ],
+            Self::ElsevierWithTitles => &[
+                "elsevier-with-titles",
+            ],
+            Self::Frontiers => &[
+                "frontiers",
+            ],
+            Self::FutureMedicine => &[
+                "future-medicine",
+            ],
+            Self::FutureScience => &[
+                "future-science",
+            ],
+            Self::Gb77142005Numeric => &[
+                "gb-7714-2005-numeric",
+            ],
+            Self::Gb77142015AuthorDate => &[
+                "gb-7714-2015-author-date",
+            ],
+            Self::Gb77142015Note => &[
+                "gb-7714-2015-note",
+            ],
+            Self::Gb77142015Numeric => &[
+                "gb-7714-2015-numeric",
+            ],
+            Self::GostR7052008Numeric => &[
+                "gost-r-705-2008-numeric",
+            ],
+            Self::HarvardCiteThemRight => &[
+                "harvard-cite-them-right",
+            ],
+            Self::InstituteOfElectricalAndElectronicsEngineers => &[
+                "institute-of-electrical-and-electronics-engineers",
+                "ieee",
+            ],
+            Self::InstituteOfPhysicsNumeric => &[
+                "institute-of-physics-numeric",
+            ],
+            Self::Iso690AuthorDate => &[
+                "iso-690-author-date",
+            ],
+            Self::Iso690Numeric => &[
+                "iso-690-numeric",
+            ],
+            Self::Karger => &[
+                "karger",
             ],
             Self::MaryAnnLiebertVancouver => &[
                 "mary-ann-liebert-vancouver",
@@ -752,202 +863,92 @@ impl ArchivedStyle {
             Self::ModernHumanitiesResearchAssociation => &[
                 "modern-humanities-research-association",
             ],
-            Self::SpringerSocpsychAuthorDate => &[
-                "springer-socpsych-author-date",
-            ],
-            Self::Trends => &[
-                "trends",
-            ],
-            Self::GostR7052008Numeric => &[
-                "gost-r-705-2008-numeric",
-            ],
-            Self::AmericanPoliticalScienceAssociation => &[
-                "american-political-science-association",
-            ],
-            Self::FutureScience => &[
-                "future-science",
-            ],
-            Self::AssociationForComputingMachinery => &[
-                "association-for-computing-machinery",
-            ],
-            Self::ElsevierHarvard => &[
-                "elsevier-harvard",
-            ],
-            Self::AmericanChemicalSociety => &[
-                "american-chemical-society",
-            ],
-            Self::Cell => &[
-                "cell",
-            ],
-            Self::RoyalSocietyOfChemistry => &[
-                "royal-society-of-chemistry",
-            ],
-            Self::Sist02 => &[
-                "sist02",
-            ],
-            Self::Gb77142005Numeric => &[
-                "gb-7714-2005-numeric",
-            ],
-            Self::InstituteOfElectricalAndElectronicsEngineers => &[
-                "institute-of-electrical-and-electronics-engineers",
-                "ieee",
-            ],
-            Self::SpringerHumanitiesAuthorDate => &[
-                "springer-humanities-author-date",
-            ],
-            Self::DeutscheGesellschaftFRPsychologie => &[
-                "deutsche-gesellschaft-für-psychologie",
-            ],
-            Self::SpringerBasicAuthorDate => &[
-                "springer-basic-author-date",
-            ],
-            Self::InstituteOfPhysicsNumeric => &[
-                "institute-of-physics-numeric",
-            ],
-            Self::Vancouver => &[
-                "vancouver",
-            ],
-            Self::Nature => &[
-                "nature",
-            ],
-            Self::CurrentOpinion => &[
-                "current-opinion",
-            ],
-            Self::AnnualReviewsAuthorDate => &[
-                "annual-reviews-author-date",
-            ],
-            Self::AmericanInstituteOfPhysics => &[
-                "american-institute-of-physics",
-            ],
-            Self::Gb77142015Numeric => &[
-                "gb-7714-2015-numeric",
-            ],
-            Self::TheLancet => &[
-                "the-lancet",
-            ],
-            Self::SpringerBasic => &[
-                "springer-basic",
-            ],
-            Self::AmericanGeophysicalUnion => &[
-                "american-geophysical-union",
-            ],
-            Self::TurabianFullnote8 => &[
-                "turabian-fullnote-8",
-            ],
-            Self::TaylorAndFrancisNationalLibraryOfMedicine => &[
-                "taylor-and-francis-national-library-of-medicine",
-            ],
-            Self::AmericanPhysiologicalSociety => &[
-                "american-physiological-society",
-            ],
-            Self::Thieme => &[
-                "thieme",
-            ],
-            Self::Copernicus => &[
-                "copernicus",
-            ],
-            Self::TheInstitutionOfEngineeringAndTechnology => &[
-                "the-institution-of-engineering-and-technology",
-            ],
-            Self::AnnualReviews => &[
-                "annual-reviews",
-            ],
-            Self::DeutscheSprache => &[
-                "deutsche-sprache",
-            ],
-            Self::HarvardCiteThemRight => &[
-                "harvard-cite-them-right",
-            ],
-            Self::ChicagoFullnotes => &[
-                "chicago-fullnotes",
-            ],
-            Self::Iso690AuthorDate => &[
-                "iso-690-author-date",
-            ],
-            Self::CouncilOfScienceEditorsAuthorDate => &[
-                "council-of-science-editors-author-date",
-            ],
-            Self::SpringerMathphys => &[
-                "springer-mathphys",
-            ],
-            Self::AmericanSocietyOfMechanicalEngineers => &[
-                "american-society-of-mechanical-engineers",
-            ],
-            Self::Karger => &[
-                "karger",
-            ],
-            Self::MultidisciplinaryDigitalPublishingInstitute => &[
-                "multidisciplinary-digital-publishing-institute",
-            ],
-            Self::AmericanPsychologicalAssociation => &[
-                "american-psychological-association",
-                "apa",
+            Self::ModernLanguageAssociation => &[
+                "modern-language-association",
+                "mla",
             ],
             Self::ModernLanguageAssociation8 => &[
                 "modern-language-association-8",
                 "mla-8",
             ],
-            Self::Gb77142015AuthorDate => &[
-                "gb-7714-2015-author-date",
+            Self::MultidisciplinaryDigitalPublishingInstitute => &[
+                "multidisciplinary-digital-publishing-institute",
             ],
-            Self::SpringerVancouver => &[
-                "springer-vancouver",
+            Self::Nature => &[
+                "nature",
             ],
-            Self::BritishMedicalJournal => &[
-                "british-medical-journal",
-                "bmj",
+            Self::Pensoft => &[
+                "pensoft",
             ],
-            Self::TurabianAuthorDate => &[
-                "turabian-author-date",
+            Self::PublicLibraryOfScience => &[
+                "public-library-of-science",
+                "plos",
             ],
-            Self::ChicagoAuthorDate => &[
-                "chicago-author-date",
+            Self::RoyalSocietyOfChemistry => &[
+                "royal-society-of-chemistry",
             ],
-            Self::AssociacaoBrasileiraDeNormasTecnicas => &[
-                "associacao-brasileira-de-normas-tecnicas",
+            Self::SageVancouver => &[
+                "sage-vancouver",
             ],
-            Self::VancouverSuperscript => &[
-                "vancouver-superscript",
-            ],
-            Self::AngewandteChemie => &[
-                "angewandte-chemie",
-            ],
-            Self::ElsevierWithTitles => &[
-                "elsevier-with-titles",
-            ],
-            Self::Iso690Numeric => &[
-                "iso-690-numeric",
-            ],
-            Self::ModernLanguageAssociation => &[
-                "modern-language-association",
-                "mla",
-            ],
-            Self::CouncilOfScienceEditors => &[
-                "council-of-science-editors",
+            Self::Sist02 => &[
+                "sist02",
             ],
             Self::Spie => &[
                 "spie",
             ],
+            Self::SpringerBasic => &[
+                "springer-basic",
+            ],
+            Self::SpringerBasicAuthorDate => &[
+                "springer-basic-author-date",
+            ],
             Self::SpringerFachzeitschriftenMedizinPsychologie => &[
                 "springer-fachzeitschriften-medizin-psychologie",
             ],
-            Self::Frontiers => &[
-                "frontiers",
+            Self::SpringerHumanitiesAuthorDate => &[
+                "springer-humanities-author-date",
             ],
-            Self::AmericanPhysicsSociety => &[
-                "american-physics-society",
+            Self::SpringerLectureNotesInComputerScience => &[
+                "springer-lecture-notes-in-computer-science",
             ],
-            Self::AmericanSociologicalAssociation => &[
-                "american-sociological-association",
+            Self::SpringerMathphys => &[
+                "springer-mathphys",
             ],
-            Self::ElsevierVancouver => &[
-                "elsevier-vancouver",
+            Self::SpringerSocpsychAuthorDate => &[
+                "springer-socpsych-author-date",
             ],
-            Self::ChicagoNotes => &[
-                "chicago-notes",
+            Self::SpringerVancouver => &[
+                "springer-vancouver",
             ],
-            Self::Alphanumeric => &[
-                "alphanumeric",
+            Self::TaylorAndFrancisChicagoAuthorDate => &[
+                "taylor-and-francis-chicago-author-date",
+            ],
+            Self::TaylorAndFrancisNationalLibraryOfMedicine => &[
+                "taylor-and-francis-national-library-of-medicine",
+            ],
+            Self::TheInstitutionOfEngineeringAndTechnology => &[
+                "the-institution-of-engineering-and-technology",
+            ],
+            Self::TheLancet => &[
+                "the-lancet",
+            ],
+            Self::Thieme => &[
+                "thieme",
+            ],
+            Self::Trends => &[
+                "trends",
+            ],
+            Self::TurabianAuthorDate => &[
+                "turabian-author-date",
+            ],
+            Self::TurabianFullnote8 => &[
+                "turabian-fullnote-8",
+            ],
+            Self::Vancouver => &[
+                "vancouver",
+            ],
+            Self::VancouverSuperscript => &[
+                "vancouver-superscript",
             ],
         }
     }
@@ -955,177 +956,176 @@ impl ArchivedStyle {
     /// Get the style's full name.
     pub fn display_name(self) -> &'static str {
         match self {
-            Self::AmericanAnthropologicalAssociation => "American Anthropological Association",
-            Self::SpringerLectureNotesInComputerScience => "Springer - Lecture Notes in Computer Science",
-            Self::AmericanMedicalAssociation => "American Medical Association 11th edition",
-            Self::SageVancouver => "SAGE - Vancouver",
-            Self::BiomedCentral => "BioMed Central",
-            Self::AmericanSocietyOfCivilEngineers => "American Society of Civil Engineers",
-            Self::TaylorAndFrancisChicagoAuthorDate => "Taylor & Francis - Chicago Manual of Style (author-date)",
-            Self::Gb77142015Note => "China National Standard GB/T 7714-2015 (note, 中文)",
-            Self::AmericanSocietyForMicrobiology => "American Society for Microbiology",
-            Self::AmericanMeteorologicalSociety => "American Meteorological Society",
-            Self::FutureMedicine => "Future Medicine journals",
-            Self::BristolUniversityPress => "Bristol University Press",
-            Self::PublicLibraryOfScience => "Public Library of Science",
-            Self::Pensoft => "Pensoft Journals",
-            Self::AmericanInstituteOfAeronauticsAndAstronautics => "American Institute of Aeronautics and Astronautics",
-            Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
-            Self::ModernHumanitiesResearchAssociation => "Modern Humanities Research Association 3rd edition (note with bibliography)",
-            Self::SpringerSocpsychAuthorDate => "Springer - SocPsych (author-date)",
-            Self::Trends => "Trends journals",
-            Self::GostR7052008Numeric => "Russian GOST R 7.0.5-2008 (numeric)",
-            Self::AmericanPoliticalScienceAssociation => "American Political Science Association",
-            Self::FutureScience => "Future Science Group",
-            Self::AssociationForComputingMachinery => "Association for Computing Machinery",
-            Self::ElsevierHarvard => "Elsevier - Harvard (with titles)",
-            Self::AmericanChemicalSociety => "American Chemical Society",
-            Self::Cell => "Cell",
-            Self::RoyalSocietyOfChemistry => "Royal Society of Chemistry",
-            Self::Sist02 => "SIST02 (日本語)",
-            Self::Gb77142005Numeric => "China National Standard GB/T 7714-2005 (numeric, 中文)",
-            Self::InstituteOfElectricalAndElectronicsEngineers => "IEEE",
-            Self::SpringerHumanitiesAuthorDate => "Springer - Humanities (author-date)",
-            Self::DeutscheGesellschaftFRPsychologie => "Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch)",
-            Self::SpringerBasicAuthorDate => "Springer - Basic (author-date)",
-            Self::InstituteOfPhysicsNumeric => "Institute of Physics (numeric)",
-            Self::Vancouver => "Vancouver",
-            Self::Nature => "Nature",
-            Self::CurrentOpinion => "Current Opinion journals",
-            Self::AnnualReviewsAuthorDate => "Annual Reviews (author-date)",
-            Self::AmericanInstituteOfPhysics => "American Institute of Physics 4th edition",
-            Self::Gb77142015Numeric => "China National Standard GB/T 7714-2015 (numeric, 中文)",
-            Self::TheLancet => "The Lancet",
-            Self::SpringerBasic => "Springer - Basic (numeric, brackets)",
-            Self::AmericanGeophysicalUnion => "American Geophysical Union",
-            Self::TurabianFullnote8 => "Turabian 8th edition (full note)",
-            Self::TaylorAndFrancisNationalLibraryOfMedicine => "Taylor & Francis - National Library of Medicine",
-            Self::AmericanPhysiologicalSociety => "American Physiological Society",
-            Self::Thieme => "Thieme-German (Deutsch)",
-            Self::Copernicus => "Copernicus Publications",
-            Self::TheInstitutionOfEngineeringAndTechnology => "The Institution of Engineering and Technology",
-            Self::AnnualReviews => "Annual Reviews (sorted by order of appearance)",
-            Self::DeutscheSprache => "Deutsche Sprache (Deutsch)",
-            Self::HarvardCiteThemRight => "Cite Them Right 12th edition - Harvard",
-            Self::ChicagoFullnotes => "Chicago Manual of Style 17th edition (full note)",
-            Self::Iso690AuthorDate => "ISO-690 (author-date, English)",
-            Self::CouncilOfScienceEditorsAuthorDate => "Council of Science Editors, Name-Year (author-date)",
-            Self::SpringerMathphys => "Springer - MathPhys (numeric, brackets)",
-            Self::AmericanSocietyOfMechanicalEngineers => "American Society of Mechanical Engineers",
-            Self::Karger => "Karger journals",
-            Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
-            Self::AmericanPsychologicalAssociation => "American Psychological Association 7th edition",
-            Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
-            Self::Gb77142015AuthorDate => "China National Standard GB/T 7714-2015 (author-date, 中文)",
-            Self::SpringerVancouver => "Springer - Vancouver (brackets)",
-            Self::BritishMedicalJournal => "BMJ",
-            Self::TurabianAuthorDate => "Turabian 9th edition (author-date)",
-            Self::ChicagoAuthorDate => "Chicago Manual of Style 17th edition (author-date)",
-            Self::AssociacaoBrasileiraDeNormasTecnicas => "Associação Brasileira de Normas Técnicas (Português - Brasil)",
-            Self::VancouverSuperscript => "Vancouver (superscript)",
-            Self::AngewandteChemie => "Angewandte Chemie International Edition",
-            Self::ElsevierWithTitles => "Elsevier (numeric, with titles)",
-            Self::Iso690Numeric => "ISO-690 (numeric, English)",
-            Self::ModernLanguageAssociation => "Modern Language Association 9th edition",
-            Self::CouncilOfScienceEditors => "Council of Science Editors, Citation-Sequence (numeric, brackets)",
-            Self::Spie => "SPIE journals",
-            Self::SpringerFachzeitschriftenMedizinPsychologie => "Springer - Fachzeitschriften Medizin Psychologie (Deutsch)",
-            Self::Frontiers => "Frontiers journals",
-            Self::AmericanPhysicsSociety => "American Physical Society",
-            Self::AmericanSociologicalAssociation => "American Sociological Association 6th edition",
-            Self::ElsevierVancouver => "Elsevier - Vancouver",
-            Self::ChicagoNotes => "Chicago Manual of Style 17th edition (note)",
             Self::Alphanumeric => "Alphanumeric",
+            Self::AmericanAnthropologicalAssociation => "American Anthropological Association",
+            Self::AmericanChemicalSociety => "American Chemical Society",
+            Self::AmericanGeophysicalUnion => "American Geophysical Union",
+            Self::AmericanInstituteOfAeronauticsAndAstronautics => "American Institute of Aeronautics and Astronautics",
+            Self::AmericanInstituteOfPhysics => "American Institute of Physics 4th edition",
+            Self::AmericanMedicalAssociation => "American Medical Association 11th edition",
+            Self::AmericanMeteorologicalSociety => "American Meteorological Society",
+            Self::AmericanPhysicsSociety => "American Physical Society",
+            Self::AmericanPhysiologicalSociety => "American Physiological Society",
+            Self::AmericanPoliticalScienceAssociation => "American Political Science Association",
+            Self::AmericanPsychologicalAssociation => "American Psychological Association 7th edition",
+            Self::AmericanSocietyForMicrobiology => "American Society for Microbiology",
+            Self::AmericanSocietyOfCivilEngineers => "American Society of Civil Engineers",
+            Self::AmericanSocietyOfMechanicalEngineers => "American Society of Mechanical Engineers",
+            Self::AmericanSociologicalAssociation => "American Sociological Association 6th/7th edition",
+            Self::AngewandteChemie => "Angewandte Chemie International Edition",
+            Self::AnnualReviews => "Annual Reviews (sorted by order of appearance)",
+            Self::AnnualReviewsAuthorDate => "Annual Reviews (author-date)",
+            Self::AssociacaoBrasileiraDeNormasTecnicas => "Associação Brasileira de Normas Técnicas (Português - Brasil)",
+            Self::AssociationForComputingMachinery => "Association for Computing Machinery",
+            Self::BiomedCentral => "BioMed Central",
+            Self::BristolUniversityPress => "Bristol University Press",
+            Self::BritishMedicalJournal => "BMJ",
+            Self::Cell => "Cell",
+            Self::ChicagoAuthorDate => "Chicago Manual of Style 17th edition (author-date)",
+            Self::ChicagoFullnotes => "Chicago Manual of Style 17th edition (full note)",
+            Self::ChicagoNotes => "Chicago Manual of Style 17th edition (note)",
+            Self::Copernicus => "Copernicus Publications",
+            Self::CouncilOfScienceEditors => "Council of Science Editors, Citation-Sequence (numeric, brackets)",
+            Self::CouncilOfScienceEditorsAuthorDate => "Council of Science Editors, Name-Year (author-date)",
+            Self::CurrentOpinion => "Current Opinion journals",
+            Self::DeutscheGesellschaftFürPsychologie => "Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch)",
+            Self::DeutscheSprache => "Deutsche Sprache (Deutsch)",
+            Self::ElsevierHarvard => "Elsevier - Harvard (with titles)",
+            Self::ElsevierVancouver => "Elsevier - Vancouver",
+            Self::ElsevierWithTitles => "Elsevier (numeric, with titles)",
+            Self::Frontiers => "Frontiers journals",
+            Self::FutureMedicine => "Future Medicine journals",
+            Self::FutureScience => "Future Science Group",
+            Self::Gb77142005Numeric => "China National Standard GB/T 7714-2005 (numeric, 中文)",
+            Self::Gb77142015AuthorDate => "China National Standard GB/T 7714-2015 (author-date, 中文)",
+            Self::Gb77142015Note => "China National Standard GB/T 7714-2015 (note, 中文)",
+            Self::Gb77142015Numeric => "China National Standard GB/T 7714-2015 (numeric, 中文)",
+            Self::GostR7052008Numeric => "Russian GOST R 7.0.5-2008 (numeric)",
+            Self::HarvardCiteThemRight => "Cite Them Right 12th edition - Harvard",
+            Self::InstituteOfElectricalAndElectronicsEngineers => "IEEE",
+            Self::InstituteOfPhysicsNumeric => "Institute of Physics (numeric)",
+            Self::Iso690AuthorDate => "ISO-690 (author-date, English)",
+            Self::Iso690Numeric => "ISO-690 (numeric, English)",
+            Self::Karger => "Karger journals",
+            Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
+            Self::ModernHumanitiesResearchAssociation => "Modern Humanities Research Association 4th edition (note with bibliography)",
+            Self::ModernLanguageAssociation => "Modern Language Association 9th edition",
+            Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
+            Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
+            Self::Nature => "Nature",
+            Self::Pensoft => "Pensoft Journals",
+            Self::PublicLibraryOfScience => "Public Library of Science",
+            Self::RoyalSocietyOfChemistry => "Royal Society of Chemistry",
+            Self::SageVancouver => "SAGE - Vancouver",
+            Self::Sist02 => "SIST02 (日本語)",
+            Self::Spie => "SPIE journals",
+            Self::SpringerBasic => "Springer - Basic (numeric, brackets)",
+            Self::SpringerBasicAuthorDate => "Springer - Basic (author-date)",
+            Self::SpringerFachzeitschriftenMedizinPsychologie => "Springer - Fachzeitschriften Medizin Psychologie (Deutsch)",
+            Self::SpringerHumanitiesAuthorDate => "Springer - Humanities (author-date)",
+            Self::SpringerLectureNotesInComputerScience => "Springer - Lecture Notes in Computer Science",
+            Self::SpringerMathphys => "Springer - MathPhys (numeric, brackets)",
+            Self::SpringerSocpsychAuthorDate => "Springer - SocPsych (author-date)",
+            Self::SpringerVancouver => "Springer - Vancouver (brackets)",
+            Self::TaylorAndFrancisChicagoAuthorDate => "Taylor & Francis - Chicago Manual of Style (author-date)",
+            Self::TaylorAndFrancisNationalLibraryOfMedicine => "Taylor & Francis - National Library of Medicine",
+            Self::TheInstitutionOfEngineeringAndTechnology => "The Institution of Engineering and Technology",
+            Self::TheLancet => "The Lancet",
+            Self::Thieme => "Thieme-German (Deutsch)",
+            Self::Trends => "Trends journals",
+            Self::TurabianAuthorDate => "Turabian 9th edition (author-date)",
+            Self::TurabianFullnote8 => "Turabian 8th edition (full note)",
+            Self::Vancouver => "Vancouver",
+            Self::VancouverSuperscript => "Vancouver (superscript)",
         }
     }
 
     /// Get the style's CSL ID.
     pub fn csl_id(self) -> &'static str {
         match self {
+            Self::Alphanumeric => "http://typst.org/csl/alphanumeric",
             Self::AmericanAnthropologicalAssociation => "http://www.zotero.org/styles/american-anthropological-association",
-            Self::SpringerLectureNotesInComputerScience => "http://www.zotero.org/styles/springer-lecture-notes-in-computer-science",
-            Self::AmericanMedicalAssociation => "http://www.zotero.org/styles/american-medical-association",
-            Self::SageVancouver => "http://www.zotero.org/styles/sage-vancouver",
-            Self::BiomedCentral => "http://www.zotero.org/styles/biomed-central",
-            Self::AmericanSocietyOfCivilEngineers => "http://www.zotero.org/styles/american-society-of-civil-engineers",
-            Self::TaylorAndFrancisChicagoAuthorDate => "http://www.zotero.org/styles/taylor-and-francis-chicago-author-date",
-            Self::Gb77142015Note => "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note",
-            Self::AmericanSocietyForMicrobiology => "http://www.zotero.org/styles/american-society-for-microbiology",
-            Self::AmericanMeteorologicalSociety => "http://www.zotero.org/styles/american-meteorological-society",
-            Self::FutureMedicine => "http://www.zotero.org/styles/future-medicine",
-            Self::BristolUniversityPress => "http://www.zotero.org/styles/bristol-university-press",
-            Self::PublicLibraryOfScience => "http://www.zotero.org/styles/plos",
-            Self::Pensoft => "http://www.zotero.org/styles/pensoft-journals",
+            Self::AmericanChemicalSociety => "http://www.zotero.org/styles/american-chemical-society",
+            Self::AmericanGeophysicalUnion => "http://www.zotero.org/styles/american-geophysical-union",
             Self::AmericanInstituteOfAeronauticsAndAstronautics => "http://www.zotero.org/styles/american-institute-of-aeronautics-and-astronautics",
+            Self::AmericanInstituteOfPhysics => "http://www.zotero.org/styles/american-institute-of-physics",
+            Self::AmericanMedicalAssociation => "http://www.zotero.org/styles/american-medical-association",
+            Self::AmericanMeteorologicalSociety => "http://www.zotero.org/styles/american-meteorological-society",
+            Self::AmericanPhysicsSociety => "http://www.zotero.org/styles/american-physics-society",
+            Self::AmericanPhysiologicalSociety => "http://www.zotero.org/styles/american-physiological-society",
+            Self::AmericanPoliticalScienceAssociation => "http://www.zotero.org/styles/american-political-science-association",
+            Self::AmericanPsychologicalAssociation => "http://www.zotero.org/styles/apa",
+            Self::AmericanSocietyForMicrobiology => "http://www.zotero.org/styles/american-society-for-microbiology",
+            Self::AmericanSocietyOfCivilEngineers => "http://www.zotero.org/styles/american-society-of-civil-engineers",
+            Self::AmericanSocietyOfMechanicalEngineers => "http://www.zotero.org/styles/american-society-of-mechanical-engineers",
+            Self::AmericanSociologicalAssociation => "http://www.zotero.org/styles/american-sociological-association",
+            Self::AngewandteChemie => "http://www.zotero.org/styles/angewandte-chemie",
+            Self::AnnualReviews => "http://www.zotero.org/styles/annual-reviews",
+            Self::AnnualReviewsAuthorDate => "http://www.zotero.org/styles/annual-reviews-author-date",
+            Self::AssociacaoBrasileiraDeNormasTecnicas => "http://www.zotero.org/styles/associacao-brasileira-de-normas-tecnicas",
+            Self::AssociationForComputingMachinery => "http://www.zotero.org/styles/association-for-computing-machinery",
+            Self::BiomedCentral => "http://www.zotero.org/styles/biomed-central",
+            Self::BristolUniversityPress => "http://www.zotero.org/styles/bristol-university-press",
+            Self::BritishMedicalJournal => "http://www.zotero.org/styles/bmj",
+            Self::Cell => "http://www.zotero.org/styles/cell",
+            Self::ChicagoAuthorDate => "http://www.zotero.org/styles/chicago-author-date",
+            Self::ChicagoFullnotes => "http://www.zotero.org/styles/chicago-fullnote-bibliography",
+            Self::ChicagoNotes => "http://www.zotero.org/styles/chicago-note-bibliography",
+            Self::Copernicus => "http://www.zotero.org/styles/copernicus-publications",
+            Self::CouncilOfScienceEditors => "http://www.zotero.org/styles/council-of-science-editors-brackets",
+            Self::CouncilOfScienceEditorsAuthorDate => "http://www.zotero.org/styles/council-of-science-editors-author-date",
+            Self::CurrentOpinion => "http://www.zotero.org/styles/current-opinion",
+            Self::DeutscheGesellschaftFürPsychologie => "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
+            Self::DeutscheSprache => "http://www.zotero.org/styles/deutsche-sprache",
+            Self::ElsevierHarvard => "http://www.zotero.org/styles/elsevier-harvard",
+            Self::ElsevierVancouver => "http://www.zotero.org/styles/elsevier-vancouver",
+            Self::ElsevierWithTitles => "http://www.zotero.org/styles/elsevier-with-titles",
+            Self::Frontiers => "http://www.zotero.org/styles/frontiers",
+            Self::FutureMedicine => "http://www.zotero.org/styles/future-medicine",
+            Self::FutureScience => "http://www.zotero.org/styles/future-science-group",
+            Self::Gb77142005Numeric => "http://www.zotero.org/styles/chinese-gb7714-2005-numeric",
+            Self::Gb77142015AuthorDate => "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date",
+            Self::Gb77142015Note => "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note",
+            Self::Gb77142015Numeric => "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric",
+            Self::GostR7052008Numeric => "http://www.zotero.org/styles/gost-r-7-0-5-2008-numeric",
+            Self::HarvardCiteThemRight => "http://www.zotero.org/styles/harvard-cite-them-right",
+            Self::InstituteOfElectricalAndElectronicsEngineers => "http://www.zotero.org/styles/ieee",
+            Self::InstituteOfPhysicsNumeric => "http://www.zotero.org/styles/institute-of-physics-numeric",
+            Self::Iso690AuthorDate => "http://www.zotero.org/styles/iso690-author-date-en",
+            Self::Iso690Numeric => "http://www.zotero.org/styles/iso690-numeric-en",
+            Self::Karger => "http://www.zotero.org/styles/karger-journals",
             Self::MaryAnnLiebertVancouver => "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
             Self::ModernHumanitiesResearchAssociation => "http://www.zotero.org/styles/modern-humanities-research-association",
-            Self::SpringerSocpsychAuthorDate => "http://www.zotero.org/styles/springer-socpsych-author-date",
-            Self::Trends => "http://www.zotero.org/styles/trends-journals",
-            Self::GostR7052008Numeric => "http://www.zotero.org/styles/gost-r-7-0-5-2008-numeric",
-            Self::AmericanPoliticalScienceAssociation => "http://www.zotero.org/styles/american-political-science-association",
-            Self::FutureScience => "http://www.zotero.org/styles/future-science-group",
-            Self::AssociationForComputingMachinery => "http://www.zotero.org/styles/association-for-computing-machinery",
-            Self::ElsevierHarvard => "http://www.zotero.org/styles/elsevier-harvard",
-            Self::AmericanChemicalSociety => "http://www.zotero.org/styles/american-chemical-society",
-            Self::Cell => "http://www.zotero.org/styles/cell",
-            Self::RoyalSocietyOfChemistry => "http://www.zotero.org/styles/royal-society-of-chemistry",
-            Self::Sist02 => "http://www.zotero.org/styles/sist02",
-            Self::Gb77142005Numeric => "http://www.zotero.org/styles/chinese-gb7714-2005-numeric",
-            Self::InstituteOfElectricalAndElectronicsEngineers => "http://www.zotero.org/styles/ieee",
-            Self::SpringerHumanitiesAuthorDate => "http://www.zotero.org/styles/springer-humanities-author-date",
-            Self::DeutscheGesellschaftFRPsychologie => "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
-            Self::SpringerBasicAuthorDate => "http://www.zotero.org/styles/springer-basic-author-date",
-            Self::InstituteOfPhysicsNumeric => "http://www.zotero.org/styles/institute-of-physics-numeric",
-            Self::Vancouver => "http://www.zotero.org/styles/vancouver",
-            Self::Nature => "http://www.zotero.org/styles/nature",
-            Self::CurrentOpinion => "http://www.zotero.org/styles/current-opinion",
-            Self::AnnualReviewsAuthorDate => "http://www.zotero.org/styles/annual-reviews-author-date",
-            Self::AmericanInstituteOfPhysics => "http://www.zotero.org/styles/american-institute-of-physics",
-            Self::Gb77142015Numeric => "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric",
-            Self::TheLancet => "http://www.zotero.org/styles/the-lancet",
-            Self::SpringerBasic => "http://www.zotero.org/styles/springer-basic-brackets",
-            Self::AmericanGeophysicalUnion => "http://www.zotero.org/styles/american-geophysical-union",
-            Self::TurabianFullnote8 => "http://www.zotero.org/styles/turabian-fullnote-bibliography-8th-edition",
-            Self::TaylorAndFrancisNationalLibraryOfMedicine => "http://www.zotero.org/styles/taylor-and-francis-national-library-of-medicine",
-            Self::AmericanPhysiologicalSociety => "http://www.zotero.org/styles/american-physiological-society",
-            Self::Thieme => "http://www.zotero.org/styles/thieme-german",
-            Self::Copernicus => "http://www.zotero.org/styles/copernicus-publications",
-            Self::TheInstitutionOfEngineeringAndTechnology => "http://www.zotero.org/styles/the-institution-of-engineering-and-technology",
-            Self::AnnualReviews => "http://www.zotero.org/styles/annual-reviews",
-            Self::DeutscheSprache => "http://www.zotero.org/styles/deutsche-sprache",
-            Self::HarvardCiteThemRight => "http://www.zotero.org/styles/harvard-cite-them-right",
-            Self::ChicagoFullnotes => "http://www.zotero.org/styles/chicago-fullnote-bibliography",
-            Self::Iso690AuthorDate => "http://www.zotero.org/styles/iso690-author-date-en",
-            Self::CouncilOfScienceEditorsAuthorDate => "http://www.zotero.org/styles/council-of-science-editors-author-date",
-            Self::SpringerMathphys => "http://www.zotero.org/styles/springer-mathphys-brackets",
-            Self::AmericanSocietyOfMechanicalEngineers => "http://www.zotero.org/styles/american-society-of-mechanical-engineers",
-            Self::Karger => "http://www.zotero.org/styles/karger-journals",
-            Self::MultidisciplinaryDigitalPublishingInstitute => "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
-            Self::AmericanPsychologicalAssociation => "http://www.zotero.org/styles/apa",
-            Self::ModernLanguageAssociation8 => "http://www.zotero.org/styles/modern-language-association-8th-edition",
-            Self::Gb77142015AuthorDate => "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date",
-            Self::SpringerVancouver => "http://www.zotero.org/styles/springer-vancouver-brackets",
-            Self::BritishMedicalJournal => "http://www.zotero.org/styles/bmj",
-            Self::TurabianAuthorDate => "http://www.zotero.org/styles/turabian-author-date",
-            Self::ChicagoAuthorDate => "http://www.zotero.org/styles/chicago-author-date",
-            Self::AssociacaoBrasileiraDeNormasTecnicas => "http://www.zotero.org/styles/associacao-brasileira-de-normas-tecnicas",
-            Self::VancouverSuperscript => "http://www.zotero.org/styles/vancouver-superscript",
-            Self::AngewandteChemie => "http://www.zotero.org/styles/angewandte-chemie",
-            Self::ElsevierWithTitles => "http://www.zotero.org/styles/elsevier-with-titles",
-            Self::Iso690Numeric => "http://www.zotero.org/styles/iso690-numeric-en",
             Self::ModernLanguageAssociation => "http://www.zotero.org/styles/modern-language-association",
-            Self::CouncilOfScienceEditors => "http://www.zotero.org/styles/council-of-science-editors-brackets",
+            Self::ModernLanguageAssociation8 => "http://www.zotero.org/styles/modern-language-association-8th-edition",
+            Self::MultidisciplinaryDigitalPublishingInstitute => "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
+            Self::Nature => "http://www.zotero.org/styles/nature",
+            Self::Pensoft => "http://www.zotero.org/styles/pensoft-journals",
+            Self::PublicLibraryOfScience => "http://www.zotero.org/styles/plos",
+            Self::RoyalSocietyOfChemistry => "http://www.zotero.org/styles/royal-society-of-chemistry",
+            Self::SageVancouver => "http://www.zotero.org/styles/sage-vancouver",
+            Self::Sist02 => "http://www.zotero.org/styles/sist02",
             Self::Spie => "http://www.zotero.org/styles/spie-journals",
+            Self::SpringerBasic => "http://www.zotero.org/styles/springer-basic-brackets",
+            Self::SpringerBasicAuthorDate => "http://www.zotero.org/styles/springer-basic-author-date",
             Self::SpringerFachzeitschriftenMedizinPsychologie => "http://www.zotero.org/styles/springer-fachzeitschriften-medizin-psychologie",
-            Self::Frontiers => "http://www.zotero.org/styles/frontiers",
-            Self::AmericanPhysicsSociety => "http://www.zotero.org/styles/american-physics-society",
-            Self::AmericanSociologicalAssociation => "http://www.zotero.org/styles/american-sociological-association",
-            Self::ElsevierVancouver => "http://www.zotero.org/styles/elsevier-vancouver",
-            Self::ChicagoNotes => "http://www.zotero.org/styles/chicago-note-bibliography",
-            Self::Alphanumeric => "http://typst.org/csl/alphanumeric",
+            Self::SpringerHumanitiesAuthorDate => "http://www.zotero.org/styles/springer-humanities-author-date",
+            Self::SpringerLectureNotesInComputerScience => "http://www.zotero.org/styles/springer-lecture-notes-in-computer-science",
+            Self::SpringerMathphys => "http://www.zotero.org/styles/springer-mathphys-brackets",
+            Self::SpringerSocpsychAuthorDate => "http://www.zotero.org/styles/springer-socpsych-author-date",
+            Self::SpringerVancouver => "http://www.zotero.org/styles/springer-vancouver-brackets",
+            Self::TaylorAndFrancisChicagoAuthorDate => "http://www.zotero.org/styles/taylor-and-francis-chicago-author-date",
+            Self::TaylorAndFrancisNationalLibraryOfMedicine => "http://www.zotero.org/styles/taylor-and-francis-national-library-of-medicine",
+            Self::TheInstitutionOfEngineeringAndTechnology => "http://www.zotero.org/styles/the-institution-of-engineering-and-technology",
+            Self::TheLancet => "http://www.zotero.org/styles/the-lancet",
+            Self::Thieme => "http://www.zotero.org/styles/thieme-german",
+            Self::Trends => "http://www.zotero.org/styles/trends-journals",
+            Self::TurabianAuthorDate => "http://www.zotero.org/styles/turabian-author-date",
+            Self::TurabianFullnote8 => "http://www.zotero.org/styles/turabian-fullnote-bibliography-8th-edition",
+            Self::Vancouver => "http://www.zotero.org/styles/vancouver",
+            Self::VancouverSuperscript => "http://www.zotero.org/styles/vancouver-superscript",
         }
     }
-
 }
 fn from_cbor<T: DeserializeOwned>(
     reader: &[u8],
@@ -1135,66 +1135,68 @@ fn from_cbor<T: DeserializeOwned>(
 
 /// CBOR-encoded CSL locales.
 pub const LOCALES: &[&[u8]] = &[
-    include_bytes!("../../archive/locales/is-IS.cbor"),
-    include_bytes!("../../archive/locales/km-KH.cbor"),
+    include_bytes!("../../archive/locales/af-ZA.cbor"),
+    include_bytes!("../../archive/locales/ar.cbor"),
     include_bytes!("../../archive/locales/bg-BG.cbor"),
-    include_bytes!("../../archive/locales/pt-PT.cbor"),
-    include_bytes!("../../archive/locales/ru-RU.cbor"),
-    include_bytes!("../../archive/locales/tr-TR.cbor"),
-    include_bytes!("../../archive/locales/et-EE.cbor"),
+    include_bytes!("../../archive/locales/ca-AD.cbor"),
+    include_bytes!("../../archive/locales/cs-CZ.cbor"),
+    include_bytes!("../../archive/locales/cy-GB.cbor"),
     include_bytes!("../../archive/locales/da-DK.cbor"),
     include_bytes!("../../archive/locales/de-AT.cbor"),
-    include_bytes!("../../archive/locales/gl-ES.cbor"),
-    include_bytes!("../../archive/locales/fr-CA.cbor"),
     include_bytes!("../../archive/locales/de-CH.cbor"),
-    include_bytes!("../../archive/locales/pt-BR.cbor"),
-    include_bytes!("../../archive/locales/sl-SI.cbor"),
-    include_bytes!("../../archive/locales/es-CL.cbor"),
-    include_bytes!("../../archive/locales/eu.cbor"),
-    include_bytes!("../../archive/locales/hu-HU.cbor"),
-    include_bytes!("../../archive/locales/mn-MN.cbor"),
-    include_bytes!("../../archive/locales/uk-UA.cbor"),
-    include_bytes!("../../archive/locales/ca-AD.cbor"),
-    include_bytes!("../../archive/locales/lv-LV.cbor"),
-    include_bytes!("../../archive/locales/fi-FI.cbor"),
-    include_bytes!("../../archive/locales/hr-HR.cbor"),
-    include_bytes!("../../archive/locales/zh-CN.cbor"),
-    include_bytes!("../../archive/locales/id-ID.cbor"),
-    include_bytes!("../../archive/locales/es-MX.cbor"),
-    include_bytes!("../../archive/locales/en-US.cbor"),
-    include_bytes!("../../archive/locales/sv-SE.cbor"),
-    include_bytes!("../../archive/locales/lt-LT.cbor"),
-    include_bytes!("../../archive/locales/zh-TW.cbor"),
-    include_bytes!("../../archive/locales/sk-SK.cbor"),
-    include_bytes!("../../archive/locales/ko-KR.cbor"),
-    include_bytes!("../../archive/locales/he-IL.cbor"),
     include_bytes!("../../archive/locales/de-DE.cbor"),
-    include_bytes!("../../archive/locales/cs-CZ.cbor"),
-    include_bytes!("../../archive/locales/fr-FR.cbor"),
-    include_bytes!("../../archive/locales/la.cbor"),
-    include_bytes!("../../archive/locales/nn-NO.cbor"),
-    include_bytes!("../../archive/locales/nb-NO.cbor"),
-    include_bytes!("../../archive/locales/ar.cbor"),
-    include_bytes!("../../archive/locales/hi-IN.cbor"),
-    include_bytes!("../../archive/locales/af-ZA.cbor"),
-    include_bytes!("../../archive/locales/fa-IR.cbor"),
-    include_bytes!("../../archive/locales/ja-JP.cbor"),
-    include_bytes!("../../archive/locales/vi-VN.cbor"),
-    include_bytes!("../../archive/locales/ro-RO.cbor"),
-    include_bytes!("../../archive/locales/cy-GB.cbor"),
-    include_bytes!("../../archive/locales/it-IT.cbor"),
-    include_bytes!("../../archive/locales/en-GB.cbor"),
-    include_bytes!("../../archive/locales/pl-PL.cbor"),
-    include_bytes!("../../archive/locales/sr-RS.cbor"),
-    include_bytes!("../../archive/locales/nl-NL.cbor"),
     include_bytes!("../../archive/locales/el-GR.cbor"),
-    include_bytes!("../../archive/locales/th-TH.cbor"),
+    include_bytes!("../../archive/locales/en-GB.cbor"),
+    include_bytes!("../../archive/locales/en-US.cbor"),
+    include_bytes!("../../archive/locales/es-CL.cbor"),
     include_bytes!("../../archive/locales/es-ES.cbor"),
+    include_bytes!("../../archive/locales/es-MX.cbor"),
+    include_bytes!("../../archive/locales/et-EE.cbor"),
+    include_bytes!("../../archive/locales/eu.cbor"),
+    include_bytes!("../../archive/locales/fa-IR.cbor"),
+    include_bytes!("../../archive/locales/fi-FI.cbor"),
+    include_bytes!("../../archive/locales/fr-CA.cbor"),
+    include_bytes!("../../archive/locales/fr-FR.cbor"),
+    include_bytes!("../../archive/locales/gl-ES.cbor"),
+    include_bytes!("../../archive/locales/he-IL.cbor"),
+    include_bytes!("../../archive/locales/hi-IN.cbor"),
+    include_bytes!("../../archive/locales/hr-HR.cbor"),
+    include_bytes!("../../archive/locales/hu-HU.cbor"),
+    include_bytes!("../../archive/locales/id-ID.cbor"),
+    include_bytes!("../../archive/locales/is-IS.cbor"),
+    include_bytes!("../../archive/locales/it-IT.cbor"),
+    include_bytes!("../../archive/locales/ja-JP.cbor"),
+    include_bytes!("../../archive/locales/km-KH.cbor"),
+    include_bytes!("../../archive/locales/ko-KR.cbor"),
+    include_bytes!("../../archive/locales/la.cbor"),
+    include_bytes!("../../archive/locales/lt-LT.cbor"),
+    include_bytes!("../../archive/locales/lv-LV.cbor"),
+    include_bytes!("../../archive/locales/mn-MN.cbor"),
+    include_bytes!("../../archive/locales/nb-NO.cbor"),
+    include_bytes!("../../archive/locales/nl-NL.cbor"),
+    include_bytes!("../../archive/locales/nn-NO.cbor"),
+    include_bytes!("../../archive/locales/pa-PK.cbor"),
+    include_bytes!("../../archive/locales/pl-PL.cbor"),
+    include_bytes!("../../archive/locales/pt-BR.cbor"),
+    include_bytes!("../../archive/locales/pt-PT.cbor"),
+    include_bytes!("../../archive/locales/ro-RO.cbor"),
+    include_bytes!("../../archive/locales/ru-RU.cbor"),
+    include_bytes!("../../archive/locales/sk-SK.cbor"),
+    include_bytes!("../../archive/locales/sl-SI.cbor"),
+    include_bytes!("../../archive/locales/sr-RS.cbor"),
+    include_bytes!("../../archive/locales/sv-SE.cbor"),
+    include_bytes!("../../archive/locales/th-TH.cbor"),
+    include_bytes!("../../archive/locales/tr-TR.cbor"),
+    include_bytes!("../../archive/locales/uk-UA.cbor"),
+    include_bytes!("../../archive/locales/vi-VN.cbor"),
+    include_bytes!("../../archive/locales/zh-CN.cbor"),
+    include_bytes!("../../archive/locales/zh-TW.cbor"),
 ];
 
 /// Get all CSL locales.
 pub fn locales() -> Vec<Locale> {
-    LOCALES.iter().map(|bytes| {
-        from_cbor::<Locale>(bytes).unwrap()
-    }).collect()
+    LOCALES
+        .iter()
+        .map(|bytes| from_cbor::<Locale>(bytes).unwrap())
+        .collect()
 }

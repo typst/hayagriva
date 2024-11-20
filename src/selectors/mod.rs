@@ -137,7 +137,7 @@ impl Selector {
     /// This can panic if there are resolving entries which do not bind the
     /// argument.
     pub fn bound<'s>(&self, entry: &'s Entry, bound: &str) -> Option<&'s Entry> {
-        self.apply(entry).map(|mut hm| hm.remove(bound).unwrap())
+        self.apply(entry).and_then(|mut hm| hm.remove(bound))
     }
 
     /// Applies the selector to an [`Entry`] and returns the bound variables
@@ -227,8 +227,8 @@ impl Selector {
 
             Self::Binding(binding, expr) => {
                 expr.apply_any(entries).map(|(mut bound, es)| {
-                    if !es.is_empty() {
-                        bound.insert(binding.to_string(), es.get(0).unwrap());
+                    if let Some(first) = es.first() {
+                        bound.insert(binding.to_string(), first);
                     }
                     (bound, vec![])
                 })

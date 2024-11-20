@@ -1,3 +1,55 @@
+# 0.8.0
+
+- **Breaking change:** Fixed deserialization of page ranges,
+  removing `From<u64> for PageRanges`
+- Added support for disambiguation to alphanumeric citation style
+- Raised limit for disambiguation resolving in complex cases
+- The year 0 will now render as 1BC for CSL
+
+# 0.7.0
+
+- **Breaking change:** `Entry::page_range` now returns
+  `Option<&MaybeTyped<PageRanges>>` instead of `Option<&PageRanges>`. This fixes
+  a panic that occurred when a page range had an unknown format
+- `MaybeTyped` now has an `as_typed` method
+
+# 0.6.0
+
+- **Breaking change:** Fix that the page range labels were not pluralized,
+  `NumericValue::Range` now returns an inclusive range (#142)
+- **Breaking change:** The field `publisher` can now accept a dictionary with a
+  `location`. The top-level `location` key is now primarily for event and item
+  locations.
+- **Breaking change:** The field `annote` has been removed
+- Allow multiple page ranges with prefixes and suffixes
+- Fixes with sorting bibliography entries
+- Fix sorting citations by their number (#115)
+- Fix how citation number ranges collapse (#154)
+- `BibliographyItem` is now exported (#157)
+- Fix when the short form of a title was used (#173)
+- Bumped the `biblatex` crate to 0.10.0 to fix a BibLaTeX parsing bug
+  (https://github.com/typst/biblatex/issues/53) and allow the Unknown and
+  Director editor types (https://github.com/typst/biblatex/issues/52).
+
+We also updated our collection of Citation Styles.
+
+# 0.5.3
+
+- Fixed a bug with initials (#150)
+- Fixed suppression of title when no author was provided (#144)
+- Fixed et al handling on subsequent citations by [bumping citationberg](https://github.com/typst/citationberg/releases/tag/v0.3.1)
+
+# 0.5.2
+
+- Allow the `abstract`, `annote`, and `genre` fields to Hayagriva files and process them from BibTeX files. 
+- Fix retrieval of an item's editor (#94)
+- Fixed issue with pulling punctuation into quotation marks (#85)
+- Allow non-range values in the `pages` field (#103)
+- Fix multiple subsequent prose citations to the same item (#122)
+- Interpret the `eprint` BibTeX key as `serial-number.arxiv` if the `eprinttype` is set to `arxiv`
+- Fixed issue with multiple subsequent citations (#122)
+- Improved handling of empty CSL objects
+
 # 0.5.1
 
 - Fixed spacing around math blocks
