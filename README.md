@@ -27,7 +27,7 @@ Hayagriva supports all styles provided in the
 [official Citation Style Language repository](https://github.com/citation-style-language/styles),
 currently over 2,600.
 
-# Usage
+## Usage
 
 ```rust
 use hayagriva::io::from_yaml_str;
@@ -150,6 +150,7 @@ return `Some` even if no sub-entry was bound / if the hash map is empty.
 ## Installation
 
 Run this in your terminal:
+
 ```bash
 cargo install hayagriva --features cli
 ```
@@ -191,6 +192,7 @@ feminism:
 
 You can then issue the following command to get reference list entries for both
 of these articles.
+
 ```bash
 hayagriva literature.yml reference
 ```
@@ -198,6 +200,7 @@ hayagriva literature.yml reference
 Hayagriva defaults to the Author-Date style of the Chicago Manual of Style (17th
 edition). If you prefer to use another style, you can, for example, do the
 following to use the style of the American Psychological Association instead:
+
 ```bash
 hayagriva literature.yml reference --style apa
 ```
@@ -207,6 +210,7 @@ Available values for the `--style` argument can be viewed by calling
 
 If you now need an in-text citation to the second article in the above file, you
 can call:
+
 ```bash
 hayagriva literature.yml cite --key feminism
 ```
@@ -221,6 +225,7 @@ Instead of the `--key` argument, you can also use `--select` to provide a custom
 [Hayagriva selector.](https://github.com/typst/hayagriva/blob/main/docs/selectors.md)
 For example, you could run the following to only reference entries that have a
 URL or DOI at the top level:
+
 ```bash
 hayagriva literature.yml --select "*[url] | *[doi]" reference
 ```
@@ -235,6 +240,7 @@ expression. Consider this selector which always binds the sub-entry with the
 volume field to `a`, regardless of if it occurred at the top level or in the
 first parent: `a:*[volume] | * > a:[volume]`. You can then use the command below
 to show which sub-entry the selector bound as `a` for each match:
+
 ```bash
 hayagriva literature.yml --select "a:*[volume] | * > a:[volume]" --show-bound
 ```
@@ -249,6 +255,7 @@ like you would use a `.yml` file. If you want to convert your `.bib` file to a
 arguments. It will then show the YAML-formatted bibliography with key and selector
 filters applied on standard output. If you therefore want to convert your `.bib`
 file and save the result somewhere, you can just use `>`:
+
 ```bash
 hayagriva literature.bib > converted.yml
 ```
