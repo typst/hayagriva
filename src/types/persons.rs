@@ -327,7 +327,7 @@ impl Person {
         Ok(())
     }
 
-    /// Get the name with the family name fist, the initials
+    /// Get the name with the family name first, the initials
     /// afterwards, separated by a comma.
     pub fn name_first(&self, initials: bool, prefix_given_name: bool) -> String {
         let mut res = if !prefix_given_name {
@@ -613,5 +613,17 @@ mod tests {
         let mut s = String::new();
         p.first_name_with_delimiter(&mut s, Some(".")).unwrap();
         assert_eq!("James T.", s);
+    }
+
+    #[test]
+    fn person_name_retrieval_order() {
+        let p =
+            Person::from_strings(vec!["van Dissmer", "Jr.", "Courtney Deliah"]).unwrap();
+        assert_eq!("van Dissmer, Courtney Deliah, Jr.", p.name_first(false, false));
+        assert_eq!("Dissmer, Courtney Deliah van, Jr.", p.name_first(false, true));
+        assert_eq!("van Dissmer, C. D., Jr.", p.name_first(true, false));
+        assert_eq!("Dissmer, C. D. van, Jr.", p.name_first(true, true));
+        assert_eq!("Courtney Deliah van Dissmer Jr.", p.given_first(false));
+        assert_eq!("C. D. van Dissmer Jr.", p.given_first(true));
     }
 }
