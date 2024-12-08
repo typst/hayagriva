@@ -188,6 +188,7 @@ name_AsianGlyphs
 name_AuthorCountWithSameVarContentAndCombinedTermFail
 name_AuthorCountWithSameVarContentAndCombinedTermSucceed
 name_CelticClanName
+name_CeltsAndToffsNoHyphens
 name_CeltsAndToffsWithHyphens
 name_CiteGroupDelimiterWithYearCollapse
 name_CollapseRoleLabels
@@ -206,6 +207,7 @@ name_InstitutionDecoration
 name_LabelAfterPlural
 name_LabelAfterPluralDecorations
 name_LabelFormatBug
+name_MultipleLiteral
 name_NoNameNode
 name_NonDroppingParticleDefault
 name_OnlyFamilyname
