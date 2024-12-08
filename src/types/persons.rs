@@ -577,6 +577,11 @@ mod tests {
 
         let mut s = String::new();
         let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some(""), true).unwrap();
+        assert_eq!("H-J", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
         p.initials(&mut s, None, true).unwrap();
         assert_eq!("H-J", s);
 
