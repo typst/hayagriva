@@ -261,6 +261,7 @@ impl RenderCsl for Names {
             if let Some(substitute) = &self.substitute() {
                 ctx.writing.start_suppressing_queried_variables();
 
+                let depth = ctx.push_elem(self.to_formatting());
                 for child in &substitute.children {
                     let len = ctx.writing.len();
                     if let LayoutRenderingElement::Names(names_child) = child {
@@ -273,6 +274,7 @@ impl RenderCsl for Names {
                     }
                 }
 
+                ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
                 ctx.writing.stop_suppressing_queried_variables();
             }
 
