@@ -1,23 +1,26 @@
 use std::borrow::Cow;
 use std::fs::{self, read_to_string};
 use std::io::ErrorKind as IoErrorKind;
-use std::path::Path;
-use std::process::exit;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
 use citationberg::taxonomy::Locator;
 use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
 use clap::builder::PossibleValue;
-use clap::{crate_version, Arg, ArgAction, Command, ValueEnum};
+use clap::{crate_version, value_parser, Arg, ArgAction, Command, ValueEnum};
 use strum::VariantNames;
 
 use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::types::error::{BibliographyError, Error};
 use hayagriva::{
     io, BibliographyDriver, CitationItem, CitationRequest, LocatorPayload,
     SpecificLocator,
 };
 use hayagriva::{BibliographyRequest, Selector};
+
+mod macros;
 
 #[derive(Debug, Copy, Clone, PartialEq, VariantNames)]
 #[strum(serialize_all = "kebab_case")]
@@ -52,7 +55,7 @@ impl ValueEnum for Format {
 }
 
 /// Main function of the Hayagriva CLI.
-fn main() {
+fn main() -> ExitCode {
     let matches = Command::new("Hayagriva CLI")
             .version(crate_version!())
             .author("The Typst Project Developers <hi@typst.app>")
@@ -60,6 +63,7 @@ fn main() {
             .arg(
                 Arg::new("INPUT")
                     .help("Sets the bibliography file to use")
+                    .value_parser(value_parser!(PathBuf))
                     .required(true)
                     .index(1)
             ).arg(
@@ -167,6 +171,7 @@ fn main() {
                         Arg::new("csl")
                             .long("csl")
                             .help("Set a CSL file to use the style therein")
+                            .value_parser(value_parser!(PathBuf))
                             .num_args(1)
                     )
                     .arg(
@@ -188,7 +193,7 @@ fn main() {
             )
             .get_matches();
 
-    let input = Path::new(matches.get_one::<String>("INPUT").unwrap());
+    let input = matches.get_one::<PathBuf>("INPUT").unwrap().to_owned();
 
     let format = matches.get_one("format").cloned().unwrap_or_else(|| {
         #[allow(unused_mut)]
@@ -207,49 +212,35 @@ fn main() {
     });
 
     let bibliography = {
-        let input = match read_to_string(input) {
-            Ok(s) => s,
-            Err(e) => {
-                if e.kind() == IoErrorKind::NotFound {
-                    eprintln!("Bibliography file \"{}\" not found.", input.display());
-                    exit(5);
-                } else if let Some(os) = e.raw_os_error() {
-                    eprintln!(
-                        "Error while reading the bibliography file \"{}\": {}",
-                        input.display(),
-                        os
-                    );
-                    exit(6);
-                } else {
-                    eprintln!(
-                        "Error while reading the bibliography file \"{}\".",
-                        input.display()
-                    );
-                    exit(6);
-                }
-            }
+        use BibliographyError::*;
+        let input = match read_to_string(&input).map_err(|err| match err.kind() {
+            IoErrorKind::NotFound => (NotFound(input), 5),
+            _ => match err.raw_os_error() {
+                Some(os) => (ReadErrorWithCode(input, os), 6),
+                _ => (ReadError(input), 6),
+            },
+        }) {
+            Ok(v) => v,
+            Err((err, exit_code)) => err!(Err(err), exit_code),
         };
 
-        match format {
-            Format::Yaml => io::from_yaml_str(&input).unwrap(),
+        err!(match format {
+            Format::Yaml => io::from_yaml_str(&input),
             #[cfg(feature = "biblatex")]
-            Format::Biblatex | Format::Bibtex => io::from_biblatex_str(&input).unwrap(),
-        }
+            Format::Biblatex | Format::Bibtex => io::from_biblatex_str(&input),
+        })
     };
 
     let bib_len = bibliography.len();
 
-    let selector =
-        matches
-            .get_one("selector")
-            .cloned()
-            .map(|src| match Selector::parse(src) {
-                Ok(selector) => selector,
-                Err(err) => {
-                    eprintln!("Error while parsing selector: {}", err);
-                    exit(7);
-                }
-            });
+    let selector = match matches
+        .get_one::<String>("selector")
+        .cloned()
+        .map(|src| Selector::parse(&src))
+    {
+        Some(result) => Some(err_fmt!(result, "Error while parsing selector: {}", 7)),
+        _ => None,
+    };
 
     let bibliography = if let Some(keys) = matches.get_one::<String>("key") {
         let mut res = vec![];
@@ -306,23 +297,22 @@ fn main() {
                 }
             }
         }
-        exit(0);
+        return ExitCode::SUCCESS;
     }
 
     match matches.subcommand() {
         Some(("reference", sub_matches)) => {
             let style: Option<&String> = sub_matches.get_one("style");
-            let csl: Option<&String> = sub_matches.get_one("csl");
+            let csl: Option<&PathBuf> = sub_matches.get_one("csl");
             let locale_path =
                 sub_matches.get_one::<String>("locales").map(|s| s.split(','));
             let locale_str: Option<&String> = sub_matches.get_one("locale");
 
             let (style, locales, locale) =
-                retrieve_assets(style, csl, locale_path, locale_str);
+                err!(retrieve_assets(style, csl, locale_path, locale_str));
 
             if style.bibliography.is_none() {
-                eprintln!("style has no bibliography");
-                exit(4);
+                err_str!("style has no bibliography", 4);
             }
 
             let mut driver = BibliographyDriver::new();
@@ -361,7 +351,7 @@ fn main() {
         }
         Some(("cite", sub_matches)) => {
             let style: Option<&String> = sub_matches.get_one("style");
-            let csl: Option<&String> = sub_matches.get_one("csl");
+            let csl: Option<&PathBuf> = sub_matches.get_one("csl");
             let locale_path =
                 sub_matches.get_one::<String>("locales").map(|s| s.split(','));
             let locale_str: Option<&String> = sub_matches.get_one("locale");
@@ -373,7 +363,7 @@ fn main() {
                 .collect();
 
             let (style, locales, locale) =
-                retrieve_assets(style, csl, locale_path, locale_str);
+                err!(retrieve_assets(style, csl, locale_path, locale_str));
 
             let assign_locator = |(i, e)| {
                 let mut item = CitationItem::with_entry(e);
@@ -452,43 +442,47 @@ fn main() {
             println!("{}", bib);
         }
     }
+    ExitCode::SUCCESS
 }
 
 fn retrieve_assets<'a>(
     style: Option<&String>,
-    csl: Option<&String>,
+    csl: Option<&PathBuf>,
     locale_paths: Option<impl Iterator<Item = &'a str>>,
     locale_str: Option<&String>,
-) -> (IndependentStyle, Vec<Locale>, Option<LocaleCode>) {
-    let locale: Option<_> = locale_str.map(|l: &String| LocaleCode(l.into()));
+) -> Result<(IndependentStyle, Vec<Locale>, Option<LocaleCode>), Error> {
+    use Error::OtherError;
 
+    let locale: Option<_> = locale_str.map(|l: &String| LocaleCode(l.into()));
     let style = match (style, csl) {
         (_, Some(csl)) => {
-            let file_str = fs::read_to_string(csl).expect("could not read CSL file");
-            IndependentStyle::from_xml(&file_str).expect("CSL file malformed")
+            let xml_str = fs::read_to_string(csl).ok().ok_or(OtherError(format!(
+                "could not read CSL file: {csl:?}\n{}",
+                "Maybe you meant to use --style instead?"
+            )))?;
+            IndependentStyle::from_xml(&xml_str)
+                .map_err(|_| OtherError("CSL file malformed".into()))?
         }
-        (Some(style), _) => {
-            let Style::Independent(indep) =
-                ArchivedStyle::by_name(style.as_str()).expect("no style found").get()
-            else {
-                panic!("dependent style in archive")
-            };
-            indep
-        }
-        (None, None) => panic!("must specify style or CSL file"),
+        (Some(style), _) => match ArchivedStyle::by_name(style.as_str())
+            .ok_or(OtherError("no style found".into()))?
+            .get()
+        {
+            Style::Independent(indep) => indep,
+            _ => return Err("dependent style in archive".into()),
+        },
+        (None, None) => return Err("must specify style or CSL file".into()),
     };
 
     let locales: Vec<Locale> = match locale_paths {
-        Some(locale_paths) => locale_paths
-            .into_iter()
-            .map(|locale_path| {
-                let file_str =
-                    fs::read_to_string(locale_path).expect("could not read locale file");
-                LocaleFile::from_xml(&file_str).expect("locale file malformed").into()
+        Some(paths) => paths
+            .map(|path| match fs::read_to_string(path) {
+                Ok(file_str) => LocaleFile::from_xml(&file_str)
+                    .map(Into::into)
+                    .map_err(|_| Error::from("locale file malformed")),
+                Err(_) => Err("could not read locale file".into()),
             })
-            .collect(),
+            .collect::<Result<_, _>>()?,
         None => locales(),
     };
-
-    (style, locales, locale)
+    Ok((style, locales, locale))
 }

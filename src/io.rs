@@ -7,6 +7,8 @@ use biblatex::{Bibliography, TypeError};
 use crate::Entry;
 use crate::Library;
 
+use crate::error::Error;
+
 /// Parse a bibliography from a YAML string.
 ///
 /// ```
@@ -24,43 +26,29 @@ use crate::Library;
 /// let bib = from_yaml_str(yaml).unwrap();
 /// assert_eq!(bib.nth(0).unwrap().date().unwrap().year, 2014);
 /// ```
-pub fn from_yaml_str(s: &str) -> Result<Library, serde_yaml::Error> {
-    serde_yaml::from_str(s)
+pub fn from_yaml_str(s: &str) -> Result<Library, Error> {
+    serde_yaml::from_str(s).map_err(Error::from)
 }
 
 /// Serialize a bibliography to a YAML string.
-pub fn to_yaml_str(entries: &Library) -> Result<String, serde_yaml::Error> {
-    serde_yaml::to_string(&entries)
-}
-
-/// Errors that may occur when parsing a BibLaTeX file.
-#[cfg(feature = "biblatex")]
-#[derive(Clone, Debug)]
-pub enum BibLaTeXError {
-    /// An error occurred when parsing a BibLaTeX file.
-    Parse(biblatex::ParseError),
-    /// One of the BibLaTeX fields was malformed for its type.
-    Type(biblatex::TypeError),
-}
-
-#[cfg(feature = "biblatex")]
-impl std::fmt::Display for BibLaTeXError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Parse(err) => write!(f, "biblatex parse error: {}", err),
-            Self::Type(err) => write!(f, "biblatex type error: {}", err),
-        }
-    }
+pub fn to_yaml_str(entries: &Library) -> Result<String, Error> {
+    serde_yaml::to_string(&entries).map_err(Error::from)
 }
 
 /// Parse a bibliography from a BibLaTeX source string.
 #[cfg(feature = "biblatex")]
-pub fn from_biblatex_str(biblatex: &str) -> Result<Library, Vec<BibLaTeXError>> {
-    let bibliography =
-        Bibliography::parse(biblatex).map_err(|e| vec![BibLaTeXError::Parse(e)])?;
+pub fn from_biblatex_str(biblatex: &str) -> Result<Library, Error> {
+    use crate::error::{BibLaTeXError, BibLaTeXErrors};
+
+    let bibliography = Bibliography::parse(biblatex)
+        .map_err(BibLaTeXError::Parse)
+        .map_err(|e| BibLaTeXErrors(vec![e]))
+        .map_err(Error::from)?;
 
     from_biblatex(&bibliography)
-        .map_err(|e| e.into_iter().map(BibLaTeXError::Type).collect())
+        .map_err(|e| e.into_iter().map(BibLaTeXError::Type).collect::<Vec<_>>())
+        .map_err(BibLaTeXErrors)
+        .map_err(Error::from)
 }
 
 /// Parse a bibliography from a BibLaTeX [`Bibliography`].
