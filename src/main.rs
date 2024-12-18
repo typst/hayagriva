@@ -457,8 +457,9 @@ fn retrieve_assets<'a>(
     let style = match (style, csl) {
         (_, Some(csl)) => {
             let xml_str = fs::read_to_string(csl).ok().ok_or(OtherError(format!(
-                "could not read CSL file: {csl:?}\n{}",
-                "Maybe you meant to use --style instead?"
+                r#"Could not read CSL file: "{}"{}"#,
+                csl.display(),
+                "\nMaybe you meant to use --style instead?"
             )))?;
             IndependentStyle::from_xml(&xml_str)
                 .map_err(|_| OtherError("CSL file malformed".into()))?
