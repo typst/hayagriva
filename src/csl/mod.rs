@@ -1674,6 +1674,9 @@ pub(crate) struct WritingContext {
     cases: NonEmptyStack<Option<TextCase>>,
     /// Inheritable name options.
     name_options: NonEmptyStack<InheritableNameOptions>,
+    /// Delimiters from ancestor delimiting elements (e.g., `cs:group`).
+    /// To be applied within `cs:choose`, but not another delimiting element or a macro.
+    delimiters: NonEmptyStack<Option<String>>,
 
     // Buffers.
     /// The buffer we're writing to. If block-level or formatting changes, we
@@ -1698,6 +1701,7 @@ impl Default for WritingContext {
             format_stack: NonEmptyStack::default(),
             cases: NonEmptyStack::default(),
             name_options: NonEmptyStack::default(),
+            delimiters: NonEmptyStack::default(),
             buf: CaseFolder::default(),
             elem_stack: NonEmptyStack::default(),
         }
@@ -1930,6 +1934,21 @@ impl WritingContext {
     fn reconfigure(&mut self) {
         self.buf
             .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
+    }
+
+    /// Set the delimiter of the next [`citationberg::Choose`].
+    fn push_delimiter(&mut self, delimiter: Option<&str>) -> DelimiterIdx {
+        let idx = self.delimiters.len();
+        self.delimiters.push(delimiter.map(|s| s.to_string()));
+        DelimiterIdx(idx)
+    }
+    /// Clear the delimiter of the next [`citationberg::Choose`].
+    fn pop_delimiter(&mut self, idx: DelimiterIdx) {
+        if idx.0 == self.delimiters.len() {
+            return;
+        }
+
+        self.delimiters.drain(idx.0).for_each(drop);
     }
 
     /// Push a new suppressed variable if we are suppressing queried variables.
@@ -2752,6 +2771,9 @@ impl DisplayLoc {
 
 #[must_use = "case stack must be popped"]
 struct CaseIdx(NonZeroUsize);
+
+#[must_use = "delimiter stack must be popped"]
+struct DelimiterIdx(NonZeroUsize);
 
 impl<T: EntryLike> Write for Context<'_, T> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {

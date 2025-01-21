@@ -98,9 +98,12 @@ impl RenderCsl for citationberg::Text {
                 MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
             },
             ResolvedTextTarget::Macro(mac) => {
+                // Delimiters from ancestor delimiting elements are NOT applied within.
+                let idx = ctx.writing.push_delimiter(None);
                 for child in &mac.children {
                     child.render(ctx);
                 }
+                ctx.writing.pop_delimiter(idx);
             }
             ResolvedTextTarget::Term(s) => ctx.push_str(s),
             ResolvedTextTarget::Value(val) => ctx.push_str(val),
@@ -831,7 +834,7 @@ where
 impl RenderCsl for citationberg::Choose {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         choose_children(self, ctx, |children, ctx| {
-            render_with_delimiter(children, self.delimiter.as_deref(), ctx);
+            render_with_delimiter(children, ctx);
         });
     }
 
@@ -859,11 +862,16 @@ impl RenderCsl for citationberg::Choose {
     }
 }
 
+/// Render `children` with the delimiter in `ctx` between them.
+///
+/// The delimiter can be updated by [`ctx.writing.push_delimiter`][super::WritingContext::push_delimiter]
+/// and [`ctx.writing.pop_delimiter`][super::WritingContext::pop_delimiter].
 fn render_with_delimiter<T: EntryLike>(
     children: &[LayoutRenderingElement],
-    delimiter: Option<&str>,
     ctx: &mut Context<T>,
 ) {
+    let delimiter = ctx.writing.delimiters.last().clone();
+
     let mut first = true;
     let mut loc = None;
 
@@ -874,7 +882,7 @@ fn render_with_delimiter<T: EntryLike>(
         }
 
         if !first {
-            if let Some(delim) = delimiter {
+            if let Some(delim) = &delimiter {
                 let prev_loc = std::mem::take(&mut loc);
 
                 if let Some(prev_loc) = prev_loc {
@@ -885,20 +893,10 @@ fn render_with_delimiter<T: EntryLike>(
                 ctx.push_str(delim);
             }
         }
+        first = false;
 
         let pos = ctx.push_elem(citationberg::Formatting::default());
-
-        match child {
-            LayoutRenderingElement::Text(text) => text.render(ctx),
-            LayoutRenderingElement::Number(num) => num.render(ctx),
-            LayoutRenderingElement::Label(label) => label.render(ctx),
-            LayoutRenderingElement::Date(date) => date.render(ctx),
-            LayoutRenderingElement::Names(names) => names.render(ctx),
-            LayoutRenderingElement::Choose(choose) => choose.render(ctx),
-            LayoutRenderingElement::Group(_group) => _group.render(ctx),
-        }
-
-        first = false;
+        child.render(ctx);
         ctx.commit_elem(pos, None, None);
     }
 
@@ -1147,7 +1145,10 @@ impl RenderCsl for citationberg::Group {
         let affix_loc = ctx.apply_prefix(&affixes);
 
         let info = self.will_have_info(ctx).1;
-        render_with_delimiter(&self.children, self.delimiter.as_deref(), ctx);
+
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.as_deref());
+        render_with_delimiter(&self.children, ctx);
+        ctx.writing.pop_delimiter(delim_idx);
 
         ctx.apply_suffix(&affixes, affix_loc);
 
@@ -1247,11 +1248,13 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 
 impl RenderCsl for citationberg::Layout {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        let fidx = ctx.push_format(self.to_formatting());
+        let format_idx = ctx.push_format(self.to_formatting());
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.as_deref());
         for e in &self.elements {
             e.render(ctx);
         }
-        ctx.pop_format(fidx);
+        ctx.writing.pop_delimiter(delim_idx);
+        ctx.pop_format(format_idx);
     }
 
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
