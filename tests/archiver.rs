@@ -384,7 +384,7 @@ fn strip_id(full_id: &str) -> &str {
 
 /// Map which styles are referenced by which dependent styles.
 #[allow(dead_code)]
-fn retrieve_dependent_aliasses() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
+fn retrieve_dependent_aliases() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
     let mut dependent_alias: HashMap<_, Vec<_>> = HashMap::new();
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     for path in iter_files(&style_path.join("dependent"), "csl") {

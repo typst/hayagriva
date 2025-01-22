@@ -1412,7 +1412,7 @@ pub struct CitationRequest<'a, T: EntryLike> {
     /// style.
     pub locale: Option<LocaleCode>,
     /// The files used to retrieve locale settings and terms if the style does
-    /// not define all neccessary items.
+    /// not define all necessary items.
     pub locale_files: &'a [Locale],
     /// The number to use for `first-reference-note-number`.
     ///
@@ -1488,7 +1488,7 @@ pub struct BibliographyRequest<'a> {
     /// style.
     pub locale: Option<LocaleCode>,
     /// The files used to retrieve locale settings and terms if the style does
-    /// not define all neccessary items.
+    /// not define all necessary items.
     pub locale_files: &'a [Locale],
 }
 
@@ -1646,7 +1646,7 @@ impl<'a> StyleContext<'a> {
 pub(crate) struct WritingContext {
     // Dynamic settings that change while rendering.
     /// Whether to watch out for punctuation that should be pulled inside the
-    /// preceeding quoted content.
+    /// preceding quoted content.
     pull_punctuation: bool,
     /// Whether we should be using inner quotes.
     inner_quotes: bool,
@@ -1953,7 +1953,7 @@ impl WritingContext {
     }
 
     /// Return the sum of the lengths of strings in the finished elements. This
-    /// may not monotonoically increase.
+    /// may not monotonically increase.
     fn len(&self) -> usize {
         self.buf.len()
             + self
@@ -2034,7 +2034,7 @@ impl CertainCiteProperties {
     }
 }
 
-/// Item properies that can only be determined after one or multiple renders.
+/// Item properties that can only be determined after one or multiple renders.
 /// These require validation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SpeculativeCiteProperties<'a> {
@@ -2404,7 +2404,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
         if self.writing.strip_periods {
             // Replicate citeproc.js behavior: remove a period if the
-            // preceeding character in the original string is not a period.
+            // preceding character in the original string is not a period.
             let mut last_period = false;
             for c in s.chars() {
                 let is_period = c == '.';
@@ -2518,7 +2518,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .unwrap_or_else(OrdinalLookup::empty)
     }
 
-    /// Pull the next punctuation character into the preceeding quoted content
+    /// Pull the next punctuation character into the preceding quoted content
     /// if appropriate for the locale.
     fn may_pull_punctuation(&mut self) {
         self.writing.pull_punctuation |= self.style.punctuation_in_quotes();
