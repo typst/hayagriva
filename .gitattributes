@@ -1,0 +1,4 @@
+*.cbor binary
+
+*.xml text eol=lf
+*.csl text eol=lf
