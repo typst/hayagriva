@@ -941,7 +941,7 @@ mod tests {
     }
 
     #[test]
-    fn title_case_name_detecion() {
+    fn title_case_name_detection() {
         let mut props = TitleCase::new();
         let case: Case = props.into();
 
