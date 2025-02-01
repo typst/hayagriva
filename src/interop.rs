@@ -421,7 +421,7 @@ impl TryFrom<&tex::Entry> for Entry {
             if eprint_type == Some("arxiv") {
                 item.set_arxiv(eprint);
             } else if eprint_type == Some("pubmed") {
-                item.set_pmid(eprint.replace("http://www.ncbi.nlm.nih.gov/pubmed/", ""));
+                item.set_pmid(eprint);
             }
         }
 
