@@ -415,11 +415,13 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(eprint) = map_res(entry.eprint())? {
-            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
-                .as_deref()
-                == Some("arxiv")
-            {
+            let eprint_type =
+                map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?;
+            let eprint_type = eprint_type.as_deref();
+            if eprint_type == Some("arxiv") {
                 item.set_arxiv(eprint);
+            } else if eprint_type == Some("pubmed") {
+                item.set_pmid(eprint.replace("http://www.ncbi.nlm.nih.gov/pubmed/", ""));
             }
         }
 
