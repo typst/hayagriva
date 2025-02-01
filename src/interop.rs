@@ -583,3 +583,25 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 
     FormatString { value, short: None }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_pmid_from_biblatex() {
+        let entries = crate::io::from_biblatex_str(r#"@article{test_article,
+	title = {Title},
+	volume = {3},
+	url = {https://example.org},
+	pages = {1--99},
+	journaltitle = {Testing Journal},
+	author = {Doe, Jane},
+	date = {2024-12},
+ eprint = {54678},
+ eprinttype = {pubmed},
+}"#).unwrap();
+        let entry = entries.get("test_article").unwrap();
+        assert_eq!(Some("54678"), entry.keyed_serial_number("pmid"));
+        assert_eq!(Some("54678"), entry.pmid());
+    }
+}
+
