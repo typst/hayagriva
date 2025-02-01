@@ -403,7 +403,7 @@ fn label_pluralization(
                 if let NumberOrPageVariable::Number(v) = label.variable {
                     n.is_plural(v.is_number_of_variable())
                 } else {
-                    panic!("Incompatiable variable types")
+                    panic!("Incompatible variable types")
                 }
             }
             NumberVariableResult::Transparent(_) => false,
@@ -818,12 +818,12 @@ fn choose_children<F, R, T: EntryLike>(
 where
     F: FnMut(&[LayoutRenderingElement], &mut Context<T>) -> R,
 {
-    let supressed = ctx.writing.suppress_queried_variables;
+    let suppressed = ctx.writing.suppress_queried_variables;
     ctx.writing.stop_suppressing_queried_variables();
     let branch = choose
         .branches()
         .find(|branch| branch.match_.test(BranchConditionIter::from_branch(branch, ctx)));
-    ctx.writing.suppress_queried_variables = supressed;
+    ctx.writing.suppress_queried_variables = suppressed;
 
     branch
         .map(|b| b.children.as_slice())

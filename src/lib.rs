@@ -741,7 +741,7 @@ impl Entry {
             EntryType::Article => retrieve_container(&[
                 EntryType::Book,
                 // Proceedings must come before Conference.
-                // Because @inproceedings will result in a Artical entry with a Proceedings and a
+                // Because @inproceedings will result in a Article entry with a Proceedings and a
                 // Conference parent. But only the Proceedings has the correct title.
                 EntryType::Proceedings,
                 EntryType::Conference,

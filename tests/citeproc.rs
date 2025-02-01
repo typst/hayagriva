@@ -277,7 +277,9 @@ impl<'s> TestCaseBuilder<'s> {
             result: self
                 .result
                 .ok_or(TestParseError::MissingRequiredSection(SectionTag::Result))?
-                .replace("&#38;", "&"),
+                .replace("&#38;", "&")
+                // [`test_file`] uses LF, even on Windows. Therefore, unify CRLF to LF.
+                .replace("\r\n", "\n"),
             csl: Style::from_xml(
                 self.csl
                     .ok_or(TestParseError::MissingRequiredSection(SectionTag::Csl))?,
