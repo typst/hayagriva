@@ -18,7 +18,7 @@ https://github.com/typst/hayagriva/issues/180
 
 
 >>===== RESULT =====>>
-Title_Edition_Publisher_Place_TitleEditionPublisherPlace
+Title_Edition_Publisher_Place_TitleEditionPublisherPlace_PublisherPublisherPublisher
 <<===== RESULT =====<<
 
 
@@ -65,6 +65,11 @@ Title_Edition_Publisher_Place_TitleEditionPublisherPlace
           </if>
         </choose>
         <text macro="unaffected"/>
+        <group>
+          <text variable="publisher"/>
+          <text variable="publisher"/>
+          <text variable="publisher"/>
+        </group>
       </group>
     </layout>
   </citation>
