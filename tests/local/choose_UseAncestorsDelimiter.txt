@@ -7,11 +7,11 @@ citation
 Delimiters from the nearest delimiters from the nearest ancestor delimiting element (e.g., <group>)
 are applied within the output of <choose>
 (i.e., the output of the matching <if>, <else-if>, or <else>).
-https://docs.citationstyles.org/en/stable/specification.html#choose
+https://docs.citationstyles.org/en/v1.0.2/specification.html#choose
 
 But they are not applied within the output of a delimiting element or a <text macro="…"> element.
-https://docs.citationstyles.org/en/stable/specification.html#delimiter
-https://docs.citationstyles.org/en/stable/specification.html#macro
+https://docs.citationstyles.org/en/v1.0.2/specification.html#delimiter
+https://docs.citationstyles.org/en/v1.0.2/specification.html#macro
 
 https://github.com/typst/hayagriva/issues/180
 <<===== DESCRIPTION =====<<

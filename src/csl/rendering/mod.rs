@@ -834,6 +834,8 @@ where
 impl RenderCsl for citationberg::Choose {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         choose_children(self, ctx, |children, ctx| {
+            // Propagate parent group's delimiter to 'choose' output, as
+            // required by CSL, by not pushing a delimiter to the stack.
             render_with_delimiter(children, ctx);
         });
     }
