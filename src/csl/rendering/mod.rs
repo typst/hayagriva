@@ -975,7 +975,7 @@ impl<'a, 'b, T: EntryLike> BranchConditionIter<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
+impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {

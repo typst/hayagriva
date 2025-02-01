@@ -12,7 +12,7 @@ use crate::csl::BufWriteFormat;
 use super::taxonomy::EntryLike;
 use super::{CitationItem, InstanceContext, StyleContext};
 
-impl<'a> StyleContext<'a> {
+impl StyleContext<'_> {
     /// Retrieve the ordering of two entries according to the given sort key.
     fn cmp_entries<T: EntryLike>(
         &self,
