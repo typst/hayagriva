@@ -1936,13 +1936,16 @@ impl WritingContext {
             .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
     }
 
-    /// Set the delimiter of the next [`citationberg::Choose`].
+    /// Set the delimiter of the children of a [`citationberg::Group`] or
+    /// [`citationberg::Layout`]. It is inherited by [`citationberg::Choose`]
+    /// for its children as well.
     fn push_delimiter(&mut self, delimiter: Option<String>) -> DelimiterIdx {
         let idx = self.delimiters.len();
         self.delimiters.push(delimiter);
         DelimiterIdx(idx)
     }
-    /// Clear the delimiter of the next [`citationberg::Choose`].
+    /// Clear the delimiter after a [`citationberg::Group`] or
+    /// [`citationberg::Layout`].
     fn pop_delimiter(&mut self, idx: DelimiterIdx) {
         if idx.0 == self.delimiters.len() {
             return;
