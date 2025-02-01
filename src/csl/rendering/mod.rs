@@ -1148,7 +1148,7 @@ impl RenderCsl for citationberg::Group {
 
         let info = self.will_have_info(ctx).1;
 
-        let delim_idx = ctx.writing.push_delimiter(self.delimiter.as_deref());
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.clone());
         render_with_delimiter(&self.children, ctx);
         ctx.writing.pop_delimiter(delim_idx);
 
@@ -1251,7 +1251,7 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 impl RenderCsl for citationberg::Layout {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         let format_idx = ctx.push_format(self.to_formatting());
-        let delim_idx = ctx.writing.push_delimiter(self.delimiter.as_deref());
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.clone());
         for e in &self.elements {
             e.render(ctx);
         }

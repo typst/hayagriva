@@ -1937,9 +1937,9 @@ impl WritingContext {
     }
 
     /// Set the delimiter of the next [`citationberg::Choose`].
-    fn push_delimiter(&mut self, delimiter: Option<&str>) -> DelimiterIdx {
+    fn push_delimiter(&mut self, delimiter: Option<String>) -> DelimiterIdx {
         let idx = self.delimiters.len();
-        self.delimiters.push(delimiter.map(|s| s.to_string()));
+        self.delimiters.push(delimiter);
         DelimiterIdx(idx)
     }
     /// Clear the delimiter of the next [`citationberg::Choose`].
