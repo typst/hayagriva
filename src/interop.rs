@@ -415,11 +415,13 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(eprint) = map_res(entry.eprint())? {
-            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
-                .as_deref()
-                == Some("arxiv")
-            {
+            let eprint_type =
+                map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?;
+            let eprint_type = eprint_type.as_deref();
+            if eprint_type == Some("arxiv") {
                 item.set_arxiv(eprint);
+            } else if eprint_type == Some("pubmed") {
+                item.set_pmid(eprint);
             }
         }
 
@@ -580,4 +582,28 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
     }
 
     FormatString { value, short: None }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_pmid_from_biblatex() {
+        let entries = crate::io::from_biblatex_str(
+            r#"@article{test_article,
+	title = {Title},
+	volume = {3},
+	url = {https://example.org},
+	pages = {1--99},
+	journaltitle = {Testing Journal},
+	author = {Doe, Jane},
+	date = {2024-12},
+ eprint = {54678},
+ eprinttype = {pubmed},
+}"#,
+        )
+        .unwrap();
+        let entry = entries.get("test_article").unwrap();
+        assert_eq!(Some("54678"), entry.keyed_serial_number("pmid"));
+        assert_eq!(Some("54678"), entry.pmid());
+    }
 }
