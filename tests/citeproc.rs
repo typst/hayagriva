@@ -733,7 +733,7 @@ mod citeproc_bib {
             }
         }
 
-        if css != "" {
+        if !css.is_empty() {
             push_elem(&format!("<span style=\"{css}\">"), "</span>");
         }
 
@@ -760,8 +760,8 @@ mod citeproc_bib {
             render_child(child, output)?;
         }
 
-        if div_suffix != "" {
-            output.push_str(&div_suffix);
+        if !div_suffix.is_empty() {
+            output.push_str(div_suffix);
         }
         Ok(())
     }
