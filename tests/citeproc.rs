@@ -499,7 +499,10 @@ where
         false
     } else if case.mode != TestMode::Bibliography && case.result.contains('<') {
         if print {
-            eprintln!("Skipping test {}\t(cause: HTML suspected in citation result)", display());
+            eprintln!(
+                "Skipping test {}\t(cause: HTML suspected in citation result)",
+                display()
+            );
         }
         false
     } else if contains_date_ranges {
@@ -586,11 +589,13 @@ where
             }
 
             case.result.trim()
-        },
+        }
         TestMode::Bibliography => {
             static INDENT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 
-            let bib = rendered.bibliography.expect("Bibliography mode test but no bibliography was rendered");
+            let bib = rendered
+                .bibliography
+                .expect("Bibliography mode test but no bibliography was rendered");
             citeproc_bib::render(&bib, &mut output).unwrap();
             output.push('\n');
 
@@ -602,7 +607,7 @@ where
             &*INDENT_REGEX
                 .get_or_init(|| regex::Regex::new(r#"\n\s*"#).unwrap())
                 .replace_all(case.result.trim(), "")
-        },
+        }
     };
 
     if output.trim() == formatted_result {
@@ -623,7 +628,10 @@ mod citeproc_bib {
     use citationberg::{Display, FontStyle, FontVariant, FontWeight, VerticalAlign};
     use hayagriva::{BufWriteFormat, Elem, ElemChild, Formatting};
 
-    pub(super) fn render(bib: &hayagriva::RenderedBibliography, output: &mut String) -> Result<(), fmt::Error> {
+    pub(super) fn render(
+        bib: &hayagriva::RenderedBibliography,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
         output.push_str(r#"<div class="csl-bib-body">"#);
         for item in &bib.items {
             // TODO: Verify whether this automatically implies left-margin
@@ -634,7 +642,10 @@ mod citeproc_bib {
         Ok(())
     }
 
-    fn render_item(item: &hayagriva::BibliographyItem, output: &mut String) -> Result<(), fmt::Error> {
+    fn render_item(
+        item: &hayagriva::BibliographyItem,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
         output.push_str(r#"<div class="csl-entry">"#);
         if let Some(field) = &item.first_field {
             render_child(field, output)?;
@@ -648,15 +659,16 @@ mod citeproc_bib {
 
     fn render_child(child: &ElemChild, output: &mut String) -> Result<(), fmt::Error> {
         match child {
-            ElemChild::Text(formatted) => {
-                render_formatted_text(formatted, output)
-            }
+            ElemChild::Text(formatted) => render_formatted_text(formatted, output),
             ElemChild::Elem(e) => render_elem(e, output),
             elem => elem.write_buf(output, BufWriteFormat::Html),
         }
     }
 
-    fn render_formatted_text(text: &hayagriva::Formatted, output: &mut String) -> Result<(), fmt::Error> {
+    fn render_formatted_text(
+        text: &hayagriva::Formatted,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
         let formatting = text.formatting;
         if formatting == Formatting::default() {
             output.push_str(&text.text);
@@ -706,10 +718,10 @@ mod citeproc_bib {
                 // NOTE: This has to come after (be inside) bold
                 // (Citeproc tests use <b><i>...</i></b> when both are present)
                 push_elem("<i>", "</i>")
-            },
+            }
             FontStyle::Normal => {
                 // TODO: Same note for bold and <span class="nodecor">
-            },
+            }
         }
 
         match formatting.font_variant {
