@@ -32,6 +32,7 @@ biblatex = { version = "0.10.0", optional = true }
 ciborium = { version = "0.2.1", optional = true }
 clap = { version = "4", optional = true, features = ["cargo"] }
 strum = { version = "0.26", features = ["derive"], optional = true }
+regex = { version = "1", optional = true }
 
 [dev-dependencies]
 heck = "0.5"
@@ -44,4 +45,4 @@ required-features = ["cli"]
 [[test]]
 name = "citeproc"
 path = "tests/citeproc.rs"
-required-features = ["csl-json"]
+required-features = ["csl-json", "regex"]
