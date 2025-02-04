@@ -634,8 +634,6 @@ mod citeproc_bib {
     ) -> Result<(), fmt::Error> {
         output.push_str(r#"<div class="csl-bib-body">"#);
         for item in &bib.items {
-            // TODO: Verify whether this automatically implies left-margin
-            // followed by right-inline (cf. test bugreports_AsmJournals.txt)
             render_item(item, output)?;
         }
         output.push_str("</div>");
@@ -646,13 +644,20 @@ mod citeproc_bib {
         item: &hayagriva::BibliographyItem,
         output: &mut String,
     ) -> Result<(), fmt::Error> {
+        let mut second_field_align_suffix = "";
         output.push_str(r#"<div class="csl-entry">"#);
         if let Some(field) = &item.first_field {
+            // Uses 'second-field-align', so add implicit alignment
+            // (cf. test bugreports_AsmJournals.txt)
+            output.push_str("<div class=\"csl-left-margin\">");
             render_child(field, output)?;
+            output.push_str("</div><div class=\"csl-right-inline\">");
+            second_field_align_suffix = "</div>";
         }
         for child in &item.content.0 {
             render_child(child, output)?;
         }
+        output.push_str(second_field_align_suffix);
         output.push_str("</div>");
         Ok(())
     }
