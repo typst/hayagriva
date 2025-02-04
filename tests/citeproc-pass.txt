@@ -24,6 +24,7 @@ bugreports_SortSecondaryKeyBibliography
 bugreports_StyleError001
 bugreports_TitleCase
 bugreports_UndefinedInName2
+bugreports_UndefinedNotString
 bugreports_UndefinedStr
 bugreports_UnisaHarvardInitialization
 bugreports_YearSuffixLingers
