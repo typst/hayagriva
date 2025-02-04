@@ -666,6 +666,9 @@ mod citeproc_bib {
         match child {
             ElemChild::Text(formatted) => render_formatted_text(formatted, output),
             ElemChild::Elem(e) => render_elem(e, output),
+
+            // Citeproc bib tests do not output <a href=...></a> for links
+            ElemChild::Link { text, url: _ } => render_formatted_text(text, output),
             elem => elem.write_buf(output, BufWriteFormat::Html),
         }
     }
