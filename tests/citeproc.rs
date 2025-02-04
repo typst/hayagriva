@@ -710,8 +710,6 @@ mod citeproc_bib {
                 push_elem("<sup>", "</sup>");
             }
             VerticalAlign::Baseline => {
-                // TODO: Figure out what happens when baseline is combined with
-                // something else.
                 push_elem(r#"<span style="baseline">"#, "</span>");
             }
             VerticalAlign::None => {}
@@ -722,7 +720,8 @@ mod citeproc_bib {
                 push_elem("<b>", "</b>");
             }
             FontWeight::Light => {
-                // TODO: Find an example test where this is used
+                // NOTE: This is not used in any tests, so we can only assume
+                // this is done through this CSS style for now.
                 css.push_str("font-weight:lighter;");
             }
             FontWeight::Normal => {}
