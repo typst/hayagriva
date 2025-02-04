@@ -673,6 +673,16 @@ mod citeproc_bib {
         }
     }
 
+    /// Applies the appropriate HTML tags to formatted text, according to
+    /// citeproc test output.
+    ///
+    /// Note that citeproc (csl-json) input accepts
+    /// '<span class="nodecor">...</span>' within text to nullify outer
+    /// formatting, for example apply 'font-style:normal' inside bold and
+    /// italics (see flipflop_ItalicsWithOk), or 'font-variant:normal' inside
+    /// smallcaps (see flipflop_ItalicsWithOkAndTextcase). We do not support
+    /// this notation, especially since we do not expose csl-json input to
+    /// hayagriva users anyway.
     fn render_formatted_text(
         text: &hayagriva::Formatted,
         output: &mut String,
@@ -683,7 +693,8 @@ mod citeproc_bib {
             return Ok(());
         }
 
-        // TODO: Spaces between multiple CSS? (No example with multiple in tests)
+        // NOTE: There are no tests with multiple CSS styles, so for now we
+        // join them without any spacing.
         let mut css = String::new();
         let mut suffix = String::new();
         let mut push_elem = |start, end| {
@@ -714,11 +725,7 @@ mod citeproc_bib {
                 // TODO: Find an example test where this is used
                 css.push_str("font-weight:lighter;");
             }
-            FontWeight::Normal => {
-                // TODO: Do we support <span class="nodecor">...</span>?
-                // It should force 'font-style:normal' when inside bold/italics
-                // Relevant test: flipflop_ItalicsWithOk.txt
-            }
+            FontWeight::Normal => {}
         }
 
         match formatting.font_style {
@@ -727,18 +734,12 @@ mod citeproc_bib {
                 // (Citeproc tests use <b><i>...</i></b> when both are present)
                 push_elem("<i>", "</i>")
             }
-            FontStyle::Normal => {
-                // TODO: Same note for bold and <span class="nodecor">
-            }
+            FontStyle::Normal => {}
         }
 
         match formatting.font_variant {
             FontVariant::SmallCaps => css.push_str("font-variant:small-caps;"),
-            FontVariant::Normal => {
-                // TODO: <span class="nodecor">...</span> translates to
-                // 'font-variant:normal' inside smallcaps
-                // Relevant test: flipflop_ItalicsWithOkAndTextcase.txt
-            }
+            FontVariant::Normal => {}
         }
 
         if !css.is_empty() {
