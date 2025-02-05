@@ -159,7 +159,7 @@ impl EntryLike for Entry {
             NumberVariable::Issue => self.map(|e| e.issue()).map(MaybeTyped::to_cow),
             NumberVariable::Locator => panic!("processor must resolve this"),
             NumberVariable::Number => {
-                return self.serial_number().and_then(|s| s.0.get("serial")).map(|s| {
+                self.serial_number().and_then(|s| s.0.get("serial")).map(|s| {
                     Numeric::from_str(s)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))

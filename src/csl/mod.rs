@@ -15,7 +15,7 @@ use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
     CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
     LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToFormatting,
+    StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToAffixes, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -91,7 +91,7 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 }
 
 /// Implementations for finishing the bibliography.
-impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T> {
+impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
     /// Render the bibliography.
     pub fn finish(mut self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
@@ -1590,13 +1590,12 @@ impl<'a> StyleContext<'a> {
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
 
         let layout = &self.csl.bibliography.as_ref()?.layout;
-        if let Some(prefix) = layout.prefix.as_ref() {
-            ctx.push_str(prefix);
-        }
+        let affixes = layout.to_affixes();
+
+        let affix_loc = ctx.apply_prefix(&affixes);
         layout.render(&mut ctx);
-        if let Some(suffix) = layout.suffix.as_ref() {
-            ctx.push_str(suffix);
-        }
+        ctx.apply_suffix(&affixes, affix_loc);
+
         Some(ctx)
     }
 
@@ -1622,7 +1621,7 @@ pub struct CitationRequest<'a, T: EntryLike> {
     /// style.
     pub locale: Option<LocaleCode>,
     /// The files used to retrieve locale settings and terms if the style does
-    /// not define all neccessary items.
+    /// not define all necessary items.
     pub locale_files: &'a [Locale],
     /// The number to use for `first-reference-note-number`.
     ///
@@ -1698,7 +1697,7 @@ pub struct BibliographyRequest<'a> {
     /// style.
     pub locale: Option<LocaleCode>,
     /// The files used to retrieve locale settings and terms if the style does
-    /// not define all neccessary items.
+    /// not define all necessary items.
     pub locale_files: &'a [Locale],
 }
 
@@ -1856,7 +1855,7 @@ impl<'a> StyleContext<'a> {
 pub(crate) struct WritingContext {
     // Dynamic settings that change while rendering.
     /// Whether to watch out for punctuation that should be pulled inside the
-    /// preceeding quoted content.
+    /// preceding quoted content.
     pull_punctuation: bool,
     /// Whether we should be using inner quotes.
     inner_quotes: bool,
@@ -1884,6 +1883,9 @@ pub(crate) struct WritingContext {
     cases: NonEmptyStack<Option<TextCase>>,
     /// Inheritable name options.
     name_options: NonEmptyStack<InheritableNameOptions>,
+    /// Delimiters from ancestor delimiting elements (e.g., `cs:group`).
+    /// To be applied within `cs:choose`, but not another delimiting element or a macro.
+    delimiters: NonEmptyStack<Option<String>>,
 
     // Buffers.
     /// The buffer we're writing to. If block-level or formatting changes, we
@@ -1908,6 +1910,7 @@ impl Default for WritingContext {
             format_stack: NonEmptyStack::default(),
             cases: NonEmptyStack::default(),
             name_options: NonEmptyStack::default(),
+            delimiters: NonEmptyStack::default(),
             buf: CaseFolder::default(),
             elem_stack: NonEmptyStack::default(),
         }
@@ -2142,6 +2145,24 @@ impl WritingContext {
             .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
     }
 
+    /// Set the delimiter of the children of a [`citationberg::Group`] or
+    /// [`citationberg::Layout`]. It is inherited by [`citationberg::Choose`]
+    /// for its children as well.
+    fn push_delimiter(&mut self, delimiter: Option<String>) -> DelimiterIdx {
+        let idx = self.delimiters.len();
+        self.delimiters.push(delimiter);
+        DelimiterIdx(idx)
+    }
+    /// Clear the delimiter after a [`citationberg::Group`] or
+    /// [`citationberg::Layout`].
+    fn pop_delimiter(&mut self, idx: DelimiterIdx) {
+        if idx.0 == self.delimiters.len() {
+            return;
+        }
+
+        self.delimiters.drain(idx.0).for_each(drop);
+    }
+
     /// Push a new suppressed variable if we are suppressing queried variables.
     fn maybe_suppress(&self, variable: Variable) {
         if self.suppress_queried_variables {
@@ -2163,7 +2184,7 @@ impl WritingContext {
     }
 
     /// Return the sum of the lengths of strings in the finished elements. This
-    /// may not monotonoically increase.
+    /// may not monotonically increase.
     fn len(&self) -> usize {
         self.buf.len()
             + self
@@ -2244,7 +2265,7 @@ impl CertainCiteProperties {
     }
 }
 
-/// Item properies that can only be determined after one or multiple renders.
+/// Item properties that can only be determined after one or multiple renders.
 /// These require validation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SpeculativeCiteProperties<'a> {
@@ -2614,7 +2635,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
         if self.writing.strip_periods {
             // Replicate citeproc.js behavior: remove a period if the
-            // preceeding character in the original string is not a period.
+            // preceding character in the original string is not a period.
             let mut last_period = false;
             for c in s.chars() {
                 let is_period = c == '.';
@@ -2728,7 +2749,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .unwrap_or_else(OrdinalLookup::empty)
     }
 
-    /// Pull the next punctuation character into the preceeding quoted content
+    /// Pull the next punctuation character into the preceding quoted content
     /// if appropriate for the locale.
     fn may_pull_punctuation(&mut self) {
         self.writing.pull_punctuation |= self.style.punctuation_in_quotes();
@@ -2962,6 +2983,9 @@ impl DisplayLoc {
 
 #[must_use = "case stack must be popped"]
 struct CaseIdx(NonZeroUsize);
+
+#[must_use = "delimiter stack must be popped"]
+struct DelimiterIdx(NonZeroUsize);
 
 impl<T: EntryLike> Write for Context<'_, T> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {

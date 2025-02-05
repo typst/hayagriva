@@ -17,7 +17,7 @@ archive = ["ciborium"]
 csl-json = ["citationberg/json"]
 
 [dependencies]
-citationberg = "0.4.0"
+citationberg = "0.5.0"
 indexmap = { version = "2.0.2", features = ["serde"] }
 numerals = "0.1.4"
 paste = "1.0.14"
@@ -36,6 +36,7 @@ strum = { version = "0.26", features = ["derive"], optional = true }
 [dev-dependencies]
 heck = "0.5"
 serde_json = "1"
+regex = "1"
 
 [[bin]]
 name = "hayagriva"

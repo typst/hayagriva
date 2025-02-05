@@ -32,7 +32,7 @@ impl<'de> Deserialize<'de> for Numeric {
         struct OurVisitor;
 
         /// The visitor parses numbers and strings.
-        impl<'de> Visitor<'de> for OurVisitor {
+        impl Visitor<'_> for OurVisitor {
             type Value = Numeric;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -230,7 +230,7 @@ impl Numeric {
     }
 }
 
-impl<'a> MaybeTyped<Cow<'a, Numeric>> {
+impl MaybeTyped<Cow<'_, Numeric>> {
     /// Order the values according to CSL rules.
     pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
@@ -379,7 +379,7 @@ pub struct NumIterator<'a> {
     idx: usize,
 }
 
-impl<'a> Iterator for NumIterator<'a> {
+impl Iterator for NumIterator<'_> {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -394,7 +394,7 @@ impl<'a> Iterator for NumIterator<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for NumIterator<'a> {
+impl ExactSizeIterator for NumIterator<'_> {
     fn len(&self) -> usize {
         self.size_hint().0
     }

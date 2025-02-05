@@ -98,9 +98,12 @@ impl RenderCsl for citationberg::Text {
                 MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
             },
             ResolvedTextTarget::Macro(mac) => {
+                // Delimiters from ancestor delimiting elements are NOT applied within.
+                let idx = ctx.writing.push_delimiter(None);
                 for child in &mac.children {
                     child.render(ctx);
                 }
+                ctx.writing.pop_delimiter(idx);
             }
             ResolvedTextTarget::Term(s) => ctx.push_str(s),
             ResolvedTextTarget::Value(val) => ctx.push_str(val),
@@ -400,7 +403,7 @@ fn label_pluralization(
                 if let NumberOrPageVariable::Number(v) = label.variable {
                     n.is_plural(v.is_number_of_variable())
                 } else {
-                    panic!("Incompatiable variable types")
+                    panic!("Incompatible variable types")
                 }
             }
             NumberVariableResult::Transparent(_) => false,
@@ -815,12 +818,12 @@ fn choose_children<F, R, T: EntryLike>(
 where
     F: FnMut(&[LayoutRenderingElement], &mut Context<T>) -> R,
 {
-    let supressed = ctx.writing.suppress_queried_variables;
+    let suppressed = ctx.writing.suppress_queried_variables;
     ctx.writing.stop_suppressing_queried_variables();
     let branch = choose
         .branches()
         .find(|branch| branch.match_.test(BranchConditionIter::from_branch(branch, ctx)));
-    ctx.writing.suppress_queried_variables = supressed;
+    ctx.writing.suppress_queried_variables = suppressed;
 
     branch
         .map(|b| b.children.as_slice())
@@ -831,7 +834,9 @@ where
 impl RenderCsl for citationberg::Choose {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         choose_children(self, ctx, |children, ctx| {
-            render_with_delimiter(children, self.delimiter.as_deref(), ctx);
+            // Propagate parent group's delimiter to 'choose' output, as
+            // required by CSL, by not pushing a delimiter to the stack.
+            render_with_delimiter(children, ctx);
         });
     }
 
@@ -859,11 +864,16 @@ impl RenderCsl for citationberg::Choose {
     }
 }
 
+/// Render `children` with the delimiter in `ctx` between them.
+///
+/// The delimiter can be updated by [`ctx.writing.push_delimiter`][super::WritingContext::push_delimiter]
+/// and [`ctx.writing.pop_delimiter`][super::WritingContext::pop_delimiter].
 fn render_with_delimiter<T: EntryLike>(
     children: &[LayoutRenderingElement],
-    delimiter: Option<&str>,
     ctx: &mut Context<T>,
 ) {
+    let delimiter = ctx.writing.delimiters.last().clone();
+
     let mut first = true;
     let mut loc = None;
 
@@ -874,7 +884,7 @@ fn render_with_delimiter<T: EntryLike>(
         }
 
         if !first {
-            if let Some(delim) = delimiter {
+            if let Some(delim) = &delimiter {
                 let prev_loc = std::mem::take(&mut loc);
 
                 if let Some(prev_loc) = prev_loc {
@@ -885,20 +895,10 @@ fn render_with_delimiter<T: EntryLike>(
                 ctx.push_str(delim);
             }
         }
+        first = false;
 
         let pos = ctx.push_elem(citationberg::Formatting::default());
-
-        match child {
-            LayoutRenderingElement::Text(text) => text.render(ctx),
-            LayoutRenderingElement::Number(num) => num.render(ctx),
-            LayoutRenderingElement::Label(label) => label.render(ctx),
-            LayoutRenderingElement::Date(date) => date.render(ctx),
-            LayoutRenderingElement::Names(names) => names.render(ctx),
-            LayoutRenderingElement::Choose(choose) => choose.render(ctx),
-            LayoutRenderingElement::Group(_group) => _group.render(ctx),
-        }
-
-        first = false;
+        child.render(ctx);
         ctx.commit_elem(pos, None, None);
     }
 
@@ -975,7 +975,7 @@ impl<'a, 'b, T: EntryLike> BranchConditionIter<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
+impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1147,7 +1147,10 @@ impl RenderCsl for citationberg::Group {
         let affix_loc = ctx.apply_prefix(&affixes);
 
         let info = self.will_have_info(ctx).1;
-        render_with_delimiter(&self.children, self.delimiter.as_deref(), ctx);
+
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.clone());
+        render_with_delimiter(&self.children, ctx);
+        ctx.writing.pop_delimiter(delim_idx);
 
         ctx.apply_suffix(&affixes, affix_loc);
 
@@ -1247,11 +1250,13 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 
 impl RenderCsl for citationberg::Layout {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        let fidx = ctx.push_format(self.to_formatting());
+        let format_idx = ctx.push_format(self.to_formatting());
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.clone());
         for e in &self.elements {
             e.render(ctx);
         }
-        ctx.pop_format(fidx);
+        ctx.writing.pop_delimiter(delim_idx);
+        ctx.pop_format(format_idx);
     }
 
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {

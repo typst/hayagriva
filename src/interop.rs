@@ -115,7 +115,7 @@ impl From<&PermissiveType<i64>> for MaybeTyped<Numeric> {
     }
 }
 
-fn ed_role(role: EditorType) -> Option<PersonRole> {
+fn ed_role(role: EditorType, entry_type: &tex::EntryType) -> Option<PersonRole> {
     match role {
         EditorType::Editor => None,
         EditorType::Compiler => Some(PersonRole::Compiler),
@@ -126,7 +126,25 @@ fn ed_role(role: EditorType) -> Option<PersonRole> {
         EditorType::Collaborator => Some(PersonRole::Collaborator),
         EditorType::Organizer => Some(PersonRole::Organizer),
         EditorType::Director => Some(PersonRole::Director),
-        EditorType::Unknown(role) => Some(PersonRole::Unknown(role)),
+        EditorType::Unknown(role) => {
+            let other_entry_type = if let tex::EntryType::Unknown(t) = entry_type {
+                Some(t.to_ascii_lowercase())
+            } else {
+                None
+            };
+
+            match (role.to_ascii_lowercase().as_str(), other_entry_type.as_deref()) {
+                // See p. 26 of the biblatex-chicago manual and biblatex-apa
+                ("producer", _) => Some(PersonRole::Producer),
+                // The pervasive Zotero plugin zotero-better-biblatex produces this.
+                ("scriptwriter", _) => Some(PersonRole::Writer),
+                // The biblatex-apa style expects `writer` for videos.
+                ("writer", Some("video")) => Some(PersonRole::Writer),
+                // See p. 26 of the biblatex-chicago manual
+                ("none", Some("video") | Some("music")) => Some(PersonRole::CastMember),
+                _ => Some(PersonRole::Unknown(role)),
+            }
+        }
     }
 }
 
@@ -209,7 +227,7 @@ impl TryFrom<&tex::Entry> for Entry {
         let mut eds: Vec<Person> = vec![];
         let mut collaborators = vec![];
         for (editors, role) in entry.editors()? {
-            let ptype = ed_role(role);
+            let ptype = ed_role(role, &entry.entry_type);
             match ptype {
                 None => eds.extend(editors.iter().map(Into::into)),
                 Some(role) => collaborators.push(PersonsWithRoles::new(
@@ -415,11 +433,13 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(eprint) = map_res(entry.eprint())? {
-            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
-                .as_deref()
-                == Some("arxiv")
-            {
+            let eprint_type =
+                map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?;
+            let eprint_type = eprint_type.as_deref();
+            if eprint_type == Some("arxiv") {
                 item.set_arxiv(eprint);
+            } else if eprint_type == Some("pubmed") {
+                item.set_pmid(eprint);
             }
         }
 
@@ -580,4 +600,67 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
     }
 
     FormatString { value, short: None }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::PersonRole;
+
+    #[test]
+    fn test_pmid_from_biblatex() {
+        let entries = crate::io::from_biblatex_str(
+            r#"@article{test_article,
+            title = {Title},
+            volume = {3},
+            url = {https://example.org},
+            pages = {1--99},
+            journaltitle = {Testing Journal},
+            author = {Doe, Jane},
+            date = {2024-12},
+            eprint = {54678},
+            eprinttype = {pubmed},
+          }"#,
+        )
+        .unwrap();
+        let entry = entries.get("test_article").unwrap();
+        assert_eq!(Some("54678"), entry.keyed_serial_number("pmid"));
+        assert_eq!(Some("54678"), entry.pmid());
+    }
+
+    #[test]
+    /// See https://github.com/typst/hayagriva/issues/266
+    fn issue_266() {
+        let entries = crate::io::from_biblatex_str(
+            r#"@video{wachowskiMatrix1999,
+            type = {Action, Sci-Fi},
+            entrysubtype = {film},
+            title = {The {{Matrix}}},
+            editor = {Wachowski, Lana and Wachowski, Lilly},
+            editortype = {director},
+            editora = {Wachowski, Lilly and Wachowski, Lana},
+            editoratype = {scriptwriter},
+            namea = {Reeves, Keanu and Fishburne, Laurence and Moss, Carrie-Anne},
+            nameatype = {collaborator},
+            date = {1999-03-31},
+            publisher = {Warner Bros., Village Roadshow Pictures, Groucho Film Partnership},
+            abstract = {When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.},
+            keywords = {artificial reality,dystopia,post apocalypse,simulated reality,war with machines},
+            annotation = {IMDb ID: tt0133093\\
+            event-location: United States, Australia}
+            }"#,
+        ).unwrap();
+
+        let entry = entries.get("wachowskiMatrix1999").unwrap();
+        assert_eq!(
+            Some("Lilly"),
+            entry
+                .affiliated_with_role(PersonRole::Writer)
+                .first()
+                .unwrap()
+                .given_name
+                .as_deref()
+        );
+
+        serde_json::to_value(entry).unwrap();
+    }
 }

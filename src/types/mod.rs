@@ -210,7 +210,7 @@ pub enum EntryType {
     /// conference.
     #[serde(alias = "Proceedings")]
     Proceedings,
-    /// Long-form work published pysically as a set of bound sheets.
+    /// Long-form work published physically as a set of bound sheets.
     #[serde(alias = "Book")]
     Book,
     /// Set of self-published articles on a website.
@@ -304,7 +304,7 @@ pub enum DeserializationError {
     ExpectedKey(&'static str),
 }
 
-/// A type that may be a string or a stricly typed value.
+/// A type that may be a string or a strictly typed value.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Eq, Hash)]
 #[serde(untagged)]
 pub enum MaybeTyped<T> {

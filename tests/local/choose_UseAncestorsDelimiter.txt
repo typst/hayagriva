@@ -1,0 +1,82 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+>>===== DESCRIPTION =====>>
+Delimiters from the nearest delimiters from the nearest ancestor delimiting element (e.g., <group>)
+are applied within the output of <choose>
+(i.e., the output of the matching <if>, <else-if>, or <else>).
+https://docs.citationstyles.org/en/v1.0.2/specification.html#choose
+
+But they are not applied within the output of a delimiting element or a <text macro="…"> element.
+https://docs.citationstyles.org/en/v1.0.2/specification.html#delimiter
+https://docs.citationstyles.org/en/v1.0.2/specification.html#macro
+
+https://github.com/typst/hayagriva/issues/180
+<<===== DESCRIPTION =====<<
+
+
+>>===== RESULT =====>>
+Title_Edition_Publisher_Place_TitleEditionPublisherPlace_PublisherPublisherPublisher
+<<===== RESULT =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "edition": "Edition",
+        "id": "random",
+        "publisher": "Publisher",
+        "publisher-place": "Place",
+        "title": "Title",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== CSL =====>>
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+  <info>
+    <id />
+    <title />
+  </info>
+  <macro name="unaffected">
+    <text variable="title"/> 
+    <text variable="edition"/>
+    <choose>
+      <if type="book">
+        <text variable="publisher"/>
+        <text variable="publisher-place"/>
+      </if>
+    </choose>
+  </macro>
+  <citation>
+    <layout>
+      <group delimiter="_">
+        <text variable="title"/> 
+        <text variable="edition"/>
+        <choose>
+          <if type="book">
+            <text variable="publisher"/>
+            <text variable="publisher-place"/>
+          </if>
+        </choose>
+        <text macro="unaffected"/>
+        <group>
+          <text variable="publisher"/>
+          <text variable="publisher"/>
+          <text variable="publisher"/>
+        </group>
+      </group>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== VERSION =====>>
+1.0.2
+<<===== VERSION =====<<

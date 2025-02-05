@@ -164,7 +164,7 @@ impl CharClass {
             }
             '(' | '[' | '{' => Self::NewSubclause,
             ')' | ']' | '}' => self,
-            '"' | '”' | '“' | '»' | '›' | '«' | '‹' | '‘' => self,
+            '"' | '”' | '“' | '»' | '›' | '«' | '‹' | '‘' | '\'' => self,
             ',' | ';' => {
                 if self.is_in_word() {
                     Self::MaybeSubclause
@@ -913,6 +913,10 @@ mod tests {
         let title =
             case.transform("Around a table: the reason why we just could not care");
         assert_eq!("Around a Table: The Reason Why We Just Could Not Care", title);
+
+        let title =
+        case.transform("'My colleague is a robot' – exploring frontline employees' willingness to work with collaborative service robots");
+        assert_eq!("'My Colleague Is a Robot' – Exploring Frontline Employees' Willingness to Work with Collaborative Service Robots", title);
     }
 
     #[test]
@@ -937,7 +941,7 @@ mod tests {
     }
 
     #[test]
-    fn title_case_name_detecion() {
+    fn title_case_name_detection() {
         let mut props = TitleCase::new();
         let case: Case = props.into();
 
