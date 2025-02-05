@@ -15,7 +15,7 @@ use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
     CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
     LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, TermForm, ToFormatting,
+    StyleClass, TermForm, ToAffixes, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -1386,7 +1386,14 @@ impl<'a> StyleContext<'a> {
         let mut ctx = self.ctx(entry, props, locale, term_locale, true);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
-        self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
+
+        let layout = &self.csl.bibliography.as_ref()?.layout;
+        let affixes = layout.to_affixes();
+
+        let affix_loc = ctx.apply_prefix(&affixes);
+        layout.render(&mut ctx);
+        ctx.apply_suffix(&affixes, affix_loc);
+
         Some(ctx)
     }
 

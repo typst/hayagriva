@@ -3,6 +3,7 @@
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::OnceLock;
 use std::{fmt, fs};
 
 mod common;
@@ -491,19 +492,17 @@ where
                 .map_or(false, |d| d.end.is_some())
         });
 
-    if case.mode == TestMode::Bibliography {
-        if print {
-            eprintln!("Skipping test {}\t(cause: Bibliography mode)", display());
-        }
-        false
-    } else if !can_test {
+    if !can_test {
         if print {
             eprintln!("Skipping test {}\t(cause: unsupported test feature)", display());
         }
         false
-    } else if case.result.contains('<') {
+    } else if case.mode != TestMode::Bibliography && case.result.contains('<') {
         if print {
-            eprintln!("Skipping test {}\t(cause: HTML suspected)", display());
+            eprintln!(
+                "Skipping test {}\t(cause: HTML suspected in citation result)",
+                display()
+            );
         }
         false
     } else if contains_date_ranges {
@@ -579,21 +578,200 @@ where
 
     let rendered = driver.finish(BibliographyRequest::new(&style, None, locales));
 
-    for citation in rendered.citations {
-        citation
-            .citation
-            .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
-            .unwrap();
-        output.push('\n');
-    }
+    let formatted_result = match case.mode {
+        TestMode::Citation => {
+            for citation in rendered.citations {
+                citation
+                    .citation
+                    .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
+                    .unwrap();
+                output.push('\n');
+            }
 
-    if output.trim() == case.result.trim() {
+            case.result.trim()
+        }
+        TestMode::Bibliography => {
+            static INDENT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
+            let bib = rendered
+                .bibliography
+                .expect("Bibliography mode test but no bibliography was rendered");
+            citeproc_bib::render(&bib, &mut output).unwrap();
+            output.push('\n');
+
+            // Remove indentation from original result to match our own output,
+            // which is not indented or pretty-printed. It appears that
+            // citeproc test results simply indent elements with two spaces at
+            // the start when the line gets too long, or for each inner bib
+            // entry.
+            &*INDENT_REGEX
+                .get_or_init(|| regex::Regex::new(r#"\n\s*"#).unwrap())
+                .replace_all(case.result.trim(), "")
+        }
+    };
+
+    if output.trim() == formatted_result {
         true
     } else {
         eprintln!("Test {} failed", display());
         eprintln!("Expected:\n{}", case.result);
         eprintln!("Got:\n{}", output);
         false
+    }
+}
+
+/// Functions to format bibliography rendered by hayagriva using citeproc's HTML
+/// output format, in order to be able to compare the generated HTML.
+mod citeproc_bib {
+    use core::fmt;
+
+    use citationberg::{Display, FontStyle, FontVariant, FontWeight, VerticalAlign};
+    use hayagriva::{BufWriteFormat, Elem, ElemChild, Formatting};
+
+    pub(super) fn render(
+        bib: &hayagriva::RenderedBibliography,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
+        output.push_str(r#"<div class="csl-bib-body">"#);
+        for item in &bib.items {
+            render_item(item, output)?;
+        }
+        output.push_str("</div>");
+        Ok(())
+    }
+
+    fn render_item(
+        item: &hayagriva::BibliographyItem,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
+        let mut second_field_align_suffix = "";
+        output.push_str(r#"<div class="csl-entry">"#);
+        if let Some(field) = &item.first_field {
+            // Uses 'second-field-align', so add implicit alignment
+            // (cf. test bugreports_AsmJournals.txt)
+            output.push_str("<div class=\"csl-left-margin\">");
+            render_child(field, output)?;
+            output.push_str("</div><div class=\"csl-right-inline\">");
+            second_field_align_suffix = "</div>";
+        }
+        for child in &item.content.0 {
+            render_child(child, output)?;
+        }
+        output.push_str(second_field_align_suffix);
+        output.push_str("</div>");
+        Ok(())
+    }
+
+    fn render_child(child: &ElemChild, output: &mut String) -> Result<(), fmt::Error> {
+        match child {
+            ElemChild::Text(formatted) => render_formatted_text(formatted, output),
+            ElemChild::Elem(e) => render_elem(e, output),
+
+            // Citeproc bib tests do not output <a href=...></a> for links
+            ElemChild::Link { text, url: _ } => render_formatted_text(text, output),
+            elem => elem.write_buf(output, BufWriteFormat::Html),
+        }
+    }
+
+    /// Applies the appropriate HTML tags to formatted text, according to
+    /// citeproc test output.
+    ///
+    /// Note that citeproc (csl-json) input accepts
+    /// '<span class="nodecor">...</span>' within text to nullify outer
+    /// formatting, for example apply 'font-style:normal' inside bold and
+    /// italics (see flipflop_ItalicsWithOk), or 'font-variant:normal' inside
+    /// smallcaps (see flipflop_ItalicsWithOkAndTextcase). We do not support
+    /// this notation, especially since we do not expose csl-json input to
+    /// hayagriva users anyway.
+    fn render_formatted_text(
+        text: &hayagriva::Formatted,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
+        let formatting = text.formatting;
+        if formatting == Formatting::default() {
+            output.push_str(&text.text);
+            return Ok(());
+        }
+
+        // NOTE: There are no tests with multiple CSS styles, so for now we
+        // join them without any spacing.
+        let mut css = String::new();
+        let mut suffix = String::new();
+        let mut push_elem = |start, end| {
+            output.push_str(start);
+            suffix.insert_str(0, end);
+        };
+
+        match formatting.vertical_align {
+            VerticalAlign::Sub => {
+                push_elem("<sub>", "</sub>");
+            }
+            VerticalAlign::Sup => {
+                push_elem("<sup>", "</sup>");
+            }
+            VerticalAlign::Baseline => {
+                push_elem(r#"<span style="baseline">"#, "</span>");
+            }
+            VerticalAlign::None => {}
+        }
+
+        match formatting.font_weight {
+            FontWeight::Bold => {
+                push_elem("<b>", "</b>");
+            }
+            FontWeight::Light => {
+                // NOTE: This is not used in any tests, so we can only assume
+                // this is done through this CSS style for now.
+                css.push_str("font-weight:lighter;");
+            }
+            FontWeight::Normal => {}
+        }
+
+        match formatting.font_style {
+            FontStyle::Italic => {
+                // NOTE: This has to come after (be inside) bold
+                // (Citeproc tests use <b><i>...</i></b> when both are present)
+                push_elem("<i>", "</i>")
+            }
+            FontStyle::Normal => {}
+        }
+
+        match formatting.font_variant {
+            FontVariant::SmallCaps => css.push_str("font-variant:small-caps;"),
+            FontVariant::Normal => {}
+        }
+
+        if !css.is_empty() {
+            push_elem(&format!("<span style=\"{css}\">"), "</span>");
+        }
+
+        output.push_str(&text.text);
+        output.push_str(&suffix);
+        Ok(())
+    }
+
+    fn render_elem(elem: &Elem, output: &mut String) -> Result<(), fmt::Error> {
+        let mut div_suffix = "";
+        if let Some(display) = elem.display {
+            div_suffix = "</div>";
+            let div_class = match display {
+                Display::Block => "csl-block",
+                Display::LeftMargin => "csl-left-margin",
+                Display::RightInline => "csl-right-inline",
+                Display::Indent => "csl-indent",
+            };
+
+            output.push_str(&format!("<div class=\"{div_class}\">"));
+        }
+
+        for child in &elem.children.0 {
+            render_child(child, output)?;
+        }
+
+        if !div_suffix.is_empty() {
+            output.push_str(div_suffix);
+        }
+        Ok(())
     }
 }
 
@@ -723,7 +901,7 @@ fn case_folding() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, ". my lowercase container title");
+    assert_eq!(buf, ". my lowercase container title.");
 }
 
 #[test]
