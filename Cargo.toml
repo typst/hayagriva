@@ -35,7 +35,6 @@ strum = { version = "0.26", features = ["derive"], optional = true }
 
 [dev-dependencies]
 heck = "0.5"
-html_parser = "0.7"
 serde_json = "1"
 
 [[bin]]
