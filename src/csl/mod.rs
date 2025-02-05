@@ -1247,7 +1247,15 @@ impl<'a> StyleContext<'a> {
         };
 
         let do_author = |ctx: &mut Context<'b, T>| {
-            let author_var = Variable::Name(NameVariable::Author);
+            let author_var = Variable::Name(
+                if entry.resolve_name_variable(NameVariable::Author).is_empty()
+                    && !entry.resolve_name_variable(NameVariable::Editor).is_empty()
+                {
+                    NameVariable::Editor
+                } else {
+                    NameVariable::Author
+                },
+            );
 
             if self.csl.citation.layout.will_render(ctx, author_var) {
                 // Render name from citation.
@@ -2972,16 +2980,16 @@ mod tests {
     #[cfg(feature = "archive")]
     fn test_alphanumeric_disambiguation() {
         let bibtex = r#"@article{chenTransMorphTransformerUnsupervised2021,
-  title = {{{TransMorph}}: {{Transformer}} for Unsupervised Medical Image Registration},
-  author = {Chen, Junyu and Frey, Eric C. and He, Yufan and Segars, William P. and Li, Ye and Du, Yong},
-  date = {2021},
-}
+        title = {{{TransMorph}}: {{Transformer}} for Unsupervised Medical Image Registration},
+        author = {Chen, Junyu and Frey, Eric C. and He, Yufan and Segars, William P. and Li, Ye and Du, Yong},
+        date = {2021},
+        }
 
-@article{chenViTVNetVisionTransformer2021,
-  title = {{{ViT-V-Net}}: {{Vision Transformer}} for {{Unsupervised Volumetric Medical Image Registration}}},
-  author = {Chen, Junyu and He, Yufan and Frey, Eric C. and Li, Ye and Du, Yong},
-  date = {2021},
-}"#;
+        @article{chenViTVNetVisionTransformer2021,
+        title = {{{ViT-V-Net}}: {{Vision Transformer}} for {{Unsupervised Volumetric Medical Image Registration}}},
+        author = {Chen, Junyu and He, Yufan and Frey, Eric C. and Li, Ye and Du, Yong},
+        date = {2021},
+        }"#;
 
         let library = crate::io::from_biblatex_str(bibtex).unwrap();
         let alphanumeric = archive::ArchivedStyle::Alphanumeric.get();
@@ -3020,5 +3028,71 @@ mod tests {
 
         assert_eq!(c1, "[Che+21a]");
         assert_eq!(c2, "[Che+21b]");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/243
+    fn issue_243() {
+        let bibtex = r#"@book{downs57,
+            title = {An Economic Theory of Democracy},
+            author = {Downs, Anthony},
+            date = {1957},
+            edition = {1},
+            publisher = {Harper \& Row},
+            location = {New York},
+            langid = {english}
+            }
+
+            @book{brady_collier10,
+            title = {Rethinking Social Inquiry. Diverse Tools, Shared Standards},
+            editor = {Brady, Henry E. and Collier, David},
+            date = {2010},
+            edition = {2},
+            publisher = {Rowman \& Littlefield Publishers},
+            location = {Maryland}
+            }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        for entry in library.iter() {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::new(
+                    entry,
+                    None,
+                    None,
+                    false,
+                    Some(CitePurpose::Prose),
+                )],
+                &apa,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &apa,
+            locale: None,
+            locale_files: &[],
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "Downs (1957)");
+        assert_eq!(c2, "Brady & Collier (2010)");
     }
 }
