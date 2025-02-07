@@ -17,6 +17,8 @@ pub use persons::*;
 pub use strings::*;
 pub use time::*;
 
+/// Provides error types.
+pub mod error;
 mod numeric;
 mod page;
 mod persons;
