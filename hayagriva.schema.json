@@ -1,0 +1,471 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hayagriva Bibliography Format",
+  "type": "object",
+  "description": "A bibliography management format for the modern age.",
+  "additionalProperties": {
+    "$ref": "#/definitions/entry"
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "description": "A single bibliography entry.",
+      "examples": [
+        {
+          "harry": {
+            "type": "Book",
+            "title": "Harry Potter and the Order of the Phoenix",
+            "author": "Rowling, J. K.",
+            "volume": 5,
+            "page-total": 768,
+            "date": "2003-06-21T00:00:00.000Z"
+          }
+        },
+        {
+          "electronic": {
+            "type": "Web",
+            "title": "Ishkur's Guide to Electronic Music",
+            "serial-number": "v2.5",
+            "author": "Ishkur",
+            "url": "http://www.techno.org/electronic-music-guide/"
+          }
+        }
+      ],
+      "properties": {
+        "type": { "$ref": "#/definitions/entryType" },
+        "title": {
+          "description": "The title of this entry",
+          "examples": ["Rick Astley: How An Internet Joke Revived My Career"],
+          "$ref": "#/definitions/formattableString"
+        },
+        "author": {
+          "description": "People primarily responsible for the creation of this entry",
+          "examples": [["Klocke, Iny", "Wohlrath, Elmar"]],
+          "oneOf": [
+            {
+              "$ref": "#/definitions/person"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/person"
+              }
+            }
+          ]
+        },
+        "date": {
+          "description": "The date of publication or creation of this entry",
+          "$ref": "#/definitions/date"
+        },
+        "parent": {
+          "description": "Entry in which the current entry was published / to which it is strongly associated to",
+          "examples": [
+            {
+              "type": "Anthology",
+              "title": "Automata studies",
+              "editor": ["Shannon, Claude E.", "McCarthy, John"]
+            }
+          ],
+          "$ref": "#/definitions/parentOrArray"
+        },
+        "abstract": {
+          "$ref": "#/definitions/formattableString",
+          "description": "Abstract of the entry",
+          "examples": [
+            "The dominant sequence transduction models are based on complex..."
+          ]
+        },
+        "genre": {
+          "description": "Type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). Do not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie)",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["Doctoral dissertation"]
+        },
+        "editor": {
+          "description": "People responsible for selecting and revising the content of the entry",
+          "examples": ["Stringer, Gary A.", "Pebworth, Ted-Larry"],
+          "$ref": "#/definitions/personOrList"
+        },
+        "affiliated": {
+          "description": "People involved with the entry that do not fit author or editor roles",
+          "examples": [
+            {
+              "role": "Director",
+              "names": "Cameron, James"
+            },
+            {
+              "role": "CastMember",
+              "names": [
+                "Schwarzenegger, Arnold",
+                "Hamilton, Linda",
+                "Patrick, Robert"
+              ]
+            }
+          ],
+          "$ref": "#/definitions/affiliatedList"
+        },
+        "call-number": {
+          "$ref": "#/definitions/formattableString",
+          "description": "The number of the item in a library, institution, or collection. Use with archive",
+          "examples": ["F16 D14"]
+        },
+        "publisher": {
+          "description": "The name of the publisher",
+          "examples": [
+            "Penguin Books",
+            {
+              "name": "Penguin Books",
+              "location": "London"
+            }
+          ],
+          "$ref": "#/definitions/publisher"
+        },
+        "location": {
+          "$ref": "#/definitions/formattableString",
+          "description": "Location at which the entry is physically located or took place. For the location where an item was published, use publisher instead.",
+          "examples": ["Lahore, Pakistan"]
+        },
+        "organization": {
+          "description": "Organization at/for which the entry was produced",
+          "examples": ["Technische Universität Berlin"],
+          "$ref": "#/definitions/formattableString"
+        },
+        "issue": {
+          "$ref": "#/definitions/numericOrString",
+          "description": "For an entry whose parent has multiple issues, indicated the position in the issue sequence. Also used to indicate the episode number for TV",
+          "examples": [5]
+        },
+        "volume": {
+          "$ref": "#/definitions/numericOrString",
+          "description": "For an entry whose parent has multiple volumes, parts, seasons, etc. of which this entry is one",
+          "examples": ["2-3"]
+        },
+        "volume-total": {
+          "type": "integer",
+          "examples": [12],
+          "description": "Total number of volumes, parts, seasons, etc. this entry is part of"
+        },
+        "edition": {
+          "$ref": "#/definitions/numericOrString",
+          "description": "Published version of the entry",
+          "examples": ["expanded and revised edition"]
+        },
+        "page-range": {
+          "$ref": "#/definitions/numericOrString",
+          "description": "Range of pages within the parent this entry occupies",
+          "examples": ["812-847"]
+        },
+        "page-total": {
+          "type": "integer",
+          "description": "Total number of pages in the entry",
+          "examples": [768]
+        },
+        "time-range": {
+          "description": "The time range within the parent this entry starts and ends at",
+          "examples": ["00:57-06:21"],
+          "$ref": "#/definitions/timestampRange"
+        },
+        "runtime": {
+          "$ref": "#/definitions/timestamp"
+        },
+        "url": {
+          "$ref": "#/definitions/url"
+        },
+        "serial-number": {
+          "$ref": "#/definitions/serialNumber"
+        },
+        "language": {
+          "$ref": "#/definitions/language"
+        },
+        "archive": {
+          "$ref": "#/definitions/formattableString"
+        },
+        "archive-location": {
+          "$ref": "#/definitions/formattableString"
+        },
+        "note": {
+          "$ref": "#/definitions/formattableString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "publisher": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "entryType": {
+      "type": "string",
+      "examples": [
+        "article",
+        "chapter",
+        "entry",
+        "anthos",
+        "report",
+        "thesis",
+        "web",
+        "scene",
+        "artwork",
+        "patent",
+        "case",
+        "newspaper",
+        "legislation",
+        "manuscript",
+        "original",
+        "post",
+        "misc",
+        "performance",
+        "periodical",
+        "proceedings",
+        "book",
+        "blog",
+        "reference",
+        "conference",
+        "anthology",
+        "repository",
+        "thread",
+        "video",
+        "audio",
+        "exhibition"
+      ],
+      "description": "Media type of the item, often determines the structure of references.",
+      "pattern": "^(?i)(article|chapter|entry|anthos|report|thesis|web|scene|artwork|patent|case|newspaper|legislation|manuscript|original|post|misc|performance|periodical|proceedings|book|blog|reference|conference|anthology|repository|thread|video|audio|exhibition)$"
+    },
+    "parentOrArray": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/entry"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/entry"
+          }
+        }
+      ]
+    },
+    "affiliatedList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/definitions/roleType"
+          },
+          "names": {
+            "$ref": "#/definitions/personOrList"
+          }
+        },
+        "required": ["role", "names"],
+        "additionalProperties": false
+      }
+    },
+    "roleType": {
+      "type": "string",
+      "examples": [
+        "translator",
+        "afterword",
+        "foreword",
+        "introduction",
+        "annotator",
+        "commentator",
+        "holder",
+        "compiler",
+        "founder",
+        "collaborator",
+        "organizer",
+        "cast-member",
+        "composer",
+        "producer",
+        "executive-producer",
+        "writer",
+        "cinematography",
+        "director",
+        "illustrator",
+        "narrator"
+      ],
+      "pattern": "^(?i)(translator|afterword|foreword|introduction|annotator|commentator|holder|compiler|founder|collaborator|organizer|cast-member|composer|producer|executive-producer|writer|cinematography|director|illustrator|narrator)$"
+    },
+    "formattableString": {
+      "description": "A formattable string is a string that may run through a text case transformer when used in a reference or citation. You can disable these transformations on segments of the string or the whole string.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "verbatim": {
+              "description": "",
+              "type": "boolean"
+            },
+            "short": {
+              "type": "string"
+            }
+          },
+          "required": ["value"]
+        }
+      ]
+    },
+    "person": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "given-name": {
+              "type": "string"
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "suffix": {
+              "type": "string"
+            },
+            "alias": {
+              "type": "string"
+            }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "personOrList": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/person"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/person"
+          }
+        }
+      ]
+    },
+    "date": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "$comment": "YYYY-MM-DD format"
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "$comment": "Year only"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}$",
+          "$comment": "YYYY-MM format"
+        },
+        {
+          "type": "string",
+          "pattern": "^([+-]?\\d{4,})(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$",
+          "$comment": "YYYY-MM-DDTHH:MM:SS format"
+        }
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{1,2}:\\d{2}(:\\d{2})?(,\\d+)?$"
+    },
+    "timestampRange": {
+      "type": "string",
+      "pattern": "^\\d{1,2}:\\d{2}(:\\d{2})?(,\\d+)?-\\d{1,2}:\\d{2}(:\\d{2})?(,\\d+)?$"
+    },
+    "numericOrString": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "url": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "date": {
+              "$ref": "#/definitions/date"
+            }
+          },
+          "required": ["value"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "serialNumber": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "doi": {
+              "type": "string"
+            },
+            "isbn": {
+              "type": "string"
+            },
+            "issn": {
+              "type": "string"
+            },
+            "pmid": {
+              "type": "string"
+            },
+            "pmcid": {
+              "type": "string"
+            },
+            "arxiv": {
+              "type": "string"
+            },
+            "serial": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3,4})?(-[A-Z]{2})?$"
+    }
+  }
+}
