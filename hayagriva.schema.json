@@ -207,7 +207,6 @@
         },
         "serial-number": {
           "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
-
           "$ref": "#/definitions/serialNumber"
         },
         "language": {
@@ -586,7 +585,6 @@
       "description": "Language of the entry.",
       "$comment": "Unicode Language Identifier (BCP 47).",
       "examples": ["zh-Hans"],
-
       "type": "string",
       "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3,4})?(-[A-Z]{2})?$"
     }
