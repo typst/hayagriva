@@ -115,7 +115,7 @@ impl From<&PermissiveType<i64>> for MaybeTyped<Numeric> {
     }
 }
 
-fn ed_role(role: EditorType) -> Option<PersonRole> {
+fn ed_role(role: EditorType, entry_type: &tex::EntryType) -> Option<PersonRole> {
     match role {
         EditorType::Editor => None,
         EditorType::Compiler => Some(PersonRole::Compiler),
@@ -125,6 +125,26 @@ fn ed_role(role: EditorType) -> Option<PersonRole> {
         EditorType::Reviser => None,
         EditorType::Collaborator => Some(PersonRole::Collaborator),
         EditorType::Organizer => Some(PersonRole::Organizer),
+        EditorType::Director => Some(PersonRole::Director),
+        EditorType::Unknown(role) => {
+            let other_entry_type = if let tex::EntryType::Unknown(t) = entry_type {
+                Some(t.to_ascii_lowercase())
+            } else {
+                None
+            };
+
+            match (role.to_ascii_lowercase().as_str(), other_entry_type.as_deref()) {
+                // See p. 26 of the biblatex-chicago manual and biblatex-apa
+                ("producer", _) => Some(PersonRole::Producer),
+                // The pervasive Zotero plugin zotero-better-biblatex produces this.
+                ("scriptwriter", _) => Some(PersonRole::Writer),
+                // The biblatex-apa style expects `writer` for videos.
+                ("writer", Some("video")) => Some(PersonRole::Writer),
+                // See p. 26 of the biblatex-chicago manual
+                ("none", Some("video") | Some("music")) => Some(PersonRole::CastMember),
+                _ => Some(PersonRole::Unknown(role)),
+            }
+        }
     }
 }
 
@@ -207,7 +227,7 @@ impl TryFrom<&tex::Entry> for Entry {
         let mut eds: Vec<Person> = vec![];
         let mut collaborators = vec![];
         for (editors, role) in entry.editors()? {
-            let ptype = ed_role(role);
+            let ptype = ed_role(role, &entry.entry_type);
             match ptype {
                 None => eds.extend(editors.iter().map(Into::into)),
                 Some(role) => collaborators.push(PersonsWithRoles::new(
@@ -277,7 +297,14 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(title) = map_res(entry.title())?.map(Into::into) {
-            item.set_title(title);
+            if let Some(short_title) = map_res(entry.short_title())?.map(Into::into) {
+                item.set_title(FormatString {
+                    value: title,
+                    short: Some(Box::new(short_title)),
+                });
+            } else {
+                item.set_title(FormatString { value: title, short: None });
+            }
         }
 
         // NOTE: Ignoring subtitle and titleaddon for now
@@ -406,11 +433,13 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(eprint) = map_res(entry.eprint())? {
-            if map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?
-                .as_deref()
-                == Some("arxiv")
-            {
+            let eprint_type =
+                map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?;
+            let eprint_type = eprint_type.as_deref();
+            if eprint_type == Some("arxiv") {
                 item.set_arxiv(eprint);
+            } else if eprint_type == Some("pubmed") {
+                item.set_pmid(eprint);
             }
         }
 
@@ -436,16 +465,18 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_url(QualifiedUrl { value: url, visit_date: date });
         }
 
-        if let Some(location) = map_res(entry.location())?.map(|d| d.into()) {
-            if let Some(parent) = book(&mut item, parent) {
-                parent.set_location(location);
-            } else {
-                item.set_location(location);
-            }
-        }
-
-        if let Some(publisher) = map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
+        if let Some(publisher_name) =
+            map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
         {
+            let location = map_res(entry.location())?.map(|d| d.into());
+            let publisher = Publisher::new(Some(publisher_name), location);
+            if let Some(parent) = book(&mut item, parent) {
+                parent.set_publisher(publisher);
+            } else {
+                item.set_publisher(publisher);
+            }
+        } else if let Some(location) = map_res(entry.location())?.map(|d| d.into()) {
+            let publisher = Publisher::new(None, Some(location));
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_publisher(publisher);
             } else {
@@ -479,35 +510,21 @@ impl TryFrom<&tex::Entry> for Entry {
 
         if let Some(pages) = map_res(entry.pages())? {
             item.set_page_range(match pages {
-                PermissiveType::Typed(pages) => {
-                    if let Some(n) =
-                        pages.first().filter(|f| pages.len() == 1 && f.start == f.end)
-                    {
-                        MaybeTyped::Typed(Numeric::new(n.start as i32))
-                    } else {
-                        let mut items = vec![];
-                        for (i, pair) in pages.iter().enumerate() {
-                            let last = i + 1 == pages.len();
-                            let last_delim = (!last).then_some(NumericDelimiter::Comma);
-
-                            if pair.start == pair.end {
-                                items.push((pair.start as i32, last_delim));
+                PermissiveType::Typed(pages) => MaybeTyped::Typed(PageRanges::new(
+                    pages
+                        .into_iter()
+                        .map(|p| {
+                            if p.start == p.end {
+                                PageRangesPart::SinglePage(Numeric::from(p.start))
                             } else {
-                                items.push((
-                                    pair.start as i32,
-                                    Some(NumericDelimiter::Hyphen),
-                                ));
-                                items.push((pair.end as i32, last_delim));
+                                PageRangesPart::Range(
+                                    Numeric::from(p.start),
+                                    Numeric::from(p.end),
+                                )
                             }
-                        }
-
-                        MaybeTyped::Typed(Numeric {
-                            value: NumericValue::Set(items),
-                            prefix: None,
-                            suffix: None,
                         })
-                    }
-                }
+                        .collect(),
+                )),
                 PermissiveType::Chunks(chunks) => {
                     MaybeTyped::infallible_from_str(&chunks.format_verbatim())
                 }
@@ -524,21 +541,21 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        if let Some(note) = map_res(entry.note())?.map(Into::into) {
+            item.set_note(note);
+        }
+
         if let Some(note) = map_res(entry.annotation())?
             .or_else(|| entry.addendum().ok())
-            .map(|d| d.format_verbatim())
+            .map(Into::into)
         {
             if item.note.is_none() {
-                item.set_note(note.into());
+                item.set_note(note);
             }
         }
 
         if let Some(abstract_) = map_res(entry.abstract_())? {
             item.set_abstract_(abstract_.into())
-        }
-
-        if let Some(annote) = map_res(entry.annotation())? {
-            item.set_annote(annote.into())
         }
 
         if let Some(series) = map_res(entry.series())? {
@@ -583,4 +600,67 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
     }
 
     FormatString { value, short: None }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::PersonRole;
+
+    #[test]
+    fn test_pmid_from_biblatex() {
+        let entries = crate::io::from_biblatex_str(
+            r#"@article{test_article,
+            title = {Title},
+            volume = {3},
+            url = {https://example.org},
+            pages = {1--99},
+            journaltitle = {Testing Journal},
+            author = {Doe, Jane},
+            date = {2024-12},
+            eprint = {54678},
+            eprinttype = {pubmed},
+          }"#,
+        )
+        .unwrap();
+        let entry = entries.get("test_article").unwrap();
+        assert_eq!(Some("54678"), entry.keyed_serial_number("pmid"));
+        assert_eq!(Some("54678"), entry.pmid());
+    }
+
+    #[test]
+    /// See https://github.com/typst/hayagriva/issues/266
+    fn issue_266() {
+        let entries = crate::io::from_biblatex_str(
+            r#"@video{wachowskiMatrix1999,
+            type = {Action, Sci-Fi},
+            entrysubtype = {film},
+            title = {The {{Matrix}}},
+            editor = {Wachowski, Lana and Wachowski, Lilly},
+            editortype = {director},
+            editora = {Wachowski, Lilly and Wachowski, Lana},
+            editoratype = {scriptwriter},
+            namea = {Reeves, Keanu and Fishburne, Laurence and Moss, Carrie-Anne},
+            nameatype = {collaborator},
+            date = {1999-03-31},
+            publisher = {Warner Bros., Village Roadshow Pictures, Groucho Film Partnership},
+            abstract = {When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.},
+            keywords = {artificial reality,dystopia,post apocalypse,simulated reality,war with machines},
+            annotation = {IMDb ID: tt0133093\\
+            event-location: United States, Australia}
+            }"#,
+        ).unwrap();
+
+        let entry = entries.get("wachowskiMatrix1999").unwrap();
+        assert_eq!(
+            Some("Lilly"),
+            entry
+                .affiliated_with_role(PersonRole::Writer)
+                .first()
+                .unwrap()
+                .given_name
+                .as_deref()
+        );
+
+        serde_json::to_value(entry).unwrap();
+    }
 }

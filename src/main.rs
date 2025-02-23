@@ -3,13 +3,13 @@ use std::fs::{self, read_to_string};
 use std::io::ErrorKind as IoErrorKind;
 use std::path::Path;
 use std::process::exit;
-use std::str::FromStr;
 
 use citationberg::taxonomy::Locator;
 use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
-use clap::{crate_version, Arg, ArgAction, Command};
+use clap::builder::PossibleValue;
+use clap::{crate_version, Arg, ArgAction, Command, ValueEnum};
 use strum::VariantNames;
 
 use hayagriva::archive::{locales, ArchivedStyle};
@@ -29,18 +29,25 @@ pub enum Format {
     Yaml,
 }
 
-impl FromStr for Format {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, &'static str> {
-        match s.to_ascii_lowercase().as_ref() {
-            #[cfg(feature = "biblatex")]
-            "bibtex" => Ok(Format::Bibtex),
-            #[cfg(feature = "biblatex")]
-            "biblatex" => Ok(Format::Biblatex),
-            "yaml" => Ok(Format::Yaml),
-            _ => Err("unknown format"),
+impl ValueEnum for Format {
+    fn value_variants<'a>() -> &'a [Self] {
+        if cfg!(feature = "biblatex") {
+            &[Self::Bibtex, Self::Biblatex, Self::Yaml]
+        } else {
+            &[Self::Yaml]
         }
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        let value = match self {
+            #[cfg(feature = "biblatex")]
+            Format::Bibtex => "bibtex",
+            #[cfg(feature = "biblatex")]
+            Format::Biblatex => "biblatex",
+            Format::Yaml => "yaml",
+        };
+
+        Some(PossibleValue::new(value))
     }
 }
 
@@ -59,7 +66,7 @@ fn main() {
                 Arg::new("format")
                     .long("format")
                     .help("What input file format to expect")
-                    .value_parser(clap::builder::PossibleValuesParser::new(Format::VARIANTS))
+                    .value_parser(clap::value_parser!(Format))
                     .ignore_case(true)
                     .num_args(1)
                     .global(true),
@@ -402,24 +409,22 @@ fn main() {
 
             for row in driver
                 .finish(BibliographyRequest::new(&style, locale, &locales))
-                .bibliography
-                .map(|b| b.items)
-                .unwrap_or_default()
+                .citations
             {
                 let alternate = matches.get_flag("no-fmt");
 
-                if let Some(prefix) = row.first_field {
+                if let Some(note_number) = row.note_number {
                     if alternate {
-                        println!("{:#}", prefix)
+                        println!("{:#}", note_number)
                     } else {
-                        println!("{}", prefix)
+                        println!("{}.", note_number)
                     }
                 }
 
                 if alternate {
-                    println!("{:#}", row.content)
+                    println!("{:#}", row.citation)
                 } else {
-                    println!("{}", row.content)
+                    println!("{}", row.citation)
                 }
             }
         }

@@ -140,7 +140,7 @@ pub enum ArchivedStyle {
     /// Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch).
     ///
     /// Authors: Daniel Hirsbrunner.
-    DeutscheGesellschaftFRPsychologie,
+    DeutscheGesellschaftFürPsychologie,
     /// Deutsche Sprache (Deutsch).
     ///
     /// Authors: Philipp Zumstein.
@@ -217,7 +217,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Patrick O'Brien.
     MaryAnnLiebertVancouver,
-    /// Modern Humanities Research Association 3rd edition (note with bibliography).
+    /// Modern Humanities Research Association 4th edition (note with bibliography).
     ///
     /// Authors: Rintze Zelle.
     ModernHumanitiesResearchAssociation,
@@ -335,6 +335,7 @@ pub enum ArchivedStyle {
     VancouverSuperscript,
 }
 
+#[rustfmt::skip]
 impl ArchivedStyle {
     /// Retrieve this style by name.
     pub fn by_name(name: &str) -> Option<Self> {
@@ -373,7 +374,7 @@ impl ArchivedStyle {
             "council-of-science-editors" => Some(Self::CouncilOfScienceEditors),
             "council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
             "current-opinion" => Some(Self::CurrentOpinion),
-            "deutsche-gesellschaft-für-psychologie" => Some(Self::DeutscheGesellschaftFRPsychologie),
+            "deutsche-gesellschaft-für-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
             "deutsche-sprache" => Some(Self::DeutscheSprache),
             "elsevier-harvard" => Some(Self::ElsevierHarvard),
             "elsevier-vancouver" => Some(Self::ElsevierVancouver),
@@ -426,7 +427,7 @@ impl ArchivedStyle {
             "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
             "vancouver" => Some(Self::Vancouver),
             "vancouver-superscript" => Some(Self::VancouverSuperscript),
-            _ => None
+            _ => None,
         }
     }
 
@@ -465,7 +466,7 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/council-of-science-editors-brackets" => Some(Self::CouncilOfScienceEditors),
             "http://www.zotero.org/styles/council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
             "http://www.zotero.org/styles/current-opinion" => Some(Self::CurrentOpinion),
-            "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie" => Some(Self::DeutscheGesellschaftFRPsychologie),
+            "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
             "http://www.zotero.org/styles/deutsche-sprache" => Some(Self::DeutscheSprache),
             "http://www.zotero.org/styles/elsevier-harvard" => Some(Self::ElsevierHarvard),
             "http://www.zotero.org/styles/elsevier-vancouver" => Some(Self::ElsevierVancouver),
@@ -553,7 +554,7 @@ impl ArchivedStyle {
             Self::CouncilOfScienceEditors,
             Self::CouncilOfScienceEditorsAuthorDate,
             Self::CurrentOpinion,
-            Self::DeutscheGesellschaftFRPsychologie,
+            Self::DeutscheGesellschaftFürPsychologie,
             Self::DeutscheSprache,
             Self::ElsevierHarvard,
             Self::ElsevierVancouver,
@@ -640,7 +641,7 @@ impl ArchivedStyle {
             Self::CouncilOfScienceEditors => include_bytes!("../../archive/styles/council-of-science-editors-brackets.cbor"),
             Self::CouncilOfScienceEditorsAuthorDate => include_bytes!("../../archive/styles/council-of-science-editors-author-date.cbor"),
             Self::CurrentOpinion => include_bytes!("../../archive/styles/current-opinion.cbor"),
-            Self::DeutscheGesellschaftFRPsychologie => include_bytes!("../../archive/styles/deutsche-gesellschaft-fur-psychologie.cbor"),
+            Self::DeutscheGesellschaftFürPsychologie => include_bytes!("../../archive/styles/deutsche-gesellschaft-fur-psychologie.cbor"),
             Self::DeutscheSprache => include_bytes!("../../archive/styles/deutsche-sprache.cbor"),
             Self::ElsevierHarvard => include_bytes!("../../archive/styles/elsevier-harvard.cbor"),
             Self::ElsevierVancouver => include_bytes!("../../archive/styles/elsevier-vancouver.cbor"),
@@ -798,7 +799,7 @@ impl ArchivedStyle {
             Self::CurrentOpinion => &[
                 "current-opinion",
             ],
-            Self::DeutscheGesellschaftFRPsychologie => &[
+            Self::DeutscheGesellschaftFürPsychologie => &[
                 "deutsche-gesellschaft-für-psychologie",
             ],
             Self::DeutscheSprache => &[
@@ -987,7 +988,7 @@ impl ArchivedStyle {
             Self::CouncilOfScienceEditors => "Council of Science Editors, Citation-Sequence (numeric, brackets)",
             Self::CouncilOfScienceEditorsAuthorDate => "Council of Science Editors, Name-Year (author-date)",
             Self::CurrentOpinion => "Current Opinion journals",
-            Self::DeutscheGesellschaftFRPsychologie => "Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch)",
+            Self::DeutscheGesellschaftFürPsychologie => "Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch)",
             Self::DeutscheSprache => "Deutsche Sprache (Deutsch)",
             Self::ElsevierHarvard => "Elsevier - Harvard (with titles)",
             Self::ElsevierVancouver => "Elsevier - Vancouver",
@@ -1007,7 +1008,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "ISO-690 (numeric, English)",
             Self::Karger => "Karger journals",
             Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
-            Self::ModernHumanitiesResearchAssociation => "Modern Humanities Research Association 3rd edition (note with bibliography)",
+            Self::ModernHumanitiesResearchAssociation => "Modern Humanities Research Association 4th edition (note with bibliography)",
             Self::ModernLanguageAssociation => "Modern Language Association 9th edition",
             Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
             Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
@@ -1074,7 +1075,7 @@ impl ArchivedStyle {
             Self::CouncilOfScienceEditors => "http://www.zotero.org/styles/council-of-science-editors-brackets",
             Self::CouncilOfScienceEditorsAuthorDate => "http://www.zotero.org/styles/council-of-science-editors-author-date",
             Self::CurrentOpinion => "http://www.zotero.org/styles/current-opinion",
-            Self::DeutscheGesellschaftFRPsychologie => "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
+            Self::DeutscheGesellschaftFürPsychologie => "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
             Self::DeutscheSprache => "http://www.zotero.org/styles/deutsche-sprache",
             Self::ElsevierHarvard => "http://www.zotero.org/styles/elsevier-harvard",
             Self::ElsevierVancouver => "http://www.zotero.org/styles/elsevier-vancouver",
@@ -1125,7 +1126,6 @@ impl ArchivedStyle {
             Self::VancouverSuperscript => "http://www.zotero.org/styles/vancouver-superscript",
         }
     }
-
 }
 fn from_cbor<T: DeserializeOwned>(
     reader: &[u8],
@@ -1195,7 +1195,8 @@ pub const LOCALES: &[&[u8]] = &[
 
 /// Get all CSL locales.
 pub fn locales() -> Vec<Locale> {
-    LOCALES.iter().map(|bytes| {
-        from_cbor::<Locale>(bytes).unwrap()
-    }).collect()
+    LOCALES
+        .iter()
+        .map(|bytes| from_cbor::<Locale>(bytes).unwrap())
+        .collect()
 }

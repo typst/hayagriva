@@ -3,21 +3,24 @@ use std::fmt::Write;
 use std::str::FromStr;
 
 use citationberg::taxonomy::{
-    Locator, NumberVariable, OtherTerm, StandardVariable, Term, Variable,
+    Locator, NumberOrPageVariable, NumberVariable, OtherTerm, PageVariable,
+    StandardVariable, Term, Variable,
 };
 use citationberg::{
     ChooseBranch, CslMacro, DateDayForm, DateMonthForm, DatePartName, DateParts,
     DateStrongAnyForm, GrammarGender, LabelPluralize, LayoutRenderingElement,
-    LongShortForm, NumberForm, TestPosition, TextCase, ToAffixes, ToFormatting,
+    LongShortForm, NumberForm, PageRangeFormat, TestPosition, TextCase, ToAffixes,
+    ToFormatting,
 };
 use citationberg::{TermForm, TextTarget};
 
-use crate::csl::taxonomy::NumberVariableResult;
+use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
+use crate::PageRanges;
 
 use super::taxonomy::EntryLike;
-use super::{Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
+use super::{write_year, Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
 
 pub mod names;
 
@@ -81,25 +84,26 @@ impl RenderCsl for citationberg::Text {
                 }
                 _ => ctx.push_chunked(&val),
             },
-            ResolvedTextTarget::NumberVariable(var, n) => match n {
+            ResolvedTextTarget::NumberVariable(_, n) => match n {
                 NumberVariableResult::Regular(MaybeTyped::Typed(num))
                     if num.will_transform() =>
                 {
-                    render_typed_num(num.as_ref(), NumberForm::default(), var, None, ctx);
-                }
-                NumberVariableResult::Regular(n)
-                    if matches!(var, NumberVariable::Page) =>
-                {
-                    // TODO: Remove this hack
-                    ctx.push_str(&n.to_str().replace('-', "–"))
+                    render_typed_num(num.as_ref(), NumberForm::default(), None, ctx);
                 }
                 NumberVariableResult::Regular(n) => ctx.push_str(&n.to_str()),
                 NumberVariableResult::Transparent(n) => ctx.push_transparent(n),
             },
+            ResolvedTextTarget::PageVariable(p) => match p {
+                MaybeTyped::Typed(r) => render_page_range(&r, ctx),
+                MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
+            },
             ResolvedTextTarget::Macro(mac) => {
+                // Delimiters from ancestor delimiting elements are NOT applied within.
+                let idx = ctx.writing.push_delimiter(None);
                 for child in &mac.children {
                     child.render(ctx);
                 }
+                ctx.writing.pop_delimiter(idx);
             }
             ResolvedTextTarget::Term(s) => ctx.push_str(s),
             ResolvedTextTarget::Value(val) => ctx.push_str(val),
@@ -125,6 +129,11 @@ impl RenderCsl for citationberg::Text {
                 {
                     Some(ElemMeta::CitationNumber)
                 }
+                TextTarget::Variable { var, .. }
+                    if var == StandardVariable::CitationLabel.into() =>
+                {
+                    Some(ElemMeta::CitationLabel)
+                }
                 TextTarget::Variable { .. } => Some(ElemMeta::Text),
                 _ => None,
             },
@@ -138,6 +147,9 @@ impl RenderCsl for citationberg::Text {
         match target {
             ResolvedTextTarget::StandardVariable(s, _) => var == Variable::Standard(s),
             ResolvedTextTarget::NumberVariable(n, _) => var == Variable::Number(n),
+            ResolvedTextTarget::PageVariable(_) => {
+                var == Variable::Page(PageVariable::Page)
+            }
             ResolvedTextTarget::Macro(mac) => {
                 mac.children.iter().any(|c| c.will_render(ctx, var))
             }
@@ -170,7 +182,8 @@ impl RenderCsl for citationberg::Text {
                 (false, UsageInfo { has_vars: true, ..Default::default() })
             }
             ResolvedTextTarget::StandardVariable(_, _)
-            | ResolvedTextTarget::NumberVariable(_, _) => (
+            | ResolvedTextTarget::NumberVariable(_, _)
+            | ResolvedTextTarget::PageVariable(_) => (
                 true,
                 UsageInfo {
                     has_vars: true,
@@ -198,6 +211,7 @@ impl RenderCsl for citationberg::Text {
 enum ResolvedTextTarget<'a, 'b> {
     StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
     NumberVariable(NumberVariable, NumberVariableResult<'a>),
+    PageVariable(PageVariableResult),
     Macro(&'a CslMacro),
     Term(&'a str),
     Value(&'b str),
@@ -243,6 +257,9 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
             TextTarget::Variable { var: Variable::Number(var), .. } => ctx
                 .resolve_number_variable(*var)
                 .map(|n| ResolvedTextTarget::NumberVariable(*var, n)),
+            TextTarget::Variable { var: Variable::Page(pv), .. } => {
+                ctx.resolve_page_variable(*pv).map(ResolvedTextTarget::PageVariable)
+            }
             TextTarget::Variable { .. } => None,
             TextTarget::Macro { name } => {
                 ctx.style.get_macro(name).map(ResolvedTextTarget::Macro)
@@ -278,7 +295,7 @@ impl RenderCsl for citationberg::Number {
             Some(NumberVariableResult::Regular(MaybeTyped::Typed(num)))
                 if num.will_transform() =>
             {
-                render_typed_num(num.as_ref(), self.form, self.variable, gender, ctx);
+                render_typed_num(num.as_ref(), self.form, gender, ctx);
             }
             Some(NumberVariableResult::Regular(MaybeTyped::Typed(num))) => {
                 write!(ctx, "{}", num).unwrap()
@@ -345,41 +362,31 @@ impl RenderCsl for citationberg::Number {
 fn render_typed_num<T: EntryLike>(
     num: &Numeric,
     form: NumberForm,
-    variable: NumberVariable,
     gender: Option<GrammarGender>,
     ctx: &mut Context<T>,
 ) {
-    let normal_num = if form == NumberForm::Numeric && variable == NumberVariable::Page {
-        if let Some(range) = num.range() {
-            render_page_range(range, ctx);
-            false
-        } else {
-            true
-        }
-    } else {
-        true
-    };
-
-    if normal_num {
-        num.with_form(ctx, form, gender, ctx.ordinal_lookup()).unwrap();
-    }
+    num.with_form(ctx, form, gender, &ctx.ordinal_lookup()).unwrap();
 }
 
-fn render_page_range<T: EntryLike>(
-    range: std::ops::RangeInclusive<i32>,
-    ctx: &mut Context<T>,
-) {
-    ctx.style
-        .csl
-        .settings
-        .page_range_format
-        .unwrap_or_default()
-        .format(
-            range,
-            ctx,
-            ctx.term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
-                .or(Some("–")),
-        )
+fn render_page_range<T: EntryLike>(range: &PageRanges, ctx: &mut Context<T>) {
+    let format = ctx.style.csl.settings.page_range_format.unwrap_or_default();
+    let delim = ctx
+        .term(OtherTerm::PageRangeDelimiter.into(), TermForm::default(), false)
+        .or(Some("–"));
+
+    range
+        .ranges
+        .iter()
+        .try_for_each(|r| match r {
+            crate::PageRangesPart::Ampersand => ctx.write_str(" & "),
+            crate::PageRangesPart::Comma => ctx.write_str(", "),
+            crate::PageRangesPart::EscapedRange(start, end) => PageRangeFormat::Expanded
+                .format(ctx, &start.to_string(), &end.to_string(), delim),
+            crate::PageRangesPart::SinglePage(page) => ctx.write_str(&page.to_string()),
+            crate::PageRangesPart::Range(start, end) => {
+                format.format(ctx, &start.to_string(), &end.to_string(), delim)
+            }
+        })
         .unwrap();
 }
 
@@ -393,7 +400,11 @@ fn label_pluralization(
         LabelPluralize::Contextual => match variable {
             NumberVariableResult::Regular(MaybeTyped::String(_)) => false,
             NumberVariableResult::Regular(MaybeTyped::Typed(n)) => {
-                n.is_plural(label.variable.is_number_of_variable())
+                if let NumberOrPageVariable::Number(v) = label.variable {
+                    n.is_plural(v.is_number_of_variable())
+                } else {
+                    panic!("Incompatible variable types")
+                }
             }
             NumberVariableResult::Transparent(_) => false,
         },
@@ -406,19 +417,37 @@ impl RenderCsl for citationberg::Label {
             return;
         }
 
-        let Some(variable) = ctx.resolve_number_variable(self.variable) else {
-            return;
-        };
+        match self.variable {
+            NumberOrPageVariable::Number(n) => {
+                let Some(variable) = ctx.resolve_number_variable(n) else {
+                    return;
+                };
 
-        let depth = ctx.push_elem(citationberg::Formatting::default());
-        let plural = label_pluralization(self, variable);
+                let depth = ctx.push_elem(citationberg::Formatting::default());
+                let plural = label_pluralization(self, variable);
 
-        let content = ctx
-            .term(Term::from(self.variable), self.label.form, plural)
-            .unwrap_or_default();
+                let content = ctx
+                    .term(Term::from(self.variable), self.label.form, plural)
+                    .unwrap_or_default();
 
-        render_label_with_var(&self.label, ctx, content);
-        ctx.commit_elem(depth, None, Some(ElemMeta::Label));
+                render_label_with_var(&self.label, ctx, content);
+                ctx.commit_elem(depth, None, Some(ElemMeta::Label));
+            }
+            NumberOrPageVariable::Page(pv) => {
+                let Some(p) = ctx.resolve_page_variable(pv) else {
+                    return;
+                };
+
+                let depth = ctx.push_elem(citationberg::Formatting::default());
+                let plural = p.as_typed().map_or(false, |p| p.is_plural());
+
+                let content =
+                    ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
+
+                render_label_with_var(&self.label, ctx, content);
+                ctx.commit_elem(depth, None, Some(ElemMeta::Label));
+            }
+        }
     }
 
     fn will_render<T: EntryLike>(&self, _ctx: &mut Context<T>, _var: Variable) -> bool {
@@ -427,7 +456,9 @@ impl RenderCsl for citationberg::Label {
 
     fn will_have_info<T: EntryLike>(&self, ctx: &mut Context<T>) -> (bool, UsageInfo) {
         match ctx.instance.kind {
-            Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
+            Some(SpecialForm::VarOnly(Variable::Number(n)))
+                if self.variable != NumberOrPageVariable::Number(n) =>
+            {
                 return (false, UsageInfo::default());
             }
             Some(
@@ -435,7 +466,8 @@ impl RenderCsl for citationberg::Label {
                 | SpecialForm::OnlyFirstDate
                 | SpecialForm::OnlyYearSuffix,
             ) => {
-                if self.variable != NumberVariable::Locator {
+                if self.variable != NumberOrPageVariable::Number(NumberVariable::Locator)
+                {
                     return (true, UsageInfo::default());
                 }
             }
@@ -443,7 +475,7 @@ impl RenderCsl for citationberg::Label {
         }
 
         // Never yield a label if the locator is set to custom.
-        if self.variable == NumberVariable::Locator
+        if self.variable == NumberOrPageVariable::Number(NumberVariable::Locator)
             && ctx
                 .instance
                 .cite_props
@@ -454,14 +486,30 @@ impl RenderCsl for citationberg::Label {
             return (false, UsageInfo::default());
         }
 
-        if let Some(num) = ctx.resolve_number_variable(self.variable) {
-            let plural = label_pluralization(self, num);
-            (
-                ctx.term(Term::from(self.variable), self.label.form, plural).is_some(),
-                UsageInfo::default(),
-            )
-        } else {
-            (false, UsageInfo::default())
+        match self.variable {
+            NumberOrPageVariable::Number(n) => {
+                if let Some(num) = ctx.resolve_number_variable(n) {
+                    let plural = label_pluralization(self, num);
+                    (
+                        ctx.term(Term::from(self.variable), self.label.form, plural)
+                            .is_some(),
+                        UsageInfo::default(),
+                    )
+                } else {
+                    (false, UsageInfo::default())
+                }
+            }
+            NumberOrPageVariable::Page(pv) => {
+                if let Some(p) = ctx.resolve_page_variable(pv) {
+                    let plural = p.as_typed().map_or(false, |p| p.is_plural());
+                    (
+                        ctx.term(Term::from(pv), self.label.form, plural).is_some(),
+                        UsageInfo::default(),
+                    )
+                } else {
+                    (false, UsageInfo::default())
+                }
+            }
         }
     }
 }
@@ -729,17 +777,8 @@ fn render_date_part<T: EntryLike>(
                     write!(ctx, "{}", val).unwrap();
                 }
             }
-            DateStrongAnyForm::Year(LongShortForm::Short) => {
-                write!(ctx, "{:02}", (val % 100).abs()).unwrap();
-            }
-            DateStrongAnyForm::Year(LongShortForm::Long) => {
-                write!(ctx, "{}", val.abs()).unwrap();
-            }
-        }
-
-        if let DateStrongAnyForm::Year(_) = form {
-            if date.year < 1000 {
-                ctx.push_str(if date.year < 0 { "BC" } else { "AD" });
+            DateStrongAnyForm::Year(brevity) => {
+                write_year(val, brevity == LongShortForm::Short, ctx).unwrap();
             }
         }
     }
@@ -779,12 +818,12 @@ fn choose_children<F, R, T: EntryLike>(
 where
     F: FnMut(&[LayoutRenderingElement], &mut Context<T>) -> R,
 {
-    let supressed = ctx.writing.suppress_queried_variables;
+    let suppressed = ctx.writing.suppress_queried_variables;
     ctx.writing.stop_suppressing_queried_variables();
     let branch = choose
         .branches()
         .find(|branch| branch.match_.test(BranchConditionIter::from_branch(branch, ctx)));
-    ctx.writing.suppress_queried_variables = supressed;
+    ctx.writing.suppress_queried_variables = suppressed;
 
     branch
         .map(|b| b.children.as_slice())
@@ -795,7 +834,9 @@ where
 impl RenderCsl for citationberg::Choose {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         choose_children(self, ctx, |children, ctx| {
-            render_with_delimiter(children, self.delimiter.as_deref(), ctx);
+            // Propagate parent group's delimiter to 'choose' output, as
+            // required by CSL, by not pushing a delimiter to the stack.
+            render_with_delimiter(children, ctx);
         });
     }
 
@@ -823,11 +864,16 @@ impl RenderCsl for citationberg::Choose {
     }
 }
 
+/// Render `children` with the delimiter in `ctx` between them.
+///
+/// The delimiter can be updated by [`ctx.writing.push_delimiter`][super::WritingContext::push_delimiter]
+/// and [`ctx.writing.pop_delimiter`][super::WritingContext::pop_delimiter].
 fn render_with_delimiter<T: EntryLike>(
     children: &[LayoutRenderingElement],
-    delimiter: Option<&str>,
     ctx: &mut Context<T>,
 ) {
+    let delimiter = ctx.writing.delimiters.last().clone();
+
     let mut first = true;
     let mut loc = None;
 
@@ -838,7 +884,7 @@ fn render_with_delimiter<T: EntryLike>(
         }
 
         if !first {
-            if let Some(delim) = delimiter {
+            if let Some(delim) = &delimiter {
                 let prev_loc = std::mem::take(&mut loc);
 
                 if let Some(prev_loc) = prev_loc {
@@ -849,20 +895,10 @@ fn render_with_delimiter<T: EntryLike>(
                 ctx.push_str(delim);
             }
         }
+        first = false;
 
         let pos = ctx.push_elem(citationberg::Formatting::default());
-
-        match child {
-            LayoutRenderingElement::Text(text) => text.render(ctx),
-            LayoutRenderingElement::Number(num) => num.render(ctx),
-            LayoutRenderingElement::Label(label) => label.render(ctx),
-            LayoutRenderingElement::Date(date) => date.render(ctx),
-            LayoutRenderingElement::Names(names) => names.render(ctx),
-            LayoutRenderingElement::Choose(choose) => choose.render(ctx),
-            LayoutRenderingElement::Group(_group) => _group.render(ctx),
-        }
-
-        first = false;
+        child.render(ctx);
         ctx.commit_elem(pos, None, None);
     }
 
@@ -939,7 +975,7 @@ impl<'a, 'b, T: EntryLike> BranchConditionIter<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
+impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1091,6 +1127,9 @@ impl<'a, 'b, T: EntryLike> Iterator for BranchConditionIter<'a, 'b, T> {
                         Variable::Name(n) => {
                             !self.ctx.resolve_name_variable(n).is_empty()
                         }
+                        Variable::Page(pv) => {
+                            self.ctx.resolve_page_variable(pv).is_some()
+                        }
                     })
                 } else {
                     None
@@ -1108,7 +1147,10 @@ impl RenderCsl for citationberg::Group {
         let affix_loc = ctx.apply_prefix(&affixes);
 
         let info = self.will_have_info(ctx).1;
-        render_with_delimiter(&self.children, self.delimiter.as_deref(), ctx);
+
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.clone());
+        render_with_delimiter(&self.children, ctx);
+        ctx.writing.pop_delimiter(delim_idx);
 
         ctx.apply_suffix(&affixes, affix_loc);
 
@@ -1208,11 +1250,13 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
 
 impl RenderCsl for citationberg::Layout {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
-        let fidx = ctx.push_format(self.to_formatting());
+        let format_idx = ctx.push_format(self.to_formatting());
+        let delim_idx = ctx.writing.push_delimiter(self.delimiter.clone());
         for e in &self.elements {
             e.render(ctx);
         }
-        ctx.pop_format(fidx);
+        ctx.writing.pop_delimiter(delim_idx);
+        ctx.pop_format(format_idx);
     }
 
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
