@@ -383,7 +383,7 @@
                 },
                 "volume": {
                     "type": [
-                        "number",
+                        "integer",
                         "string"
                     ],
                     "description": "For an item whose parent has multiple volumes/parts/seasons ... of which this item is one.",
@@ -393,7 +393,7 @@
                     ]
                 },
                 "volume-total": {
-                    "type": "number",
+                    "type": "integer",
                     "description": "Total number of volumes/parts/seasons this item consists of.",
                     "examples": [
                         12
@@ -401,7 +401,7 @@
                 },
                 "edition": {
                     "type": [
-                        "number",
+                        "integer",
                         "string"
                     ],
                     "description": "The published version of an item.",
@@ -413,7 +413,7 @@
                 },
                 "page-range": {
                     "type": [
-                        "number",
+                        "integer",
                         "string"
                     ],
                     "description": "The range of pages within the parent this item occupies.",
@@ -423,7 +423,7 @@
                     ]
                 },
                 "page-total": {
-                    "type": "number",
+                    "type": "integer",
                     "description": "total number of pages the item has",
                     "examples": [
                         1103
