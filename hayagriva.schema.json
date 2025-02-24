@@ -217,14 +217,12 @@
                     "description": "The item in which the item was published or to which it is strongly associated.",
                     "anyOf": [
                         {
-                            "$dynamicRef": "#entry",
-                            "$comment": "^ This references the `entry` schema defined above by the `$dynamicAnchor` keyword."
+                            "$ref": "#"
                         },
                         {
                             "type": "array",
                             "items": {
-                                "$dynamicRef": "#entry",
-                                "$comment": "^ This references the `entry` schema defined above by the `$dynamicAnchor` keyword."
+                                "$ref": "#"
                             },
                             "minItems": 1,
                             "uniqueItems": true,
