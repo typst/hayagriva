@@ -460,7 +460,6 @@
         },
         {
           "type": "string",
-          "format": "date",
           "$comment": "ISO 8601 date format (YYYY-MM-DD | YYYY-MM | YYYY).",
           "examples": ["2003-06-21", "2003-06", "2003"],
           "pattern": "^([+-]?\\d{4,})(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
