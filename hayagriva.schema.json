@@ -499,7 +499,7 @@
                         "National Library of New Zealand"
                     ]
                 },
-                "arhcive-location": {
+                "archive-location": {
                     "type": "string",
                     "description": "The location of the institution or collection where the item is kept.",
                     "examples": [
