@@ -298,7 +298,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/entry"
-          }
+          },
+          "uniqueItems": true
         }
       ]
     },
@@ -445,7 +446,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/person"
-          }
+          },
+          "uniqueItems": true
         }
       ]
     },
