@@ -229,7 +229,7 @@
           }
         }
       ],
-      "required": ["type", "title"],
+      "required": ["type"],
       "additionalProperties": false
     },
     "publisher": {
