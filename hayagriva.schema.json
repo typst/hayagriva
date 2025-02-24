@@ -202,10 +202,15 @@
                     ]
                 },
                 "date": {
-                    "type": "string",
+                    "type": [
+                        "string",
+                        "integer"
+                    ],
                     "description": "The date at which the item was published.",
                     "examples": [
-                        "1949-05"
+                        "1949-05-02",
+                        "1949-05",
+                        "1949"
                     ]
                 },
                 "parent": {
