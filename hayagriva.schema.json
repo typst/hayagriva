@@ -15,9 +15,7 @@
         "title": {
           "description": "The title of this entry",
           "$ref": "#/definitions/formattableString",
-          "examples": [
-            "\"Rick Astley: How An Internet Joke Revived My Career\""
-          ]
+          "examples": ["'Rick Astley: How An Internet Joke Revived My Career'"]
         },
         "author": {
           "description": "People primarily responsible for the creation of this entry",
@@ -264,7 +262,7 @@
     "entryType": {
       "type": "string",
       "description": "Media type of the item, often determines the structure of references.",
-      "pattern": "^(?i)(article|chapter|entry|anthos|report|thesis|web|scene|artwork|patent|case|newspaper|legislation|manuscript|original|post|misc|performance|periodical|proceedings|book|blog|reference|conference|anthology|repository|thread|video|audio|exhibition)$",
+      "pattern": "^(?:[Aa][Rr][Tt][Ii][Cc][Ll][Ee]|[Cc][Hh][Aa][Pp][Tt][Ee][Rr]|[Ee][Nn][Tt][Rr][Yy]|[Aa][Nn][Tt][Hh][Oo][Ss]|[Rr][Ee][Pp][Oo][Rr][Tt]|[Tt][Hh][Ee][Ss][Ii][Ss]|[Ww][Ee][Bb]|[Ss][Cc][Ee][Nn][Ee]|[Aa][Rr][Tt][Ww][Oo][Rr][Kk]|[Pp][Aa][Tt][Ee][Nn][Tt]|[Cc][Aa][Ss][Ee]|[Nn][Ee][Ww][Ss][Pp][Aa][Pp][Ee][Rr]|[Ll][Ee][Gg][Ii][Ss][Ll][Aa][Tt][Ii][Oo][Nn]|[Mm][Aa][Nn][Uu][Ss][Cc][Rr][Ii][Pp][Tt]|[Oo][Rr][Ii][Gg][Ii][Nn][Aa][Ll]|[Pp][Oo][Ss][Tt]|[Mm][Ii][Ss][Cc]|[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Pp][Ee][Rr][Ii][Oo][Dd][Ii][Cc][Aa][Ll]|[Pp][Rr][Oo][Cc][Ee][Ee][Dd][Ii][Nn][Gg][Ss]|[Bb][Oo][Oo][Kk]|[Bb][Ll][Oo][Gg]|[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Cc][Oo][Nn][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Aa][Nn][Tt][Hh][Oo][Ll][Oo][Gg][Yy]|[Rr][Ee][Pp][Oo][Ss][Ii][Tt][Oo][Rr][Yy]|[Tt][Hh][Rr][Ee][Aa][Dd]|[Vv][Ii][Dd][Ee][Oo]|[Aa][Uu][Dd][Ii][Oo]|[Ee][Xx][Hh][Ii][Bb][Ii][Tt][Ii][Oo][Nn])$",
       "examples": [
         "article",
         "chapter",
@@ -338,7 +336,6 @@
             "description": "Names of the persons involved in the role.",
             "$ref": "#/definitions/personOrList"
           }
-
         },
         "required": ["role", "names"],
         "additionalProperties": false
@@ -346,7 +343,7 @@
     },
     "roleType": {
       "type": "string",
-      "pattern": "^(?i)(translator|afterword|foreword|introduction|annotator|commentator|holder|compiler|founder|collaborator|organizer|cast-member|composer|producer|executive-producer|writer|cinematography|director|illustrator|narrator)$",
+      "pattern": "^(?:[Tt][Rr][Aa][Nn][Ss][Ll][Aa][Tt][Oo][Rr]|[Aa][Ff][Tt][Ee][Rr][Ww][Oo][Rr][Dd]|[Ff][Oo][Rr][Ee][Ww][Oo][Rr][Dd]|[Ii][Nn][Tt][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Aa][Nn][Nn][Oo][Tt][Aa][Tt][Oo][Rr]|[Cc][Oo][Mm][Mm][Ee][Nn][Tt][Aa][Tt][Oo][Rr]|[Hh][Oo][Ll][Dd][Ee][Rr]|[Cc][Oo][Mm][Pp][Ii][Ll][Ee][Rr]|[Ff][Oo][Uu][Nn][Dd][Ee][Rr]|[Cc][Oo][Ll][Ll][Aa][Bb][Oo][Rr][Aa][Tt][Oo][Rr]|[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Ee][Rr]|[Cc][Aa][Ss][Tt]-[Mm][Ee][Mm][Bb][Ee][Rr]|[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]|[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ee][Xx][Ee][Cc][Uu][Tt][Ii][Vv][Ee]-[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ww][Rr][Ii][Tt][Ee][Rr]|[Cc][Ii][Nn][Ee][Mm][Aa][Tt][Oo][Gg][Rr][Aa][Pp][Hh][Yy]|[Dd][Ii][Rr][Ee][Cc][Tt][Oo][Rr]|[Ii][Ll][Ll][Uu][Ss][Tt][Rr][Aa][Tt][Oo][Rr]|[Nn][Aa][Rr][Rr][Aa][Tt][Oo][Rr])$",
       "examples": [
         "translator",
         "afterword",
