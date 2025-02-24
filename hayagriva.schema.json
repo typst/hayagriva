@@ -135,10 +135,28 @@
                     "description": "The media type of the item. Often determines the structure of references."
                 },
                 "title": {
-                    "type": "string",
                     "description": "The title of the item.",
                     "examples": [
-                        "Rick Astley: How An Internet Joke Revived My Career"
+                        "Rick Astley: How An Internet Joke Revived My Career",
+                        {
+                            "value": "Rick Astley: How An Internet Joke Revived My Career",
+                            "verbatim": "true"
+                        }
+                    ],
+                    "type": [
+                        "string",
+                        "object"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "string"
+                        },
+                        "verbatim": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": [
+                        "value"
                     ]
                 },
                 "author": {
