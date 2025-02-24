@@ -332,7 +332,8 @@
         },
         "required": ["role", "names"],
         "additionalProperties": false
-      }
+      },
+      "uniqueItems": true
     },
     "roleType": {
       "type": "string",
