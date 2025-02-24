@@ -160,6 +160,14 @@
                     ]
                 },
                 "author": {
+                    "description": "The person or persons primarily responsible for the creation of the item.",
+                    "examples": [
+                        [
+                            "Klocke, Iny",
+                            "Wohlrath, Elmar"
+                        ],
+                        "Klocke, Iny"
+                    ],
                     "type": [
                         "array",
                         "string"
@@ -191,15 +199,7 @@
                         ]
                     },
                     "minItems": 1,
-                    "uniqueItems": true,
-                    "description": "The person or persons primarily responsible for the creation of the item.",
-                    "examples": [
-                        [
-                            "Klocke, Iny",
-                            "Wohlrath, Elmar"
-                        ],
-                        "Klocke, Iny"
-                    ]
+                    "uniqueItems": true
                 },
                 "date": {
                     "type": [
