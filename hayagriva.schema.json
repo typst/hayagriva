@@ -97,7 +97,7 @@
         "type": { "$ref": "#/definitions/entryType" },
         "title": {
           "description": "The title of this entry",
-          "examples": ["Rick Astley: How An Internet Joke Revived My Career"],
+          "examples": ["\"Rick Astley: How An Internet Joke Revived My Career\""],
           "$ref": "#/definitions/formattableString"
         },
         "author": {
