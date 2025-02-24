@@ -1,5 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://raw.githubusercontent.com/typst/hayagriva/main/hayagriva.schema.json",
     "title": "Hayagriva Bibliography Format",
     "type": "object",
     "description": "A bibliography management format for the modern age.",
