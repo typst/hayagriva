@@ -466,29 +466,31 @@
       ]
     },
     "timestamp": {
-      "description": "A timestamp represents some time in a piece of media. It is given as a string of the form DD:HH:MM:SS,msms but everything except MM:SS can be omitted. Wrapping the string in double-quotes is necessary due to the colons.",
+      "description": "A timestamp represents some time in a piece of media. It is given as a string of the form DD:HH:MM:SS,msms but everything except MM:SS can be omitted. The left-most time denomination allows values that could overflow into the next-largest denomination if that is not specified.",
       "type": "string",
       "examples": [
         "12:34",
+        "137:00",
         "1:12:34",
         "2:01:12:34",
         "12:34,567",
         "1:12:34,567",
         "2:01:12:34,567"
       ],
-      "pattern": "^((\\d{1,2}:)?([0-5]?\\d:))?([0-5]?\\d):([0-5]\\d)(,\\d+)?$"
+      "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
     },
     "timestampRange": {
-      "description": "A range of timestamps is a string containing two timestamps separated by a hyphen.",
+      "description": "A range of timestamps is a string containing two timestamps separated by a hyphen. The left-most time denomination in each timestamp allows values that could overflow into the next-largest denomination if that is not specified.",
       "type": "string",
       "examples": [
         "00:12-00:34",
         "1:00:12-1:00:34",
         "2:01:12:34-2:01:12:56",
         "00:12,567-00:34,890",
-        "1:00:12,567-1:00:34,890"
+        "1:00:12,567-1:00:34,890",
+        "137:00-140:00"
       ],
-      "pattern": "^((\\d{1,2}:)?([0-5]?\\d:)?([0-5]?\\d):([0-5]\\d)(,\\d+)?)-((\\d{1,2}:)?([0-5]?\\d:)?([0-5]?\\d):([0-5]\\d)(,\\d+)?)$"
+      "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?-(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
     },
     "numericOrString": {
       "description": "A numeric or string value.",
@@ -535,7 +537,7 @@
       "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
       "oneOf": [
         {
-          "type": ["string","number"]
+          "type": ["string", "number"]
         },
         {
           "type": "object",
