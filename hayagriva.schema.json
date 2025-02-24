@@ -450,17 +450,16 @@
     },
     "date": {
       "description": "A calendar date as ISO 8601.",
+      "examples": [2025, "2025-12-31", "2025-12", "2000"],
       "anyOf": [
         {
           "type": "integer",
           "minimum": 0,
-          "examples": [2003],
           "description": "Shortened date for year only."
         },
         {
           "type": "string",
           "$comment": "ISO 8601 date format (YYYY-MM-DD | YYYY-MM | YYYY).",
-          "examples": ["2003-06-21", "2003-06", "2003"],
           "pattern": "^([+-~]?\\d{4,})(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
         }
       ]
