@@ -10,6 +10,144 @@
     "entry": {
       "type": "object",
       "description": "A single bibliography entry.",
+      "properties": {
+        "type": { "$ref": "#/definitions/entryType" },
+        "title": {
+          "description": "The title of this entry",
+          "$ref": "#/definitions/formattableString",
+          "examples": [
+            "\"Rick Astley: How An Internet Joke Revived My Career\""
+          ]
+        },
+        "author": {
+          "description": "People primarily responsible for the creation of this entry",
+          "$ref": "#/definitions/personOrList"
+        },
+        "date": {
+          "description": "The date of publication or creation of this entry",
+          "$ref": "#/definitions/date"
+        },
+        "parent": {
+          "description": "Entry in which the current entry was published / to which it is strongly associated to",
+          "$ref": "#/definitions/parentOrArray",
+          "examples": [
+            {
+              "type": "Anthology",
+              "title": "Automata studies",
+              "editor": ["Shannon, Claude E.", "McCarthy, John"]
+            }
+          ]
+        },
+        "abstract": {
+          "$ref": "#/definitions/formattableString",
+          "examples": [
+            "The dominant sequence transduction models are based on complex..."
+          ]
+        },
+        "genre": {
+          "description": "Type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). Do not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["Doctoral dissertation"]
+        },
+        "editor": {
+          "description": "People responsible for selecting and revising the content of the entry.",
+          "$ref": "#/definitions/personOrList"
+        },
+        "affiliated": {
+          "description": "People involved with the entry that do not fit author or editor roles.",
+          "$ref": "#/definitions/affiliatedList"
+        },
+        "call-number": {
+          "description": "The number of the item in a library, institution, or collection. Use with archive.",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["F16 D14"]
+        },
+        "publisher": {
+          "description": "The name of the publisher.",
+          "$ref": "#/definitions/publisher"
+        },
+        "location": {
+          "description": "Location at which the entry is physically located or took place. For the location where an item was published, use publisher instead.",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["Lahore, Pakistan"]
+        },
+        "organization": {
+          "description": "Organization at/for which the entry was produced.",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["Technische Universität Berlin"]
+        },
+        "issue": {
+          "description": "For an entry whose parent has multiple issues, indicated the position in the issue sequence. Also used to indicate the episode number for TV.",
+          "$ref": "#/definitions/numericOrString",
+          "examples": [5]
+        },
+        "volume": {
+          "description": "For an entry whose parent has multiple volumes, parts, seasons, etc. of which this entry is one.",
+          "$ref": "#/definitions/numericOrString",
+          "examples": ["2-3"]
+        },
+        "volume-total": {
+          "description": "Total number of volumes, parts, seasons, etc. this entry is part of.",
+          "type": "integer",
+          "examples": [12]
+        },
+        "edition": {
+          "description": "Published version of the entry.",
+          "examples": ["expanded and revised edition"],
+          "$ref": "#/definitions/numericOrString"
+        },
+        "page-range": {
+          "description": "Range of pages within the parent this entry occupies.",
+          "$ref": "#/definitions/numericOrString",
+          "examples": ["812-847"]
+        },
+        "page-total": {
+          "description": "Total number of pages in the entry.",
+          "type": "integer",
+          "examples": [768]
+        },
+        "time-range": {
+          "description": "The time range within the parent this entry starts and ends at.",
+          "$ref": "#/definitions/timestampRange"
+        },
+        "runtime": {
+          "description": "Total runtime of the entry.",
+          "$ref": "#/definitions/timestamp"
+        },
+        "url": {
+          "description": "Canonical public URL of the entry, can have access date.",
+          "$ref": "#/definitions/url",
+          "examples": [
+            {
+              "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
+              "date": "2020-12-29"
+            }
+          ]
+        },
+        "serial-number": {
+          "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
+          "$ref": "#/definitions/serialNumber"
+        },
+        "language": {
+          "description": "Language of the entry.",
+          "$ref": "#/definitions/language"
+        },
+        "archive": {
+          "description": "Name of the institution/collection where the entry is kept.",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["National Library of New Zealand"]
+        },
+        "archive-location": {
+          "description": "Location of the institution/collection where the entry is kept.",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["Wellington, New Zealand"]
+        },
+        "note": {
+          "description": "Short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
+          "$ref": "#/definitions/formattableString",
+          "examples": ["microfilm version"]
+        }
+      },
       "examples": [
         {
           "harry": {
@@ -93,142 +231,7 @@
           }
         }
       ],
-      "properties": {
-        "type": { "$ref": "#/definitions/entryType" },
-        "title": {
-          "description": "The title of this entry",
-          "examples": ["\"Rick Astley: How An Internet Joke Revived My Career\""],
-          "$ref": "#/definitions/formattableString"
-        },
-        "author": {
-          "description": "People primarily responsible for the creation of this entry",
-          "$ref": "#/definitions/personOrList"
-        },
-        "date": {
-          "description": "The date of publication or creation of this entry",
-          "$ref": "#/definitions/date"
-        },
-        "parent": {
-          "description": "Entry in which the current entry was published / to which it is strongly associated to",
-          "examples": [
-            {
-              "type": "Anthology",
-              "title": "Automata studies",
-              "editor": ["Shannon, Claude E.", "McCarthy, John"]
-            }
-          ],
-          "$ref": "#/definitions/parentOrArray"
-        },
-        "abstract": {
-          "examples": [
-            "The dominant sequence transduction models are based on complex..."
-          ],
-          "$ref": "#/definitions/formattableString"
-        },
-        "genre": {
-          "description": "Type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). Do not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
-          "examples": ["Doctoral dissertation"],
-          "$ref": "#/definitions/formattableString"
-        },
-        "editor": {
-          "description": "People responsible for selecting and revising the content of the entry.",
-          "$ref": "#/definitions/personOrList"
-        },
-        "affiliated": {
-          "description": "People involved with the entry that do not fit author or editor roles.",
-          "$ref": "#/definitions/affiliatedList"
-        },
-        "call-number": {
-          "description": "The number of the item in a library, institution, or collection. Use with archive.",
-          "examples": ["F16 D14"],
-          "$ref": "#/definitions/formattableString"
-        },
-        "publisher": {
-          "description": "The name of the publisher.",
-          "$ref": "#/definitions/publisher"
-        },
-        "location": {
-          "description": "Location at which the entry is physically located or took place. For the location where an item was published, use publisher instead.",
-          "examples": ["Lahore, Pakistan"],
-          "$ref": "#/definitions/formattableString"
-        },
-        "organization": {
-          "description": "Organization at/for which the entry was produced.",
-          "examples": ["Technische Universität Berlin"],
-          "$ref": "#/definitions/formattableString"
-        },
-        "issue": {
-          "description": "For an entry whose parent has multiple issues, indicated the position in the issue sequence. Also used to indicate the episode number for TV.",
-          "examples": [5],
-          "$ref": "#/definitions/numericOrString"
-        },
-        "volume": {
-          "description": "For an entry whose parent has multiple volumes, parts, seasons, etc. of which this entry is one.",
-          "examples": ["2-3"],
-          "$ref": "#/definitions/numericOrString"
-        },
-        "volume-total": {
-          "description": "Total number of volumes, parts, seasons, etc. this entry is part of.",
-          "examples": [12],
-          "type": "integer"
-        },
-        "edition": {
-          "description": "Published version of the entry.",
-          "examples": ["expanded and revised edition"],
-          "$ref": "#/definitions/numericOrString"
-        },
-        "page-range": {
-          "description": "Range of pages within the parent this entry occupies.",
-          "examples": ["812-847"],
-          "$ref": "#/definitions/numericOrString"
-        },
-        "page-total": {
-          "description": "Total number of pages in the entry.",
-          "examples": [768],
-          "type": "integer"
-        },
-        "time-range": {
-          "description": "The time range within the parent this entry starts and ends at.",
-          "$ref": "#/definitions/timestampRange"
-        },
-        "runtime": {
-          "description": "Total runtime of the entry.",
-          "$ref": "#/definitions/timestamp"
-        },
-        "url": {
-          "description": "Canonical public URL of the entry, can have access date.",
-          "examples": [
-            {
-              "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
-              "date": "2020-12-29"
-            }
-          ],
-          "$ref": "#/definitions/url"
-        },
-        "serial-number": {
-          "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
-          "$ref": "#/definitions/serialNumber"
-        },
-        "language": {
-          "description": "Language of the entry.",
-          "$ref": "#/definitions/language"
-        },
-        "archive": {
-          "description": "Name of the institution/collection where the entry is kept.",
-          "examples": ["National Library of New Zealand"],
-          "$ref": "#/definitions/formattableString"
-        },
-        "archive-location": {
-          "description": "Location of the institution/collection where the entry is kept.",
-          "examples": ["Wellington, New Zealand"],
-          "$ref": "#/definitions/formattableString"
-        },
-        "note": {
-          "description": "Short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
-          "examples": ["microfilm version"],
-          "$ref": "#/definitions/formattableString"
-        }
-      },
+      "required": ["type", "title"],
       "additionalProperties": false
     },
     "publisher": {
@@ -260,6 +263,8 @@
     },
     "entryType": {
       "type": "string",
+      "description": "Media type of the item, often determines the structure of references.",
+      "pattern": "^(?i)(article|chapter|entry|anthos|report|thesis|web|scene|artwork|patent|case|newspaper|legislation|manuscript|original|post|misc|performance|periodical|proceedings|book|blog|reference|conference|anthology|repository|thread|video|audio|exhibition)$",
       "examples": [
         "article",
         "chapter",
@@ -291,9 +296,7 @@
         "video",
         "audio",
         "exhibition"
-      ],
-      "description": "Media type of the item, often determines the structure of references.",
-      "pattern": "^(?i)(article|chapter|entry|anthos|report|thesis|web|scene|artwork|patent|case|newspaper|legislation|manuscript|original|post|misc|performance|periodical|proceedings|book|blog|reference|conference|anthology|repository|thread|video|audio|exhibition)$"
+      ]
     },
     "parentOrArray": {
       "oneOf": [
@@ -335,6 +338,7 @@
             "description": "Names of the persons involved in the role.",
             "$ref": "#/definitions/personOrList"
           }
+
         },
         "required": ["role", "names"],
         "additionalProperties": false
@@ -342,6 +346,7 @@
     },
     "roleType": {
       "type": "string",
+      "pattern": "^(?i)(translator|afterword|foreword|introduction|annotator|commentator|holder|compiler|founder|collaborator|organizer|cast-member|composer|producer|executive-producer|writer|cinematography|director|illustrator|narrator)$",
       "examples": [
         "translator",
         "afterword",
@@ -363,8 +368,7 @@
         "director",
         "illustrator",
         "narrator"
-      ],
-      "pattern": "^(?i)(translator|afterword|foreword|introduction|annotator|commentator|holder|compiler|founder|collaborator|organizer|cast-member|composer|producer|executive-producer|writer|cinematography|director|illustrator|narrator)$"
+      ]
     },
     "formattableString": {
       "oneOf": [
