@@ -1,596 +1,602 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Hayagriva Bibliography Format",
-  "type": "object",
-  "description": "A bibliography management format for the modern age.",
-  "additionalProperties": {
-    "$ref": "#/definitions/entry"
-  },
-  "definitions": {
-    "entry": {
-      "type": "object",
-      "description": "A single bibliography entry.",
-      "properties": {
-        "type": { "$ref": "#/definitions/entryType" },
-        "title": {
-          "description": "The title of this entry",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["'Rick Astley: How An Internet Joke Revived My Career'"]
-        },
-        "author": {
-          "description": "People primarily responsible for the creation of this entry",
-          "$ref": "#/definitions/personOrList"
-        },
-        "date": {
-          "description": "The date of publication or creation of this entry",
-          "$ref": "#/definitions/date"
-        },
-        "parent": {
-          "description": "Entry in which the current entry was published / to which it is strongly associated to",
-          "$ref": "#/definitions/parentOrArray",
-          "examples": [
-            {
-              "type": "Anthology",
-              "title": "Automata studies",
-              "editor": ["Shannon, Claude E.", "McCarthy, John"]
-            }
-          ]
-        },
-        "abstract": {
-          "$ref": "#/definitions/formattableString",
-          "examples": [
-            "The dominant sequence transduction models are based on complex..."
-          ]
-        },
-        "genre": {
-          "description": "Type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). Do not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["Doctoral dissertation"]
-        },
-        "editor": {
-          "description": "People responsible for selecting and revising the content of the entry.",
-          "$ref": "#/definitions/personOrList"
-        },
-        "affiliated": {
-          "description": "People involved with the entry that do not fit author or editor roles.",
-          "$ref": "#/definitions/affiliatedList"
-        },
-        "call-number": {
-          "description": "The number of the item in a library, institution, or collection. Use with archive.",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["F16 D14"]
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Hayagriva Bibliography Format",
+    "type": "object",
+    "description": "A bibliography management format for the modern age.",
+    "additionalProperties": {
+        "$ref": "#/definitions/entry"
+    },
+    "definitions": {
+        "entry": {
+            "type": "object",
+            "description": "A single bibliography entry.",
+            "properties": {
+                "type": { "$ref": "#/definitions/entryType" },
+                "title": {
+                    "description": "The title of this entry",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": [
+                        "'Rick Astley: How An Internet Joke Revived My Career'"
+                    ]
+                },
+                "author": {
+                    "description": "People primarily responsible for the creation of this entry",
+                    "$ref": "#/definitions/personOrList"
+                },
+                "date": {
+                    "description": "The date of publication or creation of this entry",
+                    "$ref": "#/definitions/date"
+                },
+                "parent": {
+                    "description": "Entry in which the current entry was published / to which it is strongly associated to",
+                    "$ref": "#/definitions/parentOrArray",
+                    "examples": [
+                        {
+                            "type": "Anthology",
+                            "title": "Automata studies",
+                            "editor": ["Shannon, Claude E.", "McCarthy, John"]
+                        }
+                    ]
+                },
+                "abstract": {
+                    "$ref": "#/definitions/formattableString",
+                    "examples": [
+                        "The dominant sequence transduction models are based on complex..."
+                    ]
+                },
+                "genre": {
+                    "description": "Type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). Do not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["Doctoral dissertation"]
+                },
+                "editor": {
+                    "description": "People responsible for selecting and revising the content of the entry.",
+                    "$ref": "#/definitions/personOrList"
+                },
+                "affiliated": {
+                    "description": "People involved with the entry that do not fit author or editor roles.",
+                    "$ref": "#/definitions/affiliatedList"
+                },
+                "call-number": {
+                    "description": "The number of the item in a library, institution, or collection. Use with archive.",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["F16 D14"]
+                },
+                "publisher": {
+                    "description": "The name of the publisher.",
+                    "$ref": "#/definitions/publisher"
+                },
+                "location": {
+                    "description": "Location at which the entry is physically located or took place. For the location where an item was published, use publisher instead.",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["Lahore, Pakistan"]
+                },
+                "organization": {
+                    "description": "Organization at/for which the entry was produced.",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["Technische Universität Berlin"]
+                },
+                "issue": {
+                    "description": "For an entry whose parent has multiple issues, indicated the position in the issue sequence. Also used to indicate the episode number for TV.",
+                    "$ref": "#/definitions/numericOrString",
+                    "examples": [5]
+                },
+                "volume": {
+                    "description": "For an entry whose parent has multiple volumes, parts, seasons, etc. of which this entry is one.",
+                    "$ref": "#/definitions/numericOrString",
+                    "examples": ["2-3"]
+                },
+                "volume-total": {
+                    "description": "Total number of volumes, parts, seasons, etc. this entry is part of.",
+                    "type": "integer",
+                    "examples": [12]
+                },
+                "edition": {
+                    "description": "Published version of the entry.",
+                    "examples": ["expanded and revised edition"],
+                    "$ref": "#/definitions/numericOrString"
+                },
+                "page-range": {
+                    "description": "Range of pages within the parent this entry occupies.",
+                    "$ref": "#/definitions/numericOrString",
+                    "examples": ["812-847"]
+                },
+                "page-total": {
+                    "description": "Total number of pages in the entry.",
+                    "type": "integer",
+                    "examples": [768]
+                },
+                "time-range": {
+                    "description": "The time range within the parent this entry starts and ends at.",
+                    "$ref": "#/definitions/timestampRange"
+                },
+                "runtime": {
+                    "description": "Total runtime of the entry.",
+                    "$ref": "#/definitions/timestamp"
+                },
+                "url": {
+                    "description": "Canonical public URL of the entry, can have access date.",
+                    "$ref": "#/definitions/url"
+                },
+                "serial-number": {
+                    "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
+                    "$ref": "#/definitions/serialNumber"
+                },
+                "language": {
+                    "description": "Language of the entry.",
+                    "$ref": "#/definitions/language"
+                },
+                "archive": {
+                    "description": "Name of the institution/collection where the entry is kept.",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["National Library of New Zealand"]
+                },
+                "archive-location": {
+                    "description": "Location of the institution/collection where the entry is kept.",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["Wellington, New Zealand"]
+                },
+                "note": {
+                    "description": "Short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
+                    "$ref": "#/definitions/formattableString",
+                    "examples": ["microfilm version"]
+                }
+            },
+            "examples": [
+                {
+                    "harry": {
+                        "type": "Book",
+                        "title": "Harry Potter and the Order of the Phoenix",
+                        "author": "Rowling, J. K.",
+                        "volume": 5,
+                        "page-total": 768,
+                        "date": "2003-06-21"
+                    }
+                },
+                {
+                    "electronic": {
+                        "type": "Web",
+                        "title": "Ishkur's Guide to Electronic Music",
+                        "serial-number": "v2.5",
+                        "author": "Ishkur",
+                        "url": "http://www.techno.org/electronic-music-guide/"
+                    }
+                },
+                {
+                    "kinetics": {
+                        "type": "Article",
+                        "title": "Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate",
+                        "author": [
+                            "Doan, T. D.",
+                            "Tran Thoai, D. B.",
+                            "Haug, Hartmut"
+                        ],
+                        "serial-number": {
+                            "doi": "10.1103/PhysRevB.102.165126"
+                        },
+                        "page-range": "165126-165139",
+                        "date": "2020-10-14",
+                        "parent": {
+                            "type": "Periodical",
+                            "title": "Physical Review B",
+                            "volume": 102,
+                            "issue": 16,
+                            "publisher": "American Physical Society"
+                        }
+                    }
+                },
+                {
+                    "wwdc-network": {
+                        "type": "Article",
+                        "author": ["Mehta, Jiten", "Kinnear, Eric"],
+                        "title": "Boost Performance and Security with Modern Networking",
+                        "date": "2020-06-26",
+                        "parent": [
+                            {
+                                "type": "Conference",
+                                "title": "World Wide Developer Conference 2020",
+                                "organization": "Apple Inc.",
+                                "location": "Mountain View, CA"
+                            },
+                            {
+                                "type": "Video",
+                                "runtime": "00:13:42",
+                                "url": "https://developer.apple.com/videos/play/wwdc2020/10111/"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "plaque": {
+                        "type": "Misc",
+                        "title": "Informational plaque about Jacoby's 1967 photos",
+                        "publisher": {
+                            "name": "Stiftung Reinbeckhallen",
+                            "location": "Berlin, Germany"
+                        },
+                        "date": 2020,
+                        "parent": {
+                            "type": "Artwork",
+                            "date": 1967,
+                            "author": "Jacoby, Max",
+                            "parent": {
+                                "type": "Anthology",
+                                "title": "Bleibtreustraße",
+                                "archive": "Landesmuseum Koblenz",
+                                "archive-location": "Koblenz, Germany"
+                            }
+                        }
+                    }
+                }
+            ],
+            "additionalProperties": false
         },
         "publisher": {
-          "description": "The name of the publisher.",
-          "$ref": "#/definitions/publisher"
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "location": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["name"],
+                    "additionalProperties": false
+                }
+            ],
+            "examples": [
+                "Penguin Books",
+                {
+                    "name": "Penguin Books",
+                    "location": "London"
+                }
+            ]
         },
-        "location": {
-          "description": "Location at which the entry is physically located or took place. For the location where an item was published, use publisher instead.",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["Lahore, Pakistan"]
+        "entryType": {
+            "type": "string",
+            "description": "Media type of the item, often determines the structure of references.",
+            "pattern": "^(?:[Aa][Rr][Tt][Ii][Cc][Ll][Ee]|[Cc][Hh][Aa][Pp][Tt][Ee][Rr]|[Ee][Nn][Tt][Rr][Yy]|[Aa][Nn][Tt][Hh][Oo][Ss]|[Rr][Ee][Pp][Oo][Rr][Tt]|[Tt][Hh][Ee][Ss][Ii][Ss]|[Ww][Ee][Bb]|[Ss][Cc][Ee][Nn][Ee]|[Aa][Rr][Tt][Ww][Oo][Rr][Kk]|[Pp][Aa][Tt][Ee][Nn][Tt]|[Cc][Aa][Ss][Ee]|[Nn][Ee][Ww][Ss][Pp][Aa][Pp][Ee][Rr]|[Ll][Ee][Gg][Ii][Ss][Ll][Aa][Tt][Ii][Oo][Nn]|[Mm][Aa][Nn][Uu][Ss][Cc][Rr][Ii][Pp][Tt]|[Oo][Rr][Ii][Gg][Ii][Nn][Aa][Ll]|[Pp][Oo][Ss][Tt]|[Mm][Ii][Ss][Cc]|[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Pp][Ee][Rr][Ii][Oo][Dd][Ii][Cc][Aa][Ll]|[Pp][Rr][Oo][Cc][Ee][Ee][Dd][Ii][Nn][Gg][Ss]|[Bb][Oo][Oo][Kk]|[Bb][Ll][Oo][Gg]|[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Cc][Oo][Nn][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Aa][Nn][Tt][Hh][Oo][Ll][Oo][Gg][Yy]|[Rr][Ee][Pp][Oo][Ss][Ii][Tt][Oo][Rr][Yy]|[Tt][Hh][Rr][Ee][Aa][Dd]|[Vv][Ii][Dd][Ee][Oo]|[Aa][Uu][Dd][Ii][Oo]|[Ee][Xx][Hh][Ii][Bb][Ii][Tt][Ii][Oo][Nn])$",
+            "examples": [
+                "article",
+                "chapter",
+                "entry",
+                "anthos",
+                "report",
+                "thesis",
+                "web",
+                "scene",
+                "artwork",
+                "patent",
+                "case",
+                "newspaper",
+                "legislation",
+                "manuscript",
+                "original",
+                "post",
+                "misc",
+                "performance",
+                "periodical",
+                "proceedings",
+                "book",
+                "blog",
+                "reference",
+                "conference",
+                "anthology",
+                "repository",
+                "thread",
+                "video",
+                "audio",
+                "exhibition"
+            ]
         },
-        "organization": {
-          "description": "Organization at/for which the entry was produced.",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["Technische Universität Berlin"]
+        "parentOrArray": {
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/entry"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/entry"
+                    },
+                    "uniqueItems": true
+                }
+            ]
         },
-        "issue": {
-          "description": "For an entry whose parent has multiple issues, indicated the position in the issue sequence. Also used to indicate the episode number for TV.",
-          "$ref": "#/definitions/numericOrString",
-          "examples": [5]
+        "affiliatedList": {
+            "type": "array",
+            "examples": [
+                {
+                    "role": "Director",
+                    "names": "Cameron, James"
+                },
+                {
+                    "role": "CastMember",
+                    "names": [
+                        "Schwarzenegger, Arnold",
+                        "Hamilton, Linda",
+                        "Patrick, Robert"
+                    ]
+                }
+            ],
+            "items": {
+                "type": "object",
+                "properties": {
+                    "role": {
+                        "description": "Role of the person in relation to the entry.",
+                        "$ref": "#/definitions/roleType"
+                    },
+                    "names": {
+                        "description": "Names of the persons involved in the role.",
+                        "$ref": "#/definitions/personOrList"
+                    }
+                },
+                "required": ["role", "names"],
+                "additionalProperties": false
+            },
+            "uniqueItems": true
         },
-        "volume": {
-          "description": "For an entry whose parent has multiple volumes, parts, seasons, etc. of which this entry is one.",
-          "$ref": "#/definitions/numericOrString",
-          "examples": ["2-3"]
+        "roleType": {
+            "type": "string",
+            "pattern": "^(?:[Tt][Rr][Aa][Nn][Ss][Ll][Aa][Tt][Oo][Rr]|[Aa][Ff][Tt][Ee][Rr][Ww][Oo][Rr][Dd]|[Ff][Oo][Rr][Ee][Ww][Oo][Rr][Dd]|[Ii][Nn][Tt][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Aa][Nn][Nn][Oo][Tt][Aa][Tt][Oo][Rr]|[Cc][Oo][Mm][Mm][Ee][Nn][Tt][Aa][Tt][Oo][Rr]|[Hh][Oo][Ll][Dd][Ee][Rr]|[Cc][Oo][Mm][Pp][Ii][Ll][Ee][Rr]|[Ff][Oo][Uu][Nn][Dd][Ee][Rr]|[Cc][Oo][Ll][Ll][Aa][Bb][Oo][Rr][Aa][Tt][Oo][Rr]|[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Ee][Rr]|[Cc][Aa][Ss][Tt]-[Mm][Ee][Mm][Bb][Ee][Rr]|[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]|[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ee][Xx][Ee][Cc][Uu][Tt][Ii][Vv][Ee]-[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ww][Rr][Ii][Tt][Ee][Rr]|[Cc][Ii][Nn][Ee][Mm][Aa][Tt][Oo][Gg][Rr][Aa][Pp][Hh][Yy]|[Dd][Ii][Rr][Ee][Cc][Tt][Oo][Rr]|[Ii][Ll][Ll][Uu][Ss][Tt][Rr][Aa][Tt][Oo][Rr]|[Nn][Aa][Rr][Rr][Aa][Tt][Oo][Rr])$",
+            "examples": [
+                "translator",
+                "afterword",
+                "foreword",
+                "introduction",
+                "annotator",
+                "commentator",
+                "holder",
+                "compiler",
+                "founder",
+                "collaborator",
+                "organizer",
+                "cast-member",
+                "composer",
+                "producer",
+                "executive-producer",
+                "writer",
+                "cinematography",
+                "director",
+                "illustrator",
+                "narrator"
+            ]
         },
-        "volume-total": {
-          "description": "Total number of volumes, parts, seasons, etc. this entry is part of.",
-          "type": "integer",
-          "examples": [12]
+        "formattableString": {
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "value": {
+                            "type": "string"
+                        },
+                        "verbatim": {
+                            "description": "If true, disables text case transformations.",
+                            "type": "boolean"
+                        },
+                        "short": {
+                            "description": "Short form that a citation style can choose to render over the longer form.",
+                            "type": "string"
+                        }
+                    },
+                    "dependencies": {
+                        "verbatim": ["value"],
+                        "short": ["value"]
+                    },
+                    "required": ["value"]
+                }
+            ]
         },
-        "edition": {
-          "description": "Published version of the entry.",
-          "examples": ["expanded and revised edition"],
-          "$ref": "#/definitions/numericOrString"
+        "person": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "examples": [
+                        "Doe, Janet",
+                        "Luther King, Martin, Jr.",
+                        "UNICEF",
+                        "von der Leyen, Ursula"
+                    ]
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "description": "The family name of the person.",
+                            "type": "string"
+                        },
+                        "given-name": {
+                            "description": "The given name of the person.",
+                            "type": "string"
+                        },
+                        "prefix": {
+                            "description": "The prefix of the person's name.",
+                            "type": "string"
+                        },
+                        "suffix": {
+                            "description": "The suffix of the person's name.",
+                            "type": "string"
+                        },
+                        "alias": {
+                            "description": "An alias for the person.",
+                            "type": "string"
+                        }
+                    },
+                    "examples": [
+                        {
+                            "given-name": "Gloria Jean",
+                            "name": "Watkins",
+                            "alias": "bell hooks"
+                        }
+                    ],
+                    "required": ["name"],
+                    "additionalProperties": false
+                }
+            ]
         },
-        "page-range": {
-          "description": "Range of pages within the parent this entry occupies.",
-          "$ref": "#/definitions/numericOrString",
-          "examples": ["812-847"]
+        "personOrList": {
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/person"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/person"
+                    },
+                    "uniqueItems": true
+                }
+            ]
         },
-        "page-total": {
-          "description": "Total number of pages in the entry.",
-          "type": "integer",
-          "examples": [768]
+        "date": {
+            "description": "A calendar date as ISO 8601.",
+            "examples": [2025, "2025-12-31", "2025-12"],
+            "anyOf": [
+                {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Shortened date for year only."
+                },
+                {
+                    "type": "string",
+                    "$comment": "ISO 8601 date format (YYYY-MM-DD | YYYY-MM | YYYY).",
+                    "pattern": "^([+-~]?\\d{4,})(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
+                }
+            ]
         },
-        "time-range": {
-          "description": "The time range within the parent this entry starts and ends at.",
-          "$ref": "#/definitions/timestampRange"
+        "timestamp": {
+            "description": "A timestamp represents some time in a piece of media. It is given as a string of the form DD:HH:MM:SS,msms but everything except MM:SS can be omitted. The left-most time denomination allows values that could overflow into the next-largest denomination if that is not specified.",
+            "type": "string",
+            "examples": [
+                "12:34",
+                "137:00",
+                "1:12:34",
+                "2:01:12:34",
+                "12:34,567",
+                "1:12:34,567",
+                "2:01:12:34,567"
+            ],
+            "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
         },
-        "runtime": {
-          "description": "Total runtime of the entry.",
-          "$ref": "#/definitions/timestamp"
+        "timestampRange": {
+            "description": "A range of timestamps is a string containing two timestamps separated by a hyphen. The left-most time denomination in each timestamp allows values that could overflow into the next-largest denomination if that is not specified.",
+            "type": "string",
+            "examples": [
+                "00:12-00:34",
+                "1:00:12-1:00:34",
+                "2:01:12:34-2:01:12:56",
+                "00:12,567-00:34,890",
+                "1:00:12,567-1:00:34,890",
+                "137:00-140:00"
+            ],
+            "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?-(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
+        },
+        "numericOrString": {
+            "description": "A numeric or string value.",
+            "oneOf": [
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "string"
+                }
+            ]
         },
         "url": {
-          "description": "Canonical public URL of the entry, can have access date.",
-          "$ref": "#/definitions/url"
+            "description": "Canonical public URL of the entry, can have access date.",
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "value": {
+                            "description": "The URL value.",
+                            "type": "string"
+                        },
+                        "date": {
+                            "description": "The access date of the URL.",
+                            "$ref": "#/definitions/date"
+                        }
+                    },
+                    "examples": [
+                        "https://typst.app/",
+                        {
+                            "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
+                            "date": "2020-12-29"
+                        }
+                    ],
+                    "required": ["value"],
+                    "additionalProperties": false
+                }
+            ]
         },
-        "serial-number": {
-          "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
-          "$ref": "#/definitions/serialNumber"
+        "serialNumber": {
+            "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
+            "oneOf": [
+                {
+                    "type": ["string", "number"]
+                },
+                {
+                    "type": "object",
+                    "examples": [
+                        "2003.13722",
+                        {
+                            "doi": "10.22541/au.148771883.35456290",
+                            "arxiv": "1906.00356",
+                            "serial": "8516"
+                        }
+                    ],
+                    "properties": {
+                        "doi": {
+                            "description": "Digital Object Identifier.",
+                            "type": "string"
+                        },
+                        "isbn": {
+                            "description": "International Standard Book Number.",
+                            "type": "string"
+                        },
+                        "issn": {
+                            "description": "International Standard Serial Number.",
+                            "type": "string"
+                        },
+                        "pmid": {
+                            "description": "PubMed Identifier.",
+                            "type": "string"
+                        },
+                        "pmcid": {
+                            "description": "PubMed Central Identifier.",
+                            "type": "string"
+                        },
+                        "arxiv": {
+                            "description": "arXiv Identifier.",
+                            "type": "string"
+                        },
+                        "serial": {
+                            "description": "Serial number.",
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
         },
         "language": {
-          "description": "Language of the entry.",
-          "$ref": "#/definitions/language"
-        },
-        "archive": {
-          "description": "Name of the institution/collection where the entry is kept.",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["National Library of New Zealand"]
-        },
-        "archive-location": {
-          "description": "Location of the institution/collection where the entry is kept.",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["Wellington, New Zealand"]
-        },
-        "note": {
-          "description": "Short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
-          "$ref": "#/definitions/formattableString",
-          "examples": ["microfilm version"]
+            "description": "Language of the entry.",
+            "$comment": "Unicode Language Identifier (BCP 47).",
+            "examples": ["zh-Hans"],
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3,4})?(-[A-Z]{2})?$"
         }
-      },
-      "examples": [
-        {
-          "harry": {
-            "type": "Book",
-            "title": "Harry Potter and the Order of the Phoenix",
-            "author": "Rowling, J. K.",
-            "volume": 5,
-            "page-total": 768,
-            "date": "2003-06-21"
-          }
-        },
-        {
-          "electronic": {
-            "type": "Web",
-            "title": "Ishkur's Guide to Electronic Music",
-            "serial-number": "v2.5",
-            "author": "Ishkur",
-            "url": "http://www.techno.org/electronic-music-guide/"
-          }
-        },
-        {
-          "kinetics": {
-            "type": "Article",
-            "title": "Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate",
-            "author": ["Doan, T. D.", "Tran Thoai, D. B.", "Haug, Hartmut"],
-            "serial-number": {
-              "doi": "10.1103/PhysRevB.102.165126"
-            },
-            "page-range": "165126-165139",
-            "date": "2020-10-14",
-            "parent": {
-              "type": "Periodical",
-              "title": "Physical Review B",
-              "volume": 102,
-              "issue": 16,
-              "publisher": "American Physical Society"
-            }
-          }
-        },
-        {
-          "wwdc-network": {
-            "type": "Article",
-            "author": ["Mehta, Jiten", "Kinnear, Eric"],
-            "title": "Boost Performance and Security with Modern Networking",
-            "date": "2020-06-26",
-            "parent": [
-              {
-                "type": "Conference",
-                "title": "World Wide Developer Conference 2020",
-                "organization": "Apple Inc.",
-                "location": "Mountain View, CA"
-              },
-              {
-                "type": "Video",
-                "runtime": "00:13:42",
-                "url": "https://developer.apple.com/videos/play/wwdc2020/10111/"
-              }
-            ]
-          }
-        },
-        {
-          "plaque": {
-            "type": "Misc",
-            "title": "Informational plaque about Jacoby's 1967 photos",
-            "publisher": {
-              "name": "Stiftung Reinbeckhallen",
-              "location": "Berlin, Germany"
-            },
-            "date": 2020,
-            "parent": {
-              "type": "Artwork",
-              "date": 1967,
-              "author": "Jacoby, Max",
-              "parent": {
-                "type": "Anthology",
-                "title": "Bleibtreustraße",
-                "archive": "Landesmuseum Koblenz",
-                "archive-location": "Koblenz, Germany"
-              }
-            }
-          }
-        }
-      ],
-      "additionalProperties": false
-    },
-    "publisher": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            },
-            "location": {
-              "type": "string"
-            }
-          },
-          "required": ["name"],
-          "additionalProperties": false
-        }
-      ],
-      "examples": [
-        "Penguin Books",
-        {
-          "name": "Penguin Books",
-          "location": "London"
-        }
-      ]
-    },
-    "entryType": {
-      "type": "string",
-      "description": "Media type of the item, often determines the structure of references.",
-      "pattern": "^(?:[Aa][Rr][Tt][Ii][Cc][Ll][Ee]|[Cc][Hh][Aa][Pp][Tt][Ee][Rr]|[Ee][Nn][Tt][Rr][Yy]|[Aa][Nn][Tt][Hh][Oo][Ss]|[Rr][Ee][Pp][Oo][Rr][Tt]|[Tt][Hh][Ee][Ss][Ii][Ss]|[Ww][Ee][Bb]|[Ss][Cc][Ee][Nn][Ee]|[Aa][Rr][Tt][Ww][Oo][Rr][Kk]|[Pp][Aa][Tt][Ee][Nn][Tt]|[Cc][Aa][Ss][Ee]|[Nn][Ee][Ww][Ss][Pp][Aa][Pp][Ee][Rr]|[Ll][Ee][Gg][Ii][Ss][Ll][Aa][Tt][Ii][Oo][Nn]|[Mm][Aa][Nn][Uu][Ss][Cc][Rr][Ii][Pp][Tt]|[Oo][Rr][Ii][Gg][Ii][Nn][Aa][Ll]|[Pp][Oo][Ss][Tt]|[Mm][Ii][Ss][Cc]|[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Pp][Ee][Rr][Ii][Oo][Dd][Ii][Cc][Aa][Ll]|[Pp][Rr][Oo][Cc][Ee][Ee][Dd][Ii][Nn][Gg][Ss]|[Bb][Oo][Oo][Kk]|[Bb][Ll][Oo][Gg]|[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Cc][Oo][Nn][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Aa][Nn][Tt][Hh][Oo][Ll][Oo][Gg][Yy]|[Rr][Ee][Pp][Oo][Ss][Ii][Tt][Oo][Rr][Yy]|[Tt][Hh][Rr][Ee][Aa][Dd]|[Vv][Ii][Dd][Ee][Oo]|[Aa][Uu][Dd][Ii][Oo]|[Ee][Xx][Hh][Ii][Bb][Ii][Tt][Ii][Oo][Nn])$",
-      "examples": [
-        "article",
-        "chapter",
-        "entry",
-        "anthos",
-        "report",
-        "thesis",
-        "web",
-        "scene",
-        "artwork",
-        "patent",
-        "case",
-        "newspaper",
-        "legislation",
-        "manuscript",
-        "original",
-        "post",
-        "misc",
-        "performance",
-        "periodical",
-        "proceedings",
-        "book",
-        "blog",
-        "reference",
-        "conference",
-        "anthology",
-        "repository",
-        "thread",
-        "video",
-        "audio",
-        "exhibition"
-      ]
-    },
-    "parentOrArray": {
-      "oneOf": [
-        {
-          "$ref": "#/definitions/entry"
-        },
-        {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/entry"
-          },
-          "uniqueItems": true
-        }
-      ]
-    },
-    "affiliatedList": {
-      "type": "array",
-      "examples": [
-        {
-          "role": "Director",
-          "names": "Cameron, James"
-        },
-        {
-          "role": "CastMember",
-          "names": [
-            "Schwarzenegger, Arnold",
-            "Hamilton, Linda",
-            "Patrick, Robert"
-          ]
-        }
-      ],
-      "items": {
-        "type": "object",
-        "properties": {
-          "role": {
-            "description": "Role of the person in relation to the entry.",
-            "$ref": "#/definitions/roleType"
-          },
-          "names": {
-            "description": "Names of the persons involved in the role.",
-            "$ref": "#/definitions/personOrList"
-          }
-        },
-        "required": ["role", "names"],
-        "additionalProperties": false
-      },
-      "uniqueItems": true
-    },
-    "roleType": {
-      "type": "string",
-      "pattern": "^(?:[Tt][Rr][Aa][Nn][Ss][Ll][Aa][Tt][Oo][Rr]|[Aa][Ff][Tt][Ee][Rr][Ww][Oo][Rr][Dd]|[Ff][Oo][Rr][Ee][Ww][Oo][Rr][Dd]|[Ii][Nn][Tt][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Aa][Nn][Nn][Oo][Tt][Aa][Tt][Oo][Rr]|[Cc][Oo][Mm][Mm][Ee][Nn][Tt][Aa][Tt][Oo][Rr]|[Hh][Oo][Ll][Dd][Ee][Rr]|[Cc][Oo][Mm][Pp][Ii][Ll][Ee][Rr]|[Ff][Oo][Uu][Nn][Dd][Ee][Rr]|[Cc][Oo][Ll][Ll][Aa][Bb][Oo][Rr][Aa][Tt][Oo][Rr]|[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Ee][Rr]|[Cc][Aa][Ss][Tt]-[Mm][Ee][Mm][Bb][Ee][Rr]|[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]|[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ee][Xx][Ee][Cc][Uu][Tt][Ii][Vv][Ee]-[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ww][Rr][Ii][Tt][Ee][Rr]|[Cc][Ii][Nn][Ee][Mm][Aa][Tt][Oo][Gg][Rr][Aa][Pp][Hh][Yy]|[Dd][Ii][Rr][Ee][Cc][Tt][Oo][Rr]|[Ii][Ll][Ll][Uu][Ss][Tt][Rr][Aa][Tt][Oo][Rr]|[Nn][Aa][Rr][Rr][Aa][Tt][Oo][Rr])$",
-      "examples": [
-        "translator",
-        "afterword",
-        "foreword",
-        "introduction",
-        "annotator",
-        "commentator",
-        "holder",
-        "compiler",
-        "founder",
-        "collaborator",
-        "organizer",
-        "cast-member",
-        "composer",
-        "producer",
-        "executive-producer",
-        "writer",
-        "cinematography",
-        "director",
-        "illustrator",
-        "narrator"
-      ]
-    },
-    "formattableString": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "value": {
-              "type": "string"
-            },
-            "verbatim": {
-              "description": "If true, disables text case transformations.",
-              "type": "boolean"
-            },
-            "short": {
-              "description": "Short form that a citation style can choose to render over the longer form.",
-              "type": "string"
-            }
-          },
-          "dependencies": {
-            "verbatim": ["value"],
-            "short": ["value"]
-          },
-          "required": ["value"]
-        }
-      ]
-    },
-    "person": {
-      "oneOf": [
-        {
-          "type": "string",
-          "examples": [
-            "Doe, Janet",
-            "Luther King, Martin, Jr.",
-            "UNICEF",
-            "von der Leyen, Ursula"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "name": {
-              "description": "The family name of the person.",
-              "type": "string"
-            },
-            "given-name": {
-              "description": "The given name of the person.",
-              "type": "string"
-            },
-            "prefix": {
-              "description": "The prefix of the person's name.",
-              "type": "string"
-            },
-            "suffix": {
-              "description": "The suffix of the person's name.",
-              "type": "string"
-            },
-            "alias": {
-              "description": "An alias for the person.",
-              "type": "string"
-            }
-          },
-          "examples": [
-            {
-              "given-name": "Gloria Jean",
-              "name": "Watkins",
-              "alias": "bell hooks"
-            }
-          ],
-          "required": ["name"],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "personOrList": {
-      "oneOf": [
-        {
-          "$ref": "#/definitions/person"
-        },
-        {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/person"
-          },
-          "uniqueItems": true
-        }
-      ]
-    },
-    "date": {
-      "description": "A calendar date as ISO 8601.",
-      "examples": [2025, "2025-12-31", "2025-12"],
-      "anyOf": [
-        {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Shortened date for year only."
-        },
-        {
-          "type": "string",
-          "$comment": "ISO 8601 date format (YYYY-MM-DD | YYYY-MM | YYYY).",
-          "pattern": "^([+-~]?\\d{4,})(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
-        }
-      ]
-    },
-    "timestamp": {
-      "description": "A timestamp represents some time in a piece of media. It is given as a string of the form DD:HH:MM:SS,msms but everything except MM:SS can be omitted. The left-most time denomination allows values that could overflow into the next-largest denomination if that is not specified.",
-      "type": "string",
-      "examples": [
-        "12:34",
-        "137:00",
-        "1:12:34",
-        "2:01:12:34",
-        "12:34,567",
-        "1:12:34,567",
-        "2:01:12:34,567"
-      ],
-      "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
-    },
-    "timestampRange": {
-      "description": "A range of timestamps is a string containing two timestamps separated by a hyphen. The left-most time denomination in each timestamp allows values that could overflow into the next-largest denomination if that is not specified.",
-      "type": "string",
-      "examples": [
-        "00:12-00:34",
-        "1:00:12-1:00:34",
-        "2:01:12:34-2:01:12:56",
-        "00:12,567-00:34,890",
-        "1:00:12,567-1:00:34,890",
-        "137:00-140:00"
-      ],
-      "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?-(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
-    },
-    "numericOrString": {
-      "description": "A numeric or string value.",
-      "oneOf": [
-        {
-          "type": "number"
-        },
-        {
-          "type": "string"
-        }
-      ]
-    },
-    "url": {
-      "description": "Canonical public URL of the entry, can have access date.",
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "value": {
-              "description": "The URL value.",
-              "type": "string"
-            },
-            "date": {
-              "description": "The access date of the URL.",
-              "$ref": "#/definitions/date"
-            }
-          },
-          "examples": [
-            "https://typst.app/",
-            {
-              "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
-              "date": "2020-12-29"
-            }
-          ],
-          "required": ["value"],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "serialNumber": {
-      "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
-      "oneOf": [
-        {
-          "type": ["string", "number"]
-        },
-        {
-          "type": "object",
-          "examples": [
-            "2003.13722",
-            {
-              "doi": "10.22541/au.148771883.35456290",
-              "arxiv": "1906.00356",
-              "serial": "8516"
-            }
-          ],
-          "properties": {
-            "doi": {
-              "description": "Digital Object Identifier.",
-              "type": "string"
-            },
-            "isbn": {
-              "description": "International Standard Book Number.",
-              "type": "string"
-            },
-            "issn": {
-              "description": "International Standard Serial Number.",
-              "type": "string"
-            },
-            "pmid": {
-              "description": "PubMed Identifier.",
-              "type": "string"
-            },
-            "pmcid": {
-              "description": "PubMed Central Identifier.",
-              "type": "string"
-            },
-            "arxiv": {
-              "description": "arXiv Identifier.",
-              "type": "string"
-            },
-            "serial": {
-              "description": "Serial number.",
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "language": {
-      "description": "Language of the entry.",
-      "$comment": "Unicode Language Identifier (BCP 47).",
-      "examples": ["zh-Hans"],
-      "type": "string",
-      "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3,4})?(-[A-Z]{2})?$"
     }
-  }
 }
