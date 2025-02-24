@@ -114,13 +114,7 @@
         },
         "url": {
           "description": "Canonical public URL of the entry, can have access date.",
-          "$ref": "#/definitions/url",
-          "examples": [
-            {
-              "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
-              "date": "2020-12-29"
-            }
-          ]
+          "$ref": "#/definitions/url"
         },
         "serial-number": {
           "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
@@ -527,6 +521,13 @@
               "$ref": "#/definitions/date"
             }
           },
+          "examples": [
+            "https://typst.app/",
+            {
+              "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
+              "date": "2020-12-29"
+            }
+          ],
           "required": ["value"],
           "additionalProperties": false
         }
