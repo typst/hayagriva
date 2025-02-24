@@ -40,37 +40,97 @@
                     "examples": [
                         "video"
                     ],
-                    "enum": [
-                        "article",
-                        "chapter",
-                        "entry",
-                        "anthos",
-                        "report",
-                        "thesis",
-                        "web",
-                        "scene",
-                        "artwork",
-                        "patent",
-                        "case",
-                        "newspaper",
-                        "legislation",
-                        "manuscript",
-                        "original",
-                        "post",
-                        "misc",
-                        "performance",
-                        "periodical",
-                        "proceedings",
-                        "book",
-                        "blog",
-                        "reference",
-                        "conference",
-                        "anthology",
-                        "repository",
-                        "thread",
-                        "video",
-                        "audio",
-                        "exhibition"
+                    "oneOf": [
+                        {
+                            "pattern": "[Aa][Rr][Tt][Ii][Cc][Ll][Ee]"
+                        },
+                        {
+                            "pattern": "[Cc][Hh][Aa][Pp][Tt][Ee][Rr]"
+                        },
+                        {
+                            "pattern": "[Ee][Nn][Tt][Rr][Yy]"
+                        },
+                        {
+                            "pattern": "[Aa][Nn][Tt][Hh][Oo][Ss]"
+                        },
+                        {
+                            "pattern": "[Rr][Ee][Pp][Oo][Rr][Tt]"
+                        },
+                        {
+                            "pattern": "[Tt][Hh][Ee][Ss][Ii][Ss]"
+                        },
+                        {
+                            "pattern": "[Ww][Ee][Bb]"
+                        },
+                        {
+                            "pattern": "[Ss][Cc][Ee][Nn][Ee]"
+                        },
+                        {
+                            "pattern": "[Aa][Rr][Tt][Ww][Oo][Rr][Kk]"
+                        },
+                        {
+                            "pattern": "[Pp][Aa][Tt][Ee][Nn][Tt]"
+                        },
+                        {
+                            "pattern": "[Cc][Aa][Ss][Ee]"
+                        },
+                        {
+                            "pattern": "[Nn][Ee][Ww][Ss][Pp][Aa][Pp][Ee][Rr]"
+                        },
+                        {
+                            "pattern": "[Ll][Ee][Gg][Ii][Ss][Ll][Aa][Tt][Ii][Oo][Nn]"
+                        },
+                        {
+                            "pattern": "[Mm][Aa][Nn][Uu][Ss][Cc][Rr][Ii][Pp][Tt]"
+                        },
+                        {
+                            "pattern": "[Oo][Rr][Ii][Gg][Ii][Nn][Aa][Ll]"
+                        },
+                        {
+                            "pattern": "[Pp][Oo][Ss][Tt]"
+                        },
+                        {
+                            "pattern": "[Mm][Ii][Ss][Cc]"
+                        },
+                        {
+                            "pattern": "[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]"
+                        },
+                        {
+                            "pattern": "[Pp][Ee][Rr][Ii][Oo][Dd][Ii][Cc][Aa][Ll]"
+                        },
+                        {
+                            "pattern": "[Pp][Rr][Oo][Cc][Ee][Ee][Dd][Ii][Nn][Gg][Ss]"
+                        },
+                        {
+                            "pattern": "[Bb][Oo][Oo][Kk]"
+                        },
+                        {
+                            "pattern": "[Bb][Ll][Oo][Gg]"
+                        },
+                        {
+                            "pattern": "[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Cc][Ee]"
+                        },
+                        {
+                            "pattern": "[Cc][Oo][Nn][Ff][Ee][Rr][Ee][Nn][Cc][Ee]"
+                        },
+                        {
+                            "pattern": "[Aa][Nn][Tt][Hh][Oo][Ll][Oo][Gg][Yy]"
+                        },
+                        {
+                            "pattern": "[Rr][Ee][Pp][Oo][Ss][Ii][Tt][Oo][Rr][Yy]"
+                        },
+                        {
+                            "pattern": "[Tt][Hh][Rr][Ee][Aa][Dd]"
+                        },
+                        {
+                            "pattern": "[Vv][Ii][Dd][Ee][Oo]"
+                        },
+                        {
+                            "pattern": "[Aa][Uu][Dd][Ii][Oo]"
+                        },
+                        {
+                            "pattern": "[Ee][Xx][Hh][Ii][Bb][Ii][Tt][Ii][Oo][Nn]"
+                        }
                     ],
                     "description": "The media type of the item. Often determines the structure of references."
                 },
