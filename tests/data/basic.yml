@@ -20,7 +20,7 @@ zygos:
 
 wwdc-network:
     type: Article
-    author:  ["Mehta, Jiten", "Kinnear, Eric"]
+    author: ["Mehta, Jiten", "Kinnear, Eric"]
     title: Boost Performance and Security with Modern Networking
     date: 2020-06-26
     parent:
@@ -32,7 +32,11 @@ wwdc-network:
           location: Mountain View, CA
         - type: Video
           runtime: "00:13:42"
-          url: { value: https://developer.apple.com/videos/play/wwdc2020/10111/, date: 2020-09-17 }
+          url:
+              {
+                  value: https://developer.apple.com/videos/play/wwdc2020/10111/,
+                  date: 2020-09-17,
+              }
 
 omarova-libra:
     type: Article
@@ -100,7 +104,7 @@ science-e-issue:
           given-name: "Laurenz"
           alias: "laurmaedje"
     date: 2020-07-18
-    parent: 
+    parent:
         type: Repository
         title: Typst
         url: https://github.com/typst/typst
@@ -113,7 +117,8 @@ terminator-2:
         - role: director
           names: Cameron, James
         - role: cast-member
-          names: ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]
+          names:
+              ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]
         - role: composer
           names: Fiedel, Brad
     date: 1991-07-01
@@ -160,7 +165,8 @@ wire:
     genre: Drama
     affiliated:
         - role: executive-producer
-          names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
+          names:
+              ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
 
 kinetics:
     type: Article
@@ -182,7 +188,16 @@ kinetics:
 house:
     type: Article
     title: Teaching medicine with the help of "Dr. House"
-    author: ["Jerrentrup, Andreas", "Mueller, Tobias", "Glowalla, Ulrich", "Herder, Meike", "Henrichs, Nadine", "Neubauer, Andreas", "Schaefer, Juergen R."]
+    author:
+        [
+            "Jerrentrup, Andreas",
+            "Mueller, Tobias",
+            "Glowalla, Ulrich",
+            "Herder, Meike",
+            "Henrichs, Nadine",
+            "Neubauer, Andreas",
+            "Schaefer, Juergen R.",
+        ]
     serial-number:
         doi: 10.1371/journal.pone.0193972
         serial: e0193972
@@ -264,7 +279,14 @@ georgia:
 really-habitable:
     type: Article
     title: Defining the Really Habitable Zone
-    author: ["Pedbost, Marven F.", "Pomalgu, Trillean", "Lintott, Chris", "Eisner, Nora", "Nicholson, Belinda"]
+    author:
+        [
+            "Pedbost, Marven F.",
+            "Pomalgu, Trillean",
+            "Lintott, Chris",
+            "Eisner, Nora",
+            "Nicholson, Belinda",
+        ]
     date: 2020
     serial-number: 2003.13722
     url: https://arxiv.org/abs/2003.13722
@@ -277,7 +299,11 @@ electronic-music:
     title: Ishkur's Guide to Electronic Music
     serial-number: v2.5
     author: Ishkur
-    url: { value: http://www.techno.org/electronic-music-guide/, date: 2020-11-12 }
+    url:
+        {
+            value: http://www.techno.org/electronic-music-guide/,
+            date: 2020-11-12,
+        }
 
 mattermost:
     type: Web
@@ -377,7 +403,7 @@ roe-wade:
 foia:
     type: Legislation
     title: Freedom of Information Act
-    serial-number : Pub. L. No. 107-296, 80 Stat. 250
+    serial-number: Pub. L. No. 107-296, 80 Stat. 250
     date: 1967
 
 overleaf:
