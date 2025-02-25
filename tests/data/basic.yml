@@ -43,7 +43,6 @@ omarova-libra:
     author: ["Omarova, Saule", "Steele, Graham"]
     title:
         value: There’s a Lot We Still Don’t Know About Libra
-        sentence-case: There’s a lot we still don’t know about Libra
     date: 2019-11-04
     url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
     parent:
