@@ -14,22 +14,27 @@
             "properties": {
                 "type": { "$ref": "#/definitions/entryType" },
                 "title": {
-                    "description": "The title of this entry",
+                    "description": "The title of this entry.",
                     "$ref": "#/definitions/formattableString",
                     "examples": [
-                        "'Rick Astley: How An Internet Joke Revived My Career'"
+                        "Rick Astley: How An Internet Joke Revived My Career",
+                        {
+                            "value": "Rick Astley: How An Internet Joke Revived My Career",
+                            "short": "Rick Astley",
+                            "verbatim": false
+                        }
                     ]
                 },
                 "author": {
-                    "description": "People primarily responsible for the creation of this entry",
+                    "description": "The person or people primarily responsible for the creation of this entry.",
                     "$ref": "#/definitions/personOrList"
                 },
                 "date": {
-                    "description": "The date of publication or creation of this entry",
+                    "description": "The date of publication or creation of this entry.",
                     "$ref": "#/definitions/date"
                 },
                 "parent": {
-                    "description": "Entry in which the current entry was published / to which it is strongly associated to",
+                    "description": "Entry in which the current entry was published, or to which it is strongly associated.",
                     "$ref": "#/definitions/parentOrArray",
                     "examples": [
                         {
@@ -40,105 +45,106 @@
                     ]
                 },
                 "abstract": {
+                    "description": "The abstract or summary of the entry.",
                     "$ref": "#/definitions/formattableString",
                     "examples": [
                         "The dominant sequence transduction models are based on complex..."
                     ]
                 },
                 "genre": {
-                    "description": "Type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). Do not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
+                    "description": "The type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). This field is not intended for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["Doctoral dissertation"]
                 },
                 "editor": {
-                    "description": "People responsible for selecting and revising the content of the entry.",
+                    "description": "The person or people responsible for selecting and revising the content of the entry.",
                     "$ref": "#/definitions/personOrList"
                 },
                 "affiliated": {
-                    "description": "People involved with the entry that do not fit author or editor roles.",
+                    "description": "The people involved with the entry that do not fit `author` or `editor` roles.",
                     "$ref": "#/definitions/affiliatedList"
                 },
                 "call-number": {
-                    "description": "The number of the item in a library, institution, or collection. Use with archive.",
+                    "description": "The number of the item in a library, institution, or collection. Use with the `archive` field.",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["F16 D14"]
                 },
                 "publisher": {
-                    "description": "The name of the publisher.",
+                    "description": "The name of the publisher. The publisher's location also be included.",
                     "$ref": "#/definitions/publisher"
                 },
                 "location": {
-                    "description": "Location at which the entry is physically located or took place. For the location where an item was published, use publisher instead.",
+                    "description": "The location at which the entry is physically located or took place. For the location where an item was published, use the `publisher` field instead.",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["Lahore, Pakistan"]
                 },
                 "organization": {
-                    "description": "Organization at/for which the entry was produced.",
+                    "description": "The organization at/for which the entry was produced.",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["Technische Universität Berlin"]
                 },
                 "issue": {
-                    "description": "For an entry whose parent has multiple issues, indicated the position in the issue sequence. Also used to indicate the episode number for TV.",
+                    "description": "For an entry whose parent has multiple issues, this field identifies to which specific issue the entry belongs. Also used to indicate the episode number for TV series.",
                     "$ref": "#/definitions/numericOrString",
                     "examples": [5]
                 },
                 "volume": {
-                    "description": "For an entry whose parent has multiple volumes, parts, seasons, etc. of which this entry is one.",
+                    "description": "For an entry whose parent has multiple volumes, parts, seasons, etc., this field identifies to which specific volume the entry belongs.",
                     "$ref": "#/definitions/numericOrString",
                     "examples": ["2-3"]
                 },
                 "volume-total": {
-                    "description": "Total number of volumes, parts, seasons, etc. this entry is part of.",
+                    "description": "The total number of volumes, parts, seasons, etc., in the series that contains this entry.",
                     "type": "integer",
                     "examples": [12]
                 },
                 "edition": {
-                    "description": "Published version of the entry.",
-                    "examples": ["expanded and revised edition"],
+                    "description": "The published version of the entry.",
+                    "examples": ["expanded and revised edition", "second", 2],
                     "$ref": "#/definitions/numericOrString"
                 },
                 "page-range": {
-                    "description": "Range of pages within the parent this entry occupies.",
+                    "description": "The range of pages within that this entry occupies within the parent.",
                     "$ref": "#/definitions/numericOrString",
                     "examples": ["812-847"]
                 },
                 "page-total": {
-                    "description": "Total number of pages in the entry.",
+                    "description": "The total number of pages in the entry.",
                     "type": "integer",
                     "examples": [768]
                 },
                 "time-range": {
-                    "description": "The time range within the parent this entry starts and ends at.",
+                    "description": "The time range within the parent at which this entry starts and ends.",
                     "$ref": "#/definitions/timestampRange"
                 },
                 "runtime": {
-                    "description": "Total runtime of the entry.",
+                    "description": "The total runtime of the entry.",
                     "$ref": "#/definitions/timestamp"
                 },
                 "url": {
-                    "description": "Canonical public URL of the entry, can have access date.",
+                    "description": "The canonical public URL of the entry, which may include an access date.",
                     "$ref": "#/definitions/url"
                 },
                 "serial-number": {
-                    "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
+                    "description": "Any serial number, including article numbers, associated with the entry. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
                     "$ref": "#/definitions/serialNumber"
                 },
                 "language": {
-                    "description": "Language of the entry.",
+                    "description": "The language of the entry.",
                     "$ref": "#/definitions/language"
                 },
                 "archive": {
-                    "description": "Name of the institution/collection where the entry is kept.",
+                    "description": "The name of the institution/collection where the entry is kept.",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["National Library of New Zealand"]
                 },
                 "archive-location": {
-                    "description": "Location of the institution/collection where the entry is kept.",
+                    "description": "The location of the institution/collection where the entry is kept.",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["Wellington, New Zealand"]
                 },
                 "note": {
-                    "description": "Short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
+                    "description": "A short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
                     "$ref": "#/definitions/formattableString",
                     "examples": ["microfilm version"]
                 }
@@ -261,7 +267,7 @@
         },
         "entryType": {
             "type": "string",
-            "description": "Media type of the item, often determines the structure of references.",
+            "description": "The media type of the entry. Often determines the structure of references.",
             "pattern": "^(?:[Aa][Rr][Tt][Ii][Cc][Ll][Ee]|[Cc][Hh][Aa][Pp][Tt][Ee][Rr]|[Ee][Nn][Tt][Rr][Yy]|[Aa][Nn][Tt][Hh][Oo][Ss]|[Rr][Ee][Pp][Oo][Rr][Tt]|[Tt][Hh][Ee][Ss][Ii][Ss]|[Ww][Ee][Bb]|[Ss][Cc][Ee][Nn][Ee]|[Aa][Rr][Tt][Ww][Oo][Rr][Kk]|[Pp][Aa][Tt][Ee][Nn][Tt]|[Cc][Aa][Ss][Ee]|[Nn][Ee][Ww][Ss][Pp][Aa][Pp][Ee][Rr]|[Ll][Ee][Gg][Ii][Ss][Ll][Aa][Tt][Ii][Oo][Nn]|[Mm][Aa][Nn][Uu][Ss][Cc][Rr][Ii][Pp][Tt]|[Oo][Rr][Ii][Gg][Ii][Nn][Aa][Ll]|[Pp][Oo][Ss][Tt]|[Mm][Ii][Ss][Cc]|[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Pp][Ee][Rr][Ii][Oo][Dd][Ii][Cc][Aa][Ll]|[Pp][Rr][Oo][Cc][Ee][Ee][Dd][Ii][Nn][Gg][Ss]|[Bb][Oo][Oo][Kk]|[Bb][Ll][Oo][Gg]|[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Cc][Oo][Nn][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Aa][Nn][Tt][Hh][Oo][Ll][Oo][Gg][Yy]|[Rr][Ee][Pp][Oo][Ss][Ii][Tt][Oo][Rr][Yy]|[Tt][Hh][Rr][Ee][Aa][Dd]|[Vv][Ii][Dd][Ee][Oo]|[Aa][Uu][Dd][Ii][Oo]|[Ee][Xx][Hh][Ii][Bb][Ii][Tt][Ii][Oo][Nn])$",
             "examples": [
                 "article",
@@ -330,11 +336,11 @@
                 "type": "object",
                 "properties": {
                     "role": {
-                        "description": "Role of the person in relation to the entry.",
+                        "description": "The role of the person or people in relation to the entry.",
                         "$ref": "#/definitions/roleType"
                     },
                     "names": {
-                        "description": "Names of the persons involved in the role.",
+                        "description": "The name(s) of the person or people involved in the role.",
                         "$ref": "#/definitions/personOrList"
                     }
                 },
@@ -385,7 +391,7 @@
                             "type": "boolean"
                         },
                         "short": {
-                            "description": "Short form that a citation style can choose to render over the longer form.",
+                            "description": "A short form that a citation style can choose to render over the longer form.",
                             "type": "string"
                         }
                     },
@@ -437,6 +443,11 @@
                             "given-name": "Gloria Jean",
                             "name": "Watkins",
                             "alias": "bell hooks"
+                        },
+                        {
+                            "given-name": "Ursula",
+                            "name": "Le Guin",
+                            "alias":"Ursula K. Le Guin"
                         }
                     ],
                     "required": ["name"],
@@ -459,7 +470,7 @@
             ]
         },
         "date": {
-            "description": "A calendar date as ISO 8601.",
+            "description": "A calendar date in ISO 8601 format.",
             "examples": [2025, "2025-12-31", "2025-12"],
             "anyOf": [
                 {
@@ -593,7 +604,7 @@
             ]
         },
         "language": {
-            "description": "Language of the entry.",
+            "description": "The Language of the entry.",
             "$comment": "Unicode Language Identifier (BCP 47).",
             "examples": ["zh-Hans"],
             "type": "string",
