@@ -399,7 +399,8 @@
                         "verbatim": ["value"],
                         "short": ["value"]
                     },
-                    "required": ["value"]
+                    "required": ["value"],
+                    "additionalProperties": false
                 }
             ]
         },
