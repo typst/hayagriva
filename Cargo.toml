@@ -19,7 +19,7 @@ csl-json = ["citationberg/json"]
 [dependencies]
 citationberg = "0.5.0"
 indexmap = { version = "2.0.2", features = ["serde"] }
-numerals = "0.1.4"
+roman-numerals-rs = "3.1.0"
 paste = "1.0.14"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9.25"
