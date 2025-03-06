@@ -353,8 +353,7 @@
         },
         "roleType": {
             "type": "string",
-            "pattern": "^(?:[Tt][Rr][Aa][Nn][Ss][Ll][Aa][Tt][Oo][Rr]|[Aa][Ff][Tt][Ee][Rr][Ww][Oo][Rr][Dd]|[Ff][Oo][Rr][Ee][Ww][Oo][Rr][Dd]|[Ii][Nn][Tt][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Aa][Nn][Nn][Oo][Tt][Aa][Tt][Oo][Rr]|[Cc][Oo][Mm][Mm][Ee][Nn][Tt][Aa][Tt][Oo][Rr]|[Hh][Oo][Ll][Dd][Ee][Rr]|[Cc][Oo][Mm][Pp][Ii][Ll][Ee][Rr]|[Ff][Oo][Uu][Nn][Dd][Ee][Rr]|[Cc][Oo][Ll][Ll][Aa][Bb][Oo][Rr][Aa][Tt][Oo][Rr]|[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Ee][Rr]|[Cc][Aa][Ss][Tt]-[Mm][Ee][Mm][Bb][Ee][Rr]|[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]|[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ee][Xx][Ee][Cc][Uu][Tt][Ii][Vv][Ee]-[Pp][Rr][Oo][Dd][Uu][Cc][Ee][Rr]|[Ww][Rr][Ii][Tt][Ee][Rr]|[Cc][Ii][Nn][Ee][Mm][Aa][Tt][Oo][Gg][Rr][Aa][Pp][Hh][Yy]|[Dd][Ii][Rr][Ee][Cc][Tt][Oo][Rr]|[Ii][Ll][Ll][Uu][Ss][Tt][Rr][Aa][Tt][Oo][Rr]|[Nn][Aa][Rr][Rr][Aa][Tt][Oo][Rr])$",
-            "examples": [
+            "enum": [
                 "translator",
                 "afterword",
                 "foreword",
