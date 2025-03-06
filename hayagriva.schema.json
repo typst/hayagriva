@@ -236,6 +236,7 @@
                     }
                 }
             ],
+            "required": ["type"],
             "additionalProperties": false
         },
         "publisher": {
@@ -268,7 +269,8 @@
         "entryType": {
             "type": "string",
             "description": "The media type of the entry. Often determines the structure of references.",
-            "pattern": "^(?:[Aa][Rr][Tt][Ii][Cc][Ll][Ee]|[Cc][Hh][Aa][Pp][Tt][Ee][Rr]|[Ee][Nn][Tt][Rr][Yy]|[Aa][Nn][Tt][Hh][Oo][Ss]|[Rr][Ee][Pp][Oo][Rr][Tt]|[Tt][Hh][Ee][Ss][Ii][Ss]|[Ww][Ee][Bb]|[Ss][Cc][Ee][Nn][Ee]|[Aa][Rr][Tt][Ww][Oo][Rr][Kk]|[Pp][Aa][Tt][Ee][Nn][Tt]|[Cc][Aa][Ss][Ee]|[Nn][Ee][Ww][Ss][Pp][Aa][Pp][Ee][Rr]|[Ll][Ee][Gg][Ii][Ss][Ll][Aa][Tt][Ii][Oo][Nn]|[Mm][Aa][Nn][Uu][Ss][Cc][Rr][Ii][Pp][Tt]|[Oo][Rr][Ii][Gg][Ii][Nn][Aa][Ll]|[Pp][Oo][Ss][Tt]|[Mm][Ii][Ss][Cc]|[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Pp][Ee][Rr][Ii][Oo][Dd][Ii][Cc][Aa][Ll]|[Pp][Rr][Oo][Cc][Ee][Ee][Dd][Ii][Nn][Gg][Ss]|[Bb][Oo][Oo][Kk]|[Bb][Ll][Oo][Gg]|[Rr][Ee][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Cc][Oo][Nn][Ff][Ee][Rr][Ee][Nn][Cc][Ee]|[Aa][Nn][Tt][Hh][Oo][Ll][Oo][Gg][Yy]|[Rr][Ee][Pp][Oo][Ss][Ii][Tt][Oo][Rr][Yy]|[Tt][Hh][Rr][Ee][Aa][Dd]|[Vv][Ii][Dd][Ee][Oo]|[Aa][Uu][Dd][Ii][Oo]|[Ee][Xx][Hh][Ii][Bb][Ii][Tt][Ii][Oo][Nn])$",
+            "default": "Misc",
+            "pattern": "^(?:[Aa]rticle|[Cc]hapter|[Ee]ntry|[Aa]nthos|[Rr]eport|[Tt]hesis|[Ww]eb|[Ss]cene|[Aa]rtwork|[Pp]atent|[Cc]ase|[Nn]ewspaper|[Ll]egislation|[Mm]anuscript|[Oo]riginal|[Pp]ost|[Mm]isc|[Pp]erformance|[Pp]eriodical|[Pp]roceedings|[Bb]ook|[Bb]log|[Rr]eference|[Cc]onference|[Aa]nthology|[Rr]epository|[Tt]hread|[Vv]ideo|[Aa]udio|[Ee]xhibition)$",
             "examples": [
                 "article",
                 "chapter",
@@ -448,7 +450,7 @@
                         {
                             "given-name": "Ursula",
                             "name": "Le Guin",
-                            "alias":"Ursula K. Le Guin"
+                            "alias": "Ursula K. Le Guin"
                         }
                     ],
                     "required": ["name"],
