@@ -43,7 +43,7 @@ const UPDATE_ARCHIVES_ENV_VAR: &str = "HAYAGRIVA_ARCHIVER_UPDATE";
 /// below:
 ///
 /// ```sh
-/// cargo test -- always-archive --ignored
+/// cargo test --test archiver -- --ignored
 /// ```
 #[test]
 #[ignore]
