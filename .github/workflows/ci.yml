@@ -11,10 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check out CSL styles
-        run: |
-          cd ..
-          git clone --depth 1 https://github.com/citation-style-language/styles
       - run: cargo build
       - run: cargo test --features csl-json
 
@@ -23,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.80.0
+      - uses: dtolnay/rust-toolchain@1.83.0
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2

@@ -34,8 +34,19 @@ const ARCHIVE_STYLES_PATH: &str = "archive/styles/";
 const ARCHIVE_LOCALES_PATH: &str = "archive/locales/";
 const ARCHIVE_SRC_PATH: &str = "src/csl/archive.rs";
 
-/// Always archive.
+const UPDATE_ARCHIVES_ENV_VAR: &str = "HAYAGRIVA_ARCHIVER_UPDATE";
+
+/// Always archive CSL styles from upstream.
+///
+/// Ignore by default so CI and tests can pass despite outdated archives.
+/// This specific test should rather be run periodically using the command
+/// below:
+///
+/// ```sh
+/// cargo test --test archiver -- --ignored
+/// ```
 #[test]
+#[ignore]
 fn always_archive() {
     ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {}", err));
     create_archive().unwrap_or_else(|err| panic!("{}", err));
@@ -106,7 +117,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     // Without "HAYAGRIVA_ARCHIVER_UPDATE=1", we only check if the archive
     // files are up-to-date.
     let should_write =
-        std::env::var_os("HAYAGRIVA_ARCHIVER_UPDATE").is_some_and(|var| var == "1");
+        std::env::var_os(UPDATE_ARCHIVES_ENV_VAR).is_some_and(|var| var == "1");
 
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
@@ -453,8 +464,7 @@ impl fmt::Display for ArchivalError {
             Self::NeedsUpdate(item) => {
                 write!(
                     f,
-                    "{} is outdated, run archiver tests with env var 'HAYAGRIVA_ARCHIVER_UPDATE=1' to update",
-                    item
+                    "{item} is outdated, run archiver tests with env var '{UPDATE_ARCHIVES_ENV_VAR}=1' to update",
                 )
             }
         }
