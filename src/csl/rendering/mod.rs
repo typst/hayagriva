@@ -19,7 +19,7 @@ use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
 use crate::PageRanges;
 
-use super::taxonomy::EntryLike;
+use super::taxonomy::{EntryLike, NumberOrPageVariableResult};
 use super::{write_year, Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
 
 pub mod names;
@@ -278,11 +278,20 @@ impl RenderCsl for citationberg::Number {
             return;
         }
 
-        let value = ctx.resolve_number_variable(self.variable);
+        let value = ctx.resolve_number_or_page_variable(self.variable);
         if ctx.instance.sorting {
-            if let Some(NumberVariableResult::Regular(MaybeTyped::Typed(n))) = value {
-                n.fmt_value(ctx, true).unwrap();
-                return;
+            match value {
+                Some(NumberOrPageVariableResult::Number(
+                    NumberVariableResult::Regular(MaybeTyped::Typed(n)),
+                )) => {
+                    n.fmt_value(ctx, true).unwrap();
+                    return;
+                }
+                Some(NumberOrPageVariableResult::Page(MaybeTyped::Typed(p))) => {
+                    write!(ctx, "{p}").unwrap();
+                    return;
+                }
+                _ => {}
             }
         }
 
@@ -292,18 +301,32 @@ impl RenderCsl for citationberg::Number {
         let gender = ctx.gender(self.variable.into());
 
         match value {
-            Some(NumberVariableResult::Regular(MaybeTyped::Typed(num)))
-                if num.will_transform() =>
-            {
+            Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
+                MaybeTyped::Typed(num),
+            ))) if num.will_transform() => {
                 render_typed_num(num.as_ref(), self.form, gender, ctx);
             }
-            Some(NumberVariableResult::Regular(MaybeTyped::Typed(num))) => {
-                write!(ctx, "{}", num).unwrap()
+
+            Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
+                MaybeTyped::Typed(num),
+            ))) => write!(ctx, "{}", num).unwrap(),
+
+            Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
+                MaybeTyped::String(s),
+            ))) => ctx.push_str(&s),
+
+            Some(NumberOrPageVariableResult::Number(
+                NumberVariableResult::Transparent(n),
+            )) => ctx.push_transparent(n),
+
+            Some(NumberOrPageVariableResult::Page(MaybeTyped::Typed(p))) => {
+                render_page_range(&p, ctx)
             }
-            Some(NumberVariableResult::Regular(MaybeTyped::String(s))) => {
+
+            Some(NumberOrPageVariableResult::Page(MaybeTyped::String(s))) => {
                 ctx.push_str(&s)
             }
-            Some(NumberVariableResult::Transparent(n)) => ctx.push_transparent(n),
+
             None => {}
         }
 
@@ -312,25 +335,36 @@ impl RenderCsl for citationberg::Number {
         ctx.commit_elem(
             depth,
             self.display,
-            (self.variable == NumberVariable::CitationNumber)
-                .then_some(ElemMeta::CitationNumber)
-                .or(Some(ElemMeta::Number)),
+            Some(
+                if self.variable
+                    == NumberOrPageVariable::Number(NumberVariable::CitationNumber)
+                {
+                    ElemMeta::CitationNumber
+                } else {
+                    ElemMeta::Number
+                },
+            ),
         );
     }
 
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
         match ctx.instance.kind {
-            Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
+            Some(SpecialForm::VarOnly(Variable::Number(n)))
+                if self.variable != NumberOrPageVariable::Number(n) =>
+            {
                 return false
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
-                return self.variable == NumberVariable::Locator
+                return matches!(
+                    self.variable,
+                    NumberOrPageVariable::Number(NumberVariable::Locator)
+                )
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
         }
 
-        var == Variable::Number(self.variable)
+        var == Variable::from(self.variable)
     }
 
     fn will_have_info<T: EntryLike>(&self, ctx: &mut Context<T>) -> (bool, UsageInfo) {
@@ -339,7 +373,7 @@ impl RenderCsl for citationberg::Number {
             // silent lookup, otherwise we need to perform a regular lookup.
             let suppressing = ctx.writing.suppress_queried_variables;
             ctx.writing.stop_suppressing_queried_variables();
-            let lookup_result = ctx.resolve_number_variable(self.variable);
+            let lookup_result = ctx.resolve_number_or_page_variable(self.variable);
 
             if suppressing {
                 ctx.writing.start_suppressing_queried_variables();

@@ -8,8 +8,8 @@ use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
 
 use citationberg::taxonomy::{
-    DateVariable, Locator, NameVariable, NumberVariable, OtherTerm, PageVariable,
-    StandardVariable, Term, Variable,
+    DateVariable, Locator, NameVariable, NumberOrPageVariable, NumberVariable, OtherTerm,
+    PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
@@ -23,6 +23,7 @@ use indexmap::IndexSet;
 use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::rendering::RenderCsl;
+use crate::csl::taxonomy::NumberOrPageVariableResult;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Person};
 
@@ -2639,6 +2640,20 @@ impl<'a, T: EntryLike> Context<'a, T> {
     ) -> Option<PageVariableResult> {
         self.writing.prepare_variable_query(variable)?;
         self.instance.resolve_page_variable(variable)
+    }
+
+    fn resolve_number_or_page_variable(
+        &self,
+        variable: NumberOrPageVariable,
+    ) -> Option<NumberOrPageVariableResult<'a>> {
+        match variable {
+            NumberOrPageVariable::Page(p) => {
+                self.resolve_page_variable(p).map(NumberOrPageVariableResult::Page)
+            }
+            NumberOrPageVariable::Number(n) => self
+                .resolve_number_variable(n)
+                .map(NumberOrPageVariableResult::Number),
+        }
     }
 
     /// Resolve a name variable.

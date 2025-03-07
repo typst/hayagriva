@@ -1,0 +1,78 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+3; 5; 33; 46; 450, 60–30 & 8; 22–45
+<<===== RESULT =====<<
+
+
+>>===== CSL =====>>
+<style
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <sort>
+      <key variable="page" />
+    </sort>
+    <layout delimiter="; ">
+      <number variable="page"/>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "ITEM-1",
+        "page": "3",
+        "title": "A",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-2",
+        "page": "5",
+        "title": "B",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-3",
+        "page": "22-45",
+        "title": "C",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-4",
+        "page": "33",
+        "title": "D",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-5",
+        "page": "46",
+        "title": "E",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-6",
+        "page": "450, 60-30 & 8",
+        "title": "F",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<
