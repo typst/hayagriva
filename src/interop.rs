@@ -397,7 +397,15 @@ impl TryFrom<&tex::Entry> for Entry {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_issue(number);
             } else {
-                item.set_issue(number);
+                match item.entry_type {
+                    EntryType::Report
+                    | EntryType::Patent
+                    | EntryType::Entry
+                    | EntryType::Reference => {
+                        item.set_keyed_serial_number("serial", number.to_string())
+                    }
+                    _ => item.set_issue(number),
+                }
             }
         }
 
@@ -556,6 +564,10 @@ impl TryFrom<&tex::Entry> for Entry {
 
         if let Some(abstract_) = map_res(entry.abstract_())? {
             item.set_abstract_(abstract_.into())
+        }
+
+        if let Some(type_) = map_res(entry.type_())? {
+            item.set_genre(type_.into());
         }
 
         if let Some(series) = map_res(entry.series())? {
