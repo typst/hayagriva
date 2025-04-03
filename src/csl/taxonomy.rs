@@ -64,9 +64,11 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
                 )),
-                LocatorPayload::Transparent => Some(NumberVariableResult::Transparent(
-                    self.cite_props.certain.initial_idx,
-                )),
+                LocatorPayload::Transparent(_) => {
+                    Some(NumberVariableResult::Transparent(
+                        self.cite_props.certain.initial_idx,
+                    ))
+                }
             },
             _ => self
                 .entry
