@@ -2255,7 +2255,7 @@ pub enum LocatorPayload<'a> {
     /// Each `Transparent` locator has associated numeric ID. Transparent
     /// locators with the same ID are considered identical, and with different
     /// ID are considered different.
-    Transparent(u32),
+    Transparent(u64),
 }
 
 impl<'a, T: EntryLike> Context<'a, T> {
