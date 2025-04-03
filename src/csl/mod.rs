@@ -2252,7 +2252,11 @@ pub enum LocatorPayload<'a> {
     Str(&'a str),
     /// An element with the original index of the locator will be yielded. The
     /// consumer can then recognize this and replace it with their own content.
-    Transparent,
+    ///
+    /// Each `Transparent` locator has associated numeric ID. Transparent
+    /// locators with the same ID are considered identical, and with different
+    /// ID are considered different.
+    Transparent(u32),
 }
 
 impl<'a, T: EntryLike> Context<'a, T> {
