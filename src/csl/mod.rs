@@ -2215,10 +2215,6 @@ pub enum IbidState {
 }
 
 impl IbidState {
-    fn is_ibid_with_locator(self) -> bool {
-        matches!(self, Self::IbidWithLocator | Self::Ibid)
-    }
-
     fn with_last<T>(this: &CitationItem<T>, last: Option<&CitationItem<T>>) -> Self
     where
         T: EntryLike + PartialEq,
