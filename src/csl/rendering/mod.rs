@@ -1109,9 +1109,14 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                         TestPosition::First => props.certain.is_first,
                         TestPosition::Subsequent => !props.certain.is_first,
                         TestPosition::Ibid => {
-                            matches!(props.speculative.ibid, IbidState::Ibid | IbidState::IbidWithLocator)
+                            matches!(
+                                props.speculative.ibid,
+                                IbidState::Ibid | IbidState::IbidWithLocator
+                            )
                         }
-                        TestPosition::IbidWithLocator => matches!(props.speculative.ibid, IbidState::IbidWithLocator),
+                        TestPosition::IbidWithLocator => {
+                            matches!(props.speculative.ibid, IbidState::IbidWithLocator)
+                        }
                         TestPosition::NearNote => props.certain.is_near_note,
                     })
                 } else {
