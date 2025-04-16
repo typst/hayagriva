@@ -1,3 +1,24 @@
+# 0.8.1
+
+- Use editor names in prose and author-only citations if the author names are
+  unavailable
+- Recognize some non-standard but widely used BibLaTeX `editortype`s like
+  `producer`, `writer`, `scriptwriter`, and `none` (defined by widespread style
+  `biblatex-chicago` to mean performers within `music` and `video` entries)
+- Allow CSL styles to render affixes around the bibliography
+- Correctly process the PubMed ID for BibTeX entries with `eprinttype =
+  {pubmed}`
+- Fix bugs around the handling of CSL delimiting characters (#109, #180)
+- Whitespace handling for the strings delimiting initialized names has been
+  improved
+- Fix problem with parsing multibyte characters in page ranges that could
+  prevent Hayagriva from parsing some BibTeX page ranges (#241)
+- Uppercase spelling after apostrophes used as quotation marks is now possible
+- Fix a panic with the CLI's `--format` argument
+- Updated CSL APA style
+- Updated CSL locales for Finnish, Swiss German, Austrian German, German, and
+  Arabic
+
 # 0.8.0
 
 - **Breaking change:** Fixed deserialization of page ranges,

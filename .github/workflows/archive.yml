@@ -1,0 +1,25 @@
+name: Weekly archive up-to-date check
+on:
+  schedule:
+    - cron: 00 3 * * 1
+  workflow_dispatch:
+  release:
+    # Run on draft and final releases
+    types: [published]
+
+env:
+  RUSTFLAGS: "-Dwarnings"
+  RUSTDOCFLAGS: "-Dwarnings"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out CSL styles
+        run: |
+          cd ..
+          git clone --depth 1 https://github.com/citation-style-language/styles
+      - name: Check if archives are up-to-date
+        run: cargo test --test archiver -- --ignored

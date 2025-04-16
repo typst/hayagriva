@@ -429,6 +429,7 @@ textcase_TitleCaseNonEnglish2
 textcase_TitleCaseWithHyphens
 textcase_TitleCaseWithInitials
 textcase_TitleCaseWithNonBreakSpace
+textcase_TitleCaseWithVolumeTitle
 textcase_TitleWithCircumflex
 textcase_TitleWithEnDash
 textcase_UppercaseNumber

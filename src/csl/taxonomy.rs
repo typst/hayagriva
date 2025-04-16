@@ -111,6 +111,11 @@ pub(super) enum NumberVariableResult<'a> {
 
 pub(super) type PageVariableResult = MaybeTyped<PageRanges>;
 
+pub(super) enum NumberOrPageVariableResult<'a> {
+    Number(NumberVariableResult<'a>),
+    Page(PageVariableResult),
+}
+
 impl<'a> NumberVariableResult<'a> {
     pub(super) fn from_regular(regular: MaybeTyped<Cow<'a, Numeric>>) -> Self {
         Self::Regular(regular)
