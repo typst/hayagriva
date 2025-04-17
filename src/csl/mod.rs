@@ -2547,28 +2547,15 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
             let mut used_buf = false;
             let buf = if self.writing.buf.is_empty() {
-                match self
-                    .writing
+                self.writing
                     .elem_stack
                     .last_mut_predicate(|p| !p.is_empty())
                     .and_then(|p| p.0.last_mut())
-                {
-                    Some(ElemChild::Text(f)) => &mut f.text,
-                    // Get the text element if it is contained in an `Elem`.
-                    Some(ElemChild::Elem(Elem { children, .. }))
-                        if children.0.len() == 1
-                            && matches!(children.0[0], ElemChild::Text(_)) =>
-                    {
-                        match &mut children.0[0] {
-                            ElemChild::Text(f) => &mut f.text,
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => {
+                    .and_then(get_last_text)
+                    .unwrap_or_else(|| {
                         used_buf = true;
                         self.writing.buf.as_string_mut()
-                    }
-                }
+                    })
             } else {
                 used_buf = true;
                 self.writing.buf.as_string_mut()
@@ -3101,6 +3088,17 @@ enum SpecialForm {
     OnlyYearSuffix,
     /// Output everything but the author.
     SuppressAuthor,
+}
+
+fn get_last_text(child: &mut ElemChild) -> Option<&mut String> {
+    println!("last text of {child:#?}");
+    match child {
+        ElemChild::Text(formatted) => Some(&mut formatted.text),
+        ElemChild::Elem(Elem { children, .. }) if children.0.len() == 1 => {
+            get_last_text(&mut children.0[0])
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]
