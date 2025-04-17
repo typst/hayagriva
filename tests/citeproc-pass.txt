@@ -30,7 +30,6 @@ bugreports_UnisaHarvardInitialization
 bugreports_YearSuffixLingers
 bugreports_disambiguate
 bugreports_effingBug
-bugreports_parenthesis
 bugreports_undefinedCrash
 collapse_AuthorCollapse
 collapse_AuthorCollapseDifferentAuthorsOneWithEtAl
