@@ -3090,8 +3090,10 @@ enum SpecialForm {
     SuppressAuthor,
 }
 
+/// Recursively iterates over `child`. If we reach text, we return a mutable
+/// reference to its content. If we reach an element with one child, we
+/// recursively call the funtion with this child. Otherwise, we return [None].
 fn get_last_text(child: &mut ElemChild) -> Option<&mut String> {
-    println!("last text of {child:#?}");
     match child {
         ElemChild::Text(formatted) => Some(&mut formatted.text),
         ElemChild::Elem(Elem { children, .. }) if children.0.len() == 1 => {
