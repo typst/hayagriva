@@ -8,10 +8,7 @@ use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use unscanny::Scanner;
 
-use crate::{
-    csl::Context,
-    lang::{Case, CaseFolder, SentenceCase, TitleCase},
-};
+use crate::lang::{Case, CaseFolder, SentenceCase, TitleCase};
 
 /// A string for presentation.
 ///

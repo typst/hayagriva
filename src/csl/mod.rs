@@ -19,6 +19,7 @@ use citationberg::{
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
+use quote::{SmartQuoter, SmartQuotes};
 
 use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
@@ -2398,7 +2399,20 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Add a string to the buffer.
     fn push_str(&mut self, s: &str) {
-        let s = self.do_pull_punctuation(s);
+        let mut modified = String::with_capacity(s.len());
+        let mut quoter = SmartQuoter::default();
+        let quotes = SmartQuotes::get(self);
+        let mut before = None;
+        for c in s.chars() {
+            match c {
+                '"' => modified.push_str(quoter.quote(before, &quotes, true)),
+                '\'' => modified.push_str(quoter.quote(before, &quotes, true)),
+                c => modified.push(c),
+            }
+            before = Some(c);
+        }
+
+        let s = self.do_pull_punctuation(&modified);
 
         self.writing.reconfigure();
 
