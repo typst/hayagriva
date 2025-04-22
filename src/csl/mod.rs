@@ -8,14 +8,14 @@ use std::num::{NonZeroI16, NonZeroUsize};
 use std::{mem, vec};
 
 use citationberg::taxonomy::{
-    DateVariable, Locator, NameVariable, NumberVariable, OtherTerm, StandardVariable,
-    Term, Variable,
+    DateVariable, Locator, NameVariable, NumberOrPageVariable, NumberVariable, OtherTerm,
+    PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
     taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
     CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
     LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, TermForm, ToFormatting,
+    StyleClass, TermForm, ToAffixes, ToFormatting,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -23,6 +23,7 @@ use indexmap::IndexSet;
 use crate::csl::elem::{simplify_children, NonEmptyStack};
 use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::rendering::RenderCsl;
+use crate::csl::taxonomy::NumberOrPageVariableResult;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Person};
 
@@ -30,7 +31,7 @@ use self::elem::last_text_mut_child;
 pub use self::elem::{
     BufWriteFormat, Elem, ElemChild, ElemChildren, ElemMeta, Formatted, Formatting,
 };
-use self::taxonomy::{EntryLike, NumberVariableResult};
+use self::taxonomy::{EntryLike, NumberVariableResult, PageVariableResult};
 
 #[cfg(feature = "archive")]
 pub mod archive;
@@ -84,20 +85,17 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 
     /// Create a new citation with the given items.
     pub fn citation(&mut self, mut req: CitationRequest<'a, T>) {
-        let style = req.style();
-
         for (i, item) in req.items.iter_mut().enumerate() {
             item.initial_idx = i;
         }
-        style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
         self.citations.push(req);
     }
 }
 
 /// Implementations for finishing the bibliography.
-impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T> {
+impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
     /// Render the bibliography.
-    pub fn finish(self, request: BibliographyRequest<'_>) -> Rendered {
+    pub fn finish(mut self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
         //     order and render them a first time without their locators.
         let bib_style = request.style();
@@ -116,6 +114,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
             &mut entries,
             bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
             request.locale.as_ref(),
+            |_| 0,
         );
         let citation_number = |item: &T| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
@@ -125,10 +124,17 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         let mut res: Vec<SpeculativeCiteRender<T>> = Vec::new();
         let mut last_cite: Option<&CitationItem<T>> = None;
 
-        for citation in &self.citations {
-            let items = &citation.items;
+        for citation in &mut self.citations {
             let style = citation.style();
 
+            style.sort(
+                &mut citation.items,
+                style.csl.citation.sort.as_ref(),
+                citation.locale.as_ref(),
+                citation_number,
+            );
+
+            let items = &citation.items;
             let mut renders: Vec<SpeculativeItemRender<'_, T>> = Vec::new();
 
             for item in items.iter() {
@@ -208,7 +214,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
         //
         // If we have set the disambiguation state for an item, we need to set
         // the same state for all entries referencing that item.
-        for _ in 0..6 {
+        for _ in 0..16 {
             let ambiguous = find_ambiguous_sets(&res);
             if ambiguous.is_empty() {
                 break;
@@ -292,7 +298,7 @@ impl<'a, T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'a, T>
 
                 let Some(name_elem) = cite.items[i]
                     .rendered
-                    .get_meta(ElemMeta::Names)
+                    .find_meta(ElemMeta::Names)
                     .map(|e| format!("{:?}", e))
                 else {
                     continue;
@@ -517,7 +523,12 @@ pub fn standalone_citation<T: EntryLike>(
     mut req: CitationRequest<'_, T>,
 ) -> ElemChildren {
     let style = req.style();
-    style.sort(&mut req.items, style.csl.citation.sort.as_ref(), req.locale.as_ref());
+    style.sort(
+        &mut req.items,
+        style.csl.citation.sort.as_ref(),
+        req.locale.as_ref(),
+        |_| 0,
+    );
     let mut res = vec![];
     let mut all_hidden = true;
     for item in req.items {
@@ -624,19 +635,9 @@ fn date_replacement<T: EntryLike>(
 
     ElemChildren(vec![ElemChild::Text(Formatted {
         text: if let Some(date) = date {
-            format!(
-                "{}{}",
-                if date.year > 0 { date.year } else { date.year.abs() + 1 },
-                if date.year < 1000 {
-                    if date.year < 0 {
-                        "BC"
-                    } else {
-                        "AD"
-                    }
-                } else {
-                    ""
-                }
-            )
+            let mut s = String::with_capacity(4);
+            write_year(date.year, false, &mut s).unwrap();
+            s
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
             .term(Term::Other(OtherTerm::NoDate), TermForm::default(), false)
@@ -647,6 +648,33 @@ fn date_replacement<T: EntryLike>(
         },
         formatting: Formatting::default(),
     })])
+}
+
+pub fn write_year<W: std::fmt::Write>(
+    year: i32,
+    short: bool,
+    w: &mut W,
+) -> std::fmt::Result {
+    if short && year >= 1000 {
+        return write!(w, "{:02}", year % 100);
+    }
+
+    write!(
+        w,
+        "{}{}",
+        if year > 0 { year } else { year.abs() + 1 },
+        if year < 1000 {
+            if year <= 0 {
+                "BC"
+            } else {
+                // AD is used as a postfix, see
+                // https://docs.citationstyles.org/en/stable/specification.html?#ad-and-bc
+                "AD"
+            }
+        } else {
+            ""
+        }
+    )
 }
 
 fn last_purpose_render<T: EntryLike + Debug>(
@@ -749,19 +777,32 @@ fn disambiguate_year_suffix<F, T>(
     T: EntryLike + PartialEq,
     F: FnMut(&T, DisambiguateState),
 {
-    if renders
-        .iter()
-        .flat_map(|r| r.items.iter())
-        .any(|i| i.rendered.get_meta(ElemMeta::Date).is_some())
-        && group.iter().any(|&(cite_idx, item_idx)| {
-            renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
-                && renders[cite_idx].items[item_idx]
-                    .cite_props
-                    .speculative
-                    .disambiguation
-                    .may_disambiguate_with_year_suffix()
-        })
-    {
+    if renders.iter().flat_map(|r| r.items.iter()).any(|i| {
+        let entry_has_date = i
+            .entry
+            .resolve_date_variable(DateVariable::Issued)
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::Accessed))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::AvailableDate))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::EventDate))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::Submitted))
+            .or_else(|| i.entry.resolve_date_variable(DateVariable::OriginalDate))
+            .is_some();
+
+        i.rendered
+            .find_elem_by(&|e| {
+                // The citation label will contain the date if there is one.
+                e.meta == Some(ElemMeta::Date)
+                    || (entry_has_date && e.meta == Some(ElemMeta::CitationLabel))
+            })
+            .is_some()
+    }) && group.iter().any(|&(cite_idx, item_idx)| {
+        renders[cite_idx].request.style.citation.disambiguate_add_year_suffix
+            && renders[cite_idx].items[item_idx]
+                .cite_props
+                .speculative
+                .disambiguation
+                .may_disambiguate_with_year_suffix()
+    }) {
         let mut entries = Vec::new();
         for &(cite_idx, item_idx) in group.iter() {
             let item = &renders[cite_idx].items[item_idx];
@@ -847,7 +888,11 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
 fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
     let style = &cite.request.style;
 
-    let after_collapse_delim = style.citation.after_collapse_delimiter.as_deref();
+    let after_collapse_delim = style
+        .citation
+        .after_collapse_delimiter
+        .as_deref()
+        .or(style.citation.layout.delimiter.as_deref());
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
 
@@ -855,24 +900,36 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         Some(Collapse::CitationNumber) => {
             // Option with the start and end of the range.
             let mut range_start: Option<(usize, usize)> = None;
+            let mut just_collapsed = false;
 
-            let end_range =
-                |items: &mut [SpeculativeItemRender<'a, T>],
-                 range_start: &mut Option<(usize, usize)>| {
-                    if let &mut Some((start, end)) = range_start {
-                        // There should be at least three items in the range.
-                        if start + 1 < end {
-                            items[end].delim_override =
-                                after_collapse_delim.or(Some("–"));
+            let end_range = |items: &mut [SpeculativeItemRender<'a, T>],
+                             range_start: &mut Option<(usize, usize)>,
+                             just_collapsed: &mut bool| {
+                let use_after_collapse_delim = *just_collapsed;
+                *just_collapsed = false;
 
-                            for item in &mut items[start + 1..end] {
-                                item.hidden = true;
-                            }
-                        }
+                if let &mut Some((start, end)) = range_start {
+                    // If the previous citation range was collapsed, use the
+                    // after-collapse delimiter before the next item.
+                    if use_after_collapse_delim {
+                        items[start].delim_override = after_collapse_delim;
                     }
 
-                    *range_start = None;
-                };
+                    // There should be at least three items in the range to
+                    // collapse.
+                    if start + 1 < end {
+                        items[end].delim_override = Some("–");
+
+                        for item in &mut items[start + 1..end] {
+                            item.hidden = true;
+                        }
+
+                        *just_collapsed = true;
+                    }
+                }
+
+                *range_start = None;
+            };
 
             for i in 0..cite.items.len() {
                 let citation_number = {
@@ -880,9 +937,9 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     // cannot be mutably borrowed below otherwise.
                     let item = &cite.items[i];
                     if item.hidden
-                        || item.rendered.get_meta(ElemMeta::CitationNumber).is_none()
+                        || item.rendered.find_meta(ElemMeta::CitationNumber).is_none()
                     {
-                        end_range(&mut cite.items, &mut range_start);
+                        end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         continue;
                     }
 
@@ -905,18 +962,15 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                         range_start = Some((start, i));
                     }
                     _ => {
-                        end_range(&mut cite.items, &mut range_start);
+                        end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         range_start = Some((i, i));
                     }
                 }
             }
 
-            end_range(&mut cite.items, &mut range_start);
+            end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
         }
         Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
-            let after_collapse_delim =
-                after_collapse_delim.or(style.citation.layout.delimiter.as_deref());
-
             // Index of where the current group started and the group we are
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
@@ -983,10 +1037,15 @@ pub struct RenderedBibliography {
     pub items: Vec<BibliographyItem>,
 }
 
+/// A fully rendered bibliography item.
 #[derive(Debug, Clone)]
 pub struct BibliographyItem {
+    /// The item's key as specified in the bibliography.
     pub key: String,
+    /// The item's first field. Only available when required by the
+    /// `second-field-align` CSL property.
     pub first_field: Option<ElemChild>,
+    /// The rendered item.
     pub content: ElemChildren,
 }
 
@@ -1190,7 +1249,15 @@ impl<'a> StyleContext<'a> {
         };
 
         let do_author = |ctx: &mut Context<'b, T>| {
-            let author_var = Variable::Name(NameVariable::Author);
+            let author_var = Variable::Name(
+                if entry.resolve_name_variable(NameVariable::Author).is_empty()
+                    && !entry.resolve_name_variable(NameVariable::Editor).is_empty()
+                {
+                    NameVariable::Editor
+                } else {
+                    NameVariable::Author
+                },
+            );
 
             if self.csl.citation.layout.will_render(ctx, author_var) {
                 // Render name from citation.
@@ -1248,12 +1315,11 @@ impl<'a> StyleContext<'a> {
             ctx.set_special_form(None);
         };
 
-        match kind {
-            Some(CitePurpose::Author) => {
+        match (kind, self.csl.bibliography.as_ref()) {
+            (Some(CitePurpose::Author), _) => {
                 do_author(&mut ctx);
             }
-            Some(CitePurpose::Full) if self.csl.bibliography.is_some() => {
-                let bib = self.csl.bibliography.as_ref().unwrap();
+            (Some(CitePurpose::Full), Some(bib)) => {
                 ctx.writing.push_name_options(&bib.name_options);
                 bib.layout.render(&mut ctx);
                 ctx.writing.pop_name_options();
@@ -1274,7 +1340,7 @@ impl<'a> StyleContext<'a> {
                     }
                 }
             }
-            Some(CitePurpose::Prose) => {
+            (Some(CitePurpose::Prose), _) => {
                 do_author(&mut ctx);
                 if !self.csl.citation.layout.prefix.as_ref().map_or(false, |f| {
                     f.chars().next().map_or(false, char::is_whitespace)
@@ -1312,7 +1378,7 @@ impl<'a> StyleContext<'a> {
                     );
                 }
             }
-            Some(CitePurpose::Year) | Some(CitePurpose::Full) | None => {
+            (Some(CitePurpose::Year) | Some(CitePurpose::Full) | None, _) => {
                 do_regular(&mut ctx);
             }
         }
@@ -1330,7 +1396,14 @@ impl<'a> StyleContext<'a> {
         let mut ctx = self.ctx(entry, props, locale, term_locale, true);
         ctx.writing
             .push_name_options(&self.csl.bibliography.as_ref()?.name_options);
-        self.csl.bibliography.as_ref()?.layout.render(&mut ctx);
+
+        let layout = &self.csl.bibliography.as_ref()?.layout;
+        let affixes = layout.to_affixes();
+
+        let affix_loc = ctx.apply_prefix(&affixes);
+        layout.render(&mut ctx);
+        ctx.apply_suffix(&affixes, affix_loc);
+
         Some(ctx)
     }
 
@@ -1356,7 +1429,7 @@ pub struct CitationRequest<'a, T: EntryLike> {
     /// style.
     pub locale: Option<LocaleCode>,
     /// The files used to retrieve locale settings and terms if the style does
-    /// not define all neccessary items.
+    /// not define all necessary items.
     pub locale_files: &'a [Locale],
     /// The number to use for `first-reference-note-number`.
     ///
@@ -1432,7 +1505,7 @@ pub struct BibliographyRequest<'a> {
     /// style.
     pub locale: Option<LocaleCode>,
     /// The files used to retrieve locale settings and terms if the style does
-    /// not define all neccessary items.
+    /// not define all necessary items.
     pub locale_files: &'a [Locale],
 }
 
@@ -1546,7 +1619,7 @@ impl<'a> StyleContext<'a> {
             let fallback = if i == 0 {
                 locale.parse_base().and_then(|base| match base {
                     BaseLanguage::Iso639_1(lang) => {
-                        Some(LocaleCode(String::from_utf8(lang.to_vec()).unwrap()))
+                        Some(LocaleCode(String::from_utf8(lang.to_vec()).ok()?))
                     }
                     BaseLanguage::Iana(lang) => Some(LocaleCode(lang)),
                     _ => None,
@@ -1590,7 +1663,7 @@ impl<'a> StyleContext<'a> {
 pub(crate) struct WritingContext {
     // Dynamic settings that change while rendering.
     /// Whether to watch out for punctuation that should be pulled inside the
-    /// preceeding quoted content.
+    /// preceding quoted content.
     pull_punctuation: bool,
     /// Whether we should be using inner quotes.
     inner_quotes: bool,
@@ -1618,6 +1691,9 @@ pub(crate) struct WritingContext {
     cases: NonEmptyStack<Option<TextCase>>,
     /// Inheritable name options.
     name_options: NonEmptyStack<InheritableNameOptions>,
+    /// Delimiters from ancestor delimiting elements (e.g., `cs:group`).
+    /// To be applied within `cs:choose`, but not another delimiting element or a macro.
+    delimiters: NonEmptyStack<Option<String>>,
 
     // Buffers.
     /// The buffer we're writing to. If block-level or formatting changes, we
@@ -1642,6 +1718,7 @@ impl Default for WritingContext {
             format_stack: NonEmptyStack::default(),
             cases: NonEmptyStack::default(),
             name_options: NonEmptyStack::default(),
+            delimiters: NonEmptyStack::default(),
             buf: CaseFolder::default(),
             elem_stack: NonEmptyStack::default(),
         }
@@ -1876,6 +1953,24 @@ impl WritingContext {
             .reconfigure((*self.cases.last()).map(Into::into).unwrap_or_default());
     }
 
+    /// Set the delimiter of the children of a [`citationberg::Group`] or
+    /// [`citationberg::Layout`]. It is inherited by [`citationberg::Choose`]
+    /// for its children as well.
+    fn push_delimiter(&mut self, delimiter: Option<String>) -> DelimiterIdx {
+        let idx = self.delimiters.len();
+        self.delimiters.push(delimiter);
+        DelimiterIdx(idx)
+    }
+    /// Clear the delimiter after a [`citationberg::Group`] or
+    /// [`citationberg::Layout`].
+    fn pop_delimiter(&mut self, idx: DelimiterIdx) {
+        if idx.0 == self.delimiters.len() {
+            return;
+        }
+
+        self.delimiters.drain(idx.0).for_each(drop);
+    }
+
     /// Push a new suppressed variable if we are suppressing queried variables.
     fn maybe_suppress(&self, variable: Variable) {
         if self.suppress_queried_variables {
@@ -1897,7 +1992,7 @@ impl WritingContext {
     }
 
     /// Return the sum of the lengths of strings in the finished elements. This
-    /// may not monotonoically increase.
+    /// may not monotonically increase.
     fn len(&self) -> usize {
         self.buf.len()
             + self
@@ -1978,7 +2073,7 @@ impl CertainCiteProperties {
     }
 }
 
-/// Item properies that can only be determined after one or multiple renders.
+/// Item properties that can only be determined after one or multiple renders.
 /// These require validation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SpeculativeCiteProperties<'a> {
@@ -2348,7 +2443,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
         if self.writing.strip_periods {
             // Replicate citeproc.js behavior: remove a period if the
-            // preceeding character in the original string is not a period.
+            // preceding character in the original string is not a period.
             let mut last_period = false;
             for c in s.chars() {
                 let is_period = c == '.';
@@ -2462,7 +2557,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .unwrap_or_else(OrdinalLookup::empty)
     }
 
-    /// Pull the next punctuation character into the preceeding quoted content
+    /// Pull the next punctuation character into the preceding quoted content
     /// if appropriate for the locale.
     fn may_pull_punctuation(&mut self) {
         self.writing.pull_punctuation |= self.style.punctuation_in_quotes();
@@ -2538,6 +2633,28 @@ impl<'a, T: EntryLike> Context<'a, T> {
         self.writing.prepare_variable_query(variable)?;
         let res = self.instance.resolve_number_variable(variable);
         res
+    }
+
+    fn resolve_page_variable(
+        &self,
+        variable: PageVariable,
+    ) -> Option<PageVariableResult> {
+        self.writing.prepare_variable_query(variable)?;
+        self.instance.resolve_page_variable(variable)
+    }
+
+    fn resolve_number_or_page_variable(
+        &self,
+        variable: NumberOrPageVariable,
+    ) -> Option<NumberOrPageVariableResult<'a>> {
+        match variable {
+            NumberOrPageVariable::Page(p) => {
+                self.resolve_page_variable(p).map(NumberOrPageVariableResult::Page)
+            }
+            NumberOrPageVariable::Number(n) => self
+                .resolve_number_variable(n)
+                .map(NumberOrPageVariableResult::Number),
+        }
     }
 
     /// Resolve a name variable.
@@ -2688,6 +2805,9 @@ impl DisplayLoc {
 
 #[must_use = "case stack must be popped"]
 struct CaseIdx(NonZeroUsize);
+
+#[must_use = "delimiter stack must be popped"]
+struct DelimiterIdx(NonZeroUsize);
 
 impl<T: EntryLike> Write for Context<'_, T> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
@@ -2852,5 +2972,143 @@ mod tests {
             //     }
             // }
         }
+    }
+
+    #[test]
+    fn low_year_test() {
+        let yield_year = |year, short| {
+            let mut s = String::new();
+            write_year(year, short, &mut s).unwrap();
+            s
+        };
+
+        assert_eq!(yield_year(2021, false), "2021");
+        assert_eq!(yield_year(2021, true), "21");
+        assert_eq!(yield_year(0, false), "1BC");
+        assert_eq!(yield_year(-1, false), "2BC");
+        assert_eq!(yield_year(1, false), "1AD");
+        assert_eq!(yield_year(0, true), "1BC");
+        assert_eq!(yield_year(-1, true), "2BC");
+        assert_eq!(yield_year(1, true), "1AD");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    fn test_alphanumeric_disambiguation() {
+        let bibtex = r#"@article{chenTransMorphTransformerUnsupervised2021,
+        title = {{{TransMorph}}: {{Transformer}} for Unsupervised Medical Image Registration},
+        author = {Chen, Junyu and Frey, Eric C. and He, Yufan and Segars, William P. and Li, Ye and Du, Yong},
+        date = {2021},
+        }
+
+        @article{chenViTVNetVisionTransformer2021,
+        title = {{{ViT-V-Net}}: {{Vision Transformer}} for {{Unsupervised Volumetric Medical Image Registration}}},
+        author = {Chen, Junyu and He, Yufan and Frey, Eric C. and Li, Ye and Du, Yong},
+        date = {2021},
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let alphanumeric = archive::ArchivedStyle::Alphanumeric.get();
+        let citationberg::Style::Independent(alphanumeric) = alphanumeric else {
+            unreachable!()
+        };
+
+        let mut driver = BibliographyDriver::new();
+        for entry in library.iter() {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_entry(entry)],
+                &alphanumeric,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &alphanumeric,
+            locale: None,
+            locale_files: &[],
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "[Che+21a]");
+        assert_eq!(c2, "[Che+21b]");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/243
+    fn issue_243() {
+        let bibtex = r#"@book{downs57,
+            title = {An Economic Theory of Democracy},
+            author = {Downs, Anthony},
+            date = {1957},
+            edition = {1},
+            publisher = {Harper \& Row},
+            location = {New York},
+            langid = {english}
+            }
+
+            @book{brady_collier10,
+            title = {Rethinking Social Inquiry. Diverse Tools, Shared Standards},
+            editor = {Brady, Henry E. and Collier, David},
+            date = {2010},
+            edition = {2},
+            publisher = {Rowman \& Littlefield Publishers},
+            location = {Maryland}
+            }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        for entry in library.iter() {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::new(
+                    entry,
+                    None,
+                    None,
+                    false,
+                    Some(CitePurpose::Prose),
+                )],
+                &apa,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &apa,
+            locale: None,
+            locale_files: &[],
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "Downs (1957)");
+        assert_eq!(c2, "Brady & Collier (2010)");
     }
 }

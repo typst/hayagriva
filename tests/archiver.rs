@@ -1,11 +1,23 @@
-use citationberg::{IndependentStyle, Style};
+//! Generates the archive of locales and styles for the 'archive' feature, as
+//! well as the source code of 'src/csl/archive.rs', used to retrieve those
+//! assets. The archive is downloaded from upstream CSL repositories into a
+//! `target` subfolder, where it's ready to be copied into the `archive`
+//! folder.
+//!
+//! By default, these tests simply check if the existing files in `archive/`
+//! are up-to-date, failing with an error if not. Specify
+//! `HAYAGRIVA_ARCHIVER_UPDATE=1` as an environment variable while running
+//! these tests (with `--test archiver`) to update the otherwise outdated
+//! files.
+
+use citationberg::{IndependentStyle, LocaleCode, Style};
 use citationberg::{Locale, LocaleFile, XmlError};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
-use std::io;
-use std::path::PathBuf;
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
 use std::{fmt, iter};
 
 mod common;
@@ -18,12 +30,26 @@ const CSL_REPO: &str = "https://github.com/citation-style-language/styles";
 const LOCALES_REPO: &str = "https://github.com/citation-style-language/locales";
 const LOCALES_REPO_NAME: &str = "locales";
 const OWN_STYLES: &str = "styles";
+const ARCHIVE_STYLES_PATH: &str = "archive/styles/";
+const ARCHIVE_LOCALES_PATH: &str = "archive/locales/";
+const ARCHIVE_SRC_PATH: &str = "src/csl/archive.rs";
 
-/// Always archive.
+const UPDATE_ARCHIVES_ENV_VAR: &str = "HAYAGRIVA_ARCHIVER_UPDATE";
+
+/// Always archive CSL styles from upstream.
+///
+/// Ignore by default so CI and tests can pass despite outdated archives.
+/// This specific test should rather be run periodically using the command
+/// below:
+///
+/// ```sh
+/// cargo test --test archiver -- --ignored
+/// ```
 #[test]
+#[ignore]
 fn always_archive() {
-    ensure_repos().unwrap();
-    create_archive().unwrap();
+    ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {}", err));
+    create_archive().unwrap_or_else(|err| panic!("{}", err));
 }
 
 #[test]
@@ -38,12 +64,63 @@ fn ensure_repos() -> Result<(), ArchivalError> {
     Ok(ensure_repo(LOCALES_REPO, LOCALES_REPO_NAME, "master")?)
 }
 
+/// Checks if the contents of the file at the given path match the expected byte
+/// buffer exactly, returning an error if not. The given `item` describes the
+/// file being checked and will be part of the returned error if there is one.
+fn ensure_archive_up_to_date(
+    path: impl AsRef<Path>,
+    item: String,
+    expected: &[u8],
+) -> Result<(), ArchivalError> {
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            // The archive file simply wasn't created yet.
+            return Err(ArchivalError::NeedsUpdate(item));
+        }
+        Err(err) => return Err(ArchivalError::Io(err)),
+    };
+
+    // Special case for when we're expecting an empty file to avoid
+    // overcomplicating the rest of the code. Just check if the file has a
+    // single byte.
+    if expected.is_empty() {
+        if file.bytes().next().transpose()?.is_some() {
+            return Err(ArchivalError::NeedsUpdate(item));
+        }
+
+        return Ok(());
+    }
+
+    // Read and compare the contents of the file in chunks for efficiency.
+    let mut position = 0;
+    let mut buf = vec![0u8; 4096];
+    while position < expected.len() {
+        let read_bytes = file.read(&mut buf)?;
+        if read_bytes == 0
+            || position + read_bytes > expected.len()
+            || buf[..read_bytes] != expected[position..position + read_bytes]
+        {
+            return Err(ArchivalError::NeedsUpdate(item));
+        }
+        position += read_bytes;
+    }
+
+    Ok(())
+}
+
 /// Create an archive of CSL and its locales as CBOR.
 fn create_archive() -> Result<(), ArchivalError> {
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     let own_style_path = PathBuf::from(OWN_STYLES);
+
+    // Without "HAYAGRIVA_ARCHIVER_UPDATE=1", we only check if the archive
+    // files are up-to-date.
+    let should_write =
+        std::env::var_os(UPDATE_ARCHIVES_ENV_VAR).is_some_and(|var| var == "1");
+
     let mut w = String::new();
-    let styles: Vec<_> = iter_files(&style_path, "csl")
+    let mut styles: Vec<_> = iter_files(&style_path, "csl")
         .chain(iter_files(&own_style_path, "csl"))
         .filter_map(|path| {
             {
@@ -70,11 +147,13 @@ fn create_archive() -> Result<(), ArchivalError> {
         })
         .collect();
 
+    styles.sort_by_key(|(_, _, names, _)| names[0].clone());
+
     write_styles_section(&mut w, styles.as_slice())
         .map_err(|e| ArchivalError::ValidationError(e.to_string()))?;
 
     let locales_path = PathBuf::from(CACHE_PATH).join(LOCALES_REPO_NAME);
-    let locales =
+    let mut locales =
         iter_files_with_name(&locales_path, "xml", |n| n.starts_with("locales-"))
             .map(|path| {
                 let locale: Locale =
@@ -86,26 +165,44 @@ fn create_archive() -> Result<(), ArchivalError> {
             })
             .collect::<Vec<_>>();
 
+    locales.sort_by_cached_key(|(_, locale)| {
+        locale.lang.clone().unwrap_or(LocaleCode("und-ZZ".to_string())).0
+    });
+
     write_locales_section(&mut w, locales.as_slice())
         .map_err(|e| ArchivalError::LocaleValidationError(e.to_string()))?;
 
     for (bytes, indep, _, _) in styles {
         let stripped_id = strip_id(indep.info.id.as_str());
-        fs::write(
-            PathBuf::from("archive/styles/").join(format!("{}.cbor", stripped_id)),
-            bytes,
-        )?;
+        let path =
+            PathBuf::from(ARCHIVE_STYLES_PATH).join(format!("{}.cbor", stripped_id));
+
+        if should_write {
+            fs::write(path, bytes)?;
+        } else {
+            let item = format!("style '{}.cbor'", stripped_id);
+            ensure_archive_up_to_date(&path, item, &bytes)?;
+        }
     }
 
     for (bytes, locale) in locales {
-        fs::write(
-            PathBuf::from("archive/locales/")
-                .join(format!("{}.cbor", locale.lang.unwrap())),
-            bytes,
-        )?;
+        let lang = locale.lang.unwrap();
+        let path = PathBuf::from(ARCHIVE_LOCALES_PATH).join(format!("{}.cbor", lang));
+
+        if should_write {
+            fs::write(path, bytes)?;
+        } else {
+            let item = format!("locale '{}.cbor'", lang);
+            ensure_archive_up_to_date(&path, item, &bytes)?;
+        }
     }
 
-    fs::write("src/csl/archive.rs", w)?;
+    if should_write {
+        fs::write(ARCHIVE_SRC_PATH, w)?;
+    } else {
+        let item = format!("file '{}'", ARCHIVE_SRC_PATH);
+        ensure_archive_up_to_date(ARCHIVE_SRC_PATH, item, w.as_bytes())?;
+    }
 
     Ok(())
 }
@@ -144,6 +241,7 @@ fn write_styles_section(
     writeln!(w, "}}")?;
     writeln!(w)?;
 
+    writeln!(w, "#[rustfmt::skip]")?;
     writeln!(w, "impl ArchivedStyle {{")?;
     writeln!(w, "    /// Retrieve this style by name.")?;
     writeln!(w, "    pub fn by_name(name: &str) -> Option<Self> {{")?;
@@ -153,7 +251,7 @@ fn write_styles_section(
             writeln!(w, "            {:?} => Some(Self::{}),", name, variant)?;
         }
     }
-    writeln!(w, "            _ => None")?;
+    writeln!(w, "            _ => None,")?;
     writeln!(w, "        }}")?;
     writeln!(w, "    }}")?;
     writeln!(w)?;
@@ -233,7 +331,6 @@ fn write_styles_section(
     }
     writeln!(w, "        }}")?;
     writeln!(w, "    }}")?;
-    writeln!(w)?;
     writeln!(w, "}}")?;
 
     writeln!(w, "fn from_cbor<T: DeserializeOwned>(")?;
@@ -262,9 +359,10 @@ fn write_locales_section(w: &mut String, items: &[(Vec<u8>, Locale)]) -> fmt::Re
 
     writeln!(w, "/// Get all CSL locales.")?;
     writeln!(w, "pub fn locales() -> Vec<Locale> {{")?;
-    writeln!(w, "    LOCALES.iter().map(|bytes| {{")?;
-    writeln!(w, "        from_cbor::<Locale>(bytes).unwrap()")?;
-    writeln!(w, "    }}).collect()")?;
+    writeln!(w, "    LOCALES")?;
+    writeln!(w, "        .iter()")?;
+    writeln!(w, "        .map(|bytes| from_cbor::<Locale>(bytes).unwrap())")?;
+    writeln!(w, "        .collect()")?;
     writeln!(w, "}}")?;
 
     Ok(())
@@ -282,7 +380,7 @@ fn get_names<'a>(id: &'a str, over: Option<&'a Override>) -> Vec<String> {
     }
     .to_string();
 
-    let other = if let Some(alias) = over.and_then(|o| o.alias) { alias } else { &[] };
+    let other = over.and_then(|o| o.alias).unwrap_or_default();
     iter::once(main)
         .chain(other.iter().map(ToString::to_string))
         .collect()
@@ -297,7 +395,7 @@ fn strip_id(full_id: &str) -> &str {
 
 /// Map which styles are referenced by which dependent styles.
 #[allow(dead_code)]
-fn retrieve_dependent_aliasses() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
+fn retrieve_dependent_aliases() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
     let mut dependent_alias: HashMap<_, Vec<_>> = HashMap::new();
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     for path in iter_files(&style_path.join("dependent"), "csl") {
@@ -324,6 +422,7 @@ pub enum ArchivalError {
     CborDeserialize(ciborium::de::Error<std::io::Error>),
     ValidationError(String),
     LocaleValidationError(String),
+    NeedsUpdate(String),
 }
 
 impl From<io::Error> for ArchivalError {
@@ -352,13 +451,21 @@ impl From<ciborium::de::Error<std::io::Error>> for ArchivalError {
 impl fmt::Display for ArchivalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(io) => fmt::Display::fmt(io, f),
-            Self::Deserialize(deser) => fmt::Display::fmt(deser, f),
-            Self::Serialize(ser) => fmt::Display::fmt(ser, f),
-            Self::CborDeserialize(deser) => fmt::Display::fmt(deser, f),
+            Self::Io(io) => write!(f, "io error: {}", io),
+            Self::Deserialize(deser) => write!(f, "deserialization error: {}", deser),
+            Self::Serialize(ser) => write!(f, "serialization error: {}", ser),
+            Self::CborDeserialize(deser) => {
+                write!(f, "cbor deserialization error: {}", deser)
+            }
             Self::ValidationError(id) => write!(f, "error when validating style {}", id),
             Self::LocaleValidationError(id) => {
                 write!(f, "error when validating locale {}", id)
+            }
+            Self::NeedsUpdate(item) => {
+                write!(
+                    f,
+                    "{item} is outdated, run archiver tests with env var '{UPDATE_ARCHIVES_ENV_VAR}=1' to update",
+                )
             }
         }
     }
