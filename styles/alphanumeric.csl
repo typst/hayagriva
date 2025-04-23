@@ -23,9 +23,11 @@
     </sort>
     <layout prefix="[" suffix="]" delimiter=", ">
       <group delimiter=", ">
-        <text variable="citation-label"/>
-        <text variable="year-suffix"/>
-        <text variable="locator" prefix=" " />
+        <group>
+            <text variable="citation-label" />
+            <text variable="year-suffix" />
+        </group>
+        <text variable="locator" />
       </group>
     </layout>
   </citation>

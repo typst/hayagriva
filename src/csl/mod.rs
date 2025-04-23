@@ -3145,6 +3145,14 @@ mod tests {
             ));
         }
 
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_locator(library.iter().next().unwrap(), None)],
+            &alphanumeric,
+            None,
+            &[],
+            None,
+        ));
+
         let finished = driver.finish(BibliographyRequest {
             style: &alphanumeric,
             locale: None,
@@ -3153,6 +3161,7 @@ mod tests {
 
         let mut c1 = String::new();
         let mut c2 = String::new();
+        let mut c3 = String::new();
 
         finished.citations[0]
             .citation
@@ -3162,8 +3171,13 @@ mod tests {
             .citation
             .write_buf(&mut c2, BufWriteFormat::Plain)
             .unwrap();
+        finished.citations[2]
+            .citation
+            .write_buf(&mut c3, BufWriteFormat::Plain)
+            .unwrap();
 
-        assert_eq!(c1, "[Che+21a]");
-        assert_eq!(c2, "[Che+21b]");
+        assert_eq!(c1, "[Che+21a, 12]");
+        assert_eq!(c2, "[Che+21b, 12]");
+        assert_eq!(c3, "[Che+21a]");
     }
 }
