@@ -2403,10 +2403,11 @@ impl<'a, T: EntryLike> Context<'a, T> {
         let mut quoter = SmartQuoter::default();
         let quotes = SmartQuotes::get(self);
         let mut before = None;
+        let inner = self.writing.inner_quotes;
         for c in s.chars() {
             match c {
-                '"' => modified.push_str(quoter.quote(before, &quotes, true)),
-                '\'' => modified.push_str(quoter.quote(before, &quotes, true)),
+                '"' => modified.push_str(quoter.quote(before, &quotes, !inner)),
+                '\'' => modified.push_str(quoter.quote(before, &quotes, inner)),
                 c => modified.push(c),
             }
             before = Some(c);
