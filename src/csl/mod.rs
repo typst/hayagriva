@@ -3250,11 +3250,15 @@ mod tests {
             locale_files: &[],
         });
 
-        let actual = finished.citations.iter().map(|c| {
-            let mut s = String::new();
-            c.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
-            s
-        }).collect::<Vec<_>>();
+        let actual = finished
+            .citations
+            .iter()
+            .map(|c| {
+                let mut s = String::new();
+                c.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
+                s
+            })
+            .collect::<Vec<_>>();
 
         assert_eq!(actual, ["(A 33)", "(ibid.)", "(ibid. 34)"]);
     }
@@ -3332,11 +3336,15 @@ mod tests {
             locale_files: &[],
         });
 
-        let actual = finished.citations.iter().map(|c| {
-            let mut s = String::new();
-            c.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
-            s
-        }).collect::<Vec<_>>();
+        let actual = finished
+            .citations
+            .iter()
+            .map(|c| {
+                let mut s = String::new();
+                c.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
+                s
+            })
+            .collect::<Vec<_>>();
 
         assert_eq!(actual, ["(A 33)", "(ibid.)", "(ibid.)"]);
     }
