@@ -22,8 +22,13 @@
       <key variable="issued" />
     </sort>
     <layout prefix="[" suffix="]" delimiter=", ">
-      <text variable="citation-label" />
-      <text variable="year-suffix" />
+      <group delimiter=", ">
+        <group>
+            <text variable="citation-label" />
+            <text variable="year-suffix" />
+        </group>
+        <text variable="locator" />
+      </group>
     </layout>
   </citation>
 </style>

@@ -3312,4 +3312,74 @@ mod tests {
         assert_eq!(c1, "Downs (1957)");
         assert_eq!(c2, "Brady & Collier (2010)");
     }
+    #[test]
+    #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/48
+    fn issue_48() {
+        let bibtex = r#"@article{chenTransMorphTransformerUnsupervised2021,
+        title = {{{TransMorph}}: {{Transformer}} for Unsupervised Medical Image Registration},
+        author = {Chen, Junyu and Frey, Eric C. and He, Yufan and Segars, William P. and Li, Ye and Du, Yong},
+        date = {2021},
+        }
+
+        @article{chenViTVNetVisionTransformer2021,
+        title = {{{ViT-V-Net}}: {{Vision Transformer}} for {{Unsupervised Volumetric Medical Image Registration}}},
+        author = {Chen, Junyu and He, Yufan and Frey, Eric C. and Li, Ye and Du, Yong},
+        date = {2021},
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let alphanumeric = archive::ArchivedStyle::Alphanumeric.get();
+        let citationberg::Style::Independent(alphanumeric) = alphanumeric else {
+            unreachable!()
+        };
+
+        let mut driver = BibliographyDriver::new();
+
+        let locator = SpecificLocator(Locator::Custom, LocatorPayload::Str("12"));
+        for entry in library.iter() {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_locator(entry, Some(locator))],
+                &alphanumeric,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_locator(library.iter().next().unwrap(), None)],
+            &alphanumeric,
+            None,
+            &[],
+            None,
+        ));
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &alphanumeric,
+            locale: None,
+            locale_files: &[],
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+        let mut c3 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[2]
+            .citation
+            .write_buf(&mut c3, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "[Che+21a, 12]");
+        assert_eq!(c2, "[Che+21b, 12]");
+        assert_eq!(c3, "[Che+21a]");
+    }
 }
