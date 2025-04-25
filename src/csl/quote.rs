@@ -4,6 +4,31 @@ use citationberg::TermForm;
 use super::taxonomy::EntryLike;
 use super::Context;
 
+pub fn apply_quotes(s: &str, quotes: &SmartQuotes, inner: bool) -> String {
+    let mut res = String::with_capacity(s.len());
+    let mut before = None;
+    let mut quoter = SmartQuoter::new();
+    let mut escape = false;
+    for c in s.chars() {
+        match c {
+            '"' | '\'' if escape => {
+                res.push(c);
+                escape = false
+            }
+            '"' => res.push_str(quoter.quote(before, &quotes, !inner)),
+            '\'' => res.push_str(quoter.quote(before, &quotes, inner)),
+            '\\' if escape => {
+                res.push('\\');
+                escape = false
+            }
+            '\\' => escape = true,
+            c => res.push(c),
+        }
+        before = Some(c);
+    }
+    res
+}
+
 /// A smart quote substitutor with zero lookahead.
 #[derive(Debug, Clone)]
 pub struct SmartQuoter {
@@ -144,6 +169,49 @@ impl<'s> SmartQuotes<'s> {
             self.double_close
         } else {
             self.single_close
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const US_MARKS: SmartQuotes = SmartQuotes {
+        single_open: "‘",
+        single_close: "’",
+        double_open: "“",
+        double_close: "”",
+    };
+    const DE_MARKS: SmartQuotes = SmartQuotes {
+        single_open: "‚",
+        single_close: "‘",
+        double_open: "„",
+        double_close: "“",
+    };
+
+    #[test]
+    fn typst_tests() {
+        let cases = vec![
+            ("“The horse eats no cucumber salad” was the first sentence ever uttered on the ‘telephone.’", r#""The horse eats no cucumber salad" was the first sentence ever uttered on the 'telephone.'"#, &US_MARKS),
+            ("„Das Pferd frisst keinen Gurkensalat“ war der erste jemals am ‚Fernsprecher‘ gesagte Satz.", r#""Das Pferd frisst keinen Gurkensalat" war der erste jemals am 'Fernsprecher' gesagte Satz."#, &DE_MARKS),
+            ("“”", r#""""#, &US_MARKS),
+            ("The 5′11″ ‘quick’ brown fox jumps over the “lazy” dog’s ear.", r#"The 5'11" 'quick' brown fox jumps over the "lazy" dog's ear."#, &US_MARKS),
+            ("He said “I’m a big fella.”", r#"He said "I'm a big fella.""#, &US_MARKS),
+            (r#"The 5'11" ‘quick' brown fox jumps over the "lazy’ dog's ear."#, r#"The 5\'11\" 'quick\' brown fox jumps over the \"lazy' dog\'s ear."#, &US_MARKS),
+            ("“Hello”/“World”", r#""Hello"/"World""#, &US_MARKS),
+            ("‘“Hello”/“World”’", r#"'"Hello"/"World"'"#, &US_MARKS),
+            ("“”Hello“/”World“”", r#"""Hello"/"World"""#, &US_MARKS),
+            ("Straight “A”s and “B”s", r#"Straight "A"s and "B"s"#, &US_MARKS),
+            ("A 2″ nail.", r#"A 2" nail."#, &US_MARKS),
+            ("‘A 2″ nail.’", r#"'A 2" nail.'"#, &US_MARKS),
+            ("“A 2” nail.“", r#""A 2" nail.""#, &US_MARKS),
+            ("“a [“b”] c”", r#""a ["b"] c""#, &US_MARKS),
+            ("“a b”c“d e”", r#""a b"c"d e""#, &US_MARKS)
+        ];
+
+        for (expected, input, quotes) in cases {
+            assert_eq!(expected, apply_quotes(input, quotes, false));
         }
     }
 }
