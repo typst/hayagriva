@@ -95,18 +95,6 @@ fn is_opening_bracket(c: char) -> bool {
     matches!(c, '(' | '{' | '[')
 }
 
-/// Whether a character is interpreted as a newline by Typst.
-#[inline]
-pub fn is_newline(character: char) -> bool {
-    matches!(
-        character,
-        // Line Feed, Vertical Tab, Form Feed, Carriage Return.
-        '\n' | '\x0B' | '\x0C' | '\r' |
-        // Next Line, Line Separator, Paragraph Separator.
-        '\u{0085}' | '\u{2028}' | '\u{2029}'
-    )
-}
-
 /// Decides which quotes to substitute smart quotes with.
 pub struct SmartQuotes<'s> {
     /// The opening single quote.
