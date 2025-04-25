@@ -3179,7 +3179,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "archive")]
-    fn ibid_handling() {
+    fn ibid_handling_with_deutsche_sprache_csl() {
         let bibtex = r#"@book{ITEM,
             title = {A},
             type = {book},
