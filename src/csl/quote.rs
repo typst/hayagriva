@@ -1,9 +1,10 @@
-use citationberg::{taxonomy::OtherTerm, TermForm};
+use citationberg::taxonomy::OtherTerm;
+use citationberg::TermForm;
 
-use super::{taxonomy::EntryLike, Context};
+use super::taxonomy::EntryLike;
+use super::Context;
 
 /// A smart quote substitutor with zero lookahead.
-/// TODO: Move to its own crate.
 #[derive(Debug, Clone)]
 pub struct SmartQuoter {
     /// The amount of quotes that have been opened.
@@ -50,7 +51,6 @@ impl SmartQuoter {
         // previous char does not indicate a nested quotation, close it.
         if opened == Some(double)
             && !before.is_whitespace()
-            && !is_newline(before)
             && !is_opening_bracket(before)
         {
             self.pop();
@@ -90,6 +90,7 @@ impl Default for SmartQuoter {
 }
 
 /// Whether the character is an opening bracket, parenthesis, or brace.
+#[inline]
 fn is_opening_bracket(c: char) -> bool {
     matches!(c, '(' | '{' | '[')
 }
@@ -119,19 +120,8 @@ pub struct SmartQuotes<'s> {
 }
 
 impl<'s> SmartQuotes<'s> {
-    /// Create a new `Quotes` struct with the given quotes, optionally falling
-    /// back to the defaults for a language and region.
-    ///
-    /// The language should be specified as an all-lowercase ISO 639-1 code, the
-    /// region as an all-uppercase ISO 3166-alpha2 code.
-    ///
-    /// Currently, the supported languages are: English, Czech, Danish, German,
-    /// Swiss / Liechtensteinian German, Estonian, Icelandic, Italian, Latin,
-    /// Lithuanian, Latvian, Slovak, Slovenian, Spanish, Bosnian, Finnish,
-    /// Swedish, French, Swiss French, Hungarian, Polish, Romanian, Japanese,
-    /// Traditional Chinese, Russian, Norwegian, Hebrew and Croatian.
-    ///
-    /// For unknown languages, the English quotes are used as fallback.
+    /// Create a new `Quotes` struct with quotes taken from the current CSL locale's
+    /// terms, falling back to `"` and `'` when not available.
     pub fn get<T: EntryLike>(ctx: &'s Context<'s, T>) -> Self {
         let default = ("'", "\"");
 
