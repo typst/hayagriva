@@ -15,8 +15,8 @@ pub fn apply_quotes(s: &str, quotes: &SmartQuotes, inner: bool) -> String {
                 res.push(c);
                 escape = false
             }
-            '"' => res.push_str(quoter.quote(before, &quotes, !inner)),
-            '\'' => res.push_str(quoter.quote(before, &quotes, inner)),
+            '"' => res.push_str(quoter.quote(before, quotes, !inner)),
+            '\'' => res.push_str(quoter.quote(before, quotes, inner)),
             '\\' if escape => {
                 res.push('\\');
                 escape = false
