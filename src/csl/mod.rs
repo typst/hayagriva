@@ -2215,10 +2215,6 @@ pub enum IbidState {
 }
 
 impl IbidState {
-    fn is_ibid_with_locator(self) -> bool {
-        matches!(self, Self::IbidWithLocator | Self::Ibid)
-    }
-
     fn with_last<T>(this: &CitationItem<T>, last: Option<&CitationItem<T>>) -> Self
     where
         T: EntryLike + PartialEq,
@@ -3179,5 +3175,55 @@ mod tests {
         assert_eq!(c1, "[Che+21a, 12]");
         assert_eq!(c2, "[Che+21b, 12]");
         assert_eq!(c3, "[Che+21a]");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    fn ibid_handling_with_deutsche_sprache_csl() {
+        let bibtex = r#"@book{ITEM,
+            title = {A},
+            type = {book},
+            }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let style = archive::ArchivedStyle::DeutscheSprache.get();
+        let citationberg::Style::Independent(style) = style else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        let entry = library.iter().next().unwrap();
+
+        for locator in ["33", "33", "34"] {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::new(
+                    entry,
+                    Some(SpecificLocator(Locator::Page, LocatorPayload::Str(locator))),
+                    None,
+                    false,
+                    Some(CitePurpose::Prose),
+                )],
+                &style,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &style,
+            locale: None,
+            locale_files: &[],
+        });
+
+        let actual = finished
+            .citations
+            .iter()
+            .map(|c| {
+                let mut s = String::new();
+                c.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
+                s
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual, ["(33)", "()", "(34)"]);
     }
 }
