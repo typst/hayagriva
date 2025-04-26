@@ -367,7 +367,9 @@ impl RenderCsl for Names {
             }
 
             do_label(NameLabelPosition::BeforeName, ctx);
+            let idx = ctx.push_format(cs_name.formatting);
             add_names(self, ctx, persons, &cs_name, forms, variable);
+            ctx.pop_format(idx);
             do_label(NameLabelPosition::AfterName, ctx);
         }
 

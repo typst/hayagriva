@@ -625,7 +625,9 @@ where
 mod citeproc_bib {
     use core::fmt;
 
-    use citationberg::{Display, FontStyle, FontVariant, FontWeight, VerticalAlign};
+    use citationberg::{
+        Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
+    };
     use hayagriva::{BufWriteFormat, Elem, ElemChild, Formatting};
 
     pub(super) fn render(
@@ -739,6 +741,13 @@ mod citeproc_bib {
         match formatting.font_variant {
             FontVariant::SmallCaps => css.push_str("font-variant:small-caps;"),
             FontVariant::Normal => {}
+        }
+
+        match formatting.text_decoration {
+            // NOTE: No existing citeproc tests use this, so this is guesswork.
+            // However, we can use this in local tests.
+            TextDecoration::Underline => push_elem("<u>", "</u>"),
+            TextDecoration::None => {}
         }
 
         if !css.is_empty() {

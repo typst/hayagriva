@@ -1,0 +1,93 @@
+
+>>===== MODE =====>>
+bibliography
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+<div class="csl-bib-body">
+  <div class="csl-entry">
+    <b>Doe Co.</b>
+    <span style="font-variant:small-caps;">Doe Co.</span>
+    <i>Doe Co.</i>
+    <i>Doe Co.</i>
+    <b><i><span style="font-variant:small-caps;">Doe Co.</span></i></b>
+    <sup><b><i><u><span style="font-variant:small-caps;">Doe Co.</span></u></i></b></sup>
+  </div>
+</div>
+<<===== RESULT =====<<
+
+
+>>===== CSL =====>>
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0">
+   <info>
+      <id />
+      <title />
+      <updated>2009-08-10T04:49:00+09:00</updated>
+   </info>
+   <citation>
+      <layout>
+        <text value="Bib only" />
+      </layout>
+   </citation>
+   <bibliography>
+      <layout>
+        <names variable="author">
+          <name font-weight="bold"/>
+        </names>
+        <names variable="author">
+          <name font-variant="small-caps"/>
+        </names>
+        <names variable="author">
+          <name font-style="italic"/>
+        </names>
+        <names variable="author" font-style="italic">
+          <name/>
+        </names>
+        <names variable="author">
+          <name font-weight="bold" font-variant="small-caps" >
+            <name-part name="family" font-style="italic"/>
+          </name>
+        </names>
+        <names variable="author">
+          <name font-style="italic" text-decoration="underline" vertical-align="sup">
+            <name-part name="family" font-weight="bold" font-variant="small-caps"/>
+          </name>
+        </names>
+      </layout>
+   </bibliography>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "author": [
+            {
+                "family": "Doe Co.",
+                "isInstitution": true
+            }
+        ],
+        "id": "ITEM-1",
+        "issued": {
+            "date-parts": [
+                [
+                    "1965",
+                    "6",
+                    "1"
+                ]
+            ]
+        },
+        "title": "His Collectively Anonymous Life",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<
