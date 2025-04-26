@@ -596,25 +596,11 @@ fn write_name<T: EntryLike>(
 
     // Combine the name formatting with specific part formatting
     let first_format = first_part
-        .map(|p| {
-            let mut fmt = p.formatting;
-            // If the name has font-variant set but the part doesn't, inherit it
-            if name_formatting.font_variant.is_some() && fmt.font_variant.is_none() {
-                fmt.font_variant = name_formatting.font_variant;
-            }
-            fmt
-        })
+        .map(|p| p.formatting.apply(name_formatting))
         .unwrap_or(name_formatting);
 
     let family_format = family_part
-        .map(|p| {
-            let mut fmt = p.formatting;
-            // If the name has font-variant set but the part doesn't, inherit it
-            if name_formatting.font_variant.is_some() && fmt.font_variant.is_none() {
-                fmt.font_variant = name_formatting.font_variant;
-            }
-            fmt
-        })
+        .map(|p| p.formatting.apply(name_formatting))
         .unwrap_or(name_formatting);
 
     let first_case = first_part.map(|p| p.text_case).unwrap_or_default();
