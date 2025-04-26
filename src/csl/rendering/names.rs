@@ -367,7 +367,9 @@ impl RenderCsl for Names {
             }
 
             do_label(NameLabelPosition::BeforeName, ctx);
+            let idx = ctx.push_format(cs_name.formatting);
             add_names(self, ctx, persons, &cs_name, forms, variable);
+            ctx.pop_format(idx);
             do_label(NameLabelPosition::AfterName, ctx);
         }
 
@@ -588,26 +590,15 @@ fn write_name<T: EntryLike>(
     let hyphen_init = ctx.style.csl.settings.initialize_with_hyphen;
     let sort_sep = name_opts.sort_separator;
 
-    // Get the formatting from the name element itself
-    let name_formatting = cs_name.formatting;
-
     let first_part = cs_name.name_part_given();
     let family_part = cs_name.name_part_family();
-
-    // Combine the name formatting with specific part formatting
-    let first_format = first_part
-        .map(|p| p.formatting.apply(name_formatting))
-        .unwrap_or(name_formatting);
-
-    let family_format = family_part
-        .map(|p| p.formatting.apply(name_formatting))
-        .unwrap_or(name_formatting);
-
+    let first_format = first_part.map(|p| p.formatting).unwrap_or_default();
     let first_case = first_part.map(|p| p.text_case).unwrap_or_default();
     let first_affixes = [
         first_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
         first_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
+    let family_format = family_part.map(|p| p.formatting).unwrap_or_default();
     let family_case = family_part.map(|p| p.text_case).unwrap_or_default();
     let family_affixes = [
         family_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
