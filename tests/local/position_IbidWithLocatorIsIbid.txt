@@ -1,0 +1,80 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+>>===== RESULT =====>>
+A 33
+ibid.
+ibid.
+<<===== RESULT =====<<
+
+>>===== CITATION-ITEMS =====>>
+[
+    [
+        {
+            "id": "ITEM-1",
+            "locator": "33"
+        }
+    ],
+    [
+        {
+            "id": "ITEM-1",
+            "locator": "33"
+        }
+    ],
+    [
+        {
+            "id": "ITEM-1",
+            "locator": "34"
+        }
+    ]
+]
+<<===== CITATION-ITEMS =====<<
+
+>>===== CSL =====>>
+<style
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout delimiter="; ">
+      <choose>
+        <if position="ibid">
+          <text term="ibid" />
+        </if>
+        <else-if position="ibid-with-locator">
+          <group delimiter=" ">
+            <text term="ibid" />
+            <text variable="locator"/>
+          </group>
+        </else-if>
+        <else>
+          <group delimiter=" ">
+            <text variable="title" />
+            <text variable="locator"/>
+          </group>
+        </else>
+      </choose>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "ITEM-1",
+        "title": "A",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+>>===== VERSION =====>>
+1.0.2
+<<===== VERSION =====<<

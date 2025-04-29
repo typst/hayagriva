@@ -9,6 +9,7 @@ affix_TextNodeWithMacro
 bugreports_Abnt
 bugreports_ArabicLocale
 bugreports_AsaSpacing
+bugreports_AsmJournals
 bugreports_AuthorYear
 bugreports_BadCitationUpdate
 bugreports_ChineseCharactersFamilyOnlyPluralLabel
