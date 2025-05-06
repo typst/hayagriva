@@ -5,12 +5,42 @@ use citationberg::{
     DemoteNonDroppingParticle, InheritableNameOptions, LocaleCode, LongShortForm, Sort,
     SortDirection, SortKey,
 };
+use rust_icu_ucol::UCollator;
 
 use crate::csl::rendering::RenderCsl;
 use crate::csl::BufWriteFormat;
 
 use super::taxonomy::EntryLike;
 use super::{CitationItem, InstanceContext, StyleContext};
+
+trait CollationOrd: Ord {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering;
+}
+
+impl CollationOrd for str {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
+        UCollator::try_from(&locale.0 as &str)
+            .and_then(|uc| uc.strcoll_utf8(self, other))
+            .unwrap_or_else(|_| self.cmp(other))
+    }
+}
+
+impl<T: CollationOrd> CollationOrd for Option<T> {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
+        match (self, other) {
+            (Some(a), Some(b)) => a.collation_cmp(b, locale),
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => Ordering::Equal,
+        }
+    }
+}
+
+impl CollationOrd for String {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
+        CollationOrd::collation_cmp(&self as &str, &other, locale)
+    }
+}
 
 impl StyleContext<'_> {
     /// Retrieve the ordering of two entries according to the given sort key.
@@ -32,7 +62,7 @@ impl StyleContext<'_> {
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
 
-                a.cmp(&b)
+                a.collation_cmp(&b, self.locale())
             }
             SortKey::Variable { variable: Variable::Date(d), .. } => {
                 let a = a.entry.resolve_date_variable(*d);
@@ -133,7 +163,7 @@ impl StyleContext<'_> {
                 let a_rendered = render(a, a_idx);
                 let b_rendered = render(b, b_idx);
 
-                a_rendered.cmp(&b_rendered)
+                a_rendered.collation_cmp(&b_rendered, self.locale())
             }
         };
 
