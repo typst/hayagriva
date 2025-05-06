@@ -31,11 +31,7 @@ pub enum DisambiguatedNameForm {
 }
 
 impl DisambiguatedNameForm {
-    fn from<T: EntryLike>(option: &citationberg::NameOptions, ctx: &Context<T>) -> Self {
-        if ctx.instance.sorting {
-            return Self::LongFull;
-        }
-
+    fn from(option: &citationberg::NameOptions) -> Self {
         let form = option.form;
 
         if option.initialize_with.is_some() && option.initialize {
@@ -285,7 +281,7 @@ impl RenderCsl for Names {
         let cs_name = self.name().cloned().unwrap_or_default();
         let options = cs_name.options(ctx.writing.name_options.last());
 
-        let default_form = DisambiguatedNameForm::from(&options, ctx);
+        let default_form = DisambiguatedNameForm::from(&options);
 
         // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
