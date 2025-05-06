@@ -442,7 +442,7 @@ impl Person {
     /// Whether the name contains CJK characters.
     pub fn is_cjk(&self) -> bool {
         self.name.chars().any(is_cjk)
-            || self.given_name.as_ref().map_or(false, |gn| gn.chars().any(is_cjk))
+            || self.given_name.as_ref().is_some_and(|gn| gn.chars().any(is_cjk))
     }
 
     /// Get the name without the leading article.

@@ -139,7 +139,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
             for item in items.iter() {
                 let entry = &item.entry;
 
-                let is_near_note = citation.note_number.map_or(false, |_| {
+                let is_near_note = citation.note_number.is_some_and(|_| {
                     res.iter()
                         .rev()
                         .take(style.csl.citation.near_note_distance as usize)
@@ -446,7 +446,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
 
                     if let Some(suffix) = cite.request.suffix() {
                         let print = last_text_mut_child(&mut elem_children)
-                            .map_or(true, |t| !t.text.ends_with(suffix));
+                            .is_none_or(|t| !t.text.ends_with(suffix));
                         if print {
                             elem_children.push(
                                 Formatted { text: suffix.to_string(), formatting }.into(),
@@ -592,7 +592,7 @@ pub fn standalone_citation<T: EntryLike>(
         }
 
         if let Some(suffix) = style.csl.citation.layout.suffix.as_ref() {
-            let print = res.last_text().map_or(true, |t| !t.text.ends_with(suffix));
+            let print = res.last_text().is_none_or(|t| !t.text.ends_with(suffix));
             if print {
                 res.0.push(Formatted { text: suffix.clone(), formatting }.into());
             }
@@ -1341,8 +1341,8 @@ impl<'a> StyleContext<'a> {
             }
             (Some(CitePurpose::Prose), _) => {
                 do_author(&mut ctx);
-                if !self.csl.citation.layout.prefix.as_ref().map_or(false, |f| {
-                    f.chars().next().map_or(false, char::is_whitespace)
+                if !self.csl.citation.layout.prefix.as_ref().is_some_and(|f| {
+                    f.chars().next().is_some_and(char::is_whitespace)
                 }) {
                     ctx.ensure_space();
                 }
@@ -2411,13 +2411,13 @@ impl<'a, T: EntryLike> Context<'a, T> {
             }
         }
 
-        let ends_with_space = last_buffer(&mut self.writing).map_or(false, |s| {
-            s.chars().next_back().map_or(false, |c| c.is_whitespace())
+        let ends_with_space = last_buffer(&mut self.writing).is_some_and(|s| {
+            s.chars().next_back().is_some_and(|c| c.is_whitespace())
         });
 
         // Punctuation eats spaces. Whitespace should be trimmed.
         if ends_with_space
-            && s.chars().next().map_or(false, |c| {
+            && s.chars().next().is_some_and(|c| {
                 c.is_whitespace() || c == '.' || c == ',' || c == ']' || c == ')'
             })
         {
@@ -2570,7 +2570,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Set the case of the next text.
     fn push_case(&mut self, case: Option<TextCase>) -> CaseIdx {
-        if case.map_or(true, |c| c.is_language_independent())
+        if case.is_none_or(|c| c.is_language_independent())
             || self
                 .instance
                 .entry
@@ -2775,7 +2775,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             .citation
             .layout
             .will_render(self, StandardVariable::YearSuffix.into())
-            && !self.style.csl.bibliography.as_ref().map_or(false, |b| {
+            && !self.style.csl.bibliography.as_ref().is_some_and(|b| {
                 b.layout.will_render(self, StandardVariable::YearSuffix.into())
             })
     }
