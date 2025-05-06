@@ -38,7 +38,7 @@ impl<T: CollationOrd> CollationOrd for Option<T> {
 
 impl CollationOrd for String {
     fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
-        CollationOrd::collation_cmp(&self as &str, &other, locale)
+        CollationOrd::collation_cmp(self as &str, other, locale)
     }
 }
 
