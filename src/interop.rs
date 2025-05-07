@@ -7,6 +7,7 @@ use tex::{
     Chunk, ChunksExt, DateValue, EditorType, PermissiveType, RetrievalError, Spanned,
     TypeError,
 };
+
 use url::Url;
 
 use super::types::*;
@@ -276,7 +277,10 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
-        // TODO: entry.orig_language into item.language = Some()
+        // If we cannot parse the language, ignore it
+        if let Some(Ok(l)) = map_res(entry.language())?.map(|l| l.parse()) {
+            item.language = Some(l)
+        }
 
         if let Some(a) =
             map_res(entry.afterword())?.map(|a| a.iter().map(Into::into).collect())
