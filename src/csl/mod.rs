@@ -92,7 +92,9 @@ impl<'a, T: EntryLike, P> BibliographyDriver<'a, T, P> {
 }
 
 /// Implementations for finishing the bibliography.
-impl<T: EntryLike + Hash + PartialEq + Eq + Debug, P: Copy + PartialEq> BibliographyDriver<'_, T, P> {
+impl<T: EntryLike + Hash + PartialEq + Eq + Debug, P: Copy + PartialEq>
+    BibliographyDriver<'_, T, P>
+{
     /// Render the bibliography.
     pub fn finish(mut self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
@@ -419,7 +421,9 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug, P: Copy + PartialEq> Bibliogr
                             if let Some(delim) = cite
                                 .items
                                 .get(i)
-                                .and_then(|i: &SpeculativeItemRender<T, P>| i.delim_override)
+                                .and_then(|i: &SpeculativeItemRender<T, P>| {
+                                    i.delim_override
+                                })
                                 .or(cite
                                     .request
                                     .style
@@ -2036,7 +2040,10 @@ struct CiteProperties<'a, P> {
 }
 
 impl<'a, P> CiteProperties<'a, P> {
-    fn for_sorting(locator: Option<SpecificLocator<'a, P>>, citation_number: usize) -> Self {
+    fn for_sorting(
+        locator: Option<SpecificLocator<'a, P>>,
+        citation_number: usize,
+    ) -> Self {
         Self {
             certain: CertainCiteProperties::new(),
             speculative: SpeculativeCiteProperties::speculate(
@@ -2220,7 +2227,10 @@ pub enum IbidState {
 }
 
 impl IbidState {
-    fn with_last<T, P>(this: &CitationItem<T, P>, last: Option<&CitationItem<T, P>>) -> Self
+    fn with_last<T, P>(
+        this: &CitationItem<T, P>,
+        last: Option<&CitationItem<T, P>>,
+    ) -> Self
     where
         T: EntryLike + PartialEq,
         P: PartialEq,

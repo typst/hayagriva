@@ -397,7 +397,10 @@ impl RenderCsl for Names {
         false
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
 

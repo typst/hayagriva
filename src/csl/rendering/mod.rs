@@ -30,9 +30,16 @@ pub(crate) trait RenderCsl {
     /// Render the element given the context's Entry into the context's buffer.
     fn render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>);
     /// Check whether the element will render a given variable.
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool;
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool;
     /// Check whether the element will print something and what.
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo);
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo);
 }
 
 impl RenderCsl for citationberg::Text {
@@ -140,7 +147,11 @@ impl RenderCsl for citationberg::Text {
         );
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         let Some(target) = ResolvedTextTarget::compute(self, ctx) else {
             return false;
         };
@@ -158,7 +169,10 @@ impl RenderCsl for citationberg::Text {
         }
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         // If suppress_queried_variables is set to true, we need to perform a
         // silent lookup, otherwise we need to perform a regular lookup.
         let suppressing = ctx.writing.suppress_queried_variables;
@@ -347,7 +361,11 @@ impl RenderCsl for citationberg::Number {
         );
     }
 
-    fn will_render<T: EntryLike, P>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         match ctx.instance.kind {
             Some(SpecialForm::VarOnly(Variable::Number(n)))
                 if self.variable != NumberOrPageVariable::Number(n) =>
@@ -367,7 +385,10 @@ impl RenderCsl for citationberg::Number {
         var == Variable::from(self.variable)
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         if self.will_render(ctx, self.variable.into()) {
             // If suppress_queried_variables is set to true, we need to perform a
             // silent lookup, otherwise we need to perform a regular lookup.
@@ -484,11 +505,18 @@ impl RenderCsl for citationberg::Label {
         }
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, _ctx: &mut Context<T, P>, _var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        _ctx: &mut Context<T, P>,
+        _var: Variable,
+    ) -> bool {
         false
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         match ctx.instance.kind {
             Some(SpecialForm::VarOnly(Variable::Number(n)))
                 if self.variable != NumberOrPageVariable::Number(n) =>
@@ -679,7 +707,11 @@ impl RenderCsl for citationberg::Date {
         ctx.commit_elem(depth, self.display, Some(ElemMeta::Date));
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         match ctx.instance.kind {
             Some(SpecialForm::VarOnly(Variable::Date(d))) if self.variable != Some(d) => {
                 return false
@@ -694,7 +726,10 @@ impl RenderCsl for citationberg::Date {
         Some(var) == self.variable.map(Variable::Date)
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
         let Some(variable) = self.variable else {
@@ -874,14 +909,21 @@ impl RenderCsl for citationberg::Choose {
         });
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         choose_children(self, ctx, |children, ctx| {
             children.iter().any(|c| c.will_render(ctx, var))
         })
         .unwrap_or_default()
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         choose_children(self, ctx, |children, ctx| {
             let mut info = UsageInfo::default();
             let mut will_print = false;
@@ -1195,11 +1237,18 @@ impl RenderCsl for citationberg::Group {
         }
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         self.children.iter().any(|e| e.will_render(ctx, var))
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         let mut info = UsageInfo::default();
         let mut will_print = false;
 
@@ -1235,7 +1284,11 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
         }
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         match self {
             citationberg::LayoutRenderingElement::Text(text) => {
                 text.will_render(ctx, var)
@@ -1261,7 +1314,10 @@ impl RenderCsl for citationberg::LayoutRenderingElement {
         }
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         match self {
             citationberg::LayoutRenderingElement::Text(text) => text.will_have_info(ctx),
             citationberg::LayoutRenderingElement::Number(num) => num.will_have_info(ctx),
@@ -1293,11 +1349,18 @@ impl RenderCsl for citationberg::Layout {
         ctx.pop_format(format_idx);
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         self.elements.iter().any(|e| e.will_render(ctx, var))
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         let mut info = UsageInfo::default();
         let mut will_print = false;
 
@@ -1319,14 +1382,21 @@ impl RenderCsl for citationberg::RenderingElement {
         }
     }
 
-    fn will_render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>, var: Variable) -> bool {
+    fn will_render<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+        var: Variable,
+    ) -> bool {
         match self {
             citationberg::RenderingElement::Layout(l) => l.will_render(ctx, var),
             citationberg::RenderingElement::Other(o) => o.will_render(ctx, var),
         }
     }
 
-    fn will_have_info<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         match self {
             citationberg::RenderingElement::Layout(l) => l.will_have_info(ctx),
             citationberg::RenderingElement::Other(o) => o.will_have_info(ctx),
