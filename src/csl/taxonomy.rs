@@ -40,7 +40,7 @@ pub trait EntryLike {
     fn key(&self) -> Cow<'_, str>;
 }
 
-impl<'a, T: EntryLike> InstanceContext<'a, T> {
+impl<'a, T: EntryLike, P: Copy> InstanceContext<'a, T, P> {
     pub(super) fn resolve_number_variable(
         &self,
         variable: NumberVariable,
