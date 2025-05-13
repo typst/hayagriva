@@ -1080,12 +1080,8 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     self.idx += 1;
 
                     Some(
-                        self.ctx
-                            .instance
-                            .cite_props
-                            .speculative
-                            .locator
-                            .map(|l| l.0) == Some(loc),
+                        self.ctx.instance.cite_props.speculative.locator.map(|l| l.0)
+                            == Some(loc),
                     )
                 } else {
                     self.next_case();

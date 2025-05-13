@@ -1341,9 +1341,14 @@ impl<'a> StyleContext<'a> {
             }
             (Some(CitePurpose::Prose), _) => {
                 do_author(&mut ctx);
-                if !self.csl.citation.layout.prefix.as_ref().is_some_and(|f| {
-                    f.chars().next().is_some_and(char::is_whitespace)
-                }) {
+                if !self
+                    .csl
+                    .citation
+                    .layout
+                    .prefix
+                    .as_ref()
+                    .is_some_and(|f| f.chars().next().is_some_and(char::is_whitespace))
+                {
                     ctx.ensure_space();
                 }
 
@@ -2411,9 +2416,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
             }
         }
 
-        let ends_with_space = last_buffer(&mut self.writing).is_some_and(|s| {
-            s.chars().next_back().is_some_and(|c| c.is_whitespace())
-        });
+        let ends_with_space = last_buffer(&mut self.writing)
+            .is_some_and(|s| s.chars().next_back().is_some_and(|c| c.is_whitespace()));
 
         // Punctuation eats spaces. Whitespace should be trimmed.
         if ends_with_space

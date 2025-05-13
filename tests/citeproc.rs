@@ -488,8 +488,7 @@ where
         .flat_map(|i| i.0.values())
         .filter_map(|v| if let csl_json::Value::Date(d) = v { Some(d) } else { None })
         .any(|d| {
-            csl_json::FixedDateRange::try_from(d.clone())
-                .is_ok_and(|d| d.end.is_some())
+            csl_json::FixedDateRange::try_from(d.clone()).is_ok_and(|d| d.end.is_some())
         });
 
     if !can_test {
