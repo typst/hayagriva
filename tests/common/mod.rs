@@ -87,8 +87,7 @@ pub fn ensure_repo(
             .expect("Please ensure git is installed");
 
         if !status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Failed to clone repo. Is git installed correnctly and is the internet working?",
             ));
         }

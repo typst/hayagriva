@@ -299,9 +299,9 @@ mod tests {
         T: Debug + PartialEq,
     {
         if exp != found {
-            println!("source:   {:#?}", src);
-            println!("expected: {:#?}", exp);
-            println!("found:    {:#?}", found);
+            println!("source:   {src:#?}");
+            println!("expected: {exp:#?}");
+            println!("found:    {found:#?}");
             panic!("test failed");
         }
     }

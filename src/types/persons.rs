@@ -426,7 +426,7 @@ impl Person {
     pub fn name_particles(&self) -> Option<Cow<str>> {
         match (&self.prefix, self.name_particle()) {
             (Some(dropping), Some(non_dropping)) => {
-                Some(Cow::Owned(format!("{} {}", dropping, non_dropping)))
+                Some(Cow::Owned(format!("{dropping} {non_dropping}")))
             }
             (Some(dropping), None) => Some(Cow::Borrowed(dropping.as_str())),
             (None, Some(non_dropping)) => Some(Cow::Borrowed(non_dropping)),

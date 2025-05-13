@@ -298,7 +298,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                 let Some(name_elem) = cite.items[i]
                     .rendered
                     .find_meta(ElemMeta::Names)
-                    .map(|e| format!("{:?}", e))
+                    .map(|e| format!("{e:?}"))
                 else {
                     continue;
                 };
@@ -2933,7 +2933,7 @@ mod tests {
                 continue;
             }
 
-            println!("testing {:?}", path);
+            println!("testing {path:?}");
             let style = fs::read_to_string(path).unwrap();
             let style = IndependentStyle::from_xml(&style).unwrap();
             let mut driver = BibliographyDriver::new();

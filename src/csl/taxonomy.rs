@@ -793,7 +793,7 @@ impl EntryLike for citationberg::json::Item {
                             suffix,
                         }) => Person {
                             name: if let Some(non_drop) = non_dropping_particle {
-                                format!("{} {}", non_drop, family)
+                                format!("{non_drop} {family}")
                             } else {
                                 family.clone()
                             },

@@ -379,7 +379,7 @@ impl Duration {
                     if num.is_empty() {
                         return Err(DurationError::Malformed);
                     }
-                    let str = format!("0.{}", num);
+                    let str = format!("0.{num}");
                     let ms: f64 = str.parse().map_err(|_| DurationError::Malformed)?;
                     milliseconds = (ms * 1000.0).round() as u16;
                 }

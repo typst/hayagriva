@@ -114,14 +114,14 @@ enum TestParseError {
 impl fmt::Display for TestParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TestParseError::UnknownSection(s) => write!(f, "unknown section {}", s),
+            TestParseError::UnknownSection(s) => write!(f, "unknown section {s}"),
             TestParseError::SyntaxError => write!(f, "syntax error"),
             TestParseError::WrongClosingTag => write!(f, "wrong closing tag"),
             TestParseError::MissingRequiredSection(s) => {
-                write!(f, "missing required section {}", s)
+                write!(f, "missing required section {s}")
             }
-            TestParseError::CslError(e) => write!(f, "csl error: {}", e),
-            TestParseError::JsonError(e) => write!(f, "json error: {}", e),
+            TestParseError::CslError(e) => write!(f, "csl error: {e}"),
+            TestParseError::JsonError(e) => write!(f, "json error: {e}"),
         }
     }
 }
@@ -318,7 +318,7 @@ fn test_parse_tests() {
     );
     let percentage =
         results.passed.len() as f64 / (results.total - results.skipped) as f64 * 100.0;
-    eprintln!("{:.2}% passed", percentage);
+    eprintln!("{percentage:.2}% passed");
 
     let should_pass = load_passing_tests();
     // Enable binary search.
@@ -331,9 +331,9 @@ fn test_parse_tests() {
     for test in &should_pass {
         if results.passed.binary_search(test).is_err() {
             if results.failed.binary_search(test).is_ok() {
-                eprintln!("❌ Test {} should pass but failed", test);
+                eprintln!("❌ Test {test} should pass but failed");
             } else {
-                eprintln!("🤨 Test {} should pass but was not found", test);
+                eprintln!("🤨 Test {test} should pass but was not found");
             }
 
             fail = true;
@@ -349,7 +349,7 @@ fn test_parse_tests() {
 
     // Check that the `passing` file contains all passed tests.
     for test in &results.passed {
-        eprintln!("👁️ Test {} passed but is not in the `passing` file", test);
+        eprintln!("👁️ Test {test} passed but is not in the `passing` file");
         fail = true;
     }
 
@@ -473,7 +473,7 @@ where
     let can_test = case.bib_entries.is_none()
         && case.bib_section.is_none()
         && case.citations.is_none()
-        && case.citation_items.as_ref().map_or(true, |cites| {
+        && case.citation_items.as_ref().is_none_or(|cites| {
             cites.iter().flatten().all(|i| {
                 i.prefix.is_none()
                     && i.suffix.is_none()
@@ -489,7 +489,7 @@ where
         .filter_map(|v| if let csl_json::Value::Date(d) = v { Some(d) } else { None })
         .any(|d| {
             csl_json::FixedDateRange::try_from(d.clone())
-                .map_or(false, |d| d.end.is_some())
+                .is_ok_and(|d| d.end.is_some())
         });
 
     if !can_test {
@@ -615,7 +615,7 @@ where
     } else {
         eprintln!("Test {} failed", display());
         eprintln!("Expected:\n{}", case.result);
-        eprintln!("Got:\n{}", output);
+        eprintln!("Got:\n{output}");
         false
     }
 }

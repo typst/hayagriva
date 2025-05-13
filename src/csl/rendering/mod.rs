@@ -309,7 +309,7 @@ impl RenderCsl for citationberg::Number {
 
             Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
                 MaybeTyped::Typed(num),
-            ))) => write!(ctx, "{}", num).unwrap(),
+            ))) => write!(ctx, "{num}").unwrap(),
 
             Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
                 MaybeTyped::String(s),
@@ -761,7 +761,7 @@ fn render_date_part<T: EntryLike>(
         match form {
             DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
             | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
-                write!(ctx, "{:02}", val).unwrap();
+                write!(ctx, "{val:02}").unwrap();
             }
             DateStrongAnyForm::Day(DateDayForm::Ordinal)
                 if val != 1
@@ -791,7 +791,7 @@ fn render_date_part<T: EntryLike>(
             }
             DateStrongAnyForm::Day(DateDayForm::Numeric | DateDayForm::Ordinal)
             | DateStrongAnyForm::Month(DateMonthForm::Numeric) => {
-                write!(ctx, "{}", val).unwrap();
+                write!(ctx, "{val}").unwrap();
             }
             DateStrongAnyForm::Month(DateMonthForm::Long) => {
                 if let Some(month) = OtherTerm::month((val - 1) as u8)
@@ -799,7 +799,7 @@ fn render_date_part<T: EntryLike>(
                 {
                     ctx.push_str(month);
                 } else {
-                    write!(ctx, "{}", val).unwrap();
+                    write!(ctx, "{val}").unwrap();
                 }
             }
             DateStrongAnyForm::Month(DateMonthForm::Short) => {
@@ -808,7 +808,7 @@ fn render_date_part<T: EntryLike>(
                 {
                     ctx.push_str(month);
                 } else {
-                    write!(ctx, "{}", val).unwrap();
+                    write!(ctx, "{val}").unwrap();
                 }
             }
             DateStrongAnyForm::Year(brevity) => {
