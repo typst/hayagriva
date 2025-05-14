@@ -176,7 +176,7 @@ fn renders_given_special_form<T: EntryLike>(
             // Skip if none of the variables are the author and the supplement does not contain the author either.
             let contains_v = names.variable.iter().any(|v| var == v);
             let substitute_will_render_v = is_empty
-                && names.substitute().map_or(false, |s| {
+                && names.substitute().is_some_and(|s| {
                     s.children
                         .iter()
                         .filter_map(|c| match c {

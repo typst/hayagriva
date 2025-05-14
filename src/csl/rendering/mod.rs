@@ -309,7 +309,7 @@ impl RenderCsl for citationberg::Number {
 
             Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
                 MaybeTyped::Typed(num),
-            ))) => write!(ctx, "{}", num).unwrap(),
+            ))) => write!(ctx, "{num}").unwrap(),
 
             Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
                 MaybeTyped::String(s),
@@ -473,7 +473,7 @@ impl RenderCsl for citationberg::Label {
                 };
 
                 let depth = ctx.push_elem(citationberg::Formatting::default());
-                let plural = p.as_typed().map_or(false, |p| p.is_plural());
+                let plural = p.as_typed().is_some_and(|p| p.is_plural());
 
                 let content =
                     ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
@@ -515,7 +515,7 @@ impl RenderCsl for citationberg::Label {
                 .cite_props
                 .speculative
                 .locator
-                .map_or(false, |l| l.0 == Locator::Custom)
+                .is_some_and(|l| l.0 == Locator::Custom)
         {
             return (false, UsageInfo::default());
         }
@@ -535,7 +535,7 @@ impl RenderCsl for citationberg::Label {
             }
             NumberOrPageVariable::Page(pv) => {
                 if let Some(p) = ctx.resolve_page_variable(pv) {
-                    let plural = p.as_typed().map_or(false, |p| p.is_plural());
+                    let plural = p.as_typed().is_some_and(|p| p.is_plural());
                     (
                         ctx.term(Term::from(pv), self.label.form, plural).is_some(),
                         UsageInfo::default(),
@@ -761,7 +761,7 @@ fn render_date_part<T: EntryLike>(
         match form {
             DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
             | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
-                write!(ctx, "{:02}", val).unwrap();
+                write!(ctx, "{val:02}").unwrap();
             }
             DateStrongAnyForm::Day(DateDayForm::Ordinal)
                 if val != 1
@@ -791,7 +791,7 @@ fn render_date_part<T: EntryLike>(
             }
             DateStrongAnyForm::Day(DateDayForm::Numeric | DateDayForm::Ordinal)
             | DateStrongAnyForm::Month(DateMonthForm::Numeric) => {
-                write!(ctx, "{}", val).unwrap();
+                write!(ctx, "{val}").unwrap();
             }
             DateStrongAnyForm::Month(DateMonthForm::Long) => {
                 if let Some(month) = OtherTerm::month((val - 1) as u8)
@@ -799,7 +799,7 @@ fn render_date_part<T: EntryLike>(
                 {
                     ctx.push_str(month);
                 } else {
-                    write!(ctx, "{}", val).unwrap();
+                    write!(ctx, "{val}").unwrap();
                 }
             }
             DateStrongAnyForm::Month(DateMonthForm::Short) => {
@@ -808,7 +808,7 @@ fn render_date_part<T: EntryLike>(
                 {
                     ctx.push_str(month);
                 } else {
-                    write!(ctx, "{}", val).unwrap();
+                    write!(ctx, "{val}").unwrap();
                 }
             }
             DateStrongAnyForm::Year(brevity) => {
@@ -1062,7 +1062,7 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     Some(
                         self.ctx
                             .resolve_date_variable(var)
-                            .map_or(false, |d| d.approximate),
+                            .is_some_and(|d| d.approximate),
                     )
                 } else {
                     self.next_case();
@@ -1080,13 +1080,8 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     self.idx += 1;
 
                     Some(
-                        self.ctx
-                            .instance
-                            .cite_props
-                            .speculative
-                            .locator
-                            .map(|l| l.0)
-                            .map_or(false, |l| l == loc),
+                        self.ctx.instance.cite_props.speculative.locator.map(|l| l.0)
+                            == Some(loc),
                     )
                 } else {
                     self.next_case();
@@ -1154,7 +1149,7 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                             let val = self
                                 .ctx
                                 .resolve_standard_variable(LongShortForm::default(), s);
-                            val.map_or(false, |s| {
+                            val.is_some_and(|s| {
                                 !s.to_string().chars().all(char::is_whitespace)
                             })
                         }
