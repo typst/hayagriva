@@ -279,7 +279,7 @@ impl TryFrom<&tex::Entry> for Entry {
 
         // If we cannot parse the language, ignore it
         if let Some(Ok(l)) = map_res(entry.language())?.map(|l| l.parse()) {
-            item.language = Some(l)
+            item.set_language(l);
         }
 
         if let Some(a) =
