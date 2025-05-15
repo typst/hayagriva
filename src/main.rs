@@ -198,7 +198,7 @@ fn main() {
         if input
             .extension()
             .and_then(|ext| ext.to_str())
-            .map_or(false, |ext| ext.to_lowercase() == "bib")
+            .is_some_and(|ext| ext.to_lowercase() == "bib")
         {
             format = Format::Bibtex;
         }
@@ -246,7 +246,7 @@ fn main() {
             .map(|src| match Selector::parse(src) {
                 Ok(selector) => selector,
                 Err(err) => {
-                    eprintln!("Error while parsing selector: {}", err);
+                    eprintln!("Error while parsing selector: {err}");
                     exit(7);
                 }
             });
@@ -346,9 +346,9 @@ fn main() {
 
                 if let Some(prefix) = row.first_field {
                     if alternate {
-                        println!("{:#}", prefix)
+                        println!("{prefix:#}")
                     } else {
-                        println!("{}", prefix)
+                        println!("{prefix}")
                     }
                 }
 
@@ -415,9 +415,9 @@ fn main() {
 
                 if let Some(note_number) = row.note_number {
                     if alternate {
-                        println!("{:#}", note_number)
+                        println!("{note_number:#}")
                     } else {
-                        println!("{}.", note_number)
+                        println!("{note_number}.")
                     }
                 }
 
@@ -437,7 +437,7 @@ fn main() {
                 for author in style.info().authors.iter() {
                     print!("  - {}", author.name);
                     if let Some(email) = &author.email {
-                        println!(" <{}>", email);
+                        println!(" <{email}>");
                     } else {
                         println!();
                     }
@@ -449,7 +449,7 @@ fn main() {
         }
         _ => {
             let bib = io::to_yaml_str(&bibliography).unwrap();
-            println!("{}", bib);
+            println!("{bib}");
         }
     }
 }
