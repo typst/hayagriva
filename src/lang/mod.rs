@@ -773,7 +773,7 @@ mod tests {
             } else if [14, 20, 22].contains(&i) {
                 assert_eq!(case, CharClass::MaybeNewSentence);
             } else {
-                panic!("Unexpected char class at {}: {:?}", i, case);
+                panic!("Unexpected char class at {i}: {case:?}");
             }
         }
     }
@@ -851,8 +851,7 @@ mod tests {
                 None => {
                     assert!(
                         [3, 8, 10, 13].contains(&length),
-                        "Unexpected word break at {}",
-                        length
+                        "Unexpected word break at {length}"
                     );
                 }
             }

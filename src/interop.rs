@@ -393,11 +393,26 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        // "number" is generally used in Biblatex for "The number of a journal
+        // or the volume/number of a book in a series".  However, it is also
+        // used for patent entries as "the number or record token of a patent
+        // or patent request", and is also listed as an optional field for
+        // report, manual, and dataset, where it fits the use for patent.
+        // Hayagriva uses "issue" for the journal/book sense of biblatex's number,
+        // and "serial-number" for the record number / token sense.
         if let Some(number) = map_res(entry.number())?.map(|d| d.into()) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_issue(number);
             } else {
-                item.set_issue(number);
+                match item.entry_type {
+                    EntryType::Report
+                    | EntryType::Patent
+                    | EntryType::Entry
+                    | EntryType::Reference => {
+                        item.set_keyed_serial_number("serial", number.to_string())
+                    }
+                    _ => item.set_issue(number),
+                }
             }
         }
 
@@ -556,6 +571,15 @@ impl TryFrom<&tex::Entry> for Entry {
 
         if let Some(abstract_) = map_res(entry.abstract_())? {
             item.set_abstract_(abstract_.into())
+        }
+
+        // BibLaTeX describes "type" as "The type of a manual, patent, report, or thesis.
+        // This field may also be useful for the custom types listed in § 2.1.3."
+        // Hayagriva uses "genre" for 'Type, class, or subtype of the item (e.g.
+        // "Doctoral dissertation" for a PhD thesis; "NIH Publication" for an NIH
+        // technical report)'
+        if let Some(type_) = map_res(entry.type_())? {
+            item.set_genre(type_.into());
         }
 
         if let Some(series) = map_res(entry.series())? {
