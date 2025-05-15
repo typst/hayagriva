@@ -16,7 +16,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::{fmt, iter};
 
@@ -48,7 +48,7 @@ const UPDATE_ARCHIVES_ENV_VAR: &str = "HAYAGRIVA_ARCHIVER_UPDATE";
 #[test]
 #[ignore]
 fn always_archive() {
-    ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {}", err));
+    ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {err}"));
     create_archive().unwrap_or_else(|err| panic!("{}", err));
 }
 
@@ -72,7 +72,7 @@ fn ensure_archive_up_to_date(
     item: String,
     expected: &[u8],
 ) -> Result<(), ArchivalError> {
-    let mut file = match fs::File::open(path) {
+    let file = match fs::File::open(path) {
         Ok(file) => file,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             // The archive file simply wasn't created yet.
@@ -81,6 +81,7 @@ fn ensure_archive_up_to_date(
         Err(err) => return Err(ArchivalError::Io(err)),
     };
 
+    let mut file = BufReader::new(file);
     // Special case for when we're expecting an empty file to avoid
     // overcomplicating the rest of the code. Just check if the file has a
     // single byte.
@@ -174,25 +175,24 @@ fn create_archive() -> Result<(), ArchivalError> {
 
     for (bytes, indep, _, _) in styles {
         let stripped_id = strip_id(indep.info.id.as_str());
-        let path =
-            PathBuf::from(ARCHIVE_STYLES_PATH).join(format!("{}.cbor", stripped_id));
+        let path = PathBuf::from(ARCHIVE_STYLES_PATH).join(format!("{stripped_id}.cbor"));
 
         if should_write {
             fs::write(path, bytes)?;
         } else {
-            let item = format!("style '{}.cbor'", stripped_id);
+            let item = format!("style '{stripped_id}.cbor'");
             ensure_archive_up_to_date(&path, item, &bytes)?;
         }
     }
 
     for (bytes, locale) in locales {
         let lang = locale.lang.unwrap();
-        let path = PathBuf::from(ARCHIVE_LOCALES_PATH).join(format!("{}.cbor", lang));
+        let path = PathBuf::from(ARCHIVE_LOCALES_PATH).join(format!("{lang}.cbor"));
 
         if should_write {
             fs::write(path, bytes)?;
         } else {
-            let item = format!("locale '{}.cbor'", lang);
+            let item = format!("locale '{lang}.cbor'");
             ensure_archive_up_to_date(&path, item, &bytes)?;
         }
     }
@@ -200,7 +200,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     if should_write {
         fs::write(ARCHIVE_SRC_PATH, w)?;
     } else {
-        let item = format!("file '{}'", ARCHIVE_SRC_PATH);
+        let item = format!("file '{ARCHIVE_SRC_PATH}'");
         ensure_archive_up_to_date(ARCHIVE_SRC_PATH, item, w.as_bytes())?;
     }
 
@@ -236,7 +236,7 @@ fn write_styles_section(
             }
             writeln!(w, ".")?;
         }
-        writeln!(w, "    {},", variant)?;
+        writeln!(w, "    {variant},")?;
     }
     writeln!(w, "}}")?;
     writeln!(w)?;
@@ -248,7 +248,7 @@ fn write_styles_section(
     writeln!(w, "        match name {{")?;
     for (_, _, names, variant) in items {
         for name in names {
-            writeln!(w, "            {:?} => Some(Self::{}),", name, variant)?;
+            writeln!(w, "            {name:?} => Some(Self::{variant}),")?;
         }
     }
     writeln!(w, "            _ => None,")?;
@@ -271,7 +271,7 @@ fn write_styles_section(
     writeln!(w, "    pub fn all() -> &'static [Self] {{")?;
     writeln!(w, "        &[")?;
     for (_, _, _, variant) in items {
-        writeln!(w, "            Self::{},", variant)?;
+        writeln!(w, "            Self::{variant},")?;
     }
     writeln!(w, "        ]")?;
     writeln!(w, "    }}")?;
@@ -285,8 +285,7 @@ fn write_styles_section(
 
         writeln!(
             w,
-            "            Self::{} => include_bytes!(\"../../archive/styles/{}.cbor\"),",
-            variant, stripped_id
+            "            Self::{variant} => include_bytes!(\"../../archive/styles/{stripped_id}.cbor\"),"
         )?;
     }
     writeln!(w, "        }}")?;
@@ -303,9 +302,9 @@ fn write_styles_section(
     writeln!(w, "    pub fn names(self) -> &'static [&'static str] {{")?;
     writeln!(w, "        match self {{")?;
     for (_, _, names, variant) in items {
-        writeln!(w, "            Self::{} => &[", variant)?;
+        writeln!(w, "            Self::{variant} => &[")?;
         for name in names {
-            writeln!(w, "                {:?},", name)?;
+            writeln!(w, "                {name:?},")?;
         }
         writeln!(w, "            ],")?;
     }
@@ -451,15 +450,15 @@ impl From<ciborium::de::Error<std::io::Error>> for ArchivalError {
 impl fmt::Display for ArchivalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(io) => write!(f, "io error: {}", io),
-            Self::Deserialize(deser) => write!(f, "deserialization error: {}", deser),
-            Self::Serialize(ser) => write!(f, "serialization error: {}", ser),
+            Self::Io(io) => write!(f, "io error: {io}"),
+            Self::Deserialize(deser) => write!(f, "deserialization error: {deser}"),
+            Self::Serialize(ser) => write!(f, "serialization error: {ser}"),
             Self::CborDeserialize(deser) => {
-                write!(f, "cbor deserialization error: {}", deser)
+                write!(f, "cbor deserialization error: {deser}")
             }
-            Self::ValidationError(id) => write!(f, "error when validating style {}", id),
+            Self::ValidationError(id) => write!(f, "error when validating style {id}"),
             Self::LocaleValidationError(id) => {
-                write!(f, "error when validating locale {}", id)
+                write!(f, "error when validating locale {id}")
             }
             Self::NeedsUpdate(item) => {
                 write!(
