@@ -426,7 +426,7 @@ impl Person {
     pub fn name_particles(&self) -> Option<Cow<str>> {
         match (&self.prefix, self.name_particle()) {
             (Some(dropping), Some(non_dropping)) => {
-                Some(Cow::Owned(format!("{} {}", dropping, non_dropping)))
+                Some(Cow::Owned(format!("{dropping} {non_dropping}")))
             }
             (Some(dropping), None) => Some(Cow::Borrowed(dropping.as_str())),
             (None, Some(non_dropping)) => Some(Cow::Borrowed(non_dropping)),
@@ -442,7 +442,7 @@ impl Person {
     /// Whether the name contains CJK characters.
     pub fn is_cjk(&self) -> bool {
         self.name.chars().any(is_cjk)
-            || self.given_name.as_ref().map_or(false, |gn| gn.chars().any(is_cjk))
+            || self.given_name.as_ref().is_some_and(|gn| gn.chars().any(is_cjk))
     }
 
     /// Get the name without the leading article.

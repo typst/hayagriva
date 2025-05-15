@@ -74,7 +74,7 @@ impl Alphanumerical {
 
         year.and_then(|y| {
             let mut num = String::with_capacity(2);
-            write!(&mut num, "{:02}", y).ok()?;
+            write!(&mut num, "{y:02}").ok()?;
             Some(num)
         })
     }
