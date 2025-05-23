@@ -14,11 +14,11 @@ use super::{CitationItem, InstanceContext, StyleContext};
 
 impl StyleContext<'_> {
     /// Retrieve the ordering of two entries according to the given sort key.
-    fn cmp_entries<T: EntryLike>(
+    fn cmp_entries<T: EntryLike, P: Copy>(
         &self,
-        a: &CitationItem<T>,
+        a: &CitationItem<T, P>,
         a_idx: usize,
-        b: &CitationItem<T>,
+        b: &CitationItem<T, P>,
         b_idx: usize,
         key: &SortKey,
         term_locale: Option<&LocaleCode>,
@@ -102,7 +102,7 @@ impl StyleContext<'_> {
                 names_use_last,
                 ..
             } => {
-                let render = |entry: &CitationItem<T>, idx: usize| {
+                let render = |entry: &CitationItem<T, P>, idx: usize| {
                     let mut ctx = self.sorting_ctx(
                         entry,
                         idx,
@@ -145,9 +145,9 @@ impl StyleContext<'_> {
     }
 
     /// Sorts the given citation items by the style's sort keys.
-    pub fn sort<T: EntryLike>(
+    pub fn sort<T: EntryLike, P: Copy>(
         &self,
-        cites: &mut [CitationItem<T>],
+        cites: &mut [CitationItem<T, P>],
         sort: Option<&Sort>,
         term_locale: Option<&LocaleCode>,
         citation_number: impl Fn(&T) -> usize,
