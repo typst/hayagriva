@@ -5,7 +5,9 @@ use citationberg::{
     DemoteNonDroppingParticle, InheritableNameOptions, LocaleCode, LongShortForm, Sort,
     SortDirection, SortKey,
 };
-use rust_icu_ucol::UCollator;
+use icu_collator::options::CollatorOptions;
+use icu_collator::Collator;
+use icu_locale::Locale as IcuLocale;
 
 use crate::csl::rendering::RenderCsl;
 use crate::csl::BufWriteFormat;
@@ -19,9 +21,13 @@ trait CollationOrd: Ord {
 
 impl CollationOrd for str {
     fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
-        UCollator::try_from(&locale.0 as &str)
-            .and_then(|uc| uc.strcoll_utf8(self, other))
-            .unwrap_or_else(|_| self.cmp(other))
+        if let Ok(locale) = locale.0.parse::<IcuLocale>() {
+            let options = CollatorOptions::default();
+            let collator = Collator::try_new(locale.into(), options).unwrap();
+            collator.compare(self, other)
+        } else {
+            self.cmp(other)
+        }
     }
 }
 

@@ -32,7 +32,8 @@ biblatex = { version = "0.10.0", optional = true }
 ciborium = { version = "0.2.1", optional = true }
 clap = { version = "4", optional = true, features = ["cargo"] }
 strum = { version = "0.26", features = ["derive"], optional = true }
-rust_icu_ucol = "5.0.0"
+icu_collator = "2.0.0"
+icu_locale = "2.0.0"
 
 [dev-dependencies]
 heck = "0.5"
