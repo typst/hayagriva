@@ -49,7 +49,7 @@ let locales = [LocaleFile::from_xml(&en_locale).unwrap().into()];
 let style = fs::read_to_string("tests/data/art-history.csl").unwrap();
 let style = IndependentStyle::from_xml(&style).unwrap();
 
-let mut driver = BibliographyDriver::new();
+let mut driver = BibliographyDriver::<_, ()>::new();
 
 for entry in bib.iter() {
     let items = vec![CitationItem::with_entry(entry)];

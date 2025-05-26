@@ -528,7 +528,8 @@ where
         panic!("test {} has dependent style", display());
     };
 
-    let mut driver: BibliographyDriver<'_, csl_json::Item> = BibliographyDriver::new();
+    let mut driver: BibliographyDriver<'_, csl_json::Item, ()> =
+        BibliographyDriver::new();
     let mut output = String::new();
     if let Some(cites) = &case.citation_items {
         for cite in cites {
@@ -819,7 +820,7 @@ fn purposes() {
         (CitePurpose::Year, "2000"),
         (CitePurpose::Full, "Doe, J. (2000). Book A."),
     ] {
-        let mut driver: BibliographyDriver<'_, csl_json::Item> =
+        let mut driver: BibliographyDriver<'_, csl_json::Item, ()> =
             BibliographyDriver::new();
         driver.citation(CitationRequest::new(
             vec![CitationItem::new(&item, None, None, false, Some(purpose))],
@@ -890,7 +891,8 @@ fn case_folding() {
     )
     .unwrap();
 
-    let mut driver: BibliographyDriver<'_, csl_json::Item> = BibliographyDriver::new();
+    let mut driver: BibliographyDriver<'_, csl_json::Item, ()> =
+        BibliographyDriver::new();
     driver.citation(CitationRequest::new(
         vec![CitationItem::new(&item, None, None, false, None)],
         &style,
@@ -930,7 +932,7 @@ fn access_date() {
     let entry = lib.get("test").unwrap();
     assert_eq!(entry.url().unwrap().visit_date.unwrap().year, 2021);
 
-    let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
+    let mut driver: BibliographyDriver<'_, Entry, ()> = BibliographyDriver::new();
     driver.citation(CitationRequest::new(
         vec![CitationItem::new(entry, None, None, false, None)],
         &style,
@@ -971,7 +973,7 @@ fn no_author() {
     .unwrap();
     let entry = lib.get("test").unwrap();
 
-    let mut driver: BibliographyDriver<'_, Entry> = BibliographyDriver::new();
+    let mut driver: BibliographyDriver<'_, Entry, ()> = BibliographyDriver::new();
     driver.citation(CitationRequest::new(
         vec![CitationItem::new(entry, None, None, false, None)],
         &style,
