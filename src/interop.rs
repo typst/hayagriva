@@ -277,9 +277,26 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
+        // Take the first language or the langid.
+        let lang_res = entry.language();
+        let langid_res = entry.langid().ok();
         // If we cannot parse the language, ignore it
-        if let Some(Ok(l)) = map_res(entry.language())?.map(|l| l.parse()) {
-            item.set_language(l);
+        if let Some(l) = map_res(lang_res)?
+            .as_ref()
+            .and_then(|l| l.first())
+            .or_else(|| langid_res.as_ref())
+        {
+            match l {
+                PermissiveType::Typed(lang) => {
+                    item.set_language((*lang).into());
+                }
+                PermissiveType::Chunks(spanneds) => {
+                    let chunked: ChunkedString = (spanneds as &[Spanned<Chunk>]).into();
+                    if let Ok(l) = chunked.to_str().parse() {
+                        item.set_language(l);
+                    }
+                }
+            }
         }
 
         if let Some(a) =
