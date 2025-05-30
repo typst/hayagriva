@@ -284,7 +284,7 @@ impl TryFrom<&tex::Entry> for Entry {
         if let Some(l) = map_res(lang_res)?
             .as_ref()
             .and_then(|l| l.first())
-            .or_else(|| langid_res.as_ref())
+            .or(langid_res.as_ref())
         {
             match l {
                 PermissiveType::Typed(lang) => {
