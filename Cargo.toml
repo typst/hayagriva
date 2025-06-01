@@ -28,7 +28,7 @@ unic-langid = { version = "0.9.6", features = ["serde"] }
 unicode-segmentation = "1.6.0"
 unscanny = "0.1.0"
 url = { version = "2.4", features = ["serde"] }
-biblatex = { git = "https://github.com/DerDrodt/biblatex.git", branch = "lang", features = [
+biblatex = { git = "https://github.com/typst/biblatex.git", features = [
   "unic-langid",
 ], optional = true }
 ciborium = { version = "0.2.1", optional = true }
