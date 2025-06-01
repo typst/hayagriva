@@ -330,6 +330,9 @@ impl EntryLike for Entry {
                 .map(|f| f.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::PartTitle => None,
+            StandardVariable::ARXIV => {
+                entry.arxiv().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
+            }
             StandardVariable::PMCID => {
                 entry.pmcid().map(|d| Cow::Owned(StringChunk::verbatim(d).into()))
             }
