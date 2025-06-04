@@ -166,9 +166,9 @@ impl NameDisambiguationProperties {
     }
 }
 
-fn renders_given_special_form<T: EntryLike>(
+fn renders_given_special_form<T: EntryLike, P: Copy>(
     names: &Names,
-    ctx: &mut Context<T>,
+    ctx: &mut Context<T, P>,
     is_empty: bool,
 ) -> bool {
     match &ctx.instance.kind {
@@ -207,7 +207,7 @@ fn renders_given_special_form<T: EntryLike>(
 }
 
 impl RenderCsl for Names {
-    fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
+    fn render<T: EntryLike, P: Copy>(&self, ctx: &mut Context<T, P>) {
         // The editor and translator variables need to be merged if they are
         // both present and identical.
         let people: Vec<(Vec<Cow<'_, Person>>, NameVariable)> = if self.variable.len()
@@ -339,7 +339,7 @@ impl RenderCsl for Names {
             let plural = persons.len() != 1;
             let label = self.label();
             let do_label = |requested_pos: NameLabelPosition,
-                            ctx: &mut Context<'_, T>| {
+                            ctx: &mut Context<'_, T, P>| {
                 if !ctx.instance.sorting {
                     if let Some((label, pos)) = label {
                         if pos == requested_pos {
@@ -379,9 +379,9 @@ impl RenderCsl for Names {
         ctx.writing.first_name_properties(|| props);
     }
 
-    fn will_render<T: EntryLike>(
+    fn will_render<T: EntryLike, P: Copy>(
         &self,
-        ctx: &mut Context<T>,
+        ctx: &mut Context<T, P>,
         var: citationberg::taxonomy::Variable,
     ) -> bool {
         if self.variable.iter().any(|v| Variable::Name(*v) == var) {
@@ -397,7 +397,10 @@ impl RenderCsl for Names {
         false
     }
 
-    fn will_have_info<T: EntryLike>(&self, ctx: &mut Context<T>) -> (bool, UsageInfo) {
+    fn will_have_info<T: EntryLike, P: Copy>(
+        &self,
+        ctx: &mut Context<T, P>,
+    ) -> (bool, UsageInfo) {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
 
@@ -444,9 +447,9 @@ enum EndDelim {
     DelimAnd(NameAnd),
 }
 
-fn add_names<T: EntryLike>(
+fn add_names<T: EntryLike, P: Copy>(
     names: &citationberg::Names,
-    ctx: &mut Context<T>,
+    ctx: &mut Context<T, P>,
     persons: Vec<Cow<'_, Person>>,
     cs_name: &citationberg::Name,
     forms: &[Option<DisambiguatedNameForm>],
@@ -572,9 +575,9 @@ fn add_names<T: EntryLike>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn write_name<T: EntryLike>(
+fn write_name<T: EntryLike, P: Copy>(
     name: &Person,
-    ctx: &mut Context<T>,
+    ctx: &mut Context<T, P>,
     form: DisambiguatedNameForm,
     reverse: bool,
     demote_non_dropping: bool,
@@ -601,7 +604,7 @@ fn write_name<T: EntryLike>(
         family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
 
-    let first_name = |ctx: &mut Context<T>| {
+    let first_name = |ctx: &mut Context<T, P>| {
         if let Some(first) = &name.given_name {
             if let Some(initialize_with) = name_opts.initialize_with {
                 if form == DisambiguatedNameForm::LongInitialized {
@@ -619,7 +622,7 @@ fn write_name<T: EntryLike>(
         }
     };
 
-    let simple = |ctx: &mut Context<T>| {
+    let simple = |ctx: &mut Context<T, P>| {
         let idx = ctx.push_format(family_format);
         let cidx = ctx.push_case(family_case);
         if let Some(prefix) = family_affixes[0] {
@@ -633,7 +636,7 @@ fn write_name<T: EntryLike>(
         }
     };
 
-    let reverse_keep_particle = |ctx: &mut Context<T>| {
+    let reverse_keep_particle = |ctx: &mut Context<T, P>| {
         let idx = ctx.push_format(family_format);
         let cidx = ctx.push_case(family_case);
 
@@ -681,7 +684,7 @@ fn write_name<T: EntryLike>(
         }
     };
 
-    let reverse_demote_particle = |ctx: &mut Context<T>| {
+    let reverse_demote_particle = |ctx: &mut Context<T, P>| {
         let idx = ctx.push_format(family_format);
         let cidx = ctx.push_case(family_case);
 

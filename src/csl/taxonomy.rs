@@ -40,7 +40,7 @@ pub trait EntryLike {
     fn key(&self) -> Cow<'_, str>;
 }
 
-impl<'a, T: EntryLike> InstanceContext<'a, T> {
+impl<'a, T: EntryLike, P: Copy> InstanceContext<'a, T, P> {
     pub(super) fn resolve_number_variable(
         &self,
         variable: NumberVariable,
@@ -64,9 +64,11 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
                 )),
-                LocatorPayload::Transparent => Some(NumberVariableResult::Transparent(
-                    self.cite_props.certain.initial_idx,
-                )),
+                LocatorPayload::Transparent(_) => {
+                    Some(NumberVariableResult::Transparent(
+                        self.cite_props.certain.initial_idx,
+                    ))
+                }
             },
             _ => self
                 .entry
