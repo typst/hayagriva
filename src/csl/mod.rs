@@ -2917,7 +2917,7 @@ mod tests {
             fs::read_to_string(workspace.join("tests/data/locales-en-US.xml")).unwrap();
         let en_locale = LocaleFile::from_xml(&en_locale).unwrap();
 
-        let yaml = fs::read_to_string(workspace.join("tests/data/basic.yml")).unwrap();
+        let yaml = fs::read_to_string(workspace.join("tests/data/basic.yaml")).unwrap();
         let bib = from_yaml_str(&yaml).unwrap();
         let en_locale = [en_locale.into()];
 
