@@ -731,9 +731,7 @@ fn render_date_part<T: EntryLike>(
     let Some(val) = (match date_part.name {
         DatePartName::Day => date.day.map(|i| i as i32 + 1),
         DatePartName::Month => date.month.map(|i| i as i32 + 1),
-        DatePartName::Year => {
-            Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
-        }
+        DatePartName::Year => Some(date.year),
     }) else {
         return;
     };
