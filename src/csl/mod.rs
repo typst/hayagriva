@@ -109,12 +109,6 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
 
         let mut entries: Vec<_> =
             entry_set.into_iter().map(CitationItem::with_entry).collect();
-        bib_style.sort(
-            &mut entries,
-            bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
-            request.locale.as_ref(),
-            |_| 0,
-        );
         let citation_number = |item: &T| {
             entries.iter().position(|e| e.entry == item).expect("entry not found")
         };
@@ -458,6 +452,13 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                 },
             })
         }
+
+        bib_style.sort(
+            &mut entries,
+            bib_style.csl.bibliography.as_ref().and_then(|b| b.sort.as_ref()),
+            request.locale.as_ref(),
+            |_| 0,
+        );
 
         let bib_render = if let Some(bibliography) = &request.style.bibliography {
             let mut items = Vec::new();
