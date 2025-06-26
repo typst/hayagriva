@@ -646,6 +646,8 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 
 #[cfg(test)]
 mod tests {
+    use unic_langid::LanguageIdentifier;
+
     use crate::types::PersonRole;
 
     #[test]
@@ -704,5 +706,33 @@ mod tests {
         );
 
         serde_json::to_value(entry).unwrap();
+    }
+
+    #[test]
+    fn language_conversion() {
+        let lib = crate::io::from_biblatex_str(
+            r#"
+        @book{mc,
+          title = {Manufacturing Consent},
+          author = {Noam Chomsky and Edward Herman},
+          date = {1988},
+          language = {american}
+        }
+
+
+        @book{dda,
+          title = {Dialektik der Aufklärung},
+          author = {Max Horkheimer and Theodor W. Adorno},
+          date = {1944},
+          langid = {german},
+        }"#,
+        )
+        .unwrap();
+
+        let mc = lib.get("mc").unwrap().language().unwrap();
+        let dda = lib.get("dda").unwrap().language().unwrap();
+
+        assert_eq!(&"en-US".parse::<LanguageIdentifier>().unwrap(), mc);
+        assert_eq!(&"de".parse::<LanguageIdentifier>().unwrap(), dda);
     }
 }
