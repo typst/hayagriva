@@ -290,11 +290,8 @@ impl TryFrom<&tex::Entry> for Entry {
                 PermissiveType::Typed(lang) => {
                     item.set_language((*lang).into());
                 }
-                PermissiveType::Chunks(spanneds) => {
-                    let chunked: ChunkedString = (spanneds as &[Spanned<Chunk>]).into();
-                    if let Ok(l) = chunked.to_str().parse() {
-                        item.set_language(l);
-                    }
+                PermissiveType::Chunks(_spanneds) => {
+                    // Ignore this case for now. See https://github.com/typst/hayagriva/pull/317#discussion_r2119367118
                 }
             }
         }
