@@ -42,6 +42,7 @@ regex = "1"
 
 [[bin]]
 name = "hayagriva"
+path = "src/main.rs"
 required-features = ["cli"]
 
 [[test]]
