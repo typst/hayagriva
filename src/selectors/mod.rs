@@ -39,8 +39,6 @@
 /// ```
 ///
 /// [intro]: https://github.com/typst/hayagriva/blob/main/docs/selectors.md
-/// [CitStyle]: crate::style::CitationStyle
-/// [BibStyle]: crate::style::BibliographyStyle
 /// [EType]: crate::types::EntryType
 #[macro_export]
 macro_rules! select {
