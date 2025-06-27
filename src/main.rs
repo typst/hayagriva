@@ -325,7 +325,7 @@ fn main() {
                 exit(4);
             }
 
-            let mut driver = BibliographyDriver::new();
+            let mut driver = BibliographyDriver::<_, ()>::new();
             for entry in &bibliography {
                 driver.citation(CitationRequest::new(
                     vec![CitationItem::with_entry(entry)],
@@ -376,7 +376,7 @@ fn main() {
                 retrieve_assets(style, csl, locale_path, locale_str);
 
             let assign_locator = |(i, e)| {
-                let mut item = CitationItem::with_entry(e);
+                let mut item = CitationItem::<_, ()>::with_entry(e);
                 if let Some(&locator) = locators.get(i) {
                     item.locator = Some(SpecificLocator(
                         Locator::Custom,
