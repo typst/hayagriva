@@ -243,7 +243,7 @@ impl Date {
     /// - `periods`   Determines whether to use punctuation in the abbreviations
     /// - `designate_positive`    Show a denomination for positive years
     /// - `ad_prefix` Use the "AD" designation for positive years in a prefix
-    ///               position. Will be ignored if `designate_positive` is negative.
+    ///   position. Will be ignored if `designate_positive` is negative.
     pub fn display_year_opt(
         &self,
         secular: bool,

@@ -7,6 +7,7 @@ use tex::{
     Chunk, ChunksExt, DateValue, EditorType, PermissiveType, RetrievalError, Spanned,
     TypeError,
 };
+
 use url::Url;
 
 use super::types::*;
@@ -276,7 +277,24 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
-        // TODO: entry.orig_language into item.language = Some()
+        // Take the first language or the langid.
+        let lang_res = entry.language();
+        let langid_res = entry.langid().ok();
+        // If we cannot parse the language, ignore it
+        if let Some(l) = map_res(lang_res)?
+            .as_ref()
+            .and_then(|l| l.first())
+            .or(langid_res.as_ref())
+        {
+            match l {
+                PermissiveType::Typed(lang) => {
+                    item.set_language((*lang).into());
+                }
+                PermissiveType::Chunks(_spanneds) => {
+                    // Ignore this case for now. See https://github.com/typst/hayagriva/pull/317#discussion_r2119367118
+                }
+            }
+        }
 
         if let Some(a) =
             map_res(entry.afterword())?.map(|a| a.iter().map(Into::into).collect())
@@ -628,6 +646,8 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 
 #[cfg(test)]
 mod tests {
+    use unic_langid::LanguageIdentifier;
+
     use crate::types::PersonRole;
 
     #[test]
@@ -686,5 +706,33 @@ mod tests {
         );
 
         serde_json::to_value(entry).unwrap();
+    }
+
+    #[test]
+    fn language_conversion() {
+        let lib = crate::io::from_biblatex_str(
+            r#"
+        @book{mc,
+          title = {Manufacturing Consent},
+          author = {Noam Chomsky and Edward Herman},
+          date = {1988},
+          language = {american}
+        }
+
+
+        @book{dda,
+          title = {Dialektik der Aufklärung},
+          author = {Max Horkheimer and Theodor W. Adorno},
+          date = {1944},
+          langid = {german},
+        }"#,
+        )
+        .unwrap();
+
+        let mc = lib.get("mc").unwrap().language().unwrap();
+        let dda = lib.get("dda").unwrap().language().unwrap();
+
+        assert_eq!(&"en-US".parse::<LanguageIdentifier>().unwrap(), mc);
+        assert_eq!(&"de".parse::<LanguageIdentifier>().unwrap(), dda);
     }
 }
