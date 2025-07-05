@@ -3230,4 +3230,77 @@ mod tests {
 
         assert_eq!(actual, ["(33)", "()", "(34)"]);
     }
+    #[test]
+    #[cfg(feature = "biblatex")]
+    fn test_arxiv_reference() {
+        let bibtex = r#"
+            @article{LHCb-PAPER-2024-046,
+                author        = {Aaij, R. and others},
+                title         = {Test of lepton flavor universality with $B^+ arrow K^+ pi^+ pi^- ell^+ ell^-$ decays},
+                collaboration = {LHCb collaboration},
+                report        = {LHCb-PAPER-2024-046, CERN-EP-2024-312},
+                eprint        = {2412.11645},
+                archiveprefix = {arXiv},
+                primaryclass  = {hep-ex},
+                journal       = {Phys. Rev. Lett.},
+                volume        = {134},
+                pages         = {181803},
+                year          = {2025},
+                doi           = {10.1103/PhysRevLett.134.181803}
+            }
+            @misc{itzhaki1996remarksthooftssmatrix,
+                title         = {Some remarks on 't Hooft's S-matrix for black holes}, 
+                author        = {N. Itzhaki},
+                year          = {1996},
+                eprint        = {hep-th/9603067},
+                archivePrefix = {arXiv},
+                primaryClass  = {hep-th},
+            }
+        "#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+
+        let xml = archive::ArchivedStyle::AmericanPhysicsSociety.get().to_xml().unwrap();
+        let patched_xml = xml.replace(
+            r#"strip-periods="false"/></group>"#,
+            r#"strip-periods="false"/></group><text variable="ARXIV" prefix="arXiv:"/><text variable="genre" prefix="genre: "/>"#,
+        );
+        let style = citationberg::Style::from_xml(&patched_xml).unwrap();
+        let citationberg::Style::Independent(style) = style else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        for entry in library.iter() {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::new(entry, None, None, false, None)],
+                &style,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let mut references = String::new();
+        for row in driver
+            .finish(BibliographyRequest {
+                style: &style,
+                locale: None,
+                locale_files: &[],
+            })
+            .bibliography
+            .map(|b| b.items)
+            .unwrap_or_default()
+        {
+            if let Some(prefix) = row.first_field {
+                references.push_str(&format!("{:#} ", prefix))
+            }
+            references.push_str(&format!("{:#}", row.content));
+        }
+        assert_eq!(
+            concat!(
+                "[1] R. Aaij others, Test of lepton flavor universality with B^+ arrow K^+ pi^+ pi^- ell^+ ell^- decays, Phys. Rev. Lett. 134, 181803 (2025), arXiv:2412.11645 [hep-ex].",
+                "[2] N. Itzhaki, Some remarks on 't Hooft's S-matrix for black holes, (1996), arXiv:hep-th/9603067.", 
+            ),
+            references,
+        );
+    }
 }
