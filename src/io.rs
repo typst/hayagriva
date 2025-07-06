@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let contents = fs::read_to_string("tests/data/basic.yml").unwrap();
+        let contents = fs::read_to_string("tests/data/basic.yaml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
         let yaml = to_yaml_str(&entries).unwrap();
         println!("{}", &yaml);
