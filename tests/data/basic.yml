@@ -67,12 +67,12 @@ swedish:
     type: Article
     editor: Brown, George C.
     title:
-        value: "A Swedish Traveller in Early Wisconcin: The Observations of Fredrika Bremer"
+        value: "A Swedish Traveller in Early Wisconsin: The Observations of Fredrika Bremer"
         short: Swedish Traveller
     volume: 1-2
     parent:
         type: Periodical
-        title: Wisconcin Magazine of History
+        title: Wisconsin Magazine of History
         volume: 61-62
         date: 1978
         edition: 2

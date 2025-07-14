@@ -823,8 +823,8 @@ fn disambiguate_year_suffix<F, T>(
     }
 }
 
-/// Return a vector of that contains every group of mutually ambiguous items
-/// with cite and item index.
+/// Return a vector that contains every group of mutually ambiguous items with
+/// cite and item index.
 fn find_ambiguous_sets<T: EntryLike + PartialEq>(
     cites: &[SpeculativeCiteRender<'_, '_, T>],
 ) -> Vec<AmbiguousGroup> {
