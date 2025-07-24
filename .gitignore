@@ -12,3 +12,4 @@ Cargo.lock
 
 # macOS
 .DS_Store
+.zed
