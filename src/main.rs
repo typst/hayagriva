@@ -9,13 +9,13 @@ use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
 use clap::builder::PossibleValue;
-use clap::{crate_version, Arg, ArgAction, Command, ValueEnum};
+use clap::{Arg, ArgAction, Command, ValueEnum, crate_version};
 use strum::VariantNames;
 
-use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::archive::{ArchivedStyle, locales};
 use hayagriva::{
-    io, BibliographyDriver, CitationItem, CitationRequest, LocatorPayload,
-    SpecificLocator,
+    BibliographyDriver, CitationItem, CitationRequest, LocatorPayload, SpecificLocator,
+    io,
 };
 use hayagriva::{BibliographyRequest, Selector};
 
@@ -345,11 +345,7 @@ fn main() {
                 let alternate = matches.get_flag("no-fmt");
 
                 if let Some(prefix) = row.first_field {
-                    if alternate {
-                        println!("{prefix:#}")
-                    } else {
-                        println!("{prefix}")
-                    }
+                    if alternate { println!("{prefix:#}") } else { println!("{prefix}") }
                 }
 
                 if alternate {

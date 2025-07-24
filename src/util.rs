@@ -1,6 +1,6 @@
 //! Helpers for serializing and deserializing.
 
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
 
 /// Generic wrapper that allow one or more occurrences of specified type.
 ///

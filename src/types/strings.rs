@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use citationberg::LongShortForm;
-use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Visitor, ser::SerializeMap};
 use thiserror::Error;
 use unscanny::Scanner;
 

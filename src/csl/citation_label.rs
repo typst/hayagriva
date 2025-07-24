@@ -4,8 +4,8 @@ use std::fmt::Write;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    types::{EntryType, Person, PersonRole},
     Entry,
+    types::{EntryType, Person, PersonRole},
 };
 
 /// Citation labels in the form of numbers.
@@ -95,8 +95,6 @@ impl Alphanumerical {
 
 /// Get the creator of an entry.
 fn get_creators(entry: &Entry) -> Vec<&Person> {
-    
-
     if let Some(authors) = entry.authors() {
         authors.iter().collect()
     } else if let Some(eds) = entry.editors() {
