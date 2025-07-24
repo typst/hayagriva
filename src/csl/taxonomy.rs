@@ -58,16 +58,20 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
                     )))
                 })
             }
-            NumberVariable::Locator => match self.cite_props.speculative.locator?.1 {
-                LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
-                    Numeric::from_str(l)
-                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                        .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
-                )),
-                LocatorPayload::Transparent => Some(NumberVariableResult::Transparent(
-                    self.cite_props.certain.initial_idx,
-                )),
-            },
+            NumberVariable::Locator => {
+                match &self.cite_props.speculative.locator.as_ref()?.1 {
+                    &LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
+                        Numeric::from_str(l)
+                            .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                            .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
+                    )),
+                    LocatorPayload::Transparent(_) => {
+                        Some(NumberVariableResult::Transparent(
+                            self.cite_props.certain.initial_idx,
+                        ))
+                    }
+                }
+            }
             _ => self
                 .entry
                 .resolve_number_variable(variable)
