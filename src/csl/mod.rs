@@ -2630,8 +2630,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         }
 
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.resolve_number_variable(variable);
-        res
+        
+        self.instance.resolve_number_variable(variable)
     }
 
     fn resolve_page_variable(
@@ -2690,9 +2690,9 @@ impl<'a, T: EntryLike> Context<'a, T> {
         }
 
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.resolve_standard_variable(form, variable);
+        
 
-        res
+        self.instance.resolve_standard_variable(form, variable)
     }
 
     /// Resolve a date variable.
@@ -2703,9 +2703,9 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: csl_taxonomy::DateVariable,
     ) -> Option<Cow<'a, Date>> {
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.entry.resolve_date_variable(variable);
+        
 
-        res
+        self.instance.entry.resolve_date_variable(variable)
     }
 
     /// Resolve a name variable.
@@ -2719,8 +2719,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
             return Vec::new();
         }
 
-        let res = self.instance.entry.resolve_name_variable(variable);
-        res
+        
+        self.instance.entry.resolve_name_variable(variable)
     }
 
     /// Apply a prefix, but return a tuple that allows us to undo it if it

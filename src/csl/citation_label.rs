@@ -95,7 +95,9 @@ impl Alphanumerical {
 
 /// Get the creator of an entry.
 fn get_creators(entry: &Entry) -> Vec<&Person> {
-    let authors = if let Some(authors) = entry.authors() {
+    
+
+    if let Some(authors) = entry.authors() {
         authors.iter().collect()
     } else if let Some(eds) = entry.editors() {
         eds.iter().collect()
@@ -126,7 +128,5 @@ fn get_creators(entry: &Entry) -> Vec<&Person> {
 
         let translators = entry.affiliated_with_role(PersonRole::Translator);
         return translators;
-    };
-
-    authors
+    }
 }
