@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry as HmEntry;
@@ -5,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Write};
 use std::hash::Hash;
 use std::num::{NonZeroI16, NonZeroUsize};
+use std::sync::Arc;
 use std::{mem, vec};
 
 use citationberg::taxonomy::{
@@ -54,7 +56,7 @@ impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 struct SpeculativeItemRender<'a, T: EntryLike> {
     rendered: ElemChildren,
     entry: &'a T,
@@ -70,7 +72,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     collapse_verdict: Option<CollapseVerdict>,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 struct SpeculativeCiteRender<'a, 'b, T: EntryLike> {
     items: Vec<SpeculativeItemRender<'a, T>>,
     request: &'b CitationRequest<'a, T>,
@@ -195,7 +197,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                     first_name: ctx.writing.first_name.clone(),
                     delim_override: None,
                     group_idx: None,
-                    locator: item.locator,
+                    locator: item.locator.clone(),
                     rendered: ctx.flush(),
                     hidden: item.hidden,
                     locale: item.locale.clone(),
@@ -342,18 +344,19 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                 } else {
                     Some(&res[i].items[j - 1])
                 }
-                .map(|l| CitationItem::with_locator(l.entry, l.locator));
+                .map(|l| CitationItem::with_locator(l.entry, l.locator.clone()));
 
                 res[i].items[j].cite_props.speculative.ibid = IbidState::with_last(
                     &CitationItem::with_locator(
                         res[i].items[j].entry,
-                        res[i].items[j].locator,
+                        res[i].items[j].locator.clone(),
                     ),
                     last.as_ref(),
                 );
 
                 //     - Add final locator
-                res[i].items[j].cite_props.speculative.locator = res[i].items[j].locator;
+                res[i].items[j].cite_props.speculative.locator =
+                    res[i].items[j].locator.clone();
             }
         }
 
@@ -1137,7 +1140,7 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
     fn variable_sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
         Self::new(
             item.entry,
-            CiteProperties::for_sorting(item.locator, idx),
+            CiteProperties::for_sorting(item.locator.clone(), idx),
             Some(Sorting::Variable),
             None,
             None,
@@ -1201,7 +1204,7 @@ impl<'a> StyleContext<'a> {
         Context {
             instance: InstanceContext::new(
                 item.entry,
-                CiteProperties::for_sorting(item.locator, idx),
+                CiteProperties::for_sorting(item.locator.clone(), idx),
                 Some(Sorting::Macro),
                 locale,
                 term_locale,
@@ -1451,7 +1454,7 @@ impl<'a> StyleContext<'a> {
 }
 
 /// A citation request. A citation can contain references to multiple items.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq)]
 pub struct CitationRequest<'a, T: EntryLike> {
     /// The items to format.
     pub items: Vec<CitationItem<'a, T>>,
@@ -1559,7 +1562,7 @@ impl<'a> BibliographyRequest<'a> {
 }
 
 /// A reference to an [`crate::Entry`] within a [`CitationRequest`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CitationItem<'a, T: EntryLike> {
     /// The entry to format.
     pub entry: &'a T,
@@ -2055,7 +2058,7 @@ pub(crate) struct Context<'a, T: EntryLike> {
     bibliography: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 struct CiteProperties<'a> {
     pub certain: CertainCiteProperties,
     pub speculative: SpeculativeCiteProperties<'a>,
@@ -2105,7 +2108,7 @@ impl CertainCiteProperties {
 
 /// Item properties that can only be determined after one or multiple renders.
 /// These require validation.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 struct SpeculativeCiteProperties<'a> {
     /// Locator with its type.
     ///
@@ -2268,17 +2271,50 @@ impl IbidState {
 
 /// This struct allows to add context to where the information in a cite is
 /// found in the source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpecificLocator<'a>(pub Locator, pub LocatorPayload<'a>);
 
 /// The type of content a `cs:text` element should yield for a locator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LocatorPayload<'a> {
     /// Just print the string.
     Str(&'a str),
     /// An element with the original index of the locator will be yielded. The
     /// consumer can then recognize this and replace it with their own content.
-    Transparent,
+    Transparent(TransparentLocator),
+}
+
+#[derive(Clone)]
+pub struct TransparentLocator(Arc<dyn TransparentLocatorPayload>);
+
+impl TransparentLocator {
+    pub fn new<T: PartialEq + 'static>(payload: T) -> Self {
+        Self(Arc::new(payload))
+    }
+}
+
+impl std::fmt::Debug for TransparentLocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TransparentLocator").finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for TransparentLocator {
+    fn eq(&self, other: &Self) -> bool {
+        TransparentLocatorPayload::dyn_eq(self.0.as_ref(), other.0.as_ref())
+    }
+}
+
+trait TransparentLocatorPayload: Any {
+    fn dyn_eq(&self, other: &dyn TransparentLocatorPayload) -> bool;
+}
+
+impl<T: PartialEq + 'static> TransparentLocatorPayload for T {
+    fn dyn_eq(&self, other: &dyn TransparentLocatorPayload) -> bool {
+        (other as &dyn Any)
+            .downcast_ref::<Self>()
+            .map_or(false, |other| self == other)
+    }
 }
 
 impl<'a, T: EntryLike> Context<'a, T> {
@@ -2537,7 +2573,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
     /// Get a term from the style.
     fn term(&self, mut term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
         if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator)
-            && let Some(locator) = self.instance.cite_props.speculative.locator
+            && let Some(locator) = &self.instance.cite_props.speculative.locator
         {
             term = locator.0.into();
         }
@@ -3159,7 +3195,7 @@ mod tests {
         let locator = SpecificLocator(Locator::Custom, LocatorPayload::Str("12"));
         for entry in library.iter() {
             driver.citation(CitationRequest::new(
-                vec![CitationItem::with_locator(entry, Some(locator))],
+                vec![CitationItem::with_locator(entry, Some(locator.clone()))],
                 &alphanumeric,
                 None,
                 &[],
