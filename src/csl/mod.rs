@@ -2311,9 +2311,7 @@ trait TransparentLocatorPayload: Any {
 
 impl<T: PartialEq + 'static> TransparentLocatorPayload for T {
     fn dyn_eq(&self, other: &dyn TransparentLocatorPayload) -> bool {
-        (other as &dyn Any)
-            .downcast_ref::<Self>()
-            .map_or(false, |other| self == other)
+        Some(self) == (other as &dyn Any).downcast_ref::<Self>()
     }
 }
 
