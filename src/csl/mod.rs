@@ -1775,12 +1775,8 @@ impl WritingContext {
         let format = *self.formatting();
 
         // Append to last child if formats match.
-        if let Some(child) = self
-            .elem_stack
-            .last_mut()
-            .0
-            .last_mut()
-            .and_then(|c| if let ElemChild::Text(c) = c { Some(c) } else { None })
+        if let Some(child) = self.elem_stack.last_mut().0.last_mut()
+            && let ElemChild::Text(child) = child
         {
             if format == child.formatting {
                 child.text.push_str(&mem::take(&mut self.buf).finish());
