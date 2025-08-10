@@ -14,7 +14,7 @@ use crate::csl::taxonomy::EntryLike;
 use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm, UsageInfo};
 use crate::types::Person;
 
-use super::{render_label_with_var, RenderCsl};
+use super::{RenderCsl, render_label_with_var};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DisambiguatedNameForm {

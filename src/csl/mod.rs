@@ -12,17 +12,17 @@ use citationberg::taxonomy::{
     PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
-    CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
+    Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display,
+    GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
     LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, TermForm, ToAffixes, ToFormatting,
+    StyleClass, TermForm, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
 
-use crate::csl::elem::{simplify_children, NonEmptyStack};
-use crate::csl::rendering::names::NameDisambiguationProperties;
+use crate::csl::elem::{NonEmptyStack, simplify_children};
 use crate::csl::rendering::RenderCsl;
+use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::taxonomy::NumberOrPageVariableResult;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Person};
@@ -1775,17 +1775,12 @@ impl WritingContext {
         let format = *self.formatting();
 
         // Append to last child if formats match.
-        if let Some(child) = self.elem_stack.last_mut().0.last_mut().and_then(|c| {
-            if let ElemChild::Text(c) = c {
-                Some(c)
-            } else {
-                None
-            }
-        }) {
-            if format == child.formatting {
-                child.text.push_str(&mem::take(&mut self.buf).finish());
-                return;
-            }
+        if let Some(child) = self.elem_stack.last_mut().0.last_mut()
+            && let ElemChild::Text(child) = child
+            && format == child.formatting
+        {
+            child.text.push_str(&mem::take(&mut self.buf).finish());
+            return;
         }
 
         let formatted = format.add_text(mem::take(&mut self.buf).finish());
@@ -2630,8 +2625,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         }
 
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.resolve_number_variable(variable);
-        res
+
+        self.instance.resolve_number_variable(variable)
     }
 
     fn resolve_page_variable(
@@ -2690,9 +2685,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         }
 
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.resolve_standard_variable(form, variable);
 
-        res
+        self.instance.resolve_standard_variable(form, variable)
     }
 
     /// Resolve a date variable.
@@ -2703,9 +2697,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: csl_taxonomy::DateVariable,
     ) -> Option<Cow<'a, Date>> {
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.entry.resolve_date_variable(variable);
 
-        res
+        self.instance.entry.resolve_date_variable(variable)
     }
 
     /// Resolve a name variable.
@@ -2719,8 +2712,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             return Vec::new();
         }
 
-        let res = self.instance.entry.resolve_name_variable(variable);
-        res
+        self.instance.entry.resolve_name_variable(variable)
     }
 
     /// Apply a prefix, but return a tuple that allows us to undo it if it

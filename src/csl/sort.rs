@@ -6,8 +6,8 @@ use citationberg::{
     SortDirection, SortKey,
 };
 
-use crate::csl::rendering::RenderCsl;
 use crate::csl::BufWriteFormat;
+use crate::csl::rendering::RenderCsl;
 
 use super::taxonomy::EntryLike;
 use super::{CitationItem, InstanceContext, StyleContext};
