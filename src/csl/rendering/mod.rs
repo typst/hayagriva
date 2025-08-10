@@ -14,13 +14,13 @@ use citationberg::{
 };
 use citationberg::{TermForm, TextTarget};
 
+use crate::PageRanges;
 use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
-use crate::PageRanges;
 
 use super::taxonomy::{EntryLike, NumberOrPageVariableResult};
-use super::{write_year, Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
+use super::{Context, ElemMeta, IbidState, SpecialForm, UsageInfo, write_year};
 
 pub mod names;
 
@@ -352,13 +352,13 @@ impl RenderCsl for citationberg::Number {
             Some(SpecialForm::VarOnly(Variable::Number(n)))
                 if self.variable != NumberOrPageVariable::Number(n) =>
             {
-                return false
+                return false;
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
                 return matches!(
                     self.variable,
                     NumberOrPageVariable::Number(NumberVariable::Locator)
-                )
+                );
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
@@ -682,10 +682,10 @@ impl RenderCsl for citationberg::Date {
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
         match ctx.instance.kind {
             Some(SpecialForm::VarOnly(Variable::Date(d))) if self.variable != Some(d) => {
-                return false
+                return false;
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
-                return ctx.peek_is_first_date()
+                return ctx.peek_is_first_date();
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
