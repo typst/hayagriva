@@ -911,7 +911,7 @@ fn case_folding() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, ". my lowercase container title.");
+    assert_eq!(buf, "my lowercase container title.");
 }
 
 #[test]
