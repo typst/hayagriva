@@ -1777,11 +1777,10 @@ impl WritingContext {
         // Append to last child if formats match.
         if let Some(child) = self.elem_stack.last_mut().0.last_mut()
             && let ElemChild::Text(child) = child
+            && format == child.formatting
         {
-            if format == child.formatting {
-                child.text.push_str(&mem::take(&mut self.buf).finish());
-                return;
-            }
+            child.text.push_str(&mem::take(&mut self.buf).finish());
+            return;
         }
 
         let formatted = format.add_text(mem::take(&mut self.buf).finish());
