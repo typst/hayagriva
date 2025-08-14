@@ -8,7 +8,7 @@ use std::{fmt, fs};
 
 mod common;
 use citationberg::taxonomy::Locator;
-use citationberg::{Locale, LocaleCode, Style, XmlError};
+use citationberg::{Locale, LocaleCode, Style, XmlDeError};
 use common::{CACHE_PATH, ensure_repo, iter_files_with_name};
 
 use citationberg::json as csl_json;
@@ -107,7 +107,7 @@ enum TestParseError {
     SyntaxError,
     WrongClosingTag,
     MissingRequiredSection(SectionTag),
-    CslError(XmlError),
+    CslError(XmlDeError),
     JsonError(serde_json::Error),
 }
 
