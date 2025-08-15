@@ -70,6 +70,17 @@ impl RenderCsl for citationberg::Text {
                     let url = format!("https://doi.org/{}", val.to_str());
                     ctx.push_link(&val, url);
                 }
+                StandardVariable::ARXIV => {
+                    let printed_val = val.to_str();
+                    // The arXiv ID can be in two formats:
+                    //  - pre 2007: "hep-th/9603067"
+                    //  - post 2007: "2412.11645 [hep-ex]"
+                    // We only want the first part for the url.
+                    let id = printed_val.split(' ').next().unwrap_or_default();
+                    let url =
+                        format!("https://arxiv.org/abs/{}", id);
+                    ctx.push_link(&val, url);
+                }
                 StandardVariable::PMID => {
                     let url =
                         format!("https://www.ncbi.nlm.nih.gov/pubmed/{}", val.to_str());
