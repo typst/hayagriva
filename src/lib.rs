@@ -158,7 +158,7 @@ pub use csl::{
     standalone_citation, BibliographyDriver, BibliographyItem, BibliographyRequest,
     Brackets, BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem,
     ElemChild, ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
-    RenderedBibliography, RenderedCitation, SpecificLocator,
+    RenderedBibliography, RenderedCitation, SpecificLocator, TransparentLocator,
 };
 pub use selectors::{Selector, SelectorError};
 
