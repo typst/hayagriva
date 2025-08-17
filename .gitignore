@@ -12,3 +12,6 @@ Cargo.lock
 
 # macOS
 .DS_Store
+
+# Zed editor
+.zed

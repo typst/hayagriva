@@ -423,7 +423,7 @@ impl Person {
     }
 
     /// Get only the dropping and non-dropping particle of the family name.
-    pub fn name_particles(&self) -> Option<Cow<str>> {
+    pub fn name_particles(&self) -> Option<Cow<'_, str>> {
         match (&self.prefix, self.name_particle()) {
             (Some(dropping), Some(non_dropping)) => {
                 Some(Cow::Owned(format!("{dropping} {non_dropping}")))

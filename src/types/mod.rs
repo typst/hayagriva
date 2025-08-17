@@ -326,7 +326,7 @@ impl<T> MaybeTyped<T> {
 
 impl<T: ToOwned> MaybeTyped<T> {
     /// Wrap the typed value in a [`Cow`]'s borrowed variant.
-    pub fn to_cow(&self) -> MaybeTyped<Cow<T>> {
+    pub fn to_cow(&self) -> MaybeTyped<Cow<'_, T>> {
         match self {
             MaybeTyped::Typed(t) => MaybeTyped::Typed(Cow::Borrowed(t)),
             MaybeTyped::String(s) => MaybeTyped::String(s.clone()),
@@ -345,7 +345,7 @@ impl<T: Display> Display for MaybeTyped<T> {
 
 impl<T: ToString> MaybeTyped<T> {
     /// Convert the value to a string.
-    pub fn to_str(&self) -> Cow<str> {
+    pub fn to_str(&self) -> Cow<'_, str> {
         match self {
             MaybeTyped::Typed(t) => Cow::Owned(t.to_string()),
             MaybeTyped::String(s) => Cow::Borrowed(s),

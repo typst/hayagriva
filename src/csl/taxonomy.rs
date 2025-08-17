@@ -10,7 +10,7 @@ use crate::{Entry, PageRanges};
 use citationberg::taxonomy::{
     DateVariable, Kind, NameVariable, NumberVariable, PageVariable, StandardVariable,
 };
-use citationberg::{taxonomy, LongShortForm};
+use citationberg::{LongShortForm, taxonomy};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(feature = "csl-json")]

@@ -94,8 +94,8 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::types::EntryType;
 use crate::Entry;
+use crate::types::EntryType;
 
 /// A selector used to filter bibliographies and match on entries.
 #[derive(Debug, Clone, Eq, PartialEq)]

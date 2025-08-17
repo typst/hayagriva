@@ -10,8 +10,8 @@ use tex::{
 
 use url::Url;
 
-use super::types::*;
 use super::Entry;
+use super::types::*;
 
 macro_rules! tex_kinds {
     ($self:expr, $mv_attr:expr, [$({$kind:pat, $new_kind:expr, $top_level:expr, $expand_mv:expr}),* $(,)*] $(,)*) => {
@@ -42,11 +42,7 @@ macro_rules! tex_kinds {
 impl From<&tex::Person> for Person {
     fn from(person: &tex::Person) -> Self {
         fn optional(part: &str) -> Option<String> {
-            if !part.is_empty() {
-                Some(part.to_string())
-            } else {
-                None
-            }
+            if !part.is_empty() { Some(part.to_string()) } else { None }
         }
 
         Self {
@@ -150,11 +146,7 @@ fn ed_role(role: EditorType, entry_type: &tex::EntryType) -> Option<PersonRole> 
 }
 
 fn book(item: &mut Entry, parent: bool) -> Option<&mut Entry> {
-    if parent {
-        item.parents_mut().get_mut(0)
-    } else {
-        None
-    }
+    if parent { item.parents_mut().get_mut(0) } else { None }
 }
 
 fn mv(item: &mut Entry, parent: bool, mv_parent: bool) -> Option<&mut Entry> {

@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 use unscanny::Scanner;
 
@@ -672,11 +672,7 @@ fn parse_full_date(s: &mut Scanner) -> Result<(i32, u8, u8), DateError> {
 
 fn days_in_month(month: u8, year: i32) -> u8 {
     if month == 1 {
-        if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-            29
-        } else {
-            28
-        }
+        if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 29 } else { 28 }
     } else if month < 7 {
         31 - month % 2
     } else {

@@ -11,7 +11,7 @@
 //! files.
 
 use citationberg::{IndependentStyle, LocaleCode, Style};
-use citationberg::{Locale, LocaleFile, XmlError};
+use citationberg::{Locale, LocaleFile, XmlDeError};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -416,7 +416,7 @@ fn retrieve_dependent_aliases() -> Result<HashMap<String, Vec<String>>, Archival
 #[derive(Debug)]
 pub enum ArchivalError {
     Io(io::Error),
-    Deserialize(XmlError),
+    Deserialize(XmlDeError),
     Serialize(ciborium::ser::Error<std::io::Error>),
     CborDeserialize(ciborium::de::Error<std::io::Error>),
     ValidationError(String),
@@ -430,8 +430,8 @@ impl From<io::Error> for ArchivalError {
     }
 }
 
-impl From<XmlError> for ArchivalError {
-    fn from(value: XmlError) -> Self {
+impl From<XmlDeError> for ArchivalError {
+    fn from(value: XmlDeError) -> Self {
         Self::Deserialize(value)
     }
 }
