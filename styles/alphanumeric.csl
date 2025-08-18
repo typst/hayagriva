@@ -15,8 +15,7 @@
     <rights>MIT OR Apache-2.0</rights>
     <summary>Alphanumeric citations</summary>
   </info>
-  <citation collapse="citation-number" after-collapse-delimiter="; "
-    disambiguate-add-year-suffix="true">
+  <citation after-collapse-delimiter="; " disambiguate-add-year-suffix="true">
     <sort>
       <key variable="author" />
       <key variable="issued" />
