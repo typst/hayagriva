@@ -2284,10 +2284,12 @@ pub enum LocatorPayload<'a> {
     Transparent(TransparentLocator),
 }
 
+/// Wraps an object that is used to determine whether two locators are the same.
 #[derive(Clone)]
 pub struct TransparentLocator(Arc<dyn TransparentLocatorPayload>);
 
 impl TransparentLocator {
+    /// Creates a new [`TransparentLocator`] which wraps the given payload.
     pub fn new<T: PartialEq + 'static>(payload: T) -> Self {
         Self(Arc::new(payload))
     }
