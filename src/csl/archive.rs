@@ -209,9 +209,9 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Patrick O'Brien.
     MaryAnnLiebertVancouver,
-    /// Modern Language Association 9th edition.
+    /// Modern Language Association 9th edition (in-text citations).
     ///
-    /// Authors: Sebastian Karcher.
+    /// Authors: Sebastian Karcher, Andrew Dunning.
     ModernLanguageAssociation,
     /// Modern Language Association 8th edition.
     ///
@@ -951,7 +951,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "ISO-690 (numeric, English)",
             Self::Karger => "Karger journals",
             Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
-            Self::ModernLanguageAssociation => "Modern Language Association 9th edition",
+            Self::ModernLanguageAssociation => "Modern Language Association 9th edition (in-text citations)",
             Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
             Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
             Self::Nature => "Nature",
