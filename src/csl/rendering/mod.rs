@@ -762,7 +762,7 @@ fn render_date_part<T: EntryLike>(
                 write!(ctx, "{val:02}").unwrap();
             }
             DateStrongAnyForm::Day(DateDayForm::Ordinal)
-                if val != 1
+                if val == 1
                     || !ctx
                         .style
                         .lookup_locale(|l| {
