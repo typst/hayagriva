@@ -252,17 +252,17 @@ impl Date {
         ad_prefix: bool,
     ) -> String {
         let np_postfix = match (secular, periods) {
-            (true, false) => " BCE",
-            (true, true) => " B.C.E.",
-            (false, false) => " BC",
-            (false, true) => " B.C.",
+            (true, false) => "BCE",
+            (true, true) => "B.C.E.",
+            (false, false) => "BC",
+            (false, true) => "B.C.",
         };
 
         let positive_dn = match (periods, ad_prefix) {
-            (true, false) => " C.E.",
-            (false, false) => " CE",
-            (true, true) => " A.D.",
-            (false, true) => " AD",
+            (true, false) => "C.E.",
+            (false, false) => "CE",
+            (true, true) => "A.D.",
+            (false, true) => "AD",
         };
 
         if self.year > 0 {
