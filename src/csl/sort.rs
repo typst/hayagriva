@@ -103,7 +103,7 @@ impl StyleContext<'_> {
                 ..
             } => {
                 let render = |entry: &CitationItem<T>, idx: usize| {
-                    let mut ctx = self.variable_sorting_ctx(
+                    let mut ctx = self.macro_sorting_ctx(
                         entry,
                         idx,
                         entry.locale.as_ref(),

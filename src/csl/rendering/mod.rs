@@ -609,7 +609,7 @@ impl RenderCsl for citationberg::Date {
                 year = self.date_part.iter().any(|i| i.name == DatePartName::Year);
                 month = self.date_part.iter().any(|i| i.name == DatePartName::Month);
                 day = self.date_part.iter().any(|i| i.name == DatePartName::Day);
-            };
+            }
 
             if year {
                 // Smart hack taken from citeproc: This prints negative (BC) dates as N(999,999,999 + y)

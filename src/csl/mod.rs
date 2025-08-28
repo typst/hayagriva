@@ -1182,7 +1182,7 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    fn variable_sorting_ctx<'b, T: EntryLike>(
+    fn macro_sorting_ctx<'b, T: EntryLike>(
         &'b self,
         item: &'b CitationItem<'b, T>,
         idx: usize,
@@ -1194,7 +1194,7 @@ impl<'a> StyleContext<'a> {
             instance: InstanceContext::new(
                 item.entry,
                 CiteProperties::for_sorting(item.locator, idx),
-                Sorting::Variable,
+                Sorting::Macro,
                 locale,
                 term_locale,
                 None,
