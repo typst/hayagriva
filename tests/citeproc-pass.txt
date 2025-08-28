@@ -63,6 +63,7 @@ date_Accessed
 date_AccessedCrash
 date_DateAD
 date_DateNoDateWithTest
+date_DayOrdinalDayOneOnly
 date_DisappearingBug
 date_EmptyStrings
 date_IgnoreNonexistentSort
