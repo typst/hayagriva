@@ -810,7 +810,13 @@ fn render_date_part<T: EntryLike>(
                 }
             }
             DateStrongAnyForm::Year(brevity) => {
-                write_year(val, brevity == LongShortForm::Short, ctx).unwrap();
+                let ad = ctx
+                    .term(Term::Other(OtherTerm::Ad), TermForm::default(), false)
+                    .unwrap_or(" AD");
+                let bc = ctx
+                    .term(Term::Other(OtherTerm::Bc), TermForm::default(), false)
+                    .unwrap_or(" BC");
+                write_year(val, brevity == LongShortForm::Short, ctx, ad, bc).unwrap();
             }
         }
     }

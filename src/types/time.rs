@@ -261,8 +261,8 @@ impl Date {
         let positive_dn = match (periods, ad_prefix) {
             (true, false) => "C.E.",
             (false, false) => "CE",
-            (true, true) => "AD",
-            (false, true) => "A.D.",
+            (true, true) => "A.D.",
+            (false, true) => "AD",
         };
 
         if self.year > 0 {

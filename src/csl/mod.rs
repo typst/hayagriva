@@ -635,7 +635,14 @@ fn date_replacement<T: EntryLike>(
     ElemChildren(vec![ElemChild::Text(Formatted {
         text: if let Some(date) = date {
             let mut s = String::with_capacity(4);
-            write_year(date.year, false, &mut s).unwrap();
+            let c = ctx.ctx(entry, cite_props.clone(), locale, term_locale, false);
+            let ad = c
+                .term(Term::Other(OtherTerm::Ad), TermForm::default(), false)
+                .unwrap_or(" AD");
+            let bc = c
+                .term(Term::Other(OtherTerm::Bc), TermForm::default(), false)
+                .unwrap_or(" BC");
+            write_year(date.year, false, &mut s, ad, bc).unwrap();
             s
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
@@ -653,6 +660,8 @@ pub fn write_year<W: std::fmt::Write>(
     year: i32,
     short: bool,
     w: &mut W,
+    ad: &str,
+    bc: &str,
 ) -> std::fmt::Result {
     if short && year >= 1000 {
         return write!(w, "{:02}", year % 100);
@@ -664,11 +673,11 @@ pub fn write_year<W: std::fmt::Write>(
         if year > 0 { year } else { year.abs() + 1 },
         if year < 1000 {
             if year <= 0 {
-                "BC"
+                bc
             } else {
                 // AD is used as a postfix, see
                 // https://docs.citationstyles.org/en/stable/specification.html?#ad-and-bc
-                "AD"
+                ad
             }
         } else {
             ""
@@ -2984,7 +2993,7 @@ mod tests {
     fn low_year_test() {
         let yield_year = |year, short| {
             let mut s = String::new();
-            write_year(year, short, &mut s).unwrap();
+            write_year(year, short, &mut s, "AD", "BC").unwrap();
             s
         };
 
