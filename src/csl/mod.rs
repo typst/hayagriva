@@ -986,21 +986,23 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
             for i in 0..cite.items.len() {
-                eprintln!("{:?}", cite.items[i].cite_props);
                 match group_idx {
                     // This is our group.
                     Some((_, idx)) if Some(idx) == cite.items[i].group_idx => {
-                        if c == Collapse::YearSuffix {
-                            match cite.items[i].cite_props.speculative.disambiguation {
-                                DisambiguateState::YearSuffix(s) if s > 0 => {
-                                    // Same year as previous item in group
-                                    cite.items[i].delim_override = year_suffix_delimiter;
-                                    cite.items[i].collapse_verdict =
-                                        Some(CollapseVerdict::YearSuffix);
-                                    continue;
-                                }
-                                _ => {}
-                            }
+                        if c == Collapse::YearSuffix
+                            && let DisambiguateState::YearSuffix(s) =
+                                cite.items[i].cite_props.speculative.disambiguation
+                            && s > 0
+                        {
+                            // We want to collapse the years up to the suffix
+                            // and the current item has a year suffix greater
+                            // than zero, which means it follows another item
+                            // with the same year. In this case, we collapse
+                            // the year suffix.
+                            cite.items[i].delim_override = year_suffix_delimiter;
+                            cite.items[i].collapse_verdict =
+                                Some(CollapseVerdict::YearSuffix);
+                            continue;
                         }
                         // FIXME: Retains delimiter in names.
                         cite.items[i].delim_override = group_delimiter;
