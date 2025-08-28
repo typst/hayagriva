@@ -15,6 +15,7 @@ use citationberg::{
 use citationberg::{TermForm, TextTarget};
 
 use crate::PageRanges;
+use crate::csl::Sorting;
 use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
@@ -279,7 +280,7 @@ impl RenderCsl for citationberg::Number {
         }
 
         let value = ctx.resolve_number_or_page_variable(self.variable);
-        if ctx.instance.sorting {
+        if ctx.instance.sorting.is_enabled() {
             match value {
                 Some(NumberOrPageVariableResult::Number(
                     NumberVariableResult::Regular(MaybeTyped::Typed(n)),
@@ -582,7 +583,7 @@ impl RenderCsl for citationberg::Date {
 
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
-        if ctx.instance.sorting {
+        if ctx.instance.sorting.is_enabled() {
             let year;
             let mut month = false;
             let mut day = false;
@@ -600,6 +601,10 @@ impl RenderCsl for citationberg::Date {
                         day = true;
                     }
                 }
+            } else if ctx.instance.sorting == Sorting::Variable {
+                year = true;
+                month = true;
+                day = true;
             } else {
                 year = self.date_part.iter().any(|i| i.name == DatePartName::Year);
                 month = self.date_part.iter().any(|i| i.name == DatePartName::Month);
@@ -607,7 +612,14 @@ impl RenderCsl for citationberg::Date {
             };
 
             if year {
-                write!(ctx, "{:04}", date.year).unwrap();
+                // Smart hack taken from citeproc: This prints negative (BC) dates as N(999,999,999 + y)
+                // and positive (AD) dates as Py so they sort properly.
+                let (prefix, yr) = if date.year < 0 {
+                    ("N", 999999999 + date.year)
+                } else {
+                    ("P", date.year)
+                };
+                write!(ctx, "{prefix}{:09}", yr).unwrap();
                 render_year_suffix_implicitly(ctx);
             }
 

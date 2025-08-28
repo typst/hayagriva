@@ -25,10 +25,10 @@ impl StyleContext<'_> {
     ) -> Ordering {
         let ordering = match key {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
-                let a = InstanceContext::sort_instance(a, a_idx)
+                let a = InstanceContext::macro_sort_instance(a, a_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
-                let b = InstanceContext::sort_instance(b, b_idx)
+                let b = InstanceContext::macro_sort_instance(b, b_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
 
@@ -70,10 +70,10 @@ impl StyleContext<'_> {
                 }
             }
             SortKey::Variable { variable: Variable::Number(n), .. } => {
-                let a =
-                    InstanceContext::sort_instance(a, a_idx).resolve_number_variable(*n);
-                let b =
-                    InstanceContext::sort_instance(b, b_idx).resolve_number_variable(*n);
+                let a = InstanceContext::macro_sort_instance(a, a_idx)
+                    .resolve_number_variable(*n);
+                let b = InstanceContext::macro_sort_instance(b, b_idx)
+                    .resolve_number_variable(*n);
 
                 match (a, b) {
                     (Some(a), Some(b)) => a.csl_cmp(&b),
@@ -83,10 +83,10 @@ impl StyleContext<'_> {
                 }
             }
             SortKey::Variable { variable: Variable::Page(pv), .. } => {
-                let a =
-                    InstanceContext::sort_instance(a, a_idx).resolve_page_variable(*pv);
-                let b =
-                    InstanceContext::sort_instance(b, b_idx).resolve_page_variable(*pv);
+                let a = InstanceContext::macro_sort_instance(a, a_idx)
+                    .resolve_page_variable(*pv);
+                let b = InstanceContext::macro_sort_instance(b, b_idx)
+                    .resolve_page_variable(*pv);
 
                 match (a, b) {
                     (Some(a), Some(b)) => a.csl_cmp(&b),
@@ -103,7 +103,7 @@ impl StyleContext<'_> {
                 ..
             } => {
                 let render = |entry: &CitationItem<T>, idx: usize| {
-                    let mut ctx = self.sorting_ctx(
+                    let mut ctx = self.variable_sorting_ctx(
                         entry,
                         idx,
                         entry.locale.as_ref(),
