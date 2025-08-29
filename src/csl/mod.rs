@@ -14,9 +14,8 @@ use citationberg::taxonomy::{
 use citationberg::{
     Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display,
     GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
-    LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign,
-    StyleCategory, StyleClass, TermForm, ToAffixes, ToFormatting,
-    taxonomy as csl_taxonomy,
+    LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
+    StyleClass, TermForm, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
