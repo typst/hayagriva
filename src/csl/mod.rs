@@ -903,6 +903,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         .or(style.citation.layout.delimiter.as_deref());
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
+    let year_suffix_delimiter = style.citation.year_suffix_delimiter.as_deref();
 
     match style.citation.collapse {
         Some(Collapse::CitationNumber) => {
@@ -978,7 +979,9 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
 
             end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
         }
-        Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
+        Some(
+            c @ (Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged),
+        ) => {
             // Index of where the current group started and the group we are
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
@@ -986,6 +989,21 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                 match group_idx {
                     // This is our group.
                     Some((_, idx)) if Some(idx) == cite.items[i].group_idx => {
+                        if c == Collapse::YearSuffix
+                            && let DisambiguateState::YearSuffix(s) =
+                                cite.items[i].cite_props.speculative.disambiguation
+                            && s > 0
+                        {
+                            // We want to collapse the years up to the suffix
+                            // and the current item has a year suffix greater
+                            // than zero, which means it follows another item
+                            // with the same year. In this case, we collapse
+                            // the year suffix.
+                            cite.items[i].delim_override = year_suffix_delimiter;
+                            cite.items[i].collapse_verdict =
+                                Some(CollapseVerdict::YearSuffix);
+                            continue;
+                        }
                         // FIXME: Retains delimiter in names.
                         cite.items[i].delim_override = group_delimiter;
                         cite.items[i].collapse_verdict = Some(CollapseVerdict::First);
@@ -1002,7 +1020,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                 }
             }
 
-            // TODO: Year Suffix and Year Suffix ranged.
+            // TODO: Year ranged.
         }
         None => {}
     }
@@ -1014,7 +1032,6 @@ enum CollapseVerdict {
     /// Only the first date should be printed.
     First,
     /// Only the year suffix should be printed.
-    #[allow(dead_code)]
     YearSuffix,
 }
 
