@@ -619,7 +619,7 @@ impl RenderCsl for citationberg::Date {
                 } else {
                     ("P", date.year)
                 };
-                write!(ctx, "{prefix}{:09}", yr).unwrap();
+                write!(ctx, "{prefix}{yr:09}").unwrap();
                 render_year_suffix_implicitly(ctx);
             }
 
