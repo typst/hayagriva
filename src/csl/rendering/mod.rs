@@ -602,6 +602,14 @@ impl RenderCsl for citationberg::Date {
                     }
                 }
             } else if sorting == Sorting::Variable {
+                // According to the CSL 1.0.2 spec (section "Sorting"):
+                //
+                // "Number variables rendered within the macro with cs:number
+                // and date variables are treated the same as when they are
+                // called via variable. The only exception is that the complete
+                // date is returned if a date variable is called via the
+                // variable attribute. In contrast, macros return only those
+                // date-parts that would otherwise be rendered (...)."
                 year = true;
                 month = true;
                 day = true;
