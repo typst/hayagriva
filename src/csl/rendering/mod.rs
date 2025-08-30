@@ -280,7 +280,7 @@ impl RenderCsl for citationberg::Number {
         }
 
         let value = ctx.resolve_number_or_page_variable(self.variable);
-        if ctx.instance.sorting.is_enabled() {
+        if ctx.instance.sorting.is_some() {
             match value {
                 Some(NumberOrPageVariableResult::Number(
                     NumberVariableResult::Regular(MaybeTyped::Typed(n)),
@@ -583,7 +583,7 @@ impl RenderCsl for citationberg::Date {
 
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
-        if ctx.instance.sorting.is_enabled() {
+        if let Some(sorting) = ctx.instance.sorting {
             let year;
             let mut month = false;
             let mut day = false;
@@ -601,7 +601,7 @@ impl RenderCsl for citationberg::Date {
                         day = true;
                     }
                 }
-            } else if ctx.instance.sorting == Sorting::Variable {
+            } else if sorting == Sorting::Variable {
                 year = true;
                 month = true;
                 day = true;

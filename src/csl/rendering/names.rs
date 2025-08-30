@@ -340,7 +340,7 @@ impl RenderCsl for Names {
             let label = self.label();
             let do_label = |requested_pos: NameLabelPosition,
                             ctx: &mut Context<'_, T>| {
-                if !ctx.instance.sorting.is_enabled() {
+                if ctx.instance.sorting.is_none() {
                     if let Some((label, pos)) = label {
                         if pos == requested_pos {
                             render_label_with_var(
@@ -461,7 +461,7 @@ fn add_names<T: EntryLike>(
 
     let demote_non_dropping = match ctx.style.csl.settings.demote_non_dropping_particle {
         DemoteNonDroppingParticle::Never => false,
-        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting.is_enabled(),
+        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting.is_some(),
         DemoteNonDroppingParticle::DisplayAndSort => true,
     };
 
@@ -736,7 +736,7 @@ fn write_name<T: EntryLike>(
 
     let elem_idx = ctx.push_elem(citationberg::Formatting::default());
     match (form.is_long(), reverse, demote_non_dropping) {
-        _ if name.is_institutional() && ctx.instance.sorting.is_enabled() => {
+        _ if name.is_institutional() && ctx.instance.sorting.is_some() => {
             let idx = ctx.push_format(family_format);
             let cidx = ctx.push_case(family_case);
             // TODO make locale aware
@@ -771,12 +771,8 @@ fn write_name<T: EntryLike>(
             }
         }
         // Always reverse when sorting.
-        (true, _, false) if ctx.instance.sorting.is_enabled() => {
-            reverse_keep_particle(ctx)
-        }
-        (true, _, true) if ctx.instance.sorting.is_enabled() => {
-            reverse_demote_particle(ctx)
-        }
+        (true, _, false) if ctx.instance.sorting.is_some() => reverse_keep_particle(ctx),
+        (true, _, true) if ctx.instance.sorting.is_some() => reverse_demote_particle(ctx),
         (true, true, false) => reverse_keep_particle(ctx),
         (true, true, true) => reverse_demote_particle(ctx),
         (true, false, _) => {

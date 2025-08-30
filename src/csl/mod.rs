@@ -1072,17 +1072,10 @@ pub struct RenderedCitation {
     pub citation: ElemChildren,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sorting {
-    No,
     Variable,
     Macro,
-}
-
-impl Sorting {
-    pub fn is_enabled(&self) -> bool {
-        matches!(self, Self::Macro | Self::Variable)
-    }
 }
 
 /// A context that contains all information related to rendering a single entry.
@@ -1093,8 +1086,8 @@ struct InstanceContext<'a, T: EntryLike> {
     pub entry: &'a T,
     /// The position of this citation in the list of citations.
     pub cite_props: CiteProperties<'a>,
-    /// Whether we are sorting or formatting right now.
-    pub sorting: Sorting,
+    /// Whether we are sorting or formatting right now and if we are sorting with a variable or macro sort key.
+    pub sorting: Option<Sorting>,
     /// The locale for the content in the entry.
     pub locale: Option<&'a LocaleCode>,
     /// The locale for the terms.
@@ -1109,7 +1102,7 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
     fn new(
         entry: &'a T,
         cite_props: CiteProperties<'a>,
-        sorting: Sorting,
+        sorting: Option<Sorting>,
         locale: Option<&'a LocaleCode>,
         term_locale: Option<&'a LocaleCode>,
         kind: Option<SpecialForm>,
@@ -1125,11 +1118,11 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
         }
     }
 
-    fn macro_sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
+    fn variable_sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
         Self::new(
             item.entry,
             CiteProperties::for_sorting(item.locator, idx),
-            Sorting::Macro,
+            Some(Sorting::Variable),
             None,
             None,
             None,
@@ -1170,7 +1163,7 @@ impl<'a> StyleContext<'a> {
             instance: InstanceContext::new(
                 entry,
                 cite_props,
-                Sorting::No,
+                None,
                 locale,
                 term_locale,
                 None,
@@ -1193,7 +1186,7 @@ impl<'a> StyleContext<'a> {
             instance: InstanceContext::new(
                 item.entry,
                 CiteProperties::for_sorting(item.locator, idx),
-                Sorting::Macro,
+                Some(Sorting::Macro),
                 locale,
                 term_locale,
                 None,
