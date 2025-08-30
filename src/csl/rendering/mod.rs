@@ -613,9 +613,10 @@ impl RenderCsl for citationberg::Date {
 
             if year {
                 // Smart hack taken from citeproc: This prints negative (BC) dates as N(999,999,999 + y)
-                // and positive (AD) dates as Py so they sort properly.
+                // and positive (AD) dates as Py so they sort properly. (Use i32::MAX to avoid problems
+                // with large dates.)
                 let (prefix, yr) = if date.year < 0 {
-                    ("N", 999999999 + date.year)
+                    ("N", i32::MAX + date.year)
                 } else {
                     ("P", date.year)
                 };
