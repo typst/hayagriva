@@ -1089,6 +1089,12 @@ pub struct RenderedCitation {
     pub citation: ElemChildren,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sorting {
+    Variable,
+    Macro,
+}
+
 /// A context that contains all information related to rendering a single entry.
 #[derive(Debug, Clone, PartialEq)]
 struct InstanceContext<'a, T: EntryLike> {
@@ -1097,8 +1103,8 @@ struct InstanceContext<'a, T: EntryLike> {
     pub entry: &'a T,
     /// The position of this citation in the list of citations.
     pub cite_props: CiteProperties<'a>,
-    /// Whether we are sorting or formatting right now.
-    pub sorting: bool,
+    /// Whether we are sorting or formatting right now and if we are sorting with a variable or macro sort key.
+    pub sorting: Option<Sorting>,
     /// The locale for the content in the entry.
     pub locale: Option<&'a LocaleCode>,
     /// The locale for the terms.
@@ -1113,7 +1119,7 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
     fn new(
         entry: &'a T,
         cite_props: CiteProperties<'a>,
-        sorting: bool,
+        sorting: Option<Sorting>,
         locale: Option<&'a LocaleCode>,
         term_locale: Option<&'a LocaleCode>,
         kind: Option<SpecialForm>,
@@ -1129,11 +1135,11 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
         }
     }
 
-    fn sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
+    fn variable_sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
         Self::new(
             item.entry,
             CiteProperties::for_sorting(item.locator, idx),
-            true,
+            Some(Sorting::Variable),
             None,
             None,
             None,
@@ -1174,7 +1180,7 @@ impl<'a> StyleContext<'a> {
             instance: InstanceContext::new(
                 entry,
                 cite_props,
-                false,
+                None,
                 locale,
                 term_locale,
                 None,
@@ -1185,7 +1191,7 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    fn sorting_ctx<'b, T: EntryLike>(
+    fn macro_sorting_ctx<'b, T: EntryLike>(
         &'b self,
         item: &'b CitationItem<'b, T>,
         idx: usize,
@@ -1197,7 +1203,7 @@ impl<'a> StyleContext<'a> {
             instance: InstanceContext::new(
                 item.entry,
                 CiteProperties::for_sorting(item.locator, idx),
-                true,
+                Some(Sorting::Macro),
                 locale,
                 term_locale,
                 None,

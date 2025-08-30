@@ -15,6 +15,7 @@ use citationberg::{
 use citationberg::{TermForm, TextTarget};
 
 use crate::PageRanges;
+use crate::csl::Sorting;
 use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
@@ -279,7 +280,7 @@ impl RenderCsl for citationberg::Number {
         }
 
         let value = ctx.resolve_number_or_page_variable(self.variable);
-        if ctx.instance.sorting {
+        if ctx.instance.sorting.is_some() {
             match value {
                 Some(NumberOrPageVariableResult::Number(
                     NumberVariableResult::Regular(MaybeTyped::Typed(n)),
@@ -582,7 +583,7 @@ impl RenderCsl for citationberg::Date {
 
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
-        if ctx.instance.sorting {
+        if let Some(sorting) = ctx.instance.sorting {
             let year;
             let mut month = false;
             let mut day = false;
@@ -600,14 +601,34 @@ impl RenderCsl for citationberg::Date {
                         day = true;
                     }
                 }
+            } else if sorting == Sorting::Variable {
+                // According to the CSL 1.0.2 spec (section "Sorting"):
+                //
+                // "Number variables rendered within the macro with cs:number
+                // and date variables are treated the same as when they are
+                // called via variable. The only exception is that the complete
+                // date is returned if a date variable is called via the
+                // variable attribute. In contrast, macros return only those
+                // date-parts that would otherwise be rendered (...)."
+                year = true;
+                month = true;
+                day = true;
             } else {
                 year = self.date_part.iter().any(|i| i.name == DatePartName::Year);
                 month = self.date_part.iter().any(|i| i.name == DatePartName::Month);
                 day = self.date_part.iter().any(|i| i.name == DatePartName::Day);
-            };
+            }
 
             if year {
-                write!(ctx, "{:04}", date.year).unwrap();
+                // Smart hack taken from citeproc: This prints negative (BC) dates as N(999,999,999 + y)
+                // and positive (AD) dates as Py so they sort properly. (Use i32::MAX to avoid problems
+                // with large dates.)
+                let (prefix, yr) = if date.year < 0 {
+                    ("N", i32::MAX + date.year)
+                } else {
+                    ("P", date.year)
+                };
+                write!(ctx, "{prefix}{yr:09}").unwrap();
                 render_year_suffix_implicitly(ctx);
             }
 
