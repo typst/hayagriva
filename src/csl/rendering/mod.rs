@@ -680,10 +680,8 @@ impl RenderCsl for citationberg::Date {
             }
 
             let cursor = ctx.writing.len();
-            if !last_was_empty {
-                if let Some(delim) = &self.delimiter {
-                    ctx.push_str(delim);
-                }
+            if !last_was_empty && let Some(delim) = &self.delimiter {
+                ctx.push_str(delim);
             }
 
             let over_ride = base
@@ -842,10 +840,10 @@ fn render_date_part<T: EntryLike>(
         }
     }
 
-    if let DateStrongAnyForm::Year(_) = form {
-        if first {
-            render_year_suffix_implicitly(ctx);
-        }
+    if let DateStrongAnyForm::Year(_) = form
+        && first
+    {
+        render_year_suffix_implicitly(ctx);
     }
 
     if let Some(affix_loc) = affix_loc {
@@ -859,13 +857,13 @@ fn render_date_part<T: EntryLike>(
 /// Render the year suffix if it is set and the style will not render it
 /// explicitly.
 fn render_year_suffix_implicitly<T: EntryLike>(ctx: &mut Context<T>) {
-    if ctx.renders_year_suffix_implicitly() {
-        if let Some(year_suffix) = ctx.resolve_standard_variable(
+    if ctx.renders_year_suffix_implicitly()
+        && let Some(year_suffix) = ctx.resolve_standard_variable(
             LongShortForm::default(),
             StandardVariable::YearSuffix,
-        ) {
-            ctx.push_chunked(year_suffix.as_ref());
-        }
+        )
+    {
+        ctx.push_chunked(year_suffix.as_ref());
     }
 }
 
@@ -942,17 +940,15 @@ fn render_with_delimiter<T: EntryLike>(
             continue;
         }
 
-        if !first {
-            if let Some(delim) = &delimiter {
-                let prev_loc = std::mem::take(&mut loc);
+        if !first && let Some(delim) = &delimiter {
+            let prev_loc = std::mem::take(&mut loc);
 
-                if let Some(prev_loc) = prev_loc {
-                    ctx.commit_elem(prev_loc, None, None);
-                }
-
-                loc = Some(ctx.push_elem(citationberg::Formatting::default()));
-                ctx.push_str(delim);
+            if let Some(prev_loc) = prev_loc {
+                ctx.commit_elem(prev_loc, None, None);
             }
+
+            loc = Some(ctx.push_elem(citationberg::Formatting::default()));
+            ctx.push_str(delim);
         }
         first = false;
 

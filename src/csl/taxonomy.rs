@@ -841,12 +841,11 @@ impl EntryLike for citationberg::json::Item {
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
-        if matches!(variable, NumberVariable::PageFirst) {
-            if let Some(MaybeTyped::Typed(n)) =
+        if matches!(variable, NumberVariable::PageFirst)
+            && let Some(MaybeTyped::Typed(n)) =
                 self.resolve_page_variable(PageVariable::Page)
-            {
-                return n.first().map(|r| MaybeTyped::Typed(Cow::Owned(r.clone())));
-            }
+        {
+            return n.first().map(|r| MaybeTyped::Typed(Cow::Owned(r.clone())));
         }
         match self.0.get(&variable.to_string())? {
             csl_json::Value::Number(n) => {

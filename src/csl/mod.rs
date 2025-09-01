@@ -415,8 +415,8 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                             continue;
                         }
 
-                        if i != 0 {
-                            if let Some(delim) = cite
+                        if i != 0
+                            && let Some(delim) = cite
                                 .items
                                 .get(i)
                                 .and_then(|i: &SpeculativeItemRender<T>| i.delim_override)
@@ -427,12 +427,11 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                                     .layout
                                     .delimiter
                                     .as_deref())
-                            {
-                                elem_children.push(ElemChild::Text(Formatted {
-                                    text: delim.to_string(),
-                                    formatting,
-                                }));
-                            }
+                        {
+                            elem_children.push(ElemChild::Text(Formatted {
+                                text: delim.to_string(),
+                                formatting,
+                            }));
                         }
 
                         elem_children.push(ElemChild::Elem(Elem {
@@ -1355,20 +1354,19 @@ impl<'a> StyleContext<'a> {
                 bib.layout.render(&mut ctx);
                 ctx.writing.pop_name_options();
 
-                if bib.second_field_align.is_some() {
-                    if let Some(mut t) =
+                if bib.second_field_align.is_some()
+                    && let Some(mut t) =
                         ctx.writing.elem_stack.first_mut().remove_any_meta()
+                {
+                    if let ElemChild::Text(t) = &mut t {
+                        t.text.push(' ');
+                    } else if let ElemChild::Elem(e) = &mut t
+                        && let Some(t) = e.children.last_text_mut()
                     {
-                        if let ElemChild::Text(t) = &mut t {
-                            t.text.push(' ');
-                        } else if let ElemChild::Elem(e) = &mut t {
-                            if let Some(t) = e.children.last_text_mut() {
-                                t.text.push(' ');
-                            }
-                        }
-
-                        ctx.writing.elem_stack.first_mut().0.insert(0, t);
+                        t.text.push(' ');
                     }
+
+                    ctx.writing.elem_stack.first_mut().0.insert(0, t);
                 }
             }
             (Some(CitePurpose::Prose), _) => {
@@ -1668,10 +1666,10 @@ impl<'a> StyleContext<'a> {
                 return Some(output);
             }
 
-            if fallback.is_some() {
-                if let Some(output) = lookup(resource, fallback.as_ref()) {
-                    return Some(output);
-                }
+            if fallback.is_some()
+                && let Some(output) = lookup(resource, fallback.as_ref())
+            {
+                return Some(output);
             }
 
             if i == 0 {
@@ -1922,10 +1920,11 @@ impl WritingContext {
             if !self.buf.ends_with(' ') && !self.buf.ends_with('\u{a0}') {
                 self.buf.push(' ');
             }
-        } else if let Some(l) = self.elem_stack.last_mut().last_text_mut() {
-            if !l.text.ends_with(' ') && !l.text.ends_with('\u{a0}') {
-                l.text.push(' ');
-            }
+        } else if let Some(l) = self.elem_stack.last_mut().last_text_mut()
+            && !l.text.ends_with(' ')
+            && !l.text.ends_with('\u{a0}')
+        {
+            l.text.push(' ');
         }
     }
 
@@ -2451,19 +2450,18 @@ impl<'a, T: EntryLike> Context<'a, T> {
             && s.chars().next().is_some_and(|c| {
                 c.is_whitespace() || c == '.' || c == ',' || c == ']' || c == ')'
             })
+            && let Some(buf) = last_buffer(&mut self.writing)
         {
-            if let Some(buf) = last_buffer(&mut self.writing) {
-                buf.truncate(buf.trim_end().len());
-            }
+            buf.truncate(buf.trim_end().len());
         }
 
         // Do not print duplicate affixes.
         if s.chars().all(|c| !c.is_alphabetic()) {
             let trimmed = s.trim_end();
-            if let Some(last) = last_buffer(&mut self.writing) {
-                if let Some(strip) = last.strip_suffix(trimmed) {
-                    last.truncate(strip.len());
-                }
+            if let Some(last) = last_buffer(&mut self.writing)
+                && let Some(strip) = last.strip_suffix(trimmed)
+            {
+                last.truncate(strip.len());
             }
         }
 
@@ -2538,10 +2536,10 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Get a term from the style.
     fn term(&self, mut term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
-        if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator) {
-            if let Some(locator) = self.instance.cite_props.speculative.locator {
-                term = locator.0.into();
-            }
+        if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator)
+            && let Some(locator) = self.instance.cite_props.speculative.locator
+        {
+            term = locator.0.into();
         }
 
         let mut form = Some(form);
