@@ -16,6 +16,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
+use std::hash::RandomState;
 use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::{fmt, iter};
@@ -120,6 +121,9 @@ fn create_archive() -> Result<(), ArchivalError> {
     let should_write =
         std::env::var_os(UPDATE_ARCHIVES_ENV_VAR).is_some_and(|var| var == "1");
 
+    let mut expected_styles: HashSet<&str, RandomState> =
+        HashSet::from_iter(STYLE_IDS.into_iter());
+
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
         .chain(iter_files(&own_style_path, "csl"))
@@ -128,6 +132,10 @@ fn create_archive() -> Result<(), ArchivalError> {
                 let style: Style =
                     Style::from_xml(&fs::read_to_string(path).unwrap()).unwrap();
                 let Style::Independent(indep) = &style else { return None };
+
+                let name = indep.info.id.clone();
+
+                expected_styles.remove(name.as_str());
 
                 if STYLE_IDS.binary_search(&indep.info.id.as_str()).is_err() {
                     return None;
@@ -147,6 +155,15 @@ fn create_archive() -> Result<(), ArchivalError> {
             })
         })
         .collect();
+
+    if !expected_styles.is_empty() {
+        return Err(ArchivalError::MissingStyles(
+            expected_styles
+                .into_iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+        ));
+    }
 
     styles.sort_by_key(|(_, _, names, _)| names[0].clone());
 
@@ -422,6 +439,7 @@ pub enum ArchivalError {
     ValidationError(String),
     LocaleValidationError(String),
     NeedsUpdate(String),
+    MissingStyles(Vec<String>),
 }
 
 impl From<io::Error> for ArchivalError {
@@ -466,12 +484,15 @@ impl fmt::Display for ArchivalError {
                     "{item} is outdated, run archiver tests with env var '{UPDATE_ARCHIVES_ENV_VAR}=1' to update",
                 )
             }
+            Self::MissingStyles(styles) => {
+                write!(f, "Missing the following expected styles: {}", styles.join(", "))
+            }
         }
     }
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 81] = [
+const STYLE_IDS: [&str; 79] = [
     "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
@@ -498,8 +519,8 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/bristol-university-press",
     "http://www.zotero.org/styles/cell",
     "http://www.zotero.org/styles/chicago-author-date",
-    "http://www.zotero.org/styles/chicago-fullnote-bibliography",
-    "http://www.zotero.org/styles/chicago-note-bibliography",
+    "http://www.zotero.org/styles/chicago-notes-bibliography",
+    "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric",
@@ -524,7 +545,7 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/iso690-numeric-en",
     "http://www.zotero.org/styles/karger-journals",
     "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
-    "http://www.zotero.org/styles/modern-humanities-research-association",
+    "http://www.zotero.org/styles/modern-humanities-research-association-notes",
     "http://www.zotero.org/styles/modern-language-association",
     "http://www.zotero.org/styles/modern-language-association-8th-edition",
     "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
@@ -549,8 +570,6 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/the-lancet",
     "http://www.zotero.org/styles/thieme-german",
     "http://www.zotero.org/styles/trends-journals",
-    "http://www.zotero.org/styles/turabian-author-date",
-    "http://www.zotero.org/styles/turabian-fullnote-bibliography-8th-edition",
     "http://www.zotero.org/styles/vancouver",
     "http://www.zotero.org/styles/vancouver-superscript",
 ];
@@ -587,8 +606,8 @@ const OVERRIDES: [Override; 19] = [
         "china-national-standard-gb-t-7714-2015-author-date",
         "gb-7714-2015-author-date",
     ),
-    Override::first("chicago-fullnote-bibliography", "chicago-fullnotes"),
-    Override::first("chicago-note-bibliography", "chicago-notes"),
+    Override::first("chicago-notes-bibliography", "chicago-notes"),
+    Override::first("chicago-shortened-notes-bibliography", "chicago-shortened-notes"),
     Override::first("china-national-standard-gb-t-7714-2015-note", "gb-7714-2015-note"),
     Override::first(
         "china-national-standard-gb-t-7714-2015-numeric",
