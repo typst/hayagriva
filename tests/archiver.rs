@@ -121,8 +121,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     let should_write =
         std::env::var_os(UPDATE_ARCHIVES_ENV_VAR).is_some_and(|var| var == "1");
 
-    let mut expected_styles: HashSet<&str, RandomState> =
-        HashSet::from_iter(STYLE_IDS.into_iter());
+    let mut expected_styles: HashSet<&str, RandomState> = HashSet::from_iter(STYLE_IDS);
 
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
