@@ -113,6 +113,14 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Andrew Dunning.
     ChicagoAuthorDate,
+    /// Chicago Manual of Style 18th edition (notes and bibliography).
+    ///
+    /// Authors: Andrew Dunning.
+    ChicagoNotes,
+    /// Chicago Manual of Style 18th edition (shortened notes and bibliography).
+    ///
+    /// Authors: Andrew Dunning.
+    ChicagoShortenedNotes,
     /// Copernicus Publications.
     ///
     /// Authors: Julian Onions.
@@ -209,6 +217,10 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Patrick O'Brien.
     MaryAnnLiebertVancouver,
+    /// Modern Humanities Research Association 4th edition (notes).
+    ///
+    /// Authors: Andrew Dunning.
+    ModernHumanitiesResearchAssociationNotes,
     /// Modern Language Association 9th edition (in-text citations).
     ///
     /// Authors: Sebastian Karcher, Andrew Dunning.
@@ -348,6 +360,8 @@ impl ArchivedStyle {
             "bmj" => Some(Self::BritishMedicalJournal),
             "cell" => Some(Self::Cell),
             "chicago-author-date" => Some(Self::ChicagoAuthorDate),
+            "chicago-notes" => Some(Self::ChicagoNotes),
+            "chicago-shortened-notes" => Some(Self::ChicagoShortenedNotes),
             "copernicus" => Some(Self::Copernicus),
             "council-of-science-editors" => Some(Self::CouncilOfScienceEditors),
             "council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
@@ -373,6 +387,7 @@ impl ArchivedStyle {
             "iso-690-numeric" => Some(Self::Iso690Numeric),
             "karger" => Some(Self::Karger),
             "mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
+            "modern-humanities-research-association-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
             "modern-language-association-8" => Some(Self::ModernLanguageAssociation8),
@@ -435,6 +450,8 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/bmj" => Some(Self::BritishMedicalJournal),
             "http://www.zotero.org/styles/cell" => Some(Self::Cell),
             "http://www.zotero.org/styles/chicago-author-date" => Some(Self::ChicagoAuthorDate),
+            "http://www.zotero.org/styles/chicago-notes-bibliography" => Some(Self::ChicagoNotes),
+            "http://www.zotero.org/styles/chicago-shortened-notes-bibliography" => Some(Self::ChicagoShortenedNotes),
             "http://www.zotero.org/styles/copernicus-publications" => Some(Self::Copernicus),
             "http://www.zotero.org/styles/council-of-science-editors-brackets" => Some(Self::CouncilOfScienceEditors),
             "http://www.zotero.org/styles/council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
@@ -459,6 +476,7 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/iso690-numeric-en" => Some(Self::Iso690Numeric),
             "http://www.zotero.org/styles/karger-journals" => Some(Self::Karger),
             "http://www.zotero.org/styles/mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
+            "http://www.zotero.org/styles/modern-humanities-research-association-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "http://www.zotero.org/styles/modern-language-association" => Some(Self::ModernLanguageAssociation),
             "http://www.zotero.org/styles/modern-language-association-8th-edition" => Some(Self::ModernLanguageAssociation8),
             "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
@@ -518,6 +536,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal,
             Self::Cell,
             Self::ChicagoAuthorDate,
+            Self::ChicagoNotes,
+            Self::ChicagoShortenedNotes,
             Self::Copernicus,
             Self::CouncilOfScienceEditors,
             Self::CouncilOfScienceEditorsAuthorDate,
@@ -542,6 +562,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric,
             Self::Karger,
             Self::MaryAnnLiebertVancouver,
+            Self::ModernHumanitiesResearchAssociationNotes,
             Self::ModernLanguageAssociation,
             Self::ModernLanguageAssociation8,
             Self::MultidisciplinaryDigitalPublishingInstitute,
@@ -600,6 +621,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal => include_bytes!("../../archive/styles/bmj.cbor"),
             Self::Cell => include_bytes!("../../archive/styles/cell.cbor"),
             Self::ChicagoAuthorDate => include_bytes!("../../archive/styles/chicago-author-date.cbor"),
+            Self::ChicagoNotes => include_bytes!("../../archive/styles/chicago-notes-bibliography.cbor"),
+            Self::ChicagoShortenedNotes => include_bytes!("../../archive/styles/chicago-shortened-notes-bibliography.cbor"),
             Self::Copernicus => include_bytes!("../../archive/styles/copernicus-publications.cbor"),
             Self::CouncilOfScienceEditors => include_bytes!("../../archive/styles/council-of-science-editors-brackets.cbor"),
             Self::CouncilOfScienceEditorsAuthorDate => include_bytes!("../../archive/styles/council-of-science-editors-author-date.cbor"),
@@ -624,6 +647,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => include_bytes!("../../archive/styles/iso690-numeric-en.cbor"),
             Self::Karger => include_bytes!("../../archive/styles/karger-journals.cbor"),
             Self::MaryAnnLiebertVancouver => include_bytes!("../../archive/styles/mary-ann-liebert-vancouver.cbor"),
+            Self::ModernHumanitiesResearchAssociationNotes => include_bytes!("../../archive/styles/modern-humanities-research-association-notes.cbor"),
             Self::ModernLanguageAssociation => include_bytes!("../../archive/styles/modern-language-association.cbor"),
             Self::ModernLanguageAssociation8 => include_bytes!("../../archive/styles/modern-language-association-8th-edition.cbor"),
             Self::MultidisciplinaryDigitalPublishingInstitute => include_bytes!("../../archive/styles/multidisciplinary-digital-publishing-institute.cbor"),
@@ -741,6 +765,12 @@ impl ArchivedStyle {
             Self::ChicagoAuthorDate => &[
                 "chicago-author-date",
             ],
+            Self::ChicagoNotes => &[
+                "chicago-notes",
+            ],
+            Self::ChicagoShortenedNotes => &[
+                "chicago-shortened-notes",
+            ],
             Self::Copernicus => &[
                 "copernicus",
             ],
@@ -813,6 +843,9 @@ impl ArchivedStyle {
             ],
             Self::MaryAnnLiebertVancouver => &[
                 "mary-ann-liebert-vancouver",
+            ],
+            Self::ModernHumanitiesResearchAssociationNotes => &[
+                "modern-humanities-research-association-notes",
             ],
             Self::ModernLanguageAssociation => &[
                 "modern-language-association",
@@ -927,6 +960,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal => "BMJ",
             Self::Cell => "Cell",
             Self::ChicagoAuthorDate => "Chicago Manual of Style 18th edition (author-date)",
+            Self::ChicagoNotes => "Chicago Manual of Style 18th edition (notes and bibliography)",
+            Self::ChicagoShortenedNotes => "Chicago Manual of Style 18th edition (shortened notes and bibliography)",
             Self::Copernicus => "Copernicus Publications",
             Self::CouncilOfScienceEditors => "Council of Science Editors, Citation-Sequence (numeric, brackets)",
             Self::CouncilOfScienceEditorsAuthorDate => "Council of Science Editors, Name-Year 9th edition (author-date)",
@@ -951,6 +986,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "ISO-690 (numeric, English)",
             Self::Karger => "Karger journals",
             Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
+            Self::ModernHumanitiesResearchAssociationNotes => "Modern Humanities Research Association 4th edition (notes)",
             Self::ModernLanguageAssociation => "Modern Language Association 9th edition (in-text citations)",
             Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
             Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
@@ -1009,6 +1045,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal => "http://www.zotero.org/styles/bmj",
             Self::Cell => "http://www.zotero.org/styles/cell",
             Self::ChicagoAuthorDate => "http://www.zotero.org/styles/chicago-author-date",
+            Self::ChicagoNotes => "http://www.zotero.org/styles/chicago-notes-bibliography",
+            Self::ChicagoShortenedNotes => "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
             Self::Copernicus => "http://www.zotero.org/styles/copernicus-publications",
             Self::CouncilOfScienceEditors => "http://www.zotero.org/styles/council-of-science-editors-brackets",
             Self::CouncilOfScienceEditorsAuthorDate => "http://www.zotero.org/styles/council-of-science-editors-author-date",
@@ -1033,6 +1071,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "http://www.zotero.org/styles/iso690-numeric-en",
             Self::Karger => "http://www.zotero.org/styles/karger-journals",
             Self::MaryAnnLiebertVancouver => "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
+            Self::ModernHumanitiesResearchAssociationNotes => "http://www.zotero.org/styles/modern-humanities-research-association-notes",
             Self::ModernLanguageAssociation => "http://www.zotero.org/styles/modern-language-association",
             Self::ModernLanguageAssociation8 => "http://www.zotero.org/styles/modern-language-association-8th-edition",
             Self::MultidisciplinaryDigitalPublishingInstitute => "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
