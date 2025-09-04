@@ -243,12 +243,11 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Holder));
         }
 
-        if let Some(parent) = book(&mut item, parent) {
-            if let Some(a) =
+        if let Some(parent) = book(&mut item, parent)
+            && let Some(a) =
                 map_res(entry.book_author())?.map(|a| a.iter().map(Into::into).collect())
-            {
-                parent.set_authors(a);
-            }
+        {
+            parent.set_authors(a);
         }
 
         if let Some(a) =
@@ -319,10 +318,10 @@ impl TryFrom<&tex::Entry> for Entry {
 
         // NOTE: Ignoring subtitle and titleaddon for now
 
-        if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(title) = map_res(entry.main_title())?.map(Into::into) {
-                parent.set_title(title);
-            }
+        if let Some(parent) = mv(&mut item, parent, mv_parent)
+            && let Some(title) = map_res(entry.main_title())?.map(Into::into)
+        {
+            parent.set_title(title);
         }
 
         if let Some(parent) = book(&mut item, parent) {
@@ -435,10 +434,10 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(volumes) = map_res(entry.volumes())? {
-                parent.set_volume_total(Numeric::new(volumes as i32));
-            }
+        if let Some(parent) = mv(&mut item, parent, mv_parent)
+            && let Some(volumes) = map_res(entry.volumes())?
+        {
+            parent.set_volume_total(Numeric::new(volumes as i32));
         }
 
         if let Some(version) = map_res(entry.version())? {
@@ -573,10 +572,9 @@ impl TryFrom<&tex::Entry> for Entry {
         if let Some(note) = map_res(entry.annotation())?
             .or_else(|| entry.addendum().ok())
             .map(Into::into)
+            && item.note.is_none()
         {
-            if item.note.is_none() {
-                item.set_note(note);
-            }
+            item.set_note(note);
         }
 
         if let Some(abstract_) = map_res(entry.abstract_())? {

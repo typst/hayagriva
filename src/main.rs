@@ -274,35 +274,34 @@ fn main() {
 
         for entry in &bibliography {
             println!("{}", entry.key());
-            if matches.get_flag("show-bound") {
-                if let Some(selector) = &selector {
-                    for (k, v) in selector.apply(entry).unwrap() {
-                        println!(
-                            "\t{} => [{:?}] {}, {}",
-                            k,
-                            v.entry_type(),
-                            if let Some(authors) =
-                                entry.authors().or_else(|| entry.editors())
-                            {
-                                authors.iter().map(|a| a.name.as_str()).fold(
-                                    String::new(),
-                                    |mut prev, curr| {
-                                        if !prev.is_empty() {
-                                            prev.push_str(", ");
-                                        }
-                                        prev.push_str(curr);
-                                        prev
-                                    },
-                                )
-                            } else {
-                                "no authors".to_string()
-                            },
-                            entry
-                                .title()
-                                .map(|s| s.select(LongShortForm::default()).to_str())
-                                .unwrap_or_else(|| Cow::Borrowed("no title"))
-                        );
-                    }
+            if matches.get_flag("show-bound")
+                && let Some(selector) = &selector
+            {
+                for (k, v) in selector.apply(entry).unwrap() {
+                    println!(
+                        "\t{} => [{:?}] {}, {}",
+                        k,
+                        v.entry_type(),
+                        if let Some(authors) = entry.authors().or_else(|| entry.editors())
+                        {
+                            authors.iter().map(|a| a.name.as_str()).fold(
+                                String::new(),
+                                |mut prev, curr| {
+                                    if !prev.is_empty() {
+                                        prev.push_str(", ");
+                                    }
+                                    prev.push_str(curr);
+                                    prev
+                                },
+                            )
+                        } else {
+                            "no authors".to_string()
+                        },
+                        entry
+                            .title()
+                            .map(|s| s.select(LongShortForm::default()).to_str())
+                            .unwrap_or_else(|| Cow::Borrowed("no title"))
+                    );
                 }
             }
         }
