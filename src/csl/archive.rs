@@ -113,14 +113,14 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Andrew Dunning.
     ChicagoAuthorDate,
+    /// Chicago Manual of Style 18th edition (shortened notes and bibliography).
+    ///
+    /// Authors: Andrew Dunning.
+    ChicagoFullnotes,
     /// Chicago Manual of Style 18th edition (notes and bibliography).
     ///
     /// Authors: Andrew Dunning.
     ChicagoNotes,
-    /// Chicago Manual of Style 18th edition (shortened notes and bibliography).
-    ///
-    /// Authors: Andrew Dunning.
-    ChicagoShortenedNotes,
     /// Copernicus Publications.
     ///
     /// Authors: Julian Onions.
@@ -360,8 +360,8 @@ impl ArchivedStyle {
             "bmj" => Some(Self::BritishMedicalJournal),
             "cell" => Some(Self::Cell),
             "chicago-author-date" => Some(Self::ChicagoAuthorDate),
+            "chicago-fullnotes" => Some(Self::ChicagoFullnotes),
             "chicago-notes" => Some(Self::ChicagoNotes),
-            "chicago-shortened-notes" => Some(Self::ChicagoShortenedNotes),
             "copernicus" => Some(Self::Copernicus),
             "council-of-science-editors" => Some(Self::CouncilOfScienceEditors),
             "council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
@@ -450,8 +450,8 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/bmj" => Some(Self::BritishMedicalJournal),
             "http://www.zotero.org/styles/cell" => Some(Self::Cell),
             "http://www.zotero.org/styles/chicago-author-date" => Some(Self::ChicagoAuthorDate),
+            "http://www.zotero.org/styles/chicago-shortened-notes-bibliography" => Some(Self::ChicagoFullnotes),
             "http://www.zotero.org/styles/chicago-notes-bibliography" => Some(Self::ChicagoNotes),
-            "http://www.zotero.org/styles/chicago-shortened-notes-bibliography" => Some(Self::ChicagoShortenedNotes),
             "http://www.zotero.org/styles/copernicus-publications" => Some(Self::Copernicus),
             "http://www.zotero.org/styles/council-of-science-editors-brackets" => Some(Self::CouncilOfScienceEditors),
             "http://www.zotero.org/styles/council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
@@ -536,8 +536,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal,
             Self::Cell,
             Self::ChicagoAuthorDate,
+            Self::ChicagoFullnotes,
             Self::ChicagoNotes,
-            Self::ChicagoShortenedNotes,
             Self::Copernicus,
             Self::CouncilOfScienceEditors,
             Self::CouncilOfScienceEditorsAuthorDate,
@@ -621,8 +621,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal => include_bytes!("../../archive/styles/bmj.cbor"),
             Self::Cell => include_bytes!("../../archive/styles/cell.cbor"),
             Self::ChicagoAuthorDate => include_bytes!("../../archive/styles/chicago-author-date.cbor"),
+            Self::ChicagoFullnotes => include_bytes!("../../archive/styles/chicago-shortened-notes-bibliography.cbor"),
             Self::ChicagoNotes => include_bytes!("../../archive/styles/chicago-notes-bibliography.cbor"),
-            Self::ChicagoShortenedNotes => include_bytes!("../../archive/styles/chicago-shortened-notes-bibliography.cbor"),
             Self::Copernicus => include_bytes!("../../archive/styles/copernicus-publications.cbor"),
             Self::CouncilOfScienceEditors => include_bytes!("../../archive/styles/council-of-science-editors-brackets.cbor"),
             Self::CouncilOfScienceEditorsAuthorDate => include_bytes!("../../archive/styles/council-of-science-editors-author-date.cbor"),
@@ -765,11 +765,11 @@ impl ArchivedStyle {
             Self::ChicagoAuthorDate => &[
                 "chicago-author-date",
             ],
+            Self::ChicagoFullnotes => &[
+                "chicago-fullnotes",
+            ],
             Self::ChicagoNotes => &[
                 "chicago-notes",
-            ],
-            Self::ChicagoShortenedNotes => &[
-                "chicago-shortened-notes",
             ],
             Self::Copernicus => &[
                 "copernicus",
@@ -960,8 +960,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal => "BMJ",
             Self::Cell => "Cell",
             Self::ChicagoAuthorDate => "Chicago Manual of Style 18th edition (author-date)",
+            Self::ChicagoFullnotes => "Chicago Manual of Style 18th edition (shortened notes and bibliography)",
             Self::ChicagoNotes => "Chicago Manual of Style 18th edition (notes and bibliography)",
-            Self::ChicagoShortenedNotes => "Chicago Manual of Style 18th edition (shortened notes and bibliography)",
             Self::Copernicus => "Copernicus Publications",
             Self::CouncilOfScienceEditors => "Council of Science Editors, Citation-Sequence (numeric, brackets)",
             Self::CouncilOfScienceEditorsAuthorDate => "Council of Science Editors, Name-Year 9th edition (author-date)",
@@ -1045,8 +1045,8 @@ impl ArchivedStyle {
             Self::BritishMedicalJournal => "http://www.zotero.org/styles/bmj",
             Self::Cell => "http://www.zotero.org/styles/cell",
             Self::ChicagoAuthorDate => "http://www.zotero.org/styles/chicago-author-date",
+            Self::ChicagoFullnotes => "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
             Self::ChicagoNotes => "http://www.zotero.org/styles/chicago-notes-bibliography",
-            Self::ChicagoShortenedNotes => "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
             Self::Copernicus => "http://www.zotero.org/styles/copernicus-publications",
             Self::CouncilOfScienceEditors => "http://www.zotero.org/styles/council-of-science-editors-brackets",
             Self::CouncilOfScienceEditorsAuthorDate => "http://www.zotero.org/styles/council-of-science-editors-author-date",
