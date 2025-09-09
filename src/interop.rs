@@ -588,6 +588,22 @@ impl TryFrom<&tex::Entry> for Entry {
         // technical report)'
         if let Some(type_) = map_res(entry.type_())? {
             item.set_genre(type_.into());
+        } else {
+            match entry.entry_type {
+                // These are the default genres according to the BibLaTeX manual §2.1.2,
+                // which is in agreement with "BibTeXing" §2.2.
+                tex::EntryType::MastersThesis => {
+                    item.set_genre("Master's thesis".to_string().into())
+                }
+                tex::EntryType::PhdThesis => {
+                    item.set_genre("Doctoral dissertation".to_string().into())
+                }
+                tex::EntryType::TechReport => {
+                    // capitalized as in the BibLaTeX manual
+                    item.set_genre("technical report".to_string().into())
+                }
+                _ => (),
+            }
         }
 
         if let Some(series) = map_res(entry.series())? {
@@ -724,5 +740,55 @@ mod tests {
 
         assert_eq!(&"en-US".parse::<LanguageIdentifier>().unwrap(), mc);
         assert_eq!(&"de".parse::<LanguageIdentifier>().unwrap(), dda);
+    }
+
+    #[test]
+    fn auto_genre_for_phd_masters_techreport() {
+        let bib = crate::io::from_biblatex_str(
+            r#"
+        @MastersThesis{torvalds-1997-linux-portable-os,
+            author =      {Linus Torvalds},
+            title =       {Linux: a Portable Operating System},
+            institution = {University of Helsinki},
+            year =        1997,
+        }
+        @PhDThesis{may-2007-radial-vel-zodiac-dust,
+            author = {Brian May},
+            title = {A Survey of Radial Velocities in the Zodiacal Dust Cloud},
+            institution = {Imperial College},
+            year = 2007,
+        }
+        @TechReport{von-neumann-1945-first-edvac,
+            author =      {John von Neumann},
+            title =       {First draft of a report on the {EDVAC}},
+            institution = {United States Army Ordnance Department},
+            year =        1945,
+        }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            "Master's thesis",
+            &bib.get("torvalds-1997-linux-portable-os")
+                .unwrap()
+                .genre()
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            "Doctoral dissertation",
+            &bib.get("may-2007-radial-vel-zodiac-dust")
+                .unwrap()
+                .genre()
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            "technical report",
+            &bib.get("von-neumann-1945-first-edvac")
+                .unwrap()
+                .genre()
+                .unwrap()
+                .to_string()
+        );
     }
 }
