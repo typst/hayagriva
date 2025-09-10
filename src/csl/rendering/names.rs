@@ -340,17 +340,15 @@ impl RenderCsl for Names {
             let label = self.label();
             let do_label = |requested_pos: NameLabelPosition,
                             ctx: &mut Context<'_, T>| {
-                if !ctx.instance.sorting {
-                    if let Some((label, pos)) = label {
-                        if pos == requested_pos {
-                            render_label_with_var(
-                                label,
-                                ctx,
-                                ctx.term(variable.into(), label.form, plural)
-                                    .unwrap_or_default(),
-                            )
-                        }
-                    }
+                if ctx.instance.sorting.is_none()
+                    && let Some((label, pos)) = label
+                    && pos == requested_pos
+                {
+                    render_label_with_var(
+                        label,
+                        ctx,
+                        ctx.term(variable.into(), label.form, plural).unwrap_or_default(),
+                    )
                 }
             };
 
@@ -388,10 +386,10 @@ impl RenderCsl for Names {
             return true;
         }
 
-        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty()) {
-            if let Some(substitute) = &self.substitute() {
-                return substitute.children.iter().any(|c| c.will_render(ctx, var));
-            }
+        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty())
+            && let Some(substitute) = &self.substitute()
+        {
+            return substitute.children.iter().any(|c| c.will_render(ctx, var));
         }
 
         false
@@ -461,7 +459,7 @@ fn add_names<T: EntryLike>(
 
     let demote_non_dropping = match ctx.style.csl.settings.demote_non_dropping_particle {
         DemoteNonDroppingParticle::Never => false,
-        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting,
+        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting.is_some(),
         DemoteNonDroppingParticle::DisplayAndSort => true,
     };
 
@@ -473,16 +471,17 @@ fn add_names<T: EntryLike>(
 
         if !first {
             let mut delim = EndDelim::Delim;
-            if last && !has_et_al {
-                if let Some(d) = name_opts.and {
-                    delim = match name_opts.delimiter_precedes_last {
-                        DelimiterBehavior::Contextual if i >= 2 => EndDelim::DelimAnd(d),
-                        DelimiterBehavior::AfterInvertedName if last_inverted => {
-                            EndDelim::DelimAnd(d)
-                        }
-                        DelimiterBehavior::Always => EndDelim::DelimAnd(d),
-                        _ => EndDelim::And(d),
+            if last
+                && !has_et_al
+                && let Some(d) = name_opts.and
+            {
+                delim = match name_opts.delimiter_precedes_last {
+                    DelimiterBehavior::Contextual if i >= 2 => EndDelim::DelimAnd(d),
+                    DelimiterBehavior::AfterInvertedName if last_inverted => {
+                        EndDelim::DelimAnd(d)
                     }
+                    DelimiterBehavior::Always => EndDelim::DelimAnd(d),
+                    _ => EndDelim::And(d),
                 }
             }
 
@@ -736,7 +735,7 @@ fn write_name<T: EntryLike>(
 
     let elem_idx = ctx.push_elem(citationberg::Formatting::default());
     match (form.is_long(), reverse, demote_non_dropping) {
-        _ if name.is_institutional() && ctx.instance.sorting => {
+        _ if name.is_institutional() && ctx.instance.sorting.is_some() => {
             let idx = ctx.push_format(family_format);
             let cidx = ctx.push_case(family_case);
             // TODO make locale aware
@@ -771,8 +770,8 @@ fn write_name<T: EntryLike>(
             }
         }
         // Always reverse when sorting.
-        (true, _, false) if ctx.instance.sorting => reverse_keep_particle(ctx),
-        (true, _, true) if ctx.instance.sorting => reverse_demote_particle(ctx),
+        (true, _, false) if ctx.instance.sorting.is_some() => reverse_keep_particle(ctx),
+        (true, _, true) if ctx.instance.sorting.is_some() => reverse_demote_particle(ctx),
         (true, true, false) => reverse_keep_particle(ctx),
         (true, true, true) => reverse_demote_particle(ctx),
         (true, false, _) => {

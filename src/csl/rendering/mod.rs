@@ -15,6 +15,7 @@ use citationberg::{
 use citationberg::{TermForm, TextTarget};
 
 use crate::PageRanges;
+use crate::csl::Sorting;
 use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
@@ -279,7 +280,7 @@ impl RenderCsl for citationberg::Number {
         }
 
         let value = ctx.resolve_number_or_page_variable(self.variable);
-        if ctx.instance.sorting {
+        if ctx.instance.sorting.is_some() {
             match value {
                 Some(NumberOrPageVariableResult::Number(
                     NumberVariableResult::Regular(MaybeTyped::Typed(n)),
@@ -582,7 +583,7 @@ impl RenderCsl for citationberg::Date {
 
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
-        if ctx.instance.sorting {
+        if let Some(sorting) = ctx.instance.sorting {
             let year;
             let mut month = false;
             let mut day = false;
@@ -600,14 +601,34 @@ impl RenderCsl for citationberg::Date {
                         day = true;
                     }
                 }
+            } else if sorting == Sorting::Variable {
+                // According to the CSL 1.0.2 spec (section "Sorting"):
+                //
+                // "Number variables rendered within the macro with cs:number
+                // and date variables are treated the same as when they are
+                // called via variable. The only exception is that the complete
+                // date is returned if a date variable is called via the
+                // variable attribute. In contrast, macros return only those
+                // date-parts that would otherwise be rendered (...)."
+                year = true;
+                month = true;
+                day = true;
             } else {
                 year = self.date_part.iter().any(|i| i.name == DatePartName::Year);
                 month = self.date_part.iter().any(|i| i.name == DatePartName::Month);
                 day = self.date_part.iter().any(|i| i.name == DatePartName::Day);
-            };
+            }
 
             if year {
-                write!(ctx, "{:04}", date.year).unwrap();
+                // Smart hack taken from citeproc: This prints negative (BC) dates as N(999,999,999 + y)
+                // and positive (AD) dates as Py so they sort properly. (Use i32::MAX to avoid problems
+                // with large dates.)
+                let (prefix, yr) = if date.year < 0 {
+                    ("N", i32::MAX + date.year)
+                } else {
+                    ("P", date.year)
+                };
+                write!(ctx, "{prefix}{yr:09}").unwrap();
                 render_year_suffix_implicitly(ctx);
             }
 
@@ -659,10 +680,8 @@ impl RenderCsl for citationberg::Date {
             }
 
             let cursor = ctx.writing.len();
-            if !last_was_empty {
-                if let Some(delim) = &self.delimiter {
-                    ctx.push_str(delim);
-                }
+            if !last_was_empty && let Some(delim) = &self.delimiter {
+                ctx.push_str(delim);
             }
 
             let over_ride = base
@@ -762,7 +781,7 @@ fn render_date_part<T: EntryLike>(
                 write!(ctx, "{val:02}").unwrap();
             }
             DateStrongAnyForm::Day(DateDayForm::Ordinal)
-                if val != 1
+                if val == 1
                     || !ctx
                         .style
                         .lookup_locale(|l| {
@@ -810,15 +829,21 @@ fn render_date_part<T: EntryLike>(
                 }
             }
             DateStrongAnyForm::Year(brevity) => {
-                write_year(val, brevity == LongShortForm::Short, ctx).unwrap();
+                let ad = ctx
+                    .term(Term::Other(OtherTerm::Ad), TermForm::default(), false)
+                    .unwrap_or(" AD");
+                let bc = ctx
+                    .term(Term::Other(OtherTerm::Bc), TermForm::default(), false)
+                    .unwrap_or(" BC");
+                write_year(val, brevity == LongShortForm::Short, ctx, ad, bc).unwrap();
             }
         }
     }
 
-    if let DateStrongAnyForm::Year(_) = form {
-        if first {
-            render_year_suffix_implicitly(ctx);
-        }
+    if let DateStrongAnyForm::Year(_) = form
+        && first
+    {
+        render_year_suffix_implicitly(ctx);
     }
 
     if let Some(affix_loc) = affix_loc {
@@ -832,13 +857,13 @@ fn render_date_part<T: EntryLike>(
 /// Render the year suffix if it is set and the style will not render it
 /// explicitly.
 fn render_year_suffix_implicitly<T: EntryLike>(ctx: &mut Context<T>) {
-    if ctx.renders_year_suffix_implicitly() {
-        if let Some(year_suffix) = ctx.resolve_standard_variable(
+    if ctx.renders_year_suffix_implicitly()
+        && let Some(year_suffix) = ctx.resolve_standard_variable(
             LongShortForm::default(),
             StandardVariable::YearSuffix,
-        ) {
-            ctx.push_chunked(year_suffix.as_ref());
-        }
+        )
+    {
+        ctx.push_chunked(year_suffix.as_ref());
     }
 }
 
@@ -915,17 +940,15 @@ fn render_with_delimiter<T: EntryLike>(
             continue;
         }
 
-        if !first {
-            if let Some(delim) = &delimiter {
-                let prev_loc = std::mem::take(&mut loc);
+        if !first && let Some(delim) = &delimiter {
+            let prev_loc = std::mem::take(&mut loc);
 
-                if let Some(prev_loc) = prev_loc {
-                    ctx.commit_elem(prev_loc, None, None);
-                }
-
-                loc = Some(ctx.push_elem(citationberg::Formatting::default()));
-                ctx.push_str(delim);
+            if let Some(prev_loc) = prev_loc {
+                ctx.commit_elem(prev_loc, None, None);
             }
+
+            loc = Some(ctx.push_elem(citationberg::Formatting::default()));
+            ctx.push_str(delim);
         }
         first = false;
 

@@ -434,7 +434,7 @@ impl TestSuiteResults {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "nameattr_DelimiterPrecedesLastOnCitationInCitation.txt";
+    let name = "bugreports_ArabicLocale.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");

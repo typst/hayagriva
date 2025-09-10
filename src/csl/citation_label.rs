@@ -124,7 +124,6 @@ fn get_creators(entry: &Entry) -> Vec<&Person> {
             return compilers;
         }
 
-        let translators = entry.affiliated_with_role(PersonRole::Translator);
-        return translators;
+        entry.affiliated_with_role(PersonRole::Translator)
     }
 }
