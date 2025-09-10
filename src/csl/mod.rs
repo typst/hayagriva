@@ -15,7 +15,8 @@ use citationberg::{
     Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display,
     GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
     LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
+    StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToAffixes, ToFormatting,
+    taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
