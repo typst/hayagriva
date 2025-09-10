@@ -8,11 +8,11 @@ use std::{fmt, fs};
 
 mod common;
 use citationberg::taxonomy::Locator;
-use citationberg::{Locale, LocaleCode, Style, XmlError};
-use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
+use citationberg::{Locale, LocaleCode, Style, XmlDeError};
+use common::{CACHE_PATH, ensure_repo, iter_files_with_name};
 
 use citationberg::json as csl_json;
-use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::archive::{ArchivedStyle, locales};
 use hayagriva::io::from_biblatex_str;
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
@@ -107,7 +107,7 @@ enum TestParseError {
     SyntaxError,
     WrongClosingTag,
     MissingRequiredSection(SectionTag),
-    CslError(XmlError),
+    CslError(XmlDeError),
     JsonError(serde_json::Error),
 }
 
@@ -354,7 +354,9 @@ fn test_parse_tests() {
     }
 
     if fail {
-        panic!("⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`")
+        panic!(
+            "⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`"
+        )
     }
 
     eprintln!("✅ All tests expected to pass passed");
@@ -432,7 +434,7 @@ impl TestSuiteResults {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "nameattr_DelimiterPrecedesLastOnCitationInCitation.txt";
+    let name = "bugreports_ArabicLocale.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
@@ -909,7 +911,7 @@ fn case_folding() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, ". my lowercase container title.");
+    assert_eq!(buf, "my lowercase container title.");
 }
 
 #[test]
@@ -987,7 +989,10 @@ fn no_author() {
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
 
-    assert_eq!(buf, "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323");
+    assert_eq!(
+        buf,
+        "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323"
+    );
 
     let mut buf = String::new();
     rendered.citations[0]

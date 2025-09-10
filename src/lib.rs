@@ -155,21 +155,21 @@ use std::collections::BTreeMap;
 pub use crate::csl::archive;
 pub use citationberg;
 pub use csl::{
-    standalone_citation, BibliographyDriver, BibliographyItem, BibliographyRequest,
-    Brackets, BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem,
-    ElemChild, ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
-    RenderedBibliography, RenderedCitation, SpecificLocator,
+    BibliographyDriver, BibliographyItem, BibliographyRequest, Brackets, BufWriteFormat,
+    CitationItem, CitationRequest, CitePurpose, Elem, ElemChild, ElemChildren, ElemMeta,
+    Formatted, Formatting, LocatorPayload, Rendered, RenderedBibliography,
+    RenderedCitation, SpecificLocator, standalone_citation,
 };
 pub use selectors::{Selector, SelectorError};
 
 use indexmap::IndexMap;
 use paste::paste;
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Visitor};
 use types::*;
 use unic_langid::LanguageIdentifier;
 use util::{
-    deserialize_one_or_many_opt, serialize_one_or_many, serialize_one_or_many_opt,
-    OneOrMany,
+    OneOrMany, deserialize_one_or_many_opt, serialize_one_or_many,
+    serialize_one_or_many_opt,
 };
 
 /// A collection of bibliographic entries.
@@ -563,11 +563,7 @@ impl Entry {
             .flatten()
             .filter_map(
                 |PersonsWithRoles { names, role: r }| {
-                    if r == &role {
-                        Some(names)
-                    } else {
-                        None
-                    }
+                    if r == &role { Some(names) } else { None }
                 },
             )
             .flatten()
@@ -580,11 +576,7 @@ impl Entry {
     where
         F: FnMut(&'a Self) -> Option<T>,
     {
-        if let Some(value) = f(self) {
-            Some(value)
-        } else {
-            self.map_parents(f)
-        }
+        if let Some(value) = f(self) { Some(value) } else { self.map_parents(f) }
     }
 
     /// Get the unconverted value of a certain field from the parents only by BFS.

@@ -9,13 +9,13 @@ use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
 use clap::builder::PossibleValue;
-use clap::{crate_version, Arg, ArgAction, Command, ValueEnum};
+use clap::{Arg, ArgAction, Command, ValueEnum, crate_version};
 use strum::VariantNames;
 
-use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::archive::{ArchivedStyle, locales};
 use hayagriva::{
-    io, BibliographyDriver, CitationItem, CitationRequest, LocatorPayload,
-    SpecificLocator,
+    BibliographyDriver, CitationItem, CitationRequest, LocatorPayload, SpecificLocator,
+    io,
 };
 use hayagriva::{BibliographyRequest, Selector};
 
@@ -274,35 +274,34 @@ fn main() {
 
         for entry in &bibliography {
             println!("{}", entry.key());
-            if matches.get_flag("show-bound") {
-                if let Some(selector) = &selector {
-                    for (k, v) in selector.apply(entry).unwrap() {
-                        println!(
-                            "\t{} => [{:?}] {}, {}",
-                            k,
-                            v.entry_type(),
-                            if let Some(authors) =
-                                entry.authors().or_else(|| entry.editors())
-                            {
-                                authors.iter().map(|a| a.name.as_str()).fold(
-                                    String::new(),
-                                    |mut prev, curr| {
-                                        if !prev.is_empty() {
-                                            prev.push_str(", ");
-                                        }
-                                        prev.push_str(curr);
-                                        prev
-                                    },
-                                )
-                            } else {
-                                "no authors".to_string()
-                            },
-                            entry
-                                .title()
-                                .map(|s| s.select(LongShortForm::default()).to_str())
-                                .unwrap_or_else(|| Cow::Borrowed("no title"))
-                        );
-                    }
+            if matches.get_flag("show-bound")
+                && let Some(selector) = &selector
+            {
+                for (k, v) in selector.apply(entry).unwrap() {
+                    println!(
+                        "\t{} => [{:?}] {}, {}",
+                        k,
+                        v.entry_type(),
+                        if let Some(authors) = entry.authors().or_else(|| entry.editors())
+                        {
+                            authors.iter().map(|a| a.name.as_str()).fold(
+                                String::new(),
+                                |mut prev, curr| {
+                                    if !prev.is_empty() {
+                                        prev.push_str(", ");
+                                    }
+                                    prev.push_str(curr);
+                                    prev
+                                },
+                            )
+                        } else {
+                            "no authors".to_string()
+                        },
+                        entry
+                            .title()
+                            .map(|s| s.select(LongShortForm::default()).to_str())
+                            .unwrap_or_else(|| Cow::Borrowed("no title"))
+                    );
                 }
             }
         }
@@ -345,11 +344,7 @@ fn main() {
                 let alternate = matches.get_flag("no-fmt");
 
                 if let Some(prefix) = row.first_field {
-                    if alternate {
-                        println!("{prefix:#}")
-                    } else {
-                        println!("{prefix}")
-                    }
+                    if alternate { println!("{prefix:#}") } else { println!("{prefix}") }
                 }
 
                 if alternate {

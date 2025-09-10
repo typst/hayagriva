@@ -67,11 +67,7 @@ impl Elem {
     }
 
     pub(super) fn is_empty(&self) -> bool {
-        if self.children.is_empty() {
-            true
-        } else {
-            self.children.is_empty()
-        }
+        if self.children.is_empty() { true } else { self.children.is_empty() }
     }
 
     pub(super) fn has_content(&self) -> bool {
@@ -575,11 +571,7 @@ impl<T> NonEmptyStack<T> {
     }
 
     fn get(&self, idx: usize) -> Option<&T> {
-        if idx + 1 == self.len().get() {
-            Some(&self.last)
-        } else {
-            self.head.get(idx)
-        }
+        if idx + 1 == self.len().get() { Some(&self.last) } else { self.head.get(idx) }
     }
 
     fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
