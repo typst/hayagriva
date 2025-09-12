@@ -516,6 +516,7 @@ impl RenderCsl for citationberg::Label {
                 .cite_props
                 .speculative
                 .locator
+                .as_ref()
                 .is_some_and(|l| l.0 == Locator::Custom)
         {
             return (false, UsageInfo::default());
@@ -1101,8 +1102,13 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     self.idx += 1;
 
                     Some(
-                        self.ctx.instance.cite_props.speculative.locator.map(|l| l.0)
-                            == Some(loc),
+                        self.ctx
+                            .instance
+                            .cite_props
+                            .speculative
+                            .locator
+                            .as_ref()
+                            .is_some_and(|l| l.0 == loc),
                     )
                 } else {
                     self.next_case();
