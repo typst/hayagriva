@@ -19,6 +19,38 @@ use hayagriva::{
 };
 use hayagriva::{BibliographyRequest, Selector};
 
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum CliError {
+    #[error("No bibliography found in the style.")]
+    NoBibliography,
+
+    #[error("Bibliography file {0} not found.")]
+    BibliographyFileNotFound(String),
+
+    #[error("Error while reading the bibliography file: {0}")]
+    BibliographyRead(String),
+
+    #[error("Error while parsing selector: {0}")]
+    SelectorParse(#[from] hayagriva::SelectorError),
+
+    #[error("Error while serializing to YAML: {0}")]
+    SerializeYaml(#[from] serde_yaml::Error),
+}
+
+impl CliError {
+    pub fn code(&self) -> i32 {
+        match self {
+            CliError::NoBibliography => 4,
+            CliError::BibliographyFileNotFound(_) => 5,
+            CliError::BibliographyRead(_) => 6,
+            CliError::SelectorParse(_) => 7,
+            CliError::SerializeYaml(_) => 8,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, VariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Format {
@@ -51,8 +83,7 @@ impl ValueEnum for Format {
     }
 }
 
-/// Main function of the Hayagriva CLI.
-fn main() {
+fn run() -> Result<(), CliError> {
     let matches = Command::new("Hayagriva CLI")
             .version(crate_version!())
             .author("The Typst Project Developers <hi@typst.app>")
@@ -207,28 +238,22 @@ fn main() {
     });
 
     let bibliography = {
-        let input = match read_to_string(input) {
-            Ok(s) => s,
-            Err(e) => {
-                if e.kind() == IoErrorKind::NotFound {
-                    eprintln!("Bibliography file \"{}\" not found.", input.display());
-                    exit(5);
-                } else if let Some(os) = e.raw_os_error() {
-                    eprintln!(
-                        "Error while reading the bibliography file \"{}\": {}",
-                        input.display(),
-                        os
-                    );
-                    exit(6);
-                } else {
-                    eprintln!(
-                        "Error while reading the bibliography file \"{}\".",
-                        input.display()
-                    );
-                    exit(6);
-                }
+        let input = read_to_string(input).map_err(|e| {
+            if e.kind() == IoErrorKind::NotFound {
+                CliError::BibliographyFileNotFound(input.display().to_string())
+            } else if let Some(os) = e.raw_os_error() {
+                CliError::BibliographyRead(format!(
+                    "Error while reading the bibliography file \"{}\": {}",
+                    input.display(),
+                    os
+                ))
+            } else {
+                CliError::BibliographyRead(format!(
+                    "Error while reading the bibliography file \"{}\".",
+                    input.display()
+                ))
             }
-        };
+        })?;
 
         match format {
             Format::Yaml => io::from_yaml_str(&input).unwrap(),
@@ -239,17 +264,10 @@ fn main() {
 
     let bib_len = bibliography.len();
 
-    let selector =
-        matches
-            .get_one("selector")
-            .cloned()
-            .map(|src| match Selector::parse(src) {
-                Ok(selector) => selector,
-                Err(err) => {
-                    eprintln!("Error while parsing selector: {err}");
-                    exit(7);
-                }
-            });
+    // Try to parse the selector if provided
+    let selector = matches.get_one("selector").cloned().map_or(Ok(None), |src| {
+        Selector::parse(src).map(Some).map_err(CliError::SelectorParse)
+    })?;
 
     let bibliography = if let Some(keys) = matches.get_one::<String>("key") {
         let mut res = vec![];
@@ -305,7 +323,7 @@ fn main() {
                 }
             }
         }
-        exit(0);
+        return Ok(());
     }
 
     match matches.subcommand() {
@@ -320,8 +338,7 @@ fn main() {
                 retrieve_assets(style, csl, locale_path, locale_str);
 
             if style.bibliography.is_none() {
-                eprintln!("style has no bibliography");
-                exit(4);
+                return Err(CliError::NoBibliography);
             }
 
             let mut driver = BibliographyDriver::new();
@@ -443,10 +460,11 @@ fn main() {
             }
         }
         _ => {
-            let bib = io::to_yaml_str(&bibliography).unwrap();
+            let bib = io::to_yaml_str(&bibliography)?;
             println!("{bib}");
         }
     }
+    Ok(())
 }
 
 fn retrieve_assets<'a>(
@@ -486,4 +504,13 @@ fn retrieve_assets<'a>(
     };
 
     (style, locales, locale)
+}
+
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("Error: {}", e);
+        exit(e.code());
+    }
+
+    exit(0);
 }

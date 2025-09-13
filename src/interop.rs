@@ -461,6 +461,19 @@ impl TryFrom<&tex::Entry> for Entry {
                 map_res(entry.eprint_type().map(|c| c.format_verbatim().to_lowercase()))?;
             let eprint_type = eprint_type.as_deref();
             if eprint_type == Some("arxiv") {
+                let eprint_class = map_res(entry.eprint_class())
+                    .map(|c| c.map(|s| s.format_verbatim()))
+                    .unwrap_or(None);
+
+                // arXiv identifiers come in two forms:
+                //  - pre 2007: `arXiv:hep-th/9603067`
+                //  - post 2007: `arXiv:2412.11645 [hep-ex]`
+                let eprint = match eprint_class {
+                    Some(class) if !eprint.contains(&class) => {
+                        format!("{} [{}]", eprint, class)
+                    }
+                    _ => eprint,
+                };
                 item.set_arxiv(eprint);
             } else if eprint_type == Some("pubmed") {
                 item.set_pmid(eprint);
