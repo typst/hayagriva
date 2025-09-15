@@ -673,6 +673,12 @@ impl RenderCsl for citationberg::Date {
 
         // TODO: Date ranges
         let mut last_was_empty = true;
+
+        // Localized (base) delimiter takes precedence over the cs:date element's delimiter attribute.
+        let chosen_delim = base
+            .and_then(|b| b.delimiter.as_deref())
+            .or(self.delimiter.as_deref());
+
         for part in &base.unwrap_or(self).date_part {
             match part.name {
                 DatePartName::Month if !parts.has_month() => continue,
@@ -681,7 +687,7 @@ impl RenderCsl for citationberg::Date {
             }
 
             let cursor = ctx.writing.len();
-            if !last_was_empty && let Some(delim) = &self.delimiter {
+            if !last_was_empty && let Some(delim) = chosen_delim {
                 ctx.push_str(delim);
             }
 
