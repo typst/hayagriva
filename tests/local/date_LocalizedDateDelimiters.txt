@@ -1,0 +1,56 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+>>===== RESULT =====>>
+2025. year 15. September
+<<===== RESULT =====<<
+
+
+>>===== CSL =====>>
+<style
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout>
+      <date variable="issued" delimiter=" ">
+        <date-part name="year" suffix=". year"/>
+        <date-part name="day" form="numeric" suffix="."/>
+        <date-part name="month"/>
+      </date>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "ITEM-1",
+        "issued": {
+            "date-parts": [
+                [
+                  2025,
+                  9,
+                  15
+                ]
+            ]
+        },
+        "title": "Ignore me",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<
