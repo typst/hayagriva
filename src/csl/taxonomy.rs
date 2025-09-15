@@ -146,16 +146,19 @@ impl EntryLike for Entry {
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
         match variable {
             NumberVariable::ChapterNumber => self
-                .bound_select(
-                    &select!(
-                        (("e":Anthos) > ("p":Anthology)) |
-                        (("e":*) > ("p":Reference)) |
-                        (("e":Article) > ("p":Proceedings)) |
-                        (("e":*) > ("p":Book))
-                    ),
-                    "e",
-                )
-                .and_then(Entry::volume)
+                .chapter()
+                .or_else(|| {
+                    self.bound_select(
+                        &select!(
+                            (("e":Anthos) > ("p":Anthology)) |
+                            (("e":*) > ("p":Reference)) |
+                            (("e":Article) > ("p":Proceedings)) |
+                            (("e":*) > ("p":Book))
+                        ),
+                        "e",
+                    )
+                    .and_then(Entry::volume)
+                })
                 .map(MaybeTyped::to_cow),
             NumberVariable::CitationNumber => panic!("processor must resolve this"),
             NumberVariable::CollectionNumber => {

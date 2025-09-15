@@ -158,7 +158,7 @@ pub use csl::{
     BibliographyDriver, BibliographyItem, BibliographyRequest, Brackets, BufWriteFormat,
     CitationItem, CitationRequest, CitePurpose, Elem, ElemChild, ElemChildren, ElemMeta,
     Formatted, Formatting, LocatorPayload, Rendered, RenderedBibliography,
-    RenderedCitation, SpecificLocator, TransparentLocator, standalone_citation,
+    RenderedCitation, SpecificLocator, standalone_citation,
 };
 pub use selectors::{Selector, SelectorError};
 
@@ -514,6 +514,13 @@ entry! {
     /// For an item whose parent has multiple issues, indicates the position in
     /// the issue sequence. Also used to indicate the episode number for TV.
     "issue" => issue: MaybeTyped<Numeric>,
+    /// For an item that has chapters, such as book, specifies the number of
+    /// the chapter where this item is located.
+    ///
+    /// This should only be used when the chapter is simply additional
+    /// information; when citing entire chapters, the "chapter" entry type
+    /// should be used instead of this field.
+    "chapter" => chapter: MaybeTyped<Numeric>,
     /// For an item whose parent has multiple volumes/parts/seasons ... of which
     /// this item is one.
     "volume" => volume: MaybeTyped<Numeric>,
@@ -981,7 +988,7 @@ mod tests {
         use io::from_biblatex_str;
 
         let bibtex = r#"
-            @article{b, 
+            @article{b,
                 title={My page ranges},
                 pages={150--es}
             }
