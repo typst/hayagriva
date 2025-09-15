@@ -622,15 +622,7 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(chapter) =
-            map_res(entry.chapter())?.or_else(|| map_res(entry.part()).ok().flatten())
-        {
-            let mut new = Entry::new(&entry.key, EntryType::Chapter);
-            new.set_title(chapter.into());
-            let temp = item;
-            new.parents.push(temp);
-            item = new;
-        }
+        // TODO: use the chapter field
 
         Ok(item)
     }
@@ -790,5 +782,32 @@ mod tests {
                 .unwrap()
                 .to_string()
         );
+    }
+
+    /// See https://github.com/typst/hayagriva/issues/357
+    #[test]
+    fn issue_357() {
+        let entries = crate::io::from_biblatex_str(
+            r#"
+        @InCollection{king-2004-using-interv,
+          author = 	 {Nigel King},
+          title = 	 {Using interviews in qualitative research},
+          booktitle = 	 {Essential Guide to Qualitative Methods in
+                          Organizational Research},
+          crossref =	 {cassell-2004-essen-guide},
+          publisher =	 {SAGE Publications Ltd},
+          year =	 2004,
+          editor =	 {Catherine Cassell and Gillian Symon},
+          chapter =      2,
+          pages =	 {11--22},
+        }"#,
+        )
+        .unwrap();
+        let king = entries.get("king-2004-using-interv").unwrap();
+        assert_eq!(
+            &king.title().unwrap().to_string(),
+            "Using interviews in qualitative research"
+        );
+        assert_eq!(&king.authors().unwrap()[0].given_first(false), "Nigel King");
     }
 }
