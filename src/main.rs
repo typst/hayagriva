@@ -239,17 +239,15 @@ fn main() {
 
     let bib_len = bibliography.len();
 
-    let selector =
-        matches
-            .get_one("selector")
-            .cloned()
-            .map(|src| match Selector::parse(src) {
-                Ok(selector) => selector,
-                Err(err) => {
-                    eprintln!("Error while parsing selector: {err}");
-                    exit(7);
-                }
-            });
+    let selector = matches.get_one::<String>("selector").cloned().map(|src| {
+        match Selector::parse(&src) {
+            Ok(selector) => selector,
+            Err(err) => {
+                eprintln!("Error while parsing selector: {err}");
+                exit(7);
+            }
+        }
+    });
 
     let bibliography = if let Some(keys) = matches.get_one::<String>("key") {
         let mut res = vec![];
