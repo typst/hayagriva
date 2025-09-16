@@ -4,7 +4,7 @@ citation
 
 
 >>===== RESULT =====>>
-2025. year 15. September
+September 15, 2025
 <<===== RESULT =====<<
 
 
@@ -18,13 +18,21 @@ citation
     <title />
     <updated>2009-08-10T04:49:00+09:00</updated>
   </info>
+  <locale xml:lang="en">
+    <date form="text" delimiter=" ">
+        <date-part name="month" suffix=" "/>
+        <date-part name="day" suffix=", "/>
+        <date-part name="year"/>
+    </date>
+    <!-- <date form="numeric">
+        <date-part name="year"/>
+        <date-part name="month" form="numeric" prefix="-" range-delimiter="/"/>
+        <date-part name="day" prefix="-" range-delimiter="/"/>
+    </date> -->
+  </locale>
   <citation>
     <layout>
-      <date variable="issued" delimiter=" ">
-        <date-part name="year" suffix=". year"/>
-        <date-part name="day" form="numeric" suffix="."/>
-        <date-part name="month"/>
-      </date>
+      <date variable="issued" delimiter="FAIL" form="text"/>
     </layout>
   </citation>
 </style>
