@@ -2966,7 +2966,10 @@ mod tests {
     use citationberg::LocaleFile;
 
     use super::*;
-    use crate::io::from_yaml_str;
+    use crate::{
+        io::from_yaml_str,
+        types::{Numeric, NumericValue},
+    };
 
     #[test]
     fn test_csl() {
@@ -3029,6 +3032,34 @@ mod tests {
             //     }
             // }
         }
+    }
+
+    #[test]
+    fn test_chapter_field() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let yaml = fs::read_to_string(workspace.join("tests/data/basic.yml")).unwrap();
+        let bib = from_yaml_str(&yaml).unwrap();
+        let book = bib.get("lamb").unwrap();
+        assert_eq!(book.chapter().unwrap(), &MaybeTyped::Typed(Numeric::new(20)));
+        assert_eq!(book.volume().unwrap(), &MaybeTyped::Typed(Numeric::new(10)));
+
+        let book = bib.get("snail").unwrap();
+        assert_eq!(
+            book.chapter().unwrap(),
+            &MaybeTyped::Typed(Numeric {
+                value: NumericValue::Number(2),
+                prefix: None,
+                suffix: Some(Box::new("A".into()))
+            })
+        );
+        assert_eq!(
+            book.volume().unwrap(),
+            &MaybeTyped::Typed(Numeric {
+                value: NumericValue::Number(4),
+                prefix: None,
+                suffix: Some(Box::new("B".into()))
+            })
+        );
     }
 
     #[test]

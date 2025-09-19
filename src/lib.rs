@@ -965,6 +965,8 @@ mod tests {
                 "swedish",
                 "latex-users",
                 "barb",
+                "lamb",
+                "snail",
             ]
         );
         select_all!("*[abstract, note, genre]", entries, ["wire"]);
