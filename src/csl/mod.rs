@@ -3042,6 +3042,8 @@ mod tests {
         let book = bib.get("lamb").unwrap();
         assert_eq!(book.chapter().unwrap(), &MaybeTyped::Typed(Numeric::new(20)));
         assert_eq!(book.volume().unwrap(), &MaybeTyped::Typed(Numeric::new(10)));
+        assert_eq!(book.keyed_serial_number("serial"), None);
+        assert_eq!(book.resolve_number_variable(NumberVariable::Number), None);
 
         let book = bib.get("snail").unwrap();
         assert_eq!(
@@ -3054,6 +3056,35 @@ mod tests {
         );
         assert_eq!(
             book.volume().unwrap(),
+            &MaybeTyped::Typed(Numeric {
+                value: NumericValue::Number(4),
+                prefix: None,
+                suffix: Some(Box::new("B".into()))
+            })
+        );
+        assert_eq!(book.keyed_serial_number("serial"), None);
+        assert_eq!(book.resolve_number_variable(NumberVariable::Number), None);
+
+        let chapter = bib.get("lamb-chapter").unwrap();
+        assert_eq!(chapter.chapter().unwrap(), &MaybeTyped::Typed(Numeric::new(3)));
+        assert_eq!(chapter.keyed_serial_number("serial"), None);
+        assert_eq!(
+            chapter.resolve_number_variable(NumberVariable::Number),
+            Some(MaybeTyped::Typed(Cow::Borrowed(&Numeric::new(3))))
+        );
+        assert_eq!(chapter.volume(), None);
+        assert_eq!(
+            chapter.parents().first().unwrap().volume().unwrap(),
+            &MaybeTyped::Typed(Numeric::new(10))
+        );
+
+        let chapter = bib.get("snail-chapter").unwrap();
+        assert_eq!(chapter.chapter(), None);
+        assert_eq!(chapter.keyed_serial_number("serial").unwrap(), "3");
+
+        assert_eq!(chapter.volume(), None);
+        assert_eq!(
+            chapter.parents().first().unwrap().volume().unwrap(),
             &MaybeTyped::Typed(Numeric {
                 value: NumericValue::Number(4),
                 prefix: None,

@@ -170,13 +170,21 @@ impl EntryLike for Entry {
             }
             NumberVariable::Issue => self.map(|e| e.issue()).map(MaybeTyped::to_cow),
             NumberVariable::Locator => panic!("processor must resolve this"),
-            NumberVariable::Number => {
-                self.serial_number().and_then(|s| s.0.get("serial")).map(|s| {
+            NumberVariable::Number => self
+                .serial_number()
+                .and_then(|s| s.0.get("serial"))
+                .map(|s| {
                     Numeric::from_str(s)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
                 })
-            }
+                .or_else(|| {
+                    // User can specify either 'serial-number: 3' or
+                    // 'chapter: 3' for chapter entries, with the same result.
+                    self.bound_select(&select!(("e":Chapter)), "e")
+                        .and_then(|s| s.chapter())
+                        .map(MaybeTyped::to_cow)
+                }),
             NumberVariable::NumberOfPages => {
                 self.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }

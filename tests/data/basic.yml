@@ -435,3 +435,29 @@ snail:
     chapter: 2A
     volume: 4B
     page-range: 28
+
+lamb-chapter:
+    type: Chapter
+    page-range: 10-12
+    chapter: 3
+    parent:
+        type: Book
+        title: The life of a friendly lamb
+        author: Kell-Nehrer, Felips
+        date: 2011
+        chapter: 20
+        volume: 10
+        page-range: 22-23
+        tongus: 2
+
+snail-chapter:
+    type: Chapter
+    page-range: 10-12
+    serial-number: 3
+    parent:
+        type: Book
+        title: A Snail Study
+        author: Kell-Nehrer, Felips
+        date: 2011
+        volume: 4B
+        page-range: 28
