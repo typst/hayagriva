@@ -268,6 +268,14 @@ This section lists all possible fields and data types for them.
 | **Description:** | Total number of volumes/parts/seasons this item consists of |
 | **Example:**     | `volume-total: 12`                                        |
 
+#### `chapter`
+
+|                  |                                                           |
+|------------------|-----------------------------------------------------------|
+| **Data type:**   | numeric or string                                         |
+| **Description:** | The number of the chapter where this item's information can be found. When citing an entire chapter (especially if it has its own separate non-numeric title), prefer using `type: chapter` for the item, keeping the containing work's data as its parent. |
+| **Example:**     | `chapter: 4`
+
 #### `edition`
 
 |                  |                                                           |
