@@ -920,7 +920,7 @@ mod tests {
         select_all!(
             "(chapter | anthos) > (anthology | book)",
             entries,
-            ["harry", "gedanken"]
+            ["harry", "gedanken", "lamb-chapter", "snail-chapter"]
         );
         select_all!(
             "*[url]",
@@ -967,6 +967,8 @@ mod tests {
                 "barb",
                 "lamb",
                 "snail",
+                "lamb-chapter",
+                "snail-chapter",
             ]
         );
         select_all!("*[abstract, note, genre]", entries, ["wire"]);
