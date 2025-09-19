@@ -178,6 +178,24 @@ impl ElemChildren {
         })
     }
 
+    /// Retrieve a mutable reference to the first child with a matching meta by
+    /// DFS.
+    pub fn find_meta_mut(&mut self, meta: ElemMeta) -> Option<&mut Elem> {
+        self.0
+            .iter_mut()
+            .filter_map(|c| match c {
+                ElemChild::Elem(e) => {
+                    if e.meta == Some(meta) {
+                        Some(e)
+                    } else {
+                        e.children.find_meta_mut(meta)
+                    }
+                }
+                _ => None,
+            })
+            .next()
+    }
+
     /// Remove the first child with any meta by DFS.
     pub(super) fn remove_any_meta(&mut self) -> Option<ElemChild> {
         for i in 0..self.0.len() {
