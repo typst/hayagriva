@@ -622,7 +622,18 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        // TODO: use the chapter field
+        if let Some(chapter) = map_res(entry.chapter())? {
+            // Per BibLaTeX manual, v3.20:
+            // "chapter (field): a chapter or section or any other unit of a work"
+            // This means it corresponds to the CSL "chapter-number" field -
+            // that is, describes the number of the chapter where the
+            // referenced information can be found - rather than, necessarily,
+            // the chapter entry type (referring to an entire chapter), which
+            // is better corresponded to by the `@InBook` BibLaTeX entry type:
+            // "A part of a book which forms a self-contained unit with its
+            // own title."
+            item.set_chapter(chapter.into());
+        }
 
         Ok(item)
     }
@@ -646,7 +657,7 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 mod tests {
     use unic_langid::LanguageIdentifier;
 
-    use crate::types::PersonRole;
+    use crate::types::{MaybeTyped, PersonRole};
 
     #[test]
     fn test_pmid_from_biblatex() {
@@ -809,5 +820,6 @@ mod tests {
             "Using interviews in qualitative research"
         );
         assert_eq!(&king.authors().unwrap()[0].given_first(false), "Nigel King");
+        assert_eq!(king.chapter().unwrap(), &MaybeTyped::Typed(2i32.into()));
     }
 }
