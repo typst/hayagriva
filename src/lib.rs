@@ -514,11 +514,11 @@ entry! {
     /// For an item whose parent has multiple issues, indicates the position in
     /// the issue sequence. Also used to indicate the episode number for TV.
     "issue" => issue: MaybeTyped<Numeric>,
-    /// The number of the chapter where this item's information can be found.
+    /// The number of the chapter in the referenced work where this item can be found.
     ///
-    /// When citing an entire chapter (especially if it has its own separate
-    /// non-numeric title), prefer using `type: chapter` for the item, keeping
-    /// the containing work's data as its parent.
+    /// When the chapter itself is the item being cited, which is common if it
+    /// has its own non-numeric title, prefer using `type: chapter` for the
+    /// entry while specifying the containing work's data as its parent.
     "chapter" => chapter: MaybeTyped<Numeric>,
     /// For an item whose parent has multiple volumes/parts/seasons ... of which
     /// this item is one.
