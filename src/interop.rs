@@ -622,7 +622,18 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        // TODO: use the chapter field
+        if let Some(chapter) = map_res(entry.chapter())? {
+            // Per BibLaTeX manual, v3.20:
+            // "chapter (field): a chapter or section or any other unit of a work"
+            // This means it corresponds to the CSL "chapter-number" field -
+            // that is, describes the number of the chapter where the
+            // referenced information can be found - rather than, necessarily,
+            // the chapter entry type (referring to an entire chapter), which
+            // is better corresponded to by the `@InBook` BibLaTeX entry type:
+            // "A part of a book which forms a self-contained unit with its
+            // own title."
+            item.set_chapter(chapter.into());
+        }
 
         Ok(item)
     }
@@ -646,7 +657,7 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 mod tests {
     use unic_langid::LanguageIdentifier;
 
-    use crate::types::PersonRole;
+    use crate::types::{EntryType, MaybeTyped, PersonRole};
 
     #[test]
     fn test_pmid_from_biblatex() {
@@ -800,6 +811,17 @@ mod tests {
           editor =	 {Catherine Cassell and Gillian Symon},
           chapter =      2,
           pages =	 {11--22},
+        }
+
+        @InBook{pine-1982-minesweeper-techniques,
+          title = {Studies on Modern Minesweeper Techniques},
+          author = {Robertson Pine},
+          chapter = {1},
+          booktitle = {Modern Games: Deep Research and Analysis},
+          publisher = {Book Publisher},
+          editor = {John Pine},
+          year = 1982,
+          pages = {5--10},
         }"#,
         )
         .unwrap();
@@ -809,5 +831,19 @@ mod tests {
             "Using interviews in qualitative research"
         );
         assert_eq!(&king.authors().unwrap()[0].given_first(false), "Nigel King");
+        assert_eq!(king.chapter().unwrap(), &MaybeTyped::Typed(2i32.into()));
+
+        let pine = entries.get("pine-1982-minesweeper-techniques").unwrap();
+        assert_eq!(
+            &pine.title().unwrap().to_string(),
+            "Studies on Modern Minesweeper Techniques"
+        );
+        assert_eq!(&pine.authors().unwrap()[0].given_first(false), "Robertson Pine");
+        assert_eq!(pine.entry_type(), &EntryType::Chapter);
+        assert_eq!(pine.chapter().unwrap(), &MaybeTyped::Typed(1i32.into()));
+        assert_eq!(
+            pine.parents()[0].title().unwrap().to_string(),
+            "Modern Games: Deep Research and Analysis"
+        );
     }
 }
