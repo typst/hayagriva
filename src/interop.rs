@@ -657,7 +657,7 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 mod tests {
     use unic_langid::LanguageIdentifier;
 
-    use crate::types::{MaybeTyped, PersonRole};
+    use crate::types::{EntryType, MaybeTyped, PersonRole};
 
     #[test]
     fn test_pmid_from_biblatex() {
@@ -811,6 +811,17 @@ mod tests {
           editor =	 {Catherine Cassell and Gillian Symon},
           chapter =      2,
           pages =	 {11--22},
+        }
+
+        @InBook{pine-1982-minesweeper-techniques,
+          title = {Studies on Modern Minesweeper Techniques},
+          author = {Robertson Pine},
+          chapter = {1},
+          booktitle = {Modern Games: Deep Research and Analysis},
+          publisher = {Book Publisher},
+          editor = {John Pine},
+          year = 1982,
+          pages = {5--10},
         }"#,
         )
         .unwrap();
@@ -821,5 +832,18 @@ mod tests {
         );
         assert_eq!(&king.authors().unwrap()[0].given_first(false), "Nigel King");
         assert_eq!(king.chapter().unwrap(), &MaybeTyped::Typed(2i32.into()));
+
+        let pine = entries.get("pine-1982-minesweeper-techniques").unwrap();
+        assert_eq!(
+            &pine.title().unwrap().to_string(),
+            "Studies on Modern Minesweeper Techniques"
+        );
+        assert_eq!(&pine.authors().unwrap()[0].given_first(false), "Robertson Pine");
+        assert_eq!(pine.entry_type(), &EntryType::Chapter);
+        assert_eq!(pine.chapter().unwrap(), &MaybeTyped::Typed(1i32.into()));
+        assert_eq!(
+            pine.parents()[0].title().unwrap().to_string(),
+            "Modern Games: Deep Research and Analysis"
+        );
     }
 }
