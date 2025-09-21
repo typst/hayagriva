@@ -1,6 +1,6 @@
 # The Hayagriva YAML File Format
 
-The Hayagriva YAML file format enables you to feed a collection of literature items into Hayagriva. It is built on the [YAML standard](https://en.wikipedia.org/wiki/YAML). This documentation starts with a basic introduction with examples into the format, explains how to represent several types of literature with parents, and then explores all the possible fields and data types. An [example file](https://github.com/typst/hayagriva/blob/main/tests/data/basic.yaml) covering many potential use cases can be found in the test directory of the repository.
+The Hayagriva YAML file format enables you to feed a collection of literature items into Hayagriva. It is built on the [YAML standard](https://en.wikipedia.org/wiki/YAML). This documentation starts with a basic introduction with examples into the format, explains how to represent several types of literature with parents, and then explores all the possible fields and data types. An [example file](https://github.com/typst/hayagriva/blob/main/tests/data/basic.yml) covering many potential use cases can be found in the test directory of the repository.
 
 ## Overview
 
