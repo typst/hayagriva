@@ -155,21 +155,21 @@ use std::collections::BTreeMap;
 pub use crate::csl::archive;
 pub use citationberg;
 pub use csl::{
-    standalone_citation, BibliographyDriver, BibliographyItem, BibliographyRequest,
-    Brackets, BufWriteFormat, CitationItem, CitationRequest, CitePurpose, Elem,
-    ElemChild, ElemChildren, ElemMeta, Formatted, Formatting, LocatorPayload, Rendered,
-    RenderedBibliography, RenderedCitation, SpecificLocator,
+    BibliographyDriver, BibliographyItem, BibliographyRequest, Brackets, BufWriteFormat,
+    CitationItem, CitationRequest, CitePurpose, Elem, ElemChild, ElemChildren, ElemMeta,
+    Formatted, Formatting, LocatorPayload, Rendered, RenderedBibliography,
+    RenderedCitation, SpecificLocator, standalone_citation,
 };
 pub use selectors::{Selector, SelectorError};
 
 use indexmap::IndexMap;
 use paste::paste;
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Visitor};
 use types::*;
 use unic_langid::LanguageIdentifier;
 use util::{
-    deserialize_one_or_many_opt, serialize_one_or_many, serialize_one_or_many_opt,
-    OneOrMany,
+    OneOrMany, deserialize_one_or_many_opt, serialize_one_or_many,
+    serialize_one_or_many_opt,
 };
 
 /// A collection of bibliographic entries.
@@ -514,6 +514,12 @@ entry! {
     /// For an item whose parent has multiple issues, indicates the position in
     /// the issue sequence. Also used to indicate the episode number for TV.
     "issue" => issue: MaybeTyped<Numeric>,
+    /// The number of the chapter in the referenced work where this item can be found.
+    ///
+    /// When the chapter itself is the item being cited, which is common if it
+    /// has its own non-numeric title, prefer using `type: chapter` for the
+    /// entry while specifying the containing work's data as its parent.
+    "chapter" => chapter: MaybeTyped<Numeric>,
     /// For an item whose parent has multiple volumes/parts/seasons ... of which
     /// this item is one.
     "volume" => volume: MaybeTyped<Numeric>,
@@ -563,11 +569,7 @@ impl Entry {
             .flatten()
             .filter_map(
                 |PersonsWithRoles { names, role: r }| {
-                    if r == &role {
-                        Some(names)
-                    } else {
-                        None
-                    }
+                    if r == &role { Some(names) } else { None }
                 },
             )
             .flatten()
@@ -580,11 +582,7 @@ impl Entry {
     where
         F: FnMut(&'a Self) -> Option<T>,
     {
-        if let Some(value) = f(self) {
-            Some(value)
-        } else {
-            self.map_parents(f)
-        }
+        if let Some(value) = f(self) { Some(value) } else { self.map_parents(f) }
     }
 
     /// Get the unconverted value of a certain field from the parents only by BFS.
@@ -741,7 +739,7 @@ impl Entry {
             EntryType::Article => retrieve_container(&[
                 EntryType::Book,
                 // Proceedings must come before Conference.
-                // Because @inproceedings will result in a Artical entry with a Proceedings and a
+                // Because @inproceedings will result in a Article entry with a Proceedings and a
                 // Conference parent. But only the Proceedings has the correct title.
                 EntryType::Proceedings,
                 EntryType::Conference,
@@ -921,7 +919,7 @@ mod tests {
         select_all!(
             "(chapter | anthos) > (anthology | book)",
             entries,
-            ["harry", "gedanken"]
+            ["harry", "gedanken", "lamb-chapter", "snail-chapter"]
         );
         select_all!(
             "*[url]",
@@ -966,6 +964,10 @@ mod tests {
                 "swedish",
                 "latex-users",
                 "barb",
+                "lamb",
+                "snail",
+                "lamb-chapter",
+                "snail-chapter",
             ]
         );
         select_all!("*[abstract, note, genre]", entries, ["wire"]);
@@ -989,7 +991,7 @@ mod tests {
         use io::from_biblatex_str;
 
         let bibtex = r#"
-            @article{b, 
+            @article{b,
                 title={My page ranges},
                 pages={150--es}
             }

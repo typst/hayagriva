@@ -11,12 +11,13 @@
 //! files.
 
 use citationberg::{IndependentStyle, LocaleCode, Style};
-use citationberg::{Locale, LocaleFile, XmlError};
+use citationberg::{Locale, LocaleFile, XmlDeError};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
-use std::io::{self, Read};
+use std::hash::RandomState;
+use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::{fmt, iter};
 
@@ -34,10 +35,21 @@ const ARCHIVE_STYLES_PATH: &str = "archive/styles/";
 const ARCHIVE_LOCALES_PATH: &str = "archive/locales/";
 const ARCHIVE_SRC_PATH: &str = "src/csl/archive.rs";
 
-/// Always archive.
+const UPDATE_ARCHIVES_ENV_VAR: &str = "HAYAGRIVA_ARCHIVER_UPDATE";
+
+/// Always archive CSL styles from upstream.
+///
+/// Ignore by default so CI and tests can pass despite outdated archives.
+/// This specific test should rather be run periodically using the command
+/// below:
+///
+/// ```sh
+/// cargo test --test archiver -- --ignored
+/// ```
 #[test]
+#[ignore]
 fn always_archive() {
-    ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {}", err));
+    ensure_repos().unwrap_or_else(|err| panic!("Downloading repos failed: {err}"));
     create_archive().unwrap_or_else(|err| panic!("{}", err));
 }
 
@@ -61,7 +73,7 @@ fn ensure_archive_up_to_date(
     item: String,
     expected: &[u8],
 ) -> Result<(), ArchivalError> {
-    let mut file = match fs::File::open(path) {
+    let file = match fs::File::open(path) {
         Ok(file) => file,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             // The archive file simply wasn't created yet.
@@ -70,6 +82,7 @@ fn ensure_archive_up_to_date(
         Err(err) => return Err(ArchivalError::Io(err)),
     };
 
+    let mut file = BufReader::new(file);
     // Special case for when we're expecting an empty file to avoid
     // overcomplicating the rest of the code. Just check if the file has a
     // single byte.
@@ -106,7 +119,9 @@ fn create_archive() -> Result<(), ArchivalError> {
     // Without "HAYAGRIVA_ARCHIVER_UPDATE=1", we only check if the archive
     // files are up-to-date.
     let should_write =
-        std::env::var_os("HAYAGRIVA_ARCHIVER_UPDATE").is_some_and(|var| var == "1");
+        std::env::var_os(UPDATE_ARCHIVES_ENV_VAR).is_some_and(|var| var == "1");
+
+    let mut expected_styles: HashSet<&str, RandomState> = HashSet::from_iter(STYLE_IDS);
 
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
@@ -116,6 +131,10 @@ fn create_archive() -> Result<(), ArchivalError> {
                 let style: Style =
                     Style::from_xml(&fs::read_to_string(path).unwrap()).unwrap();
                 let Style::Independent(indep) = &style else { return None };
+
+                let name = indep.info.id.clone();
+
+                expected_styles.remove(name.as_str());
 
                 if STYLE_IDS.binary_search(&indep.info.id.as_str()).is_err() {
                     return None;
@@ -135,6 +154,15 @@ fn create_archive() -> Result<(), ArchivalError> {
             })
         })
         .collect();
+
+    if !expected_styles.is_empty() {
+        return Err(ArchivalError::MissingStyles(
+            expected_styles
+                .into_iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+        ));
+    }
 
     styles.sort_by_key(|(_, _, names, _)| names[0].clone());
 
@@ -163,25 +191,24 @@ fn create_archive() -> Result<(), ArchivalError> {
 
     for (bytes, indep, _, _) in styles {
         let stripped_id = strip_id(indep.info.id.as_str());
-        let path =
-            PathBuf::from(ARCHIVE_STYLES_PATH).join(format!("{}.cbor", stripped_id));
+        let path = PathBuf::from(ARCHIVE_STYLES_PATH).join(format!("{stripped_id}.cbor"));
 
         if should_write {
             fs::write(path, bytes)?;
         } else {
-            let item = format!("style '{}.cbor'", stripped_id);
+            let item = format!("style '{stripped_id}.cbor'");
             ensure_archive_up_to_date(&path, item, &bytes)?;
         }
     }
 
     for (bytes, locale) in locales {
         let lang = locale.lang.unwrap();
-        let path = PathBuf::from(ARCHIVE_LOCALES_PATH).join(format!("{}.cbor", lang));
+        let path = PathBuf::from(ARCHIVE_LOCALES_PATH).join(format!("{lang}.cbor"));
 
         if should_write {
             fs::write(path, bytes)?;
         } else {
-            let item = format!("locale '{}.cbor'", lang);
+            let item = format!("locale '{lang}.cbor'");
             ensure_archive_up_to_date(&path, item, &bytes)?;
         }
     }
@@ -189,7 +216,7 @@ fn create_archive() -> Result<(), ArchivalError> {
     if should_write {
         fs::write(ARCHIVE_SRC_PATH, w)?;
     } else {
-        let item = format!("file '{}'", ARCHIVE_SRC_PATH);
+        let item = format!("file '{ARCHIVE_SRC_PATH}'");
         ensure_archive_up_to_date(ARCHIVE_SRC_PATH, item, w.as_bytes())?;
     }
 
@@ -225,7 +252,7 @@ fn write_styles_section(
             }
             writeln!(w, ".")?;
         }
-        writeln!(w, "    {},", variant)?;
+        writeln!(w, "    {variant},")?;
     }
     writeln!(w, "}}")?;
     writeln!(w)?;
@@ -237,7 +264,7 @@ fn write_styles_section(
     writeln!(w, "        match name {{")?;
     for (_, _, names, variant) in items {
         for name in names {
-            writeln!(w, "            {:?} => Some(Self::{}),", name, variant)?;
+            writeln!(w, "            {name:?} => Some(Self::{variant}),")?;
         }
     }
     writeln!(w, "            _ => None,")?;
@@ -260,7 +287,7 @@ fn write_styles_section(
     writeln!(w, "    pub fn all() -> &'static [Self] {{")?;
     writeln!(w, "        &[")?;
     for (_, _, _, variant) in items {
-        writeln!(w, "            Self::{},", variant)?;
+        writeln!(w, "            Self::{variant},")?;
     }
     writeln!(w, "        ]")?;
     writeln!(w, "    }}")?;
@@ -274,8 +301,7 @@ fn write_styles_section(
 
         writeln!(
             w,
-            "            Self::{} => include_bytes!(\"../../archive/styles/{}.cbor\"),",
-            variant, stripped_id
+            "            Self::{variant} => include_bytes!(\"../../archive/styles/{stripped_id}.cbor\"),"
         )?;
     }
     writeln!(w, "        }}")?;
@@ -292,9 +318,9 @@ fn write_styles_section(
     writeln!(w, "    pub fn names(self) -> &'static [&'static str] {{")?;
     writeln!(w, "        match self {{")?;
     for (_, _, names, variant) in items {
-        writeln!(w, "            Self::{} => &[", variant)?;
+        writeln!(w, "            Self::{variant} => &[")?;
         for name in names {
-            writeln!(w, "                {:?},", name)?;
+            writeln!(w, "                {name:?},")?;
         }
         writeln!(w, "            ],")?;
     }
@@ -384,7 +410,7 @@ fn strip_id(full_id: &str) -> &str {
 
 /// Map which styles are referenced by which dependent styles.
 #[allow(dead_code)]
-fn retrieve_dependent_aliasses() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
+fn retrieve_dependent_aliases() -> Result<HashMap<String, Vec<String>>, ArchivalError> {
     let mut dependent_alias: HashMap<_, Vec<_>> = HashMap::new();
     let style_path = PathBuf::from(CACHE_PATH).join(STYLES_REPO_NAME);
     for path in iter_files(&style_path.join("dependent"), "csl") {
@@ -406,12 +432,13 @@ fn retrieve_dependent_aliasses() -> Result<HashMap<String, Vec<String>>, Archiva
 #[derive(Debug)]
 pub enum ArchivalError {
     Io(io::Error),
-    Deserialize(XmlError),
+    Deserialize(XmlDeError),
     Serialize(ciborium::ser::Error<std::io::Error>),
     CborDeserialize(ciborium::de::Error<std::io::Error>),
     ValidationError(String),
     LocaleValidationError(String),
     NeedsUpdate(String),
+    MissingStyles(Vec<String>),
 }
 
 impl From<io::Error> for ArchivalError {
@@ -420,8 +447,8 @@ impl From<io::Error> for ArchivalError {
     }
 }
 
-impl From<XmlError> for ArchivalError {
-    fn from(value: XmlError) -> Self {
+impl From<XmlDeError> for ArchivalError {
+    fn from(value: XmlDeError) -> Self {
         Self::Deserialize(value)
     }
 }
@@ -440,29 +467,31 @@ impl From<ciborium::de::Error<std::io::Error>> for ArchivalError {
 impl fmt::Display for ArchivalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(io) => write!(f, "io error: {}", io),
-            Self::Deserialize(deser) => write!(f, "deserialization error: {}", deser),
-            Self::Serialize(ser) => write!(f, "serialization error: {}", ser),
+            Self::Io(io) => write!(f, "io error: {io}"),
+            Self::Deserialize(deser) => write!(f, "deserialization error: {deser}"),
+            Self::Serialize(ser) => write!(f, "serialization error: {ser}"),
             Self::CborDeserialize(deser) => {
-                write!(f, "cbor deserialization error: {}", deser)
+                write!(f, "cbor deserialization error: {deser}")
             }
-            Self::ValidationError(id) => write!(f, "error when validating style {}", id),
+            Self::ValidationError(id) => write!(f, "error when validating style {id}"),
             Self::LocaleValidationError(id) => {
-                write!(f, "error when validating locale {}", id)
+                write!(f, "error when validating locale {id}")
             }
             Self::NeedsUpdate(item) => {
                 write!(
                     f,
-                    "{} is outdated, run archiver tests with env var 'HAYAGRIVA_ARCHIVER_UPDATE=1' to update",
-                    item
+                    "{item} is outdated, run archiver tests with env var '{UPDATE_ARCHIVES_ENV_VAR}=1' to update",
                 )
+            }
+            Self::MissingStyles(styles) => {
+                write!(f, "Missing the following expected styles: {}", styles.join(", "))
             }
         }
     }
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 81] = [
+const STYLE_IDS: [&str; 79] = [
     "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
@@ -489,8 +518,8 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/bristol-university-press",
     "http://www.zotero.org/styles/cell",
     "http://www.zotero.org/styles/chicago-author-date",
-    "http://www.zotero.org/styles/chicago-fullnote-bibliography",
-    "http://www.zotero.org/styles/chicago-note-bibliography",
+    "http://www.zotero.org/styles/chicago-notes-bibliography",
+    "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric",
@@ -515,7 +544,7 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/iso690-numeric-en",
     "http://www.zotero.org/styles/karger-journals",
     "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
-    "http://www.zotero.org/styles/modern-humanities-research-association",
+    "http://www.zotero.org/styles/modern-humanities-research-association-notes",
     "http://www.zotero.org/styles/modern-language-association",
     "http://www.zotero.org/styles/modern-language-association-8th-edition",
     "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
@@ -540,8 +569,6 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/the-lancet",
     "http://www.zotero.org/styles/thieme-german",
     "http://www.zotero.org/styles/trends-journals",
-    "http://www.zotero.org/styles/turabian-author-date",
-    "http://www.zotero.org/styles/turabian-fullnote-bibliography-8th-edition",
     "http://www.zotero.org/styles/vancouver",
     "http://www.zotero.org/styles/vancouver-superscript",
 ];
@@ -578,8 +605,12 @@ const OVERRIDES: [Override; 19] = [
         "china-national-standard-gb-t-7714-2015-author-date",
         "gb-7714-2015-author-date",
     ),
-    Override::first("chicago-fullnote-bibliography", "chicago-fullnotes"),
-    Override::first("chicago-note-bibliography", "chicago-notes"),
+    Override::alias(
+        "chicago-notes-bibliography",
+        "chicago-notes",
+        &["chicago-fullnotes"],
+    ),
+    Override::first("chicago-shortened-notes-bibliography", "chicago-shortened-notes"),
     Override::first("china-national-standard-gb-t-7714-2015-note", "gb-7714-2015-note"),
     Override::first(
         "china-national-standard-gb-t-7714-2015-numeric",

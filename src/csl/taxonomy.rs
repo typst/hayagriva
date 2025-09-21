@@ -10,7 +10,7 @@ use crate::{Entry, PageRanges};
 use citationberg::taxonomy::{
     DateVariable, Kind, NameVariable, NumberVariable, PageVariable, StandardVariable,
 };
-use citationberg::{taxonomy, LongShortForm};
+use citationberg::{LongShortForm, taxonomy};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(feature = "csl-json")]
@@ -58,16 +58,20 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
                     )))
                 })
             }
-            NumberVariable::Locator => match self.cite_props.speculative.locator?.1 {
-                LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
-                    Numeric::from_str(l)
-                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                        .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
-                )),
-                LocatorPayload::Transparent => Some(NumberVariableResult::Transparent(
-                    self.cite_props.certain.initial_idx,
-                )),
-            },
+            NumberVariable::Locator => {
+                match &self.cite_props.speculative.locator.as_ref()?.1 {
+                    &LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
+                        Numeric::from_str(l)
+                            .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                            .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
+                    )),
+                    LocatorPayload::Transparent(_) => {
+                        Some(NumberVariableResult::Transparent(
+                            self.cite_props.certain.initial_idx,
+                        ))
+                    }
+                }
+            }
             _ => self
                 .entry
                 .resolve_number_variable(variable)
@@ -111,6 +115,11 @@ pub(super) enum NumberVariableResult<'a> {
 
 pub(super) type PageVariableResult = MaybeTyped<PageRanges>;
 
+pub(super) enum NumberOrPageVariableResult<'a> {
+    Number(NumberVariableResult<'a>),
+    Page(PageVariableResult),
+}
+
 impl<'a> NumberVariableResult<'a> {
     pub(super) fn from_regular(regular: MaybeTyped<Cow<'a, Numeric>>) -> Self {
         Self::Regular(regular)
@@ -137,16 +146,19 @@ impl EntryLike for Entry {
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
         match variable {
             NumberVariable::ChapterNumber => self
-                .bound_select(
-                    &select!(
-                        (("e":Anthos) > ("p":Anthology)) |
-                        (("e":*) > ("p":Reference)) |
-                        (("e":Article) > ("p":Proceedings)) |
-                        (("e":*) > ("p":Book))
-                    ),
-                    "e",
-                )
-                .and_then(Entry::volume)
+                .chapter()
+                .or_else(|| {
+                    self.bound_select(
+                        &select!(
+                            (("e":Anthos) > ("p":Anthology)) |
+                            (("e":*) > ("p":Reference)) |
+                            (("e":Article) > ("p":Proceedings)) |
+                            (("e":*) > ("p":Book))
+                        ),
+                        "e",
+                    )
+                    .and_then(Entry::volume)
+                })
                 .map(MaybeTyped::to_cow),
             NumberVariable::CitationNumber => panic!("processor must resolve this"),
             NumberVariable::CollectionNumber => {
@@ -158,13 +170,21 @@ impl EntryLike for Entry {
             }
             NumberVariable::Issue => self.map(|e| e.issue()).map(MaybeTyped::to_cow),
             NumberVariable::Locator => panic!("processor must resolve this"),
-            NumberVariable::Number => {
-                return self.serial_number().and_then(|s| s.0.get("serial")).map(|s| {
+            NumberVariable::Number => self
+                .serial_number()
+                .and_then(|s| s.0.get("serial"))
+                .map(|s| {
                     Numeric::from_str(s)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
                 })
-            }
+                .or_else(|| {
+                    // User can specify either 'serial-number: 3' or
+                    // 'chapter: 3' for chapter entries, with the same result.
+                    self.bound_select(&select!(("e":Chapter)), "e")
+                        .and_then(|s| s.chapter())
+                        .map(MaybeTyped::to_cow)
+                }),
             NumberVariable::NumberOfPages => {
                 self.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
@@ -788,7 +808,7 @@ impl EntryLike for citationberg::json::Item {
                             suffix,
                         }) => Person {
                             name: if let Some(non_drop) = non_dropping_particle {
-                                format!("{} {}", non_drop, family)
+                                format!("{non_drop} {family}")
                             } else {
                                 family.clone()
                             },
@@ -836,12 +856,11 @@ impl EntryLike for citationberg::json::Item {
         &self,
         variable: NumberVariable,
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
-        if matches!(variable, NumberVariable::PageFirst) {
-            if let Some(MaybeTyped::Typed(n)) =
+        if matches!(variable, NumberVariable::PageFirst)
+            && let Some(MaybeTyped::Typed(n)) =
                 self.resolve_page_variable(PageVariable::Page)
-            {
-                return n.first().map(|r| MaybeTyped::Typed(Cow::Owned(r.clone())));
-            }
+        {
+            return n.first().map(|r| MaybeTyped::Typed(Cow::Owned(r.clone())));
         }
         match self.0.get(&variable.to_string())? {
             csl_json::Value::Number(n) => {

@@ -3,15 +3,16 @@
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::OnceLock;
 use std::{fmt, fs};
 
 mod common;
 use citationberg::taxonomy::Locator;
-use citationberg::{Locale, LocaleCode, Style, XmlError};
-use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
+use citationberg::{Locale, LocaleCode, Style, XmlDeError};
+use common::{CACHE_PATH, ensure_repo, iter_files_with_name};
 
 use citationberg::json as csl_json;
-use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::archive::{ArchivedStyle, locales};
 use hayagriva::io::from_biblatex_str;
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
@@ -106,21 +107,21 @@ enum TestParseError {
     SyntaxError,
     WrongClosingTag,
     MissingRequiredSection(SectionTag),
-    CslError(XmlError),
+    CslError(XmlDeError),
     JsonError(serde_json::Error),
 }
 
 impl fmt::Display for TestParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TestParseError::UnknownSection(s) => write!(f, "unknown section {}", s),
+            TestParseError::UnknownSection(s) => write!(f, "unknown section {s}"),
             TestParseError::SyntaxError => write!(f, "syntax error"),
             TestParseError::WrongClosingTag => write!(f, "wrong closing tag"),
             TestParseError::MissingRequiredSection(s) => {
-                write!(f, "missing required section {}", s)
+                write!(f, "missing required section {s}")
             }
-            TestParseError::CslError(e) => write!(f, "csl error: {}", e),
-            TestParseError::JsonError(e) => write!(f, "json error: {}", e),
+            TestParseError::CslError(e) => write!(f, "csl error: {e}"),
+            TestParseError::JsonError(e) => write!(f, "json error: {e}"),
         }
     }
 }
@@ -277,7 +278,9 @@ impl<'s> TestCaseBuilder<'s> {
             result: self
                 .result
                 .ok_or(TestParseError::MissingRequiredSection(SectionTag::Result))?
-                .replace("&#38;", "&"),
+                .replace("&#38;", "&")
+                // [`test_file`] uses LF, even on Windows. Therefore, unify CRLF to LF.
+                .replace("\r\n", "\n"),
             csl: Style::from_xml(
                 self.csl
                     .ok_or(TestParseError::MissingRequiredSection(SectionTag::Csl))?,
@@ -315,7 +318,7 @@ fn test_parse_tests() {
     );
     let percentage =
         results.passed.len() as f64 / (results.total - results.skipped) as f64 * 100.0;
-    eprintln!("{:.2}% passed", percentage);
+    eprintln!("{percentage:.2}% passed");
 
     let should_pass = load_passing_tests();
     // Enable binary search.
@@ -328,9 +331,9 @@ fn test_parse_tests() {
     for test in &should_pass {
         if results.passed.binary_search(test).is_err() {
             if results.failed.binary_search(test).is_ok() {
-                eprintln!("❌ Test {} should pass but failed", test);
+                eprintln!("❌ Test {test} should pass but failed");
             } else {
-                eprintln!("🤨 Test {} should pass but was not found", test);
+                eprintln!("🤨 Test {test} should pass but was not found");
             }
 
             fail = true;
@@ -346,12 +349,14 @@ fn test_parse_tests() {
 
     // Check that the `passing` file contains all passed tests.
     for test in &results.passed {
-        eprintln!("👁️ Test {} passed but is not in the `passing` file", test);
+        eprintln!("👁️ Test {test} passed but is not in the `passing` file");
         fail = true;
     }
 
     if fail {
-        panic!("⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`")
+        panic!(
+            "⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`"
+        )
     }
 
     eprintln!("✅ All tests expected to pass passed");
@@ -429,7 +434,7 @@ impl TestSuiteResults {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "nameattr_DelimiterPrecedesLastOnCitationInCitation.txt";
+    let name = "bugreports_ArabicLocale.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
@@ -470,7 +475,7 @@ where
     let can_test = case.bib_entries.is_none()
         && case.bib_section.is_none()
         && case.citations.is_none()
-        && case.citation_items.as_ref().map_or(true, |cites| {
+        && case.citation_items.as_ref().is_none_or(|cites| {
             cites.iter().flatten().all(|i| {
                 i.prefix.is_none()
                     && i.suffix.is_none()
@@ -485,23 +490,20 @@ where
         .flat_map(|i| i.0.values())
         .filter_map(|v| if let csl_json::Value::Date(d) = v { Some(d) } else { None })
         .any(|d| {
-            csl_json::FixedDateRange::try_from(d.clone())
-                .map_or(false, |d| d.end.is_some())
+            csl_json::FixedDateRange::try_from(d.clone()).is_ok_and(|d| d.end.is_some())
         });
 
-    if case.mode == TestMode::Bibliography {
-        if print {
-            eprintln!("Skipping test {}\t(cause: Bibliography mode)", display());
-        }
-        false
-    } else if !can_test {
+    if !can_test {
         if print {
             eprintln!("Skipping test {}\t(cause: unsupported test feature)", display());
         }
         false
-    } else if case.result.contains('<') {
+    } else if case.mode != TestMode::Bibliography && case.result.contains('<') {
         if print {
-            eprintln!("Skipping test {}\t(cause: HTML suspected)", display());
+            eprintln!(
+                "Skipping test {}\t(cause: HTML suspected in citation result)",
+                display()
+            );
         }
         false
     } else if contains_date_ranges {
@@ -577,21 +579,209 @@ where
 
     let rendered = driver.finish(BibliographyRequest::new(&style, None, locales));
 
-    for citation in rendered.citations {
-        citation
-            .citation
-            .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
-            .unwrap();
-        output.push('\n');
-    }
+    let formatted_result = match case.mode {
+        TestMode::Citation => {
+            for citation in rendered.citations {
+                citation
+                    .citation
+                    .write_buf(&mut output, hayagriva::BufWriteFormat::Plain)
+                    .unwrap();
+                output.push('\n');
+            }
 
-    if output.trim() == case.result.trim() {
+            case.result.trim()
+        }
+        TestMode::Bibliography => {
+            static INDENT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
+            let bib = rendered
+                .bibliography
+                .expect("Bibliography mode test but no bibliography was rendered");
+            citeproc_bib::render(&bib, &mut output).unwrap();
+            output.push('\n');
+
+            // Remove indentation from original result to match our own output,
+            // which is not indented or pretty-printed. It appears that
+            // citeproc test results simply indent elements with two spaces at
+            // the start when the line gets too long, or for each inner bib
+            // entry.
+            &*INDENT_REGEX
+                .get_or_init(|| regex::Regex::new(r#"\n\s*"#).unwrap())
+                .replace_all(case.result.trim(), "")
+        }
+    };
+
+    if output.trim() == formatted_result {
         true
     } else {
         eprintln!("Test {} failed", display());
         eprintln!("Expected:\n{}", case.result);
-        eprintln!("Got:\n{}", output);
+        eprintln!("Got:\n{output}");
         false
+    }
+}
+
+/// Functions to format bibliography rendered by hayagriva using citeproc's HTML
+/// output format, in order to be able to compare the generated HTML.
+mod citeproc_bib {
+    use core::fmt;
+
+    use citationberg::{
+        Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
+    };
+    use hayagriva::{BufWriteFormat, Elem, ElemChild, Formatting};
+
+    pub(super) fn render(
+        bib: &hayagriva::RenderedBibliography,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
+        output.push_str(r#"<div class="csl-bib-body">"#);
+        for item in &bib.items {
+            render_item(item, output)?;
+        }
+        output.push_str("</div>");
+        Ok(())
+    }
+
+    fn render_item(
+        item: &hayagriva::BibliographyItem,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
+        let mut second_field_align_suffix = "";
+        output.push_str(r#"<div class="csl-entry">"#);
+        if let Some(field) = &item.first_field {
+            // Uses 'second-field-align', so add implicit alignment
+            // (cf. test bugreports_AsmJournals.txt)
+            output.push_str("<div class=\"csl-left-margin\">");
+            render_child(field, output)?;
+            output.push_str("</div><div class=\"csl-right-inline\">");
+            second_field_align_suffix = "</div>";
+        }
+        for child in &item.content.0 {
+            render_child(child, output)?;
+        }
+        output.push_str(second_field_align_suffix);
+        output.push_str("</div>");
+        Ok(())
+    }
+
+    fn render_child(child: &ElemChild, output: &mut String) -> Result<(), fmt::Error> {
+        match child {
+            ElemChild::Text(formatted) => render_formatted_text(formatted, output),
+            ElemChild::Elem(e) => render_elem(e, output),
+
+            // Citeproc bib tests do not output <a href=...></a> for links
+            ElemChild::Link { text, url: _ } => render_formatted_text(text, output),
+            elem => elem.write_buf(output, BufWriteFormat::Html),
+        }
+    }
+
+    /// Applies the appropriate HTML tags to formatted text, according to
+    /// citeproc test output.
+    ///
+    /// Note that citeproc (csl-json) input accepts
+    /// '<span class="nodecor">...</span>' within text to nullify outer
+    /// formatting, for example apply 'font-style:normal' inside bold and
+    /// italics (see flipflop_ItalicsWithOk), or 'font-variant:normal' inside
+    /// smallcaps (see flipflop_ItalicsWithOkAndTextcase). We do not support
+    /// this notation, especially since we do not expose csl-json input to
+    /// hayagriva users anyway.
+    fn render_formatted_text(
+        text: &hayagriva::Formatted,
+        output: &mut String,
+    ) -> Result<(), fmt::Error> {
+        let formatting = text.formatting;
+        if formatting == Formatting::default() {
+            output.push_str(&text.text);
+            return Ok(());
+        }
+
+        // NOTE: There are no tests with multiple CSS styles, so for now we
+        // join them without any spacing.
+        let mut css = String::new();
+        let mut suffix = String::new();
+        let mut push_elem = |start, end| {
+            output.push_str(start);
+            suffix.insert_str(0, end);
+        };
+
+        match formatting.vertical_align {
+            VerticalAlign::Sub => {
+                push_elem("<sub>", "</sub>");
+            }
+            VerticalAlign::Sup => {
+                push_elem("<sup>", "</sup>");
+            }
+            VerticalAlign::Baseline => {
+                push_elem(r#"<span style="baseline">"#, "</span>");
+            }
+            VerticalAlign::None => {}
+        }
+
+        match formatting.font_weight {
+            FontWeight::Bold => {
+                push_elem("<b>", "</b>");
+            }
+            FontWeight::Light => {
+                // NOTE: This is not used in any tests, so we can only assume
+                // this is done through this CSS style for now.
+                css.push_str("font-weight:lighter;");
+            }
+            FontWeight::Normal => {}
+        }
+
+        match formatting.font_style {
+            FontStyle::Italic => {
+                // NOTE: This has to come after (be inside) bold
+                // (Citeproc tests use <b><i>...</i></b> when both are present)
+                push_elem("<i>", "</i>")
+            }
+            FontStyle::Normal => {}
+        }
+
+        match formatting.font_variant {
+            FontVariant::SmallCaps => css.push_str("font-variant:small-caps;"),
+            FontVariant::Normal => {}
+        }
+
+        match formatting.text_decoration {
+            // NOTE: No existing citeproc tests use this, so this is guesswork.
+            // However, we can use this in local tests.
+            TextDecoration::Underline => push_elem("<u>", "</u>"),
+            TextDecoration::None => {}
+        }
+
+        if !css.is_empty() {
+            push_elem(&format!("<span style=\"{css}\">"), "</span>");
+        }
+
+        output.push_str(&text.text);
+        output.push_str(&suffix);
+        Ok(())
+    }
+
+    fn render_elem(elem: &Elem, output: &mut String) -> Result<(), fmt::Error> {
+        let mut div_suffix = "";
+        if let Some(display) = elem.display {
+            div_suffix = "</div>";
+            let div_class = match display {
+                Display::Block => "csl-block",
+                Display::LeftMargin => "csl-left-margin",
+                Display::RightInline => "csl-right-inline",
+                Display::Indent => "csl-indent",
+            };
+
+            output.push_str(&format!("<div class=\"{div_class}\">"));
+        }
+
+        for child in &elem.children.0 {
+            render_child(child, output)?;
+        }
+
+        if !div_suffix.is_empty() {
+            output.push_str(div_suffix);
+        }
+        Ok(())
     }
 }
 
@@ -721,7 +911,7 @@ fn case_folding() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, ". my lowercase container title");
+    assert_eq!(buf, "my lowercase container title.");
 }
 
 #[test]
@@ -799,7 +989,10 @@ fn no_author() {
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
 
-    assert_eq!(buf, "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323");
+    assert_eq!(
+        buf,
+        "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323"
+    );
 
     let mut buf = String::new();
     rendered.citations[0]

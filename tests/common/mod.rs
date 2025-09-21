@@ -71,14 +71,23 @@ pub fn ensure_repo(
 
     if clone {
         let status = Command::new("git")
-            .args(["clone", repo_url, repo_name, "--depth", "1"])
+            .args([
+                "clone",
+                repo_url,
+                repo_name,
+                "--depth",
+                "1",
+                // Do not convert LF to CRLF.
+                // Otherwise, CSL/XML may generate different CBOR on Unix and Windows.
+                "--config",
+                "core.autocrlf=input",
+            ])
             .current_dir(&cache_path)
             .status()
             .expect("Please ensure git is installed");
 
         if !status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Failed to clone repo. Is git installed correnctly and is the internet working?",
             ));
         }

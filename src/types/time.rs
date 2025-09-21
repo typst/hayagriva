@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 use unscanny::Scanner;
 
@@ -243,7 +243,7 @@ impl Date {
     /// - `periods`   Determines whether to use punctuation in the abbreviations
     /// - `designate_positive`    Show a denomination for positive years
     /// - `ad_prefix` Use the "AD" designation for positive years in a prefix
-    ///               position. Will be ignored if `designate_positive` is negative.
+    ///   position. Will be ignored if `designate_positive` is negative.
     pub fn display_year_opt(
         &self,
         secular: bool,
@@ -261,8 +261,8 @@ impl Date {
         let positive_dn = match (periods, ad_prefix) {
             (true, false) => "C.E.",
             (false, false) => "CE",
-            (true, true) => "AD",
-            (false, true) => "A.D.",
+            (true, true) => "A.D.",
+            (false, true) => "AD",
         };
 
         if self.year > 0 {
@@ -378,7 +378,7 @@ impl Duration {
                     if num.is_empty() {
                         return Err(DurationError::Malformed);
                     }
-                    let str = format!("0.{}", num);
+                    let str = format!("0.{num}");
                     let ms: f64 = str.parse().map_err(|_| DurationError::Malformed)?;
                     milliseconds = (ms * 1000.0).round() as u16;
                 }
@@ -672,11 +672,7 @@ fn parse_full_date(s: &mut Scanner) -> Result<(i32, u8, u8), DateError> {
 
 fn days_in_month(month: u8, year: i32) -> u8 {
     if month == 1 {
-        if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-            29
-        } else {
-            28
-        }
+        if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 29 } else { 28 }
     } else if month < 7 {
         31 - month % 2
     } else {

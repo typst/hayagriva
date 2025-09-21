@@ -558,11 +558,7 @@ impl CaseFolder {
         match verdict {
             WordVerdict::AllUpper => {
                 map_chars(&mut self.buf, data.start..data.end, |c| {
-                    if c.is_lowercase() {
-                        Some(c.to_uppercase())
-                    } else {
-                        None
-                    }
+                    if c.is_lowercase() { Some(c.to_uppercase()) } else { None }
                 });
             }
             WordVerdict::Capitalize => capitalize_char(&mut self.buf, data.start),
@@ -773,7 +769,7 @@ mod tests {
             } else if [14, 20, 22].contains(&i) {
                 assert_eq!(case, CharClass::MaybeNewSentence);
             } else {
-                panic!("Unexpected char class at {}: {:?}", i, case);
+                panic!("Unexpected char class at {i}: {case:?}");
             }
         }
     }
@@ -851,8 +847,7 @@ mod tests {
                 None => {
                     assert!(
                         [3, 8, 10, 13].contains(&length),
-                        "Unexpected word break at {}",
-                        length
+                        "Unexpected word break at {length}"
                     );
                 }
             }
@@ -916,7 +911,10 @@ mod tests {
 
         let title =
         case.transform("'My colleague is a robot' – exploring frontline employees' willingness to work with collaborative service robots");
-        assert_eq!("'My Colleague Is a Robot' – Exploring Frontline Employees' Willingness to Work with Collaborative Service Robots", title);
+        assert_eq!(
+            "'My Colleague Is a Robot' – Exploring Frontline Employees' Willingness to Work with Collaborative Service Robots",
+            title
+        );
     }
 
     #[test]
@@ -941,7 +939,7 @@ mod tests {
     }
 
     #[test]
-    fn title_case_name_detecion() {
+    fn title_case_name_detection() {
         let mut props = TitleCase::new();
         let case: Case = props.into();
 

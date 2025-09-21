@@ -32,7 +32,7 @@ impl<'de> Deserialize<'de> for Numeric {
         struct OurVisitor;
 
         /// The visitor parses numbers and strings.
-        impl<'de> Visitor<'de> for OurVisitor {
+        impl Visitor<'_> for OurVisitor {
             type Value = Numeric;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -120,7 +120,7 @@ impl Numeric {
     where
         T: fmt::Write,
     {
-        let format = |n: i32, buf: &mut T| -> std::fmt::Result { write!(buf, "{}", n) };
+        let format = |n: i32, buf: &mut T| -> std::fmt::Result { write!(buf, "{n}") };
 
         match &self.value {
             &NumericValue::Number(n) => format(n, buf)?,
@@ -131,7 +131,7 @@ impl Numeric {
                         if machine_readable {
                             buf.write_char(sep.as_char())?
                         } else {
-                            write!(buf, "{}", sep)?
+                            write!(buf, "{sep}")?
                         }
                     }
                 }
@@ -181,7 +181,7 @@ impl Numeric {
                 NumberForm::Roman if n > 0 && n <= i16::MAX as i32 => {
                     write!(buf, "{:x}", numerals::roman::Roman::from(n as i16))
                 }
-                NumberForm::Numeric | NumberForm::Roman => write!(buf, "{}", n),
+                NumberForm::Numeric | NumberForm::Roman => write!(buf, "{n}"),
             }
         };
 
@@ -191,7 +191,7 @@ impl Numeric {
                 for &(n, sep) in s {
                     format(n, buf)?;
                     if let Some(sep) = sep {
-                        write!(buf, "{}", sep)?
+                        write!(buf, "{sep}")?
                     }
                 }
             }
@@ -230,7 +230,7 @@ impl Numeric {
     }
 }
 
-impl<'a> MaybeTyped<Cow<'a, Numeric>> {
+impl MaybeTyped<Cow<'_, Numeric>> {
     /// Order the values according to CSL rules.
     pub(crate) fn csl_cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
@@ -379,7 +379,7 @@ pub struct NumIterator<'a> {
     idx: usize,
 }
 
-impl<'a> Iterator for NumIterator<'a> {
+impl Iterator for NumIterator<'_> {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -394,7 +394,7 @@ impl<'a> Iterator for NumIterator<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for NumIterator<'a> {
+impl ExactSizeIterator for NumIterator<'_> {
     fn len(&self) -> usize {
         self.size_hint().0
     }

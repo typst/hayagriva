@@ -234,8 +234,14 @@ impl Person {
     /// Formats the given name into initials.
     ///
     /// For example, `"Judith Beatrice"` would yield `"J. B."` if the
-    /// `delimiter` argument is set to `Some(".")`, `"Klaus-Peter"` would become
-    /// `"K-P"` without a delimiter.
+    /// `delimiter` argument is set to `Some(". ")`, `"Klaus-Peter"` would
+    /// become `"K-P"` without a delimiter (or with an empty delimiter).
+    ///
+    /// Whitespace at the end of the delimiter is kept when parts are separated
+    /// by whitespace (as in the first example), but not when parts of a
+    /// compound given name are separated by hyphens (for example,
+    /// `"Klaus-Peter"` produces `"K.-P."` instead of `"K. -P."` for a
+    /// delimiter of `Some(". ")`).
     pub fn initials(
         &self,
         buf: &mut impl std::fmt::Write,
@@ -250,22 +256,28 @@ impl Person {
         let mut non_empty = false;
 
         for (_, gr) in gn.grapheme_indices(true) {
-            if let Some(c) = gr.chars().next() {
-                if c.is_whitespace() || c == '-' {
-                    if !collect {
-                        if let Some(delimiter) = delimiter {
-                            buf.write_str(delimiter.trim_end())?;
-                        }
-
-                        collect = true;
-                        if with_hyphen && c == '-' {
-                            buf.write_char(c)?;
-                        } else if delimiter.is_some() {
-                            buf.write_char(' ')?;
-                        }
+            if let Some(c) = gr.chars().next()
+                && (c.is_whitespace() || c == '-')
+            {
+                if !collect {
+                    let hyphenate = with_hyphen && c == '-';
+                    if let Some(delimiter) = delimiter {
+                        // Use the given delimiter, including any spaces at
+                        // its end if there was a whitespace, but not if we
+                        // should add a hyphen in a compound given name.
+                        buf.write_str(if hyphenate {
+                            delimiter.trim_end()
+                        } else {
+                            delimiter
+                        })?;
                     }
-                    continue;
+
+                    collect = true;
+                    if hyphenate {
+                        buf.write_char('-')?;
+                    }
                 }
+                continue;
             }
 
             if collect {
@@ -275,10 +287,11 @@ impl Person {
             }
         }
 
-        if non_empty && !collect {
-            if let Some(delim) = delimiter {
-                buf.write_str(delim)?;
-            }
+        if non_empty
+            && !collect
+            && let Some(delim) = delimiter
+        {
+            buf.write_str(delim.trim_end())?;
         }
 
         Ok(())
@@ -303,10 +316,10 @@ impl Person {
 
             buf.write_str(item)?;
 
-            if let Some(delimiter) = delimiter {
-                if item.graphemes(true).count() == 1 {
-                    buf.write_str(delimiter)?;
-                }
+            if let Some(delimiter) = delimiter
+                && item.graphemes(true).count() == 1
+            {
+                buf.write_str(delimiter)?;
             }
 
             first = false;
@@ -315,7 +328,7 @@ impl Person {
         Ok(())
     }
 
-    /// Get the name with the family name fist, the initials
+    /// Get the name with the family name first, the initials
     /// afterwards, separated by a comma.
     pub fn name_first(&self, initials: bool, prefix_given_name: bool) -> String {
         let mut res = if !prefix_given_name {
@@ -331,21 +344,19 @@ impl Person {
         if initials {
             if self.given_name.is_some() {
                 res += ", ";
-                self.initials(&mut res, Some("."), true).unwrap();
+                self.initials(&mut res, Some(". "), true).unwrap();
             }
         } else if let Some(given_name) = &self.given_name {
             res += ", ";
             res += given_name;
         }
 
-        if prefix_given_name {
-            if let Some(prefix) = &self.prefix {
-                if self.given_name.is_some() {
-                    res.push(' ');
-                }
-
-                res += prefix;
+        if prefix_given_name && let Some(prefix) = &self.prefix {
+            if self.given_name.is_some() {
+                res.push(' ');
             }
+
+            res += prefix;
         }
 
         if let Some(suffix) = &self.suffix {
@@ -361,7 +372,7 @@ impl Person {
 
         if initials {
             if self.given_name.is_some() {
-                self.initials(&mut res, Some("."), true).unwrap();
+                self.initials(&mut res, Some(". "), true).unwrap();
                 res.push(' ');
             }
         } else if let Some(given_name) = &self.given_name {
@@ -411,10 +422,10 @@ impl Person {
     }
 
     /// Get only the dropping and non-dropping particle of the family name.
-    pub fn name_particles(&self) -> Option<Cow<str>> {
+    pub fn name_particles(&self) -> Option<Cow<'_, str>> {
         match (&self.prefix, self.name_particle()) {
             (Some(dropping), Some(non_dropping)) => {
-                Some(Cow::Owned(format!("{} {}", dropping, non_dropping)))
+                Some(Cow::Owned(format!("{dropping} {non_dropping}")))
             }
             (Some(dropping), None) => Some(Cow::Borrowed(dropping.as_str())),
             (None, Some(non_dropping)) => Some(Cow::Borrowed(non_dropping)),
@@ -430,7 +441,7 @@ impl Person {
     /// Whether the name contains CJK characters.
     pub fn is_cjk(&self) -> bool {
         self.name.chars().any(is_cjk)
-            || self.given_name.as_ref().map_or(false, |gn| gn.chars().any(is_cjk))
+            || self.given_name.as_ref().is_some_and(|gn| gn.chars().any(is_cjk))
     }
 
     /// Get the name without the leading article.
@@ -536,7 +547,17 @@ mod tests {
         let mut s = String::new();
         let p = Person::from_strings(vec!["Dissmer", "Courtney Deliah"]).unwrap();
         p.initials(&mut s, Some("."), true).unwrap();
+        assert_eq!("C.D.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Dissmer", "Courtney Deliah"]).unwrap();
+        p.initials(&mut s, Some(". "), true).unwrap();
         assert_eq!("C. D.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Dissmer", "Courtney Deliah"]).unwrap();
+        p.initials(&mut s, Some(""), true).unwrap();
+        assert_eq!("CD", s);
 
         let mut s = String::new();
         let p = Person::from_strings(vec!["Dissmer", "Courtney Deliah"]).unwrap();
@@ -545,8 +566,43 @@ mod tests {
 
         let mut s = String::new();
         let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some(". "), true).unwrap();
+        assert_eq!("H.-J.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some("."), true).unwrap();
+        assert_eq!("H.-J.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some(""), true).unwrap();
+        assert_eq!("H-J", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
         p.initials(&mut s, None, true).unwrap();
         assert_eq!("H-J", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some(". "), false).unwrap();
+        assert_eq!("H. J.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some("."), false).unwrap();
+        assert_eq!("H.J.", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, Some(""), false).unwrap();
+        assert_eq!("HJ", s);
+
+        let mut s = String::new();
+        let p = Person::from_strings(vec!["Günther", "Hans-Joseph"]).unwrap();
+        p.initials(&mut s, None, false).unwrap();
+        assert_eq!("HJ", s);
     }
 
     #[test]
@@ -561,5 +617,17 @@ mod tests {
         let mut s = String::new();
         p.first_name_with_delimiter(&mut s, Some(".")).unwrap();
         assert_eq!("James T.", s);
+    }
+
+    #[test]
+    fn person_name_retrieval_order() {
+        let p =
+            Person::from_strings(vec!["van Dissmer", "Jr.", "Courtney Deliah"]).unwrap();
+        assert_eq!("van Dissmer, Courtney Deliah, Jr.", p.name_first(false, false));
+        assert_eq!("Dissmer, Courtney Deliah van, Jr.", p.name_first(false, true));
+        assert_eq!("van Dissmer, C. D., Jr.", p.name_first(true, false));
+        assert_eq!("Dissmer, C. D. van, Jr.", p.name_first(true, true));
+        assert_eq!("Courtney Deliah van Dissmer Jr.", p.given_first(false));
+        assert_eq!("C. D. van Dissmer Jr.", p.given_first(true));
     }
 }
