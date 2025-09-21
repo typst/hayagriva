@@ -161,7 +161,7 @@ Hayagriva YAML file is intuitive to write and can represent a wealth of media
 types, [learn how to write one in its dedicated
 documentation.](https://github.com/typst/hayagriva/blob/main/docs/file-format.md)
 
-Suppose you have this file saved as `literature.yml` in your current working
+Suppose you have this file saved as `literature.yaml` in your current working
 directory:
 
 ```yaml
@@ -194,7 +194,7 @@ You can then issue the following command to get reference list entries for both
 of these articles.
 
 ```bash
-hayagriva literature.yml reference
+hayagriva literature.yaml reference
 ```
 
 Hayagriva defaults to the Author-Date style of the Chicago Manual of Style (17th
@@ -202,7 +202,7 @@ edition). If you prefer to use another style, you can, for example, do the
 following to use the style of the American Psychological Association instead:
 
 ```bash
-hayagriva literature.yml reference --style apa
+hayagriva literature.yaml reference --style apa
 ```
 
 Available values for the `--style` argument can be viewed by calling
@@ -212,7 +212,7 @@ If you now need an in-text citation to the second article in the above file, you
 can call:
 
 ```bash
-hayagriva literature.yml cite --key feminism
+hayagriva literature.yaml cite --key feminism
 ```
 
 The `--key` takes a comma-separated list of keys (or a single one). The
@@ -227,7 +227,7 @@ For example, you could run the following to only reference entries that have a
 URL or DOI at the top level:
 
 ```bash
-hayagriva literature.yml --select "*[url] | *[doi]" reference
+hayagriva literature.yaml --select "*[url] | *[doi]" reference
 ```
 
 This expression would match both entries in our example and therefore the
@@ -242,22 +242,23 @@ first parent: `a:*[volume] | * > a:[volume]`. You can then use the command below
 to show which sub-entry the selector bound as `a` for each match:
 
 ```bash
-hayagriva literature.yml --select "a:*[volume] | * > a:[volume]" --show-bound
+hayagriva literature.yaml --select "a:*[volume] | * > a:[volume]" --show-bound
 ```
 
 The `--show-bound` flag shows all keys matching the selector or key filter and
 details which sub-entries of each entry were bound by the selector. If, instead,
 you only want to obtain a list of matching keys, use the `--keys` flag.
 
-If you are working with BibTeX, you can use your `.bib` file with Hayagriva just
-like you would use a `.yml` file. If you want to convert your `.bib` file to a
-`.yml` file, you can simply pass the `.bib` file to the CLI without any additional
-arguments. It will then show the YAML-formatted bibliography with key and selector
-filters applied on standard output. If you therefore want to convert your `.bib`
-file and save the result somewhere, you can just use `>`:
+If you are working with BibTeX, you can use your `.bib` file with Hayagriva
+just like you would use a `.yaml`/`.yml` file. If you want to convert your
+`.bib` file to a `.yaml` file, you can simply pass the `.bib` file to the CLI
+without any additional arguments. It will then show the YAML-formatted
+bibliography with key and selector filters applied on standard output. If you
+therefore want to convert your `.bib` file and save the result somewhere, you
+can just use `>`:
 
 ```bash
-hayagriva literature.bib > converted.yml
+hayagriva literature.bib > converted.yaml
 ```
 
 ## Contributing
