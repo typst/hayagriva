@@ -140,6 +140,7 @@ impl StyleContext<'_> {
             }
         };
 
+        // Per CSL 1.0.2 spec (https://docs.citationstyles.org/en/v1.0.2/specification.html):
         // Entries with empty values are always displayed at the end, even with reversed order.
         // So we always reverse the order if either entry is empty.
         if empty_value || key.sort_direction() == SortDirection::Descending {
