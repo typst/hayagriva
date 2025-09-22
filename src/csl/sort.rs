@@ -23,7 +23,7 @@ impl StyleContext<'_> {
         key: &SortKey,
         term_locale: Option<&LocaleCode>,
     ) -> Ordering {
-        let ordering = match key {
+        let (ordering, empty_value) = match key {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
                 let a = InstanceContext::variable_sort_instance(a, a_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
@@ -32,17 +32,17 @@ impl StyleContext<'_> {
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
 
-                a.cmp(&b)
+                (a.cmp(&b), a.is_none() || b.is_none())
             }
             SortKey::Variable { variable: Variable::Date(d), .. } => {
                 let a = a.entry.resolve_date_variable(*d);
                 let b = b.entry.resolve_date_variable(*d);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(&b),
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
+                    (Some(a), Some(b)) => (a.csl_cmp(&b), false),
+                    (Some(_), None) => (Ordering::Greater, true),
+                    (None, Some(_)) => (Ordering::Less, true),
+                    (None, None) => (Ordering::Equal, true),
                 }
             }
             SortKey::Variable { variable: Variable::Name(n), .. } => {
@@ -61,13 +61,16 @@ impl StyleContext<'_> {
                     }
                 }
 
-                if a.len() < b.len() {
-                    Ordering::Less
-                } else if a.len() > b.len() {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
+                (
+                    if a.len() < b.len() {
+                        Ordering::Less
+                    } else if a.len() > b.len() {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Equal
+                    },
+                    false,
+                )
             }
             SortKey::Variable { variable: Variable::Number(n), .. } => {
                 let a = InstanceContext::variable_sort_instance(a, a_idx)
@@ -76,10 +79,10 @@ impl StyleContext<'_> {
                     .resolve_number_variable(*n);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(&b),
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
+                    (Some(a), Some(b)) => (a.csl_cmp(&b), false),
+                    (Some(_), None) => (Ordering::Greater, true),
+                    (None, Some(_)) => (Ordering::Less, true),
+                    (None, None) => (Ordering::Equal, true),
                 }
             }
             SortKey::Variable { variable: Variable::Page(pv), .. } => {
@@ -89,10 +92,10 @@ impl StyleContext<'_> {
                     .resolve_page_variable(*pv);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(&b),
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
+                    (Some(a), Some(b)) => (a.csl_cmp(&b), false),
+                    (Some(_), None) => (Ordering::Greater, true),
+                    (None, Some(_)) => (Ordering::Less, true),
+                    (None, None) => (Ordering::Equal, true),
                 }
             }
             SortKey::MacroName {
@@ -133,11 +136,13 @@ impl StyleContext<'_> {
                 let a_rendered = render(a, a_idx);
                 let b_rendered = render(b, b_idx);
 
-                a_rendered.cmp(&b_rendered)
+                (a_rendered.cmp(&b_rendered), false)
             }
         };
 
-        if key.sort_direction() == SortDirection::Descending {
+        // Entries with empty values are always displayed at the end, even with reversed order.
+        // So we always reverse the order if either entry is empty.
+        if empty_value || key.sort_direction() == SortDirection::Descending {
             ordering.reverse()
         } else {
             ordering

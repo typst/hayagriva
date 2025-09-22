@@ -129,6 +129,10 @@ date_LongMonth
 date_LopsidedDataYearSuffixCollapse
 date_MaskNonexistentWithCondition
 date_NoDate
+date_NonexistentSortReverseBibliography
+date_NonexistentSortReverseCitation
+date_SortEmptyDatesBibliography
+date_SortEmptyDatesCitation
 date_YearSuffixDelimiter
 decorations_SimpleQuotes
 disambiguate_AddNamesSuccess
@@ -423,6 +427,7 @@ sort_NameParticleInNameSortFalse
 sort_NameParticleInNameSortTrue
 sort_NamesUseLast
 sort_NumberOfAuthorsAsKey
+sort_StatusFieldAscending
 sort_StatusFieldDescending
 sort_TestInheritance
 sortseparator_SortSeparatorEmpty
