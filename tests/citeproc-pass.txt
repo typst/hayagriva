@@ -129,6 +129,8 @@ date_LongMonth
 date_LopsidedDataYearSuffixCollapse
 date_MaskNonexistentWithCondition
 date_NoDate
+date_OtherWithDate
+date_SeasonSubstituteInGroup
 date_YearSuffixDelimiter
 decorations_SimpleQuotes
 disambiguate_AddNamesSuccess

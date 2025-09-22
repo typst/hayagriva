@@ -21,6 +21,8 @@ pub struct Date {
     pub day: Option<u8>,
     /// Whether the date is approximate.
     pub approximate: bool,
+    /// The season. Between 1 and 4 (inclusive).
+    pub season: Option<u8>,
 }
 
 impl<'de> Deserialize<'de> for Date {
@@ -57,6 +59,7 @@ impl<'de> Deserialize<'de> for Date {
                     pub day: Option<u8>,
                     #[serde(default)]
                     pub approximate: bool,
+                    pub season: Option<u8>,
                 }
 
                 Deserialize::deserialize(de::value::MapAccessDeserializer::new(map)).map(
@@ -65,6 +68,7 @@ impl<'de> Deserialize<'de> for Date {
                         month: inner.month,
                         day: inner.day,
                         approximate: inner.approximate,
+                        season: inner.season,
                     },
                 )
             }
@@ -185,6 +189,7 @@ impl FromStr for Date {
                     month: Some(month),
                     day: Some(day),
                     approximate: approx,
+                    season: None,
                 });
             }
             Err(DateError::UnknownFormat) => {
@@ -202,6 +207,7 @@ impl FromStr for Date {
                     month: Some(month),
                     day: None,
                     approximate: approx,
+                    season: None,
                 });
             }
             Err(DateError::UnknownFormat) => {
@@ -218,14 +224,26 @@ impl FromStr for Date {
             return Err(DateError::UnknownFormat);
         }
 
-        Ok(Self { year, month: None, day: None, approximate: approx })
+        Ok(Self {
+            year,
+            month: None,
+            day: None,
+            approximate: approx,
+            season: None,
+        })
     }
 }
 
 impl Date {
     /// Get a date from an integer.
     pub fn from_year(year: i32) -> Self {
-        Self { year, month: None, day: None, approximate: false }
+        Self {
+            year,
+            month: None,
+            day: None,
+            approximate: false,
+            season: None,
+        }
     }
 
     /// Returns the year as a human-readable gregorian year.

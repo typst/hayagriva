@@ -763,6 +763,7 @@ impl EntryLike for citationberg::json::Item {
                     month: d.month,
                     day: d.day,
                     approximate: false,
+                    season: d.season,
                 }))
             }
             _ => None,
