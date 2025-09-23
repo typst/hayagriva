@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for Date {
                         month: inner.month,
                         day: inner.day,
                         approximate: inner.approximate,
-                        season: inner.season.map(|v| v.try_into().ok()).flatten(),
+                        season: inner.season.and_then(|v| v.try_into().ok()),
                     },
                 )
             }
