@@ -800,9 +800,7 @@ fn render_date_part<T: EntryLike>(
         match form {
             DateStrongAnyForm::Month(_) if date.month.is_none() => {
                 let season = date.season.unwrap();
-                let Some(season_term) = OtherTerm::season(season - 1) else {
-                    return;
-                };
+                let season_term = season.into();
                 let Some(season) =
                     ctx.term(Term::Other(season_term), TermForm::Short, false)
                 else {

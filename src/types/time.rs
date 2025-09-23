@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use citationberg::json::Season;
 use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 use unscanny::Scanner;
@@ -22,7 +23,7 @@ pub struct Date {
     /// Whether the date is approximate.
     pub approximate: bool,
     /// The season. Between 1 and 4 (inclusive).
-    pub season: Option<u8>,
+    pub season: Option<Season>,
 }
 
 impl<'de> Deserialize<'de> for Date {
@@ -68,7 +69,7 @@ impl<'de> Deserialize<'de> for Date {
                         month: inner.month,
                         day: inner.day,
                         approximate: inner.approximate,
-                        season: inner.season,
+                        season: inner.season.map(|v| v.try_into().ok()).flatten(),
                     },
                 )
             }
