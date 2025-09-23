@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use citationberg::json::Season;
+use citationberg::taxonomy::Season;
 use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 use unscanny::Scanner;
