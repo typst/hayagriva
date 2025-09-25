@@ -69,7 +69,9 @@ impl<'de> Deserialize<'de> for Date {
                         month: inner.month,
                         day: inner.day,
                         approximate: inner.approximate,
-                        season: inner.season.and_then(|v| v.try_into().ok()),
+                        season: inner
+                            .season
+                            .and_then(|v| Season::try_from_csl_number(v).ok()),
                     },
                 )
             }
