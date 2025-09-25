@@ -23,7 +23,7 @@ numerals = "0.1.4"
 paste = "1.0.14"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9.25"
-thiserror = "1.0.48"
+thiserror = "2.0.16"
 unic-langid = { version = "0.9.6", features = ["serde"] }
 unicode-segmentation = "1.6.0"
 unscanny = "0.1.0"
