@@ -131,6 +131,8 @@ date_MaskNonexistentWithCondition
 date_NoDate
 date_NonexistentSortReverseBibliography
 date_NonexistentSortReverseCitation
+date_OtherWithDate
+date_SeasonSubstituteInGroup
 date_SortEmptyDatesBibliography
 date_SortEmptyDatesCitation
 date_YearSuffixDelimiter

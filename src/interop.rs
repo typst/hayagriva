@@ -65,12 +65,14 @@ impl From<tex::Date> for Date {
                 month: x.month,
                 day: x.day,
                 approximate,
+                season: None,
             },
             DateValue::Between(_, x) => Self {
                 year: x.year,
                 month: x.month,
                 day: x.day,
                 approximate,
+                season: None,
             },
         }
     }

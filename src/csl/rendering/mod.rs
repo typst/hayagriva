@@ -691,7 +691,9 @@ impl RenderCsl for citationberg::Date {
 
         for part in &base.unwrap_or(self).date_part {
             match part.name {
-                DatePartName::Month if !parts.has_month() => continue,
+                DatePartName::Month if !parts.has_month() && date.season.is_none() => {
+                    continue;
+                }
                 DatePartName::Day if !parts.has_day() => continue,
                 _ => {}
             }
@@ -766,7 +768,12 @@ fn render_date_part<T: EntryLike>(
 ) {
     let Some(val) = (match date_part.name {
         DatePartName::Day => date.day.map(|i| i as i32 + 1),
-        DatePartName::Month => date.month.map(|i| i as i32 + 1),
+        DatePartName::Month => {
+            // Fallback for month is the season
+            date.month
+                .map(|i| i as i32 + 1)
+                .or(date.season.map(|s| s.to_csl_number() as i32))
+        }
         DatePartName::Year => Some(date.year),
     }) else {
         return;
@@ -793,6 +800,19 @@ fn render_date_part<T: EntryLike>(
 
     if !is_only_suffix {
         match form {
+            DateStrongAnyForm::Month(_) if date.month.is_none() => {
+                debug_assert!(date.season.is_some());
+                let Some(season) = date.season else {
+                    return;
+                };
+                let season_term = season.into();
+                let Some(season) =
+                    ctx.term(Term::Other(season_term), TermForm::Short, false)
+                else {
+                    return;
+                };
+                write!(ctx, "{season}").unwrap();
+            }
             DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
             | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
                 write!(ctx, "{val:02}").unwrap();
