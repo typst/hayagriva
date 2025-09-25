@@ -4,8 +4,8 @@ use std::fmt::Write;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    types::{EntryType, Person, PersonRole},
     Entry,
+    types::{EntryType, Person, PersonRole},
 };
 
 /// Citation labels in the form of numbers.
@@ -74,7 +74,7 @@ impl Alphanumerical {
 
         year.and_then(|y| {
             let mut num = String::with_capacity(2);
-            write!(&mut num, "{:02}", y).ok()?;
+            write!(&mut num, "{y:02}").ok()?;
             Some(num)
         })
     }
@@ -95,7 +95,7 @@ impl Alphanumerical {
 
 /// Get the creator of an entry.
 fn get_creators(entry: &Entry) -> Vec<&Person> {
-    let authors = if let Some(authors) = entry.authors() {
+    if let Some(authors) = entry.authors() {
         authors.iter().collect()
     } else if let Some(eds) = entry.editors() {
         eds.iter().collect()
@@ -124,9 +124,6 @@ fn get_creators(entry: &Entry) -> Vec<&Person> {
             return compilers;
         }
 
-        let translators = entry.affiliated_with_role(PersonRole::Translator);
-        return translators;
-    };
-
-    authors
+        entry.affiliated_with_role(PersonRole::Translator)
+    }
 }

@@ -9,13 +9,13 @@ use citationberg::{
     IndependentStyle, Locale, LocaleCode, LocaleFile, LongShortForm, Style,
 };
 use clap::builder::PossibleValue;
-use clap::{crate_version, Arg, ArgAction, Command, ValueEnum};
+use clap::{Arg, ArgAction, Command, ValueEnum, crate_version};
 use strum::VariantNames;
 
-use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::archive::{ArchivedStyle, locales};
 use hayagriva::{
-    io, BibliographyDriver, CitationItem, CitationRequest, LocatorPayload,
-    SpecificLocator,
+    BibliographyDriver, CitationItem, CitationRequest, LocatorPayload, SpecificLocator,
+    io,
 };
 use hayagriva::{BibliographyRequest, Selector};
 
@@ -198,7 +198,7 @@ fn main() {
         if input
             .extension()
             .and_then(|ext| ext.to_str())
-            .map_or(false, |ext| ext.to_lowercase() == "bib")
+            .is_some_and(|ext| ext.to_lowercase() == "bib")
         {
             format = Format::Bibtex;
         }
@@ -239,17 +239,15 @@ fn main() {
 
     let bib_len = bibliography.len();
 
-    let selector =
-        matches
-            .get_one("selector")
-            .cloned()
-            .map(|src| match Selector::parse(src) {
-                Ok(selector) => selector,
-                Err(err) => {
-                    eprintln!("Error while parsing selector: {}", err);
-                    exit(7);
-                }
-            });
+    let selector = matches.get_one::<String>("selector").cloned().map(|src| {
+        match Selector::parse(&src) {
+            Ok(selector) => selector,
+            Err(err) => {
+                eprintln!("Error while parsing selector: {err}");
+                exit(7);
+            }
+        }
+    });
 
     let bibliography = if let Some(keys) = matches.get_one::<String>("key") {
         let mut res = vec![];
@@ -274,35 +272,34 @@ fn main() {
 
         for entry in &bibliography {
             println!("{}", entry.key());
-            if matches.get_flag("show-bound") {
-                if let Some(selector) = &selector {
-                    for (k, v) in selector.apply(entry).unwrap() {
-                        println!(
-                            "\t{} => [{:?}] {}, {}",
-                            k,
-                            v.entry_type(),
-                            if let Some(authors) =
-                                entry.authors().or_else(|| entry.editors())
-                            {
-                                authors.iter().map(|a| a.name.as_str()).fold(
-                                    String::new(),
-                                    |mut prev, curr| {
-                                        if !prev.is_empty() {
-                                            prev.push_str(", ");
-                                        }
-                                        prev.push_str(curr);
-                                        prev
-                                    },
-                                )
-                            } else {
-                                "no authors".to_string()
-                            },
-                            entry
-                                .title()
-                                .map(|s| s.select(LongShortForm::default()).to_str())
-                                .unwrap_or_else(|| Cow::Borrowed("no title"))
-                        );
-                    }
+            if matches.get_flag("show-bound")
+                && let Some(selector) = &selector
+            {
+                for (k, v) in selector.apply(entry).unwrap() {
+                    println!(
+                        "\t{} => [{:?}] {}, {}",
+                        k,
+                        v.entry_type(),
+                        if let Some(authors) = entry.authors().or_else(|| entry.editors())
+                        {
+                            authors.iter().map(|a| a.name.as_str()).fold(
+                                String::new(),
+                                |mut prev, curr| {
+                                    if !prev.is_empty() {
+                                        prev.push_str(", ");
+                                    }
+                                    prev.push_str(curr);
+                                    prev
+                                },
+                            )
+                        } else {
+                            "no authors".to_string()
+                        },
+                        entry
+                            .title()
+                            .map(|s| s.select(LongShortForm::default()).to_str())
+                            .unwrap_or_else(|| Cow::Borrowed("no title"))
+                    );
                 }
             }
         }
@@ -345,11 +342,7 @@ fn main() {
                 let alternate = matches.get_flag("no-fmt");
 
                 if let Some(prefix) = row.first_field {
-                    if alternate {
-                        println!("{:#}", prefix)
-                    } else {
-                        println!("{}", prefix)
-                    }
+                    if alternate { println!("{prefix:#}") } else { println!("{prefix}") }
                 }
 
                 if alternate {
@@ -415,9 +408,9 @@ fn main() {
 
                 if let Some(note_number) = row.note_number {
                     if alternate {
-                        println!("{:#}", note_number)
+                        println!("{note_number:#}")
                     } else {
-                        println!("{}.", note_number)
+                        println!("{note_number}.")
                     }
                 }
 
@@ -437,7 +430,7 @@ fn main() {
                 for author in style.info().authors.iter() {
                     print!("  - {}", author.name);
                     if let Some(email) = &author.email {
-                        println!(" <{}>", email);
+                        println!(" <{email}>");
                     } else {
                         println!();
                     }
@@ -449,7 +442,7 @@ fn main() {
         }
         _ => {
             let bib = io::to_yaml_str(&bibliography).unwrap();
-            println!("{}", bib);
+            println!("{bib}");
         }
     }
 }

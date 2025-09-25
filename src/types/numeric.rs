@@ -120,7 +120,7 @@ impl Numeric {
     where
         T: fmt::Write,
     {
-        let format = |n: i32, buf: &mut T| -> std::fmt::Result { write!(buf, "{}", n) };
+        let format = |n: i32, buf: &mut T| -> std::fmt::Result { write!(buf, "{n}") };
 
         match &self.value {
             &NumericValue::Number(n) => format(n, buf)?,
@@ -131,7 +131,7 @@ impl Numeric {
                         if machine_readable {
                             buf.write_char(sep.as_char())?
                         } else {
-                            write!(buf, "{}", sep)?
+                            write!(buf, "{sep}")?
                         }
                     }
                 }
@@ -180,9 +180,9 @@ impl Numeric {
                 },
                 NumberForm::Roman => match roman_numerals_rs::RomanNumeral::try_from(n) {
                     Ok(roman) => write!(buf, "{:x}", roman),
-                    Err(_) => write!(buf, "{}", n),
+                    Err(_) => write!(buf, "{n}"),
                 },
-                NumberForm::Numeric => write!(buf, "{}", n),
+                NumberForm::Numeric => write!(buf, "{n}"),
             }
         };
 
@@ -192,7 +192,7 @@ impl Numeric {
                 for &(n, sep) in s {
                     format(n, buf)?;
                     if let Some(sep) = sep {
-                        write!(buf, "{}", sep)?
+                        write!(buf, "{sep}")?
                     }
                 }
             }

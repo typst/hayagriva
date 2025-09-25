@@ -7,10 +7,11 @@ use tex::{
     Chunk, ChunksExt, DateValue, EditorType, PermissiveType, RetrievalError, Spanned,
     TypeError,
 };
+
 use url::Url;
 
-use super::types::*;
 use super::Entry;
+use super::types::*;
 
 macro_rules! tex_kinds {
     ($self:expr, $mv_attr:expr, [$({$kind:pat, $new_kind:expr, $top_level:expr, $expand_mv:expr}),* $(,)*] $(,)*) => {
@@ -41,11 +42,7 @@ macro_rules! tex_kinds {
 impl From<&tex::Person> for Person {
     fn from(person: &tex::Person) -> Self {
         fn optional(part: &str) -> Option<String> {
-            if !part.is_empty() {
-                Some(part.to_string())
-            } else {
-                None
-            }
+            if !part.is_empty() { Some(part.to_string()) } else { None }
         }
 
         Self {
@@ -68,12 +65,14 @@ impl From<tex::Date> for Date {
                 month: x.month,
                 day: x.day,
                 approximate,
+                season: None,
             },
             DateValue::Between(_, x) => Self {
                 year: x.year,
                 month: x.month,
                 day: x.day,
                 approximate,
+                season: None,
             },
         }
     }
@@ -149,11 +148,7 @@ fn ed_role(role: EditorType, entry_type: &tex::EntryType) -> Option<PersonRole> 
 }
 
 fn book(item: &mut Entry, parent: bool) -> Option<&mut Entry> {
-    if parent {
-        item.parents_mut().get_mut(0)
-    } else {
-        None
-    }
+    if parent { item.parents_mut().get_mut(0) } else { None }
 }
 
 fn mv(item: &mut Entry, parent: bool, mv_parent: bool) -> Option<&mut Entry> {
@@ -250,12 +245,11 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Holder));
         }
 
-        if let Some(parent) = book(&mut item, parent) {
-            if let Some(a) =
+        if let Some(parent) = book(&mut item, parent)
+            && let Some(a) =
                 map_res(entry.book_author())?.map(|a| a.iter().map(Into::into).collect())
-            {
-                parent.set_authors(a);
-            }
+        {
+            parent.set_authors(a);
         }
 
         if let Some(a) =
@@ -276,7 +270,24 @@ impl TryFrom<&tex::Entry> for Entry {
             item.add_affiliated_persons((a, PersonRole::Translator));
         }
 
-        // TODO: entry.orig_language into item.language = Some()
+        // Take the first language or the langid.
+        let lang_res = entry.language();
+        let langid_res = entry.langid().ok();
+        // If we cannot parse the language, ignore it
+        if let Some(l) = map_res(lang_res)?
+            .as_ref()
+            .and_then(|l| l.first())
+            .or(langid_res.as_ref())
+        {
+            match l {
+                PermissiveType::Typed(lang) => {
+                    item.set_language((*lang).into());
+                }
+                PermissiveType::Chunks(_spanneds) => {
+                    // Ignore this case for now. See https://github.com/typst/hayagriva/pull/317#discussion_r2119367118
+                }
+            }
+        }
 
         if let Some(a) =
             map_res(entry.afterword())?.map(|a| a.iter().map(Into::into).collect())
@@ -309,10 +320,10 @@ impl TryFrom<&tex::Entry> for Entry {
 
         // NOTE: Ignoring subtitle and titleaddon for now
 
-        if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(title) = map_res(entry.main_title())?.map(Into::into) {
-                parent.set_title(title);
-            }
+        if let Some(parent) = mv(&mut item, parent, mv_parent)
+            && let Some(title) = map_res(entry.main_title())?.map(Into::into)
+        {
+            parent.set_title(title);
         }
 
         if let Some(parent) = book(&mut item, parent) {
@@ -393,11 +404,26 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        // "number" is generally used in Biblatex for "The number of a journal
+        // or the volume/number of a book in a series".  However, it is also
+        // used for patent entries as "the number or record token of a patent
+        // or patent request", and is also listed as an optional field for
+        // report, manual, and dataset, where it fits the use for patent.
+        // Hayagriva uses "issue" for the journal/book sense of biblatex's number,
+        // and "serial-number" for the record number / token sense.
         if let Some(number) = map_res(entry.number())?.map(|d| d.into()) {
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_issue(number);
             } else {
-                item.set_issue(number);
+                match item.entry_type {
+                    EntryType::Report
+                    | EntryType::Patent
+                    | EntryType::Entry
+                    | EntryType::Reference => {
+                        item.set_keyed_serial_number("serial", number.to_string())
+                    }
+                    _ => item.set_issue(number),
+                }
             }
         }
 
@@ -410,10 +436,10 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(parent) = mv(&mut item, parent, mv_parent) {
-            if let Some(volumes) = map_res(entry.volumes())? {
-                parent.set_volume_total(Numeric::new(volumes as i32));
-            }
+        if let Some(parent) = mv(&mut item, parent, mv_parent)
+            && let Some(volumes) = map_res(entry.volumes())?
+        {
+            parent.set_volume_total(Numeric::new(volumes as i32));
         }
 
         if let Some(version) = map_res(entry.version())? {
@@ -548,14 +574,38 @@ impl TryFrom<&tex::Entry> for Entry {
         if let Some(note) = map_res(entry.annotation())?
             .or_else(|| entry.addendum().ok())
             .map(Into::into)
+            && item.note.is_none()
         {
-            if item.note.is_none() {
-                item.set_note(note);
-            }
+            item.set_note(note);
         }
 
         if let Some(abstract_) = map_res(entry.abstract_())? {
             item.set_abstract_(abstract_.into())
+        }
+
+        // BibLaTeX describes "type" as "The type of a manual, patent, report, or thesis.
+        // This field may also be useful for the custom types listed in § 2.1.3."
+        // Hayagriva uses "genre" for 'Type, class, or subtype of the item (e.g.
+        // "Doctoral dissertation" for a PhD thesis; "NIH Publication" for an NIH
+        // technical report)'
+        if let Some(type_) = map_res(entry.type_())? {
+            item.set_genre(type_.into());
+        } else {
+            match entry.entry_type {
+                // These are the default genres according to the BibLaTeX manual §2.1.2,
+                // which is in agreement with "BibTeXing" §2.2.
+                tex::EntryType::MastersThesis => {
+                    item.set_genre("Master's thesis".to_string().into())
+                }
+                tex::EntryType::PhdThesis => {
+                    item.set_genre("Doctoral dissertation".to_string().into())
+                }
+                tex::EntryType::TechReport => {
+                    // capitalized as in the BibLaTeX manual
+                    item.set_genre("technical report".to_string().into())
+                }
+                _ => (),
+            }
         }
 
         if let Some(series) = map_res(entry.series())? {
@@ -574,14 +624,17 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(chapter) =
-            map_res(entry.chapter())?.or_else(|| map_res(entry.part()).ok().flatten())
-        {
-            let mut new = Entry::new(&entry.key, EntryType::Chapter);
-            new.set_title(chapter.into());
-            let temp = item;
-            new.parents.push(temp);
-            item = new;
+        if let Some(chapter) = map_res(entry.chapter())? {
+            // Per BibLaTeX manual, v3.20:
+            // "chapter (field): a chapter or section or any other unit of a work"
+            // This means it corresponds to the CSL "chapter-number" field -
+            // that is, describes the number of the chapter where the
+            // referenced information can be found - rather than, necessarily,
+            // the chapter entry type (referring to an entire chapter), which
+            // is better corresponded to by the `@InBook` BibLaTeX entry type:
+            // "A part of a book which forms a self-contained unit with its
+            // own title."
+            item.set_chapter(chapter.into());
         }
 
         Ok(item)
@@ -604,7 +657,9 @@ fn comma_list(items: &[Vec<Spanned<Chunk>>]) -> FormatString {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::PersonRole;
+    use unic_langid::LanguageIdentifier;
+
+    use crate::types::{EntryType, MaybeTyped, PersonRole};
 
     #[test]
     fn test_pmid_from_biblatex() {
@@ -662,5 +717,135 @@ mod tests {
         );
 
         serde_json::to_value(entry).unwrap();
+    }
+
+    #[test]
+    fn language_conversion() {
+        let lib = crate::io::from_biblatex_str(
+            r#"
+        @book{mc,
+          title = {Manufacturing Consent},
+          author = {Noam Chomsky and Edward Herman},
+          date = {1988},
+          language = {american}
+        }
+
+
+        @book{dda,
+          title = {Dialektik der Aufklärung},
+          author = {Max Horkheimer and Theodor W. Adorno},
+          date = {1944},
+          langid = {german},
+        }"#,
+        )
+        .unwrap();
+
+        let mc = lib.get("mc").unwrap().language().unwrap();
+        let dda = lib.get("dda").unwrap().language().unwrap();
+
+        assert_eq!(&"en-US".parse::<LanguageIdentifier>().unwrap(), mc);
+        assert_eq!(&"de".parse::<LanguageIdentifier>().unwrap(), dda);
+    }
+
+    #[test]
+    fn auto_genre_for_phd_masters_techreport() {
+        let bib = crate::io::from_biblatex_str(
+            r#"
+        @MastersThesis{torvalds-1997-linux-portable-os,
+            author =      {Linus Torvalds},
+            title =       {Linux: a Portable Operating System},
+            institution = {University of Helsinki},
+            year =        1997,
+        }
+        @PhDThesis{may-2007-radial-vel-zodiac-dust,
+            author = {Brian May},
+            title = {A Survey of Radial Velocities in the Zodiacal Dust Cloud},
+            institution = {Imperial College},
+            year = 2007,
+        }
+        @TechReport{von-neumann-1945-first-edvac,
+            author =      {John von Neumann},
+            title =       {First draft of a report on the {EDVAC}},
+            institution = {United States Army Ordnance Department},
+            year =        1945,
+        }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            "Master's thesis",
+            &bib.get("torvalds-1997-linux-portable-os")
+                .unwrap()
+                .genre()
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            "Doctoral dissertation",
+            &bib.get("may-2007-radial-vel-zodiac-dust")
+                .unwrap()
+                .genre()
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            "technical report",
+            &bib.get("von-neumann-1945-first-edvac")
+                .unwrap()
+                .genre()
+                .unwrap()
+                .to_string()
+        );
+    }
+
+    /// See https://github.com/typst/hayagriva/issues/357
+    #[test]
+    fn issue_357() {
+        let entries = crate::io::from_biblatex_str(
+            r#"
+        @InCollection{king-2004-using-interv,
+          author = 	 {Nigel King},
+          title = 	 {Using interviews in qualitative research},
+          booktitle = 	 {Essential Guide to Qualitative Methods in
+                          Organizational Research},
+          crossref =	 {cassell-2004-essen-guide},
+          publisher =	 {SAGE Publications Ltd},
+          year =	 2004,
+          editor =	 {Catherine Cassell and Gillian Symon},
+          chapter =      2,
+          pages =	 {11--22},
+        }
+
+        @InBook{pine-1982-minesweeper-techniques,
+          title = {Studies on Modern Minesweeper Techniques},
+          author = {Robertson Pine},
+          chapter = {1},
+          booktitle = {Modern Games: Deep Research and Analysis},
+          publisher = {Book Publisher},
+          editor = {John Pine},
+          year = 1982,
+          pages = {5--10},
+        }"#,
+        )
+        .unwrap();
+        let king = entries.get("king-2004-using-interv").unwrap();
+        assert_eq!(
+            &king.title().unwrap().to_string(),
+            "Using interviews in qualitative research"
+        );
+        assert_eq!(&king.authors().unwrap()[0].given_first(false), "Nigel King");
+        assert_eq!(king.chapter().unwrap(), &MaybeTyped::Typed(2i32.into()));
+
+        let pine = entries.get("pine-1982-minesweeper-techniques").unwrap();
+        assert_eq!(
+            &pine.title().unwrap().to_string(),
+            "Studies on Modern Minesweeper Techniques"
+        );
+        assert_eq!(&pine.authors().unwrap()[0].given_first(false), "Robertson Pine");
+        assert_eq!(pine.entry_type(), &EntryType::Chapter);
+        assert_eq!(pine.chapter().unwrap(), &MaybeTyped::Typed(1i32.into()));
+        assert_eq!(
+            pine.parents()[0].title().unwrap().to_string(),
+            "Modern Games: Deep Research and Analysis"
+        );
     }
 }
