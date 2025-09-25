@@ -762,7 +762,7 @@ impl EntryLike for citationberg::json::Item {
                     year: d.year as i32,
                     month: d.month,
                     day: d.day,
-                    approximate: false,
+                    approximate: d.circa,
                     season: d.season,
                 }))
             }
