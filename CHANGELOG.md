@@ -1,3 +1,42 @@
+# 0.9.0
+
+- Add `chapter` field corresponding to CSL `chapter-number` and BibLaTeX
+  `chapter` (#361, #383)
+- Support locator/supplement in alphanumeric style, also clean it up (#298,
+  #307, #353)
+- Support BibLaTeX `language` field (#317)
+- Support date seasons, which are displayed when the month is missing (#391)
+- Improve translation of BibLaTeX fields to `genre` and `serial-number` (#296,
+  #369)
+- **Breaking change:** Allow differentiating custom locators/supplements for
+  styles that handle repeated locators. Due to this change,
+  `LocatorPayload::Transparent` now contains a `TransparentLocator` (#299)
+- **Breaking change:** The types `CitationRequest`, `CitationItem`,
+  `SpecificLocator` and `LocatorPayload` no longer derive `Hash` and `Eq`. That
+  also removes some automatically derived traits.
+- **Breaking change:** Updated `biblatex` to version 0.11.0
+- Update most archived CSL styles and locales
+  - **Breaking change:** Styles `chicago-fullnotes` and
+    `modern-humanities-research-association` were renamed to `chicago-notes` and
+    `modern-humanities-research-association-notes`, and the old names are now
+    deprecated, but still available. `ArchivedStyle::ChicagoFullnotes` and
+    `ArchivedStyle::ModernHumanitiesResearchAssociation` were removed and the
+    discriminant of `ArchivedStyle::ChicagoNotes` has changed. (#350, #372,
+    #389)
+- Fixes and improvements to BibLaTeX parsing (#388)
+  - Support `%` comment syntax, as well as top-level `@comment{}`
+  - Allow omitting `editor` for `@InProceedings`
+- Fix regression where page variables were no longer supported in styles'
+  `<number>` elements (#289)
+- Fix handling of `ibid-with-locator` and `ibid` positions in styles (#301)
+- Fix sorting and formatting of name parts (#287, #313)
+- Correctly use terms for "AD" and "BC" from chosen locale (#364)
+- Fix year suffix collapsing (#367)
+- Fix delimiters in locale-specific date formatting (#385)
+- Fix rendering of date ordinals (#366)
+- Fix rendering and sorting of dates with BC years (#334, #368)
+- Fix sorting for empty sort values (#390)
+
 # 0.8.1
 
 - Use editor names in prose and author-only citations if the author names are

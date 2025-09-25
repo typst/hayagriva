@@ -1,6 +1,6 @@
 [package]
 name = "hayagriva"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Martin Haug <mhaug@live.de>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"

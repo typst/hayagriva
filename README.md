@@ -105,7 +105,7 @@ default features by writing this in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hayagriva = { version = "0.8", default-features = false }
+hayagriva = { version = "0.9", default-features = false }
 ```
 
 ### Selectors
