@@ -770,7 +770,9 @@ fn render_date_part<T: EntryLike>(
         DatePartName::Day => date.day.map(|i| i as i32 + 1),
         DatePartName::Month => {
             // Fallback for month is the season
-            date.month.map(|i| i as i32 + 1).or(date.season.map(|s| s as i32))
+            date.month
+                .map(|i| i as i32 + 1)
+                .or(date.season.map(|s| s.to_csl_number() as i32))
         }
         DatePartName::Year => Some(date.year),
     }) else {
