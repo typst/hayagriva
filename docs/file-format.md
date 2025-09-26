@@ -438,6 +438,20 @@ publisher:
 Title and sentence case folding will always be deactivated if your item has set
 the `language` key to something other than English.
 
+Double quotation marks in a formattable string will be we transformed to
+fitting opening and closing quotation marks according to the chosen locale.
+Quotes will always be appropriately nested:
+
+```yaml
+title: Reflections on "Harlem" and Other Poems
+```
+
+If you use quotation marks as YAML delimiters, simply escape the quotation marks in the title:
+
+```yaml
+title: "Reflections on \"Harlem\" and Other Poems"
+```
+
 You can also include mathematical markup evaluated by [Typst](https://typst.app) by
 wrapping it in dollars.
 
