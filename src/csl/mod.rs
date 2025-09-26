@@ -2257,7 +2257,14 @@ impl IbidState {
             if last.entry == this.entry && !last.hidden {
                 if last.locator == this.locator {
                     IbidState::Ibid
+                } else if this.locator.is_none() {
+                    // Per CSL spec: "Preceding cite does have a locator: (...)
+                    // If the current cite lacks a locator its only position is
+                    // 'subsequent'."
+                    IbidState::Different
                 } else {
+                    // - Both have locators, but they differ
+                    // - Previous one has no locator, this one does
                     IbidState::IbidWithLocator
                 }
             } else {
