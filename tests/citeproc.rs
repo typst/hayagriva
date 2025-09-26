@@ -434,7 +434,7 @@ impl TestSuiteResults {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "bugreports_ArabicLocale.txt";
+    let name = "date_YearSuffixImplicitWithNoDate.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
@@ -947,7 +947,7 @@ fn access_date() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, "Retrieved 2021, from https://example.com/");
+    assert_eq!(buf, "(n.d.). Retrieved 2021, from https://example.com/");
 }
 
 #[test]

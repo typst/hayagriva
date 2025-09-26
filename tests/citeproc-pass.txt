@@ -173,6 +173,7 @@ form_TitleTestNoLongFalse
 fullstyles_ABdNT
 fullstyles_APA
 fullstyles_ChicagoNoteWithBibliographyWithPublisher
+group_ComplexNesting
 group_ShortOutputOnly
 group_SuppressValueWithEmptySubgroup
 group_SuppressWithEmptyNestedDateNode
