@@ -3112,6 +3112,104 @@ mod tests {
     }
 
     #[test]
+    fn test_transparent_locator_ibid() {
+        let test_data = r#"
+            katalog:
+                type: Book
+                title: "Book"
+                author: "Surname, Name"
+                location: Warsaw
+                date: 1971
+        "#;
+        let test_style = r#"<?xml version="1.0" encoding="utf-8"?>
+        <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only">
+           <info>
+              <title>Citing style</title>
+              <id>http://www.example.com/</id>
+           </info>
+
+           <citation>
+              <layout prefix="" suffix="." delimiter="; ">
+                 <choose>
+                    <if position="first">
+                      <text value="first" />
+                    </if>
+                    <else-if position="ibid-with-locator">
+                      <text value="ibid-with-locator" />
+                    </else-if>
+                    <else-if position="ibid">
+                       <text value="ibid" />
+                    </else-if>
+                    <else-if position="subsequent">
+                      <text value="subsequent" />
+                    </else-if>
+                    <else>
+                      <text value="other" />
+                    </else>
+                 </choose>
+              </layout>
+           </citation>
+          <bibliography>
+            <sort>
+              <key macro="contributors-biblio"/>
+            </sort>
+            <layout suffix=".">
+              <group delimiter=", ">
+                <group delimiter=", ">
+                  <text macro="locators-chapter"/>
+                </group>
+              </group>
+            </layout>
+          </bibliography>
+        </style>"#;
+
+        let library = from_yaml_str(test_data).unwrap();
+        let style = citationberg::Style::from_xml(test_style).unwrap();
+        let citationberg::Style::Independent(style) = style else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        let entry = library.get("katalog").unwrap();
+        let supplements = [
+            (Some([2, 3]), "first."),
+            (Some([2, 3]), "ibid."),
+            (Some([2, 3]), "ibid."),
+            (Some([2, 4]), "ibid-with-locator."),
+            (None, "subsequent."),
+        ];
+
+        for (supplement, _) in supplements {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_locator(
+                    entry,
+                    supplement.map(|s| {
+                        SpecificLocator(
+                            Locator::Supplement,
+                            LocatorPayload::Transparent(TransparentLocator(Arc::new(s))),
+                        )
+                    }),
+                )],
+                &style,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &style,
+            locale: None,
+            locale_files: &[],
+        });
+
+        for (citation, (_, expected_value)) in finished.citations.iter().zip(supplements)
+        {
+            let mut s = String::new();
+            citation.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
+            assert_eq!(s, expected_value);
+        }
+    }
+
+    #[test]
     #[cfg(feature = "archive")]
     fn test_alphanumeric_disambiguation() {
         let bibtex = r#"@article{chenTransMorphTransformerUnsupervised2021,
