@@ -3127,6 +3127,12 @@ mod tests {
                 author: "Surname, Name"
                 location: Warsaw
                 date: 1971
+            katalog2:
+                type: Book
+                title: "Book2"
+                author: "Surname, Name"
+                location: Warsaw
+                date: 1971
         "#;
         let test_style = r#"<?xml version="1.0" encoding="utf-8"?>
         <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only">
@@ -3175,16 +3181,19 @@ mod tests {
         let citationberg::Style::Independent(style) = style else { unreachable!() };
 
         let mut driver = BibliographyDriver::new();
-        let entry = library.get("katalog").unwrap();
-        let supplements = [
-            (Some([2, 3]), "first."),
-            (Some([2, 3]), "ibid."),
-            (Some([2, 3]), "ibid."),
-            (Some([2, 4]), "ibid-with-locator."),
-            (None, "subsequent."),
+        let citations = [
+            ("katalog", Some([2, 3]), "first."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog", Some([2, 4]), "ibid-with-locator."),
+            ("katalog", None, "subsequent."),
+            ("katalog", Some([2, 3]), "ibid-with-locator."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog2", Some([2, 3]), "first."),
         ];
 
-        for (supplement, _) in supplements {
+        for (entry, supplement, _) in citations {
+            let entry = library.get(entry).unwrap();
             driver.citation(CitationRequest::new(
                 vec![CitationItem::with_locator(
                     entry,
@@ -3208,7 +3217,7 @@ mod tests {
             locale_files: &[],
         });
 
-        for (citation, (_, expected_value)) in finished.citations.iter().zip(supplements)
+        for (citation, (_, _, expected_value)) in finished.citations.iter().zip(citations)
         {
             let mut s = String::new();
             citation.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
