@@ -2239,7 +2239,8 @@ impl DisambiguateState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IbidState {
-    /// The previous cite referenced another entry.
+    /// The previous cite referenced another entry, or this cite has no locator
+    /// when the previous one did.
     Different,
     /// The previous cite referenced the same entry, but with a different
     /// locator.
@@ -2257,7 +2258,14 @@ impl IbidState {
             if last.entry == this.entry && !last.hidden {
                 if last.locator == this.locator {
                     IbidState::Ibid
+                } else if this.locator.is_none() {
+                    // Per CSL spec: "Preceding cite does have a locator: (...)
+                    // If the current cite lacks a locator its only position is
+                    // 'subsequent'."
+                    IbidState::Different
                 } else {
+                    // - Both have locators, but they differ
+                    // - Previous one has no locator, this one does
                     IbidState::IbidWithLocator
                 }
             } else {
@@ -3109,6 +3117,113 @@ mod tests {
         assert_eq!(yield_year(0, true), "1BC");
         assert_eq!(yield_year(-1, true), "2BC");
         assert_eq!(yield_year(1, true), "1AD");
+    }
+
+    #[test]
+    fn test_transparent_locator_ibid() {
+        let test_data = r#"
+            katalog:
+                type: Book
+                title: "Book"
+                author: "Surname, Name"
+                location: Warsaw
+                date: 1971
+            katalog2:
+                type: Book
+                title: "Book2"
+                author: "Surname, Name"
+                location: Warsaw
+                date: 1971
+        "#;
+        let test_style = r#"<?xml version="1.0" encoding="utf-8"?>
+        <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only">
+           <info>
+              <title>Citing style</title>
+              <id>http://www.example.com/</id>
+           </info>
+
+           <citation>
+              <layout prefix="" suffix="." delimiter="; ">
+                 <choose>
+                    <if position="first">
+                      <text value="first" />
+                    </if>
+                    <else-if position="ibid-with-locator">
+                      <text value="ibid-with-locator" />
+                    </else-if>
+                    <else-if position="ibid">
+                       <text value="ibid" />
+                    </else-if>
+                    <else-if position="subsequent">
+                      <text value="subsequent" />
+                    </else-if>
+                    <else>
+                      <text value="other" />
+                    </else>
+                 </choose>
+              </layout>
+           </citation>
+          <bibliography>
+            <sort>
+              <key macro="contributors-biblio"/>
+            </sort>
+            <layout suffix=".">
+              <group delimiter=", ">
+                <group delimiter=", ">
+                  <text macro="locators-chapter"/>
+                </group>
+              </group>
+            </layout>
+          </bibliography>
+        </style>"#;
+
+        let library = from_yaml_str(test_data).unwrap();
+        let style = citationberg::Style::from_xml(test_style).unwrap();
+        let citationberg::Style::Independent(style) = style else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        let citations = [
+            ("katalog", Some([2, 3]), "first."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog", Some([2, 4]), "ibid-with-locator."),
+            ("katalog", None, "subsequent."),
+            ("katalog", Some([2, 3]), "ibid-with-locator."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog2", Some([2, 3]), "first."),
+        ];
+
+        for (entry, supplement, _) in citations {
+            let entry = library.get(entry).unwrap();
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_locator(
+                    entry,
+                    supplement.map(|s| {
+                        SpecificLocator(
+                            Locator::Supplement,
+                            LocatorPayload::Transparent(TransparentLocator(Arc::new(s))),
+                        )
+                    }),
+                )],
+                &style,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &style,
+            locale: None,
+            locale_files: &[],
+        });
+
+        for (citation, (_, _, expected_value)) in finished.citations.iter().zip(citations)
+        {
+            let mut s = String::new();
+            citation.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
+            assert_eq!(s, expected_value);
+        }
     }
 
     #[test]
