@@ -2239,7 +2239,8 @@ impl DisambiguateState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IbidState {
-    /// The previous cite referenced another entry.
+    /// The previous cite referenced another entry, or this cite has no locator
+    /// when the previous one did.
     Different,
     /// The previous cite referenced the same entry, but with a different
     /// locator.
