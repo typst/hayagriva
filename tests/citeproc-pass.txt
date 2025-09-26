@@ -135,6 +135,7 @@ date_OtherWithDate
 date_SeasonSubstituteInGroup
 date_SortEmptyDatesBibliography
 date_SortEmptyDatesCitation
+date_Uncertain
 date_YearSuffixDelimiter
 decorations_SimpleQuotes
 disambiguate_AddNamesSuccess
