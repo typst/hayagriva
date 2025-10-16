@@ -55,7 +55,7 @@ pub struct BibliographyDriver<'a, T: EntryLike> {
 
 impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
     fn default() -> Self {
-        Self { 
+        Self {
             citations: Vec::new(),
             citation_number_offset: None,
         }
