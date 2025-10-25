@@ -94,7 +94,7 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 }
 
 /// Implementations for finishing the bibliography.
-impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
+impl<T: EntryLike + Hash + PartialEq + Eq + Debug + Clone> BibliographyDriver<'_, T> {
     /// Render the bibliography.
     pub fn finish(mut self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
@@ -224,16 +224,22 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
             let mut rerender: HashMap<*const T, DisambiguateState> = HashMap::new();
             let mark = |map: &mut HashMap<*const T, DisambiguateState>,
                         entry: &T,
-                        state: DisambiguateState| {
-                map.entry(entry)
-                    .and_modify(|e| *e = e.clone().max(state.clone()))
-                    .or_insert(state);
+                        state: DisambiguateState,
+                        group: &AmbiguousGroup,
+                        is_year_suffix: bool| {
+                // Only commit the state change if it actually disambiguates anything.
+                // (The year suffix is always successful. No need to check)
+                if is_year_suffix || !is_fully_ambiguous(&res, group, state.clone()) {
+                    map.entry(entry)
+                        .and_modify(|e| *e = e.clone().max(state.clone()))
+                        .or_insert(state);
+                }
             };
 
             for group in ambiguous.iter() {
                 // 2a. Name Disambiguation loop
                 disambiguate_names(&res, group, |entry, state| {
-                    mark(&mut rerender, entry, state)
+                    mark(&mut rerender, entry, state, group, false)
                 });
 
                 // Do not try other methods if the previous method succeeded.
@@ -243,7 +249,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
 
                 // 2b. Disambiguate by allowing `cs:choose` disambiguation.
                 disambiguate_with_choose(&res, group, |entry, state| {
-                    mark(&mut rerender, entry, state)
+                    mark(&mut rerender, entry, state, group, false)
                 });
 
                 if !rerender.is_empty() {
@@ -252,7 +258,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
 
                 // 2c. Disambiguate by year-suffix.
                 disambiguate_year_suffix(&res, group, |entry, state| {
-                    mark(&mut rerender, entry, state)
+                    mark(&mut rerender, entry, state, group, true)
                 });
             }
 
@@ -893,6 +899,34 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
                 .any(|(cite, item)| cites[*cite].items[*item].entry != first_entry)
         })
         .collect()
+}
+
+/// True iff the given group is still entirely ambiguous even with the changed state.
+fn is_fully_ambiguous<T: EntryLike + Clone>(
+    cites: &[SpeculativeCiteRender<'_, '_, T>],
+    group: &AmbiguousGroup,
+    state: DisambiguateState,
+) -> bool {
+    let mut rendered: Option<String> = None;
+    for (cite_id, item_id) in group {
+        let cite = &cites[*cite_id];
+        let item = &cite.items[*item_id];
+        let mut item = item.clone();
+        item.cite_props.speculative.disambiguation =
+            item.cite_props.speculative.disambiguation.clone().max(state.clone());
+        let rerendered = do_rerender(&cite.request.style(), &item, cite.request);
+        let buf = format!("{:?}", rerendered);
+        match rendered.as_ref() {
+            Some(r) => {
+                if r != &buf {
+                    return false;
+                }
+            }
+            None => rendered = Some(buf),
+        }
+    }
+
+    true
 }
 
 fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
