@@ -224,22 +224,16 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug + Clone> BibliographyDriver<'_
             let mut rerender: HashMap<*const T, DisambiguateState> = HashMap::new();
             let mark = |map: &mut HashMap<*const T, DisambiguateState>,
                         entry: &T,
-                        state: DisambiguateState,
-                        group: &AmbiguousGroup,
-                        is_year_suffix: bool| {
-                // Only commit the state change if it actually disambiguates anything.
-                // (The year suffix is always successful. No need to check)
-                if is_year_suffix || !is_fully_ambiguous(&res, group, state.clone()) {
-                    map.entry(entry)
-                        .and_modify(|e| *e = e.clone().max(state.clone()))
-                        .or_insert(state);
-                }
+                        state: DisambiguateState| {
+                map.entry(entry)
+                    .and_modify(|e| *e = e.clone().max(state.clone()))
+                    .or_insert(state);
             };
 
             for group in ambiguous.iter() {
                 // 2a. Name Disambiguation loop
                 disambiguate_names(&res, group, |entry, state| {
-                    mark(&mut rerender, entry, state, group, false)
+                    mark(&mut rerender, entry, state)
                 });
 
                 // Do not try other methods if the previous method succeeded.
@@ -249,7 +243,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug + Clone> BibliographyDriver<'_
 
                 // 2b. Disambiguate by allowing `cs:choose` disambiguation.
                 disambiguate_with_choose(&res, group, |entry, state| {
-                    mark(&mut rerender, entry, state, group, false)
+                    mark(&mut rerender, entry, state)
                 });
 
                 if !rerender.is_empty() {
@@ -258,7 +252,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug + Clone> BibliographyDriver<'_
 
                 // 2c. Disambiguate by year-suffix.
                 disambiguate_year_suffix(&res, group, |entry, state| {
-                    mark(&mut rerender, entry, state, group, true)
+                    mark(&mut rerender, entry, state)
                 });
             }
 
@@ -719,33 +713,67 @@ fn disambiguate_names<F, T>(
     group: &AmbiguousGroup,
     mut mark: F,
 ) where
-    T: EntryLike,
+    T: EntryLike + Eq + Hash + Clone + Debug,
     F: FnMut(&T, DisambiguateState),
 {
-    for &(cite_idx, item_idx) in group.iter() {
-        let style = renders[cite_idx].request.style;
-        let item = &renders[cite_idx].items[item_idx];
+    let max_names = group
+        .iter()
+        .map(|(c, i)| {
+            let cite = &renders[*c];
+            let item = &cite.items[*i];
+            if let DisambiguateState::NameDisambiguation(n) =
+                &item.cite_props.speculative.disambiguation
+            {
+                n.max_names()
+            } else {
+                item.first_name
+                    .as_ref()
+                    .map(NameDisambiguationProperties::max_names)
+                    .unwrap_or_default()
+            }
+        })
+        .max()
+        .unwrap_or_default();
+    for _ in 0..max_names {
+        let mut changed_states = HashMap::new();
+        for &(cite_idx, item_idx) in group.iter() {
+            let style = renders[cite_idx].request.style;
+            let item = &renders[cite_idx].items[item_idx];
 
-        if !item.cite_props.speculative.disambiguation.may_disambiguate_names() {
-            continue;
+            if !item.cite_props.speculative.disambiguation.may_disambiguate_names() {
+                continue;
+            }
+
+            let name_props_slot = if let DisambiguateState::NameDisambiguation(n) =
+                &item.cite_props.speculative.disambiguation
+            {
+                Some(n)
+            } else {
+                item.first_name.as_ref()
+            };
+
+            if let Some(name_props) = name_props_slot {
+                let mut name_props = name_props.clone();
+                if name_props.disambiguate(
+                    style.citation.disambiguate_add_givenname,
+                    style.citation.givenname_disambiguation_rule,
+                    style.citation.disambiguate_add_names,
+                ) {
+                    changed_states.insert(
+                        (cite_idx, item_idx),
+                        DisambiguateState::NameDisambiguation(name_props),
+                    );
+                }
+            }
         }
-
-        let name_props_slot = if let DisambiguateState::NameDisambiguation(n) =
-            &item.cite_props.speculative.disambiguation
-        {
-            Some(n)
-        } else {
-            item.first_name.as_ref()
-        };
-
-        if let Some(name_props) = name_props_slot {
-            let mut name_props = name_props.clone();
-            if name_props.disambiguate(
-                style.citation.disambiguate_add_givenname,
-                style.citation.givenname_disambiguation_rule,
-                style.citation.disambiguate_add_names,
-            ) {
-                mark(item.entry, DisambiguateState::NameDisambiguation(name_props))
+        if changed_states.is_empty() {
+            // No disambiguation possible
+            return;
+        }
+        if !is_fully_ambiguous(&renders, group, &changed_states) {
+            for ((cite_id, item_id), state) in changed_states.into_iter() {
+                let entry = renders[cite_id].items[item_id].entry;
+                mark(entry, state)
             }
         }
     }
@@ -905,27 +933,34 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
 fn is_fully_ambiguous<T: EntryLike + Clone>(
     cites: &[SpeculativeCiteRender<'_, '_, T>],
     group: &AmbiguousGroup,
-    state: DisambiguateState,
+    changed_states: &HashMap<(usize, usize), DisambiguateState>,
 ) -> bool {
     let mut rendered: Option<String> = None;
+    eprintln!("Group: {group:?}");
     for (cite_id, item_id) in group {
         let cite = &cites[*cite_id];
         let item = &cite.items[*item_id];
         let mut item = item.clone();
+        let state = changed_states
+            .get(&(*cite_id, *item_id))
+            .unwrap_or_else(|| &item.cite_props.speculative.disambiguation);
+
         item.cite_props.speculative.disambiguation =
             item.cite_props.speculative.disambiguation.clone().max(state.clone());
         let rerendered = do_rerender(&cite.request.style(), &item, cite.request);
         let buf = format!("{:?}", rerendered);
+        eprintln!("-- {rerendered}");
         match rendered.as_ref() {
             Some(r) => {
                 if r != &buf {
+                    eprintln!("--> Change");
                     return false;
                 }
             }
             None => rendered = Some(buf),
         }
     }
-
+    eprintln!("--> No Change");
     true
 }
 

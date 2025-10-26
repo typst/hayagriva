@@ -164,6 +164,10 @@ impl NameDisambiguationProperties {
             _ => other,
         }
     }
+
+    pub fn max_names(&self) -> usize {
+        self.name_forms.iter().map(|nfs| nfs.len()).max().unwrap_or_default()
+    }
 }
 
 fn renders_given_special_form<T: EntryLike>(
