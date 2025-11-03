@@ -138,11 +138,10 @@ impl NameDisambiguationProperties {
     pub fn get_form_mut(&mut self, idx: usize) -> Option<&mut DisambiguatedNameForm> {
         self.name_forms
             .iter_mut()
-            .map(|l| l.iter_mut())
-            .flatten()
+            .flat_map(|l| l.iter_mut())
             .nth(idx)
             .and_then(|d| d.as_mut())
-            .or_else(|| Some(&mut self.default_name_form))
+            .or(Some(&mut self.default_name_form))
     }
 }
 
@@ -266,7 +265,7 @@ impl RenderCsl for Names {
         let meta_people = people
             .iter()
             .map(|(ps, v)| {
-                (ps.iter().map(|p| p.clone().into_owned()).collect::<Vec<_>>(), v.clone())
+                (ps.iter().map(|p| p.clone().into_owned()).collect::<Vec<_>>(), *v)
             })
             .collect::<Vec<_>>();
 

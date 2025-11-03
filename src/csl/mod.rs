@@ -713,11 +713,8 @@ fn get_names(children: &ElemChildren) -> Vec<Person> {
     fn helper(children: &ElemChildren, persons: &mut Vec<Person>) {
         for c in &children.0 {
             if let ElemChild::Elem(e) = c {
-                match &e.meta {
-                    Some(ElemMeta::Names(ns)) => {
-                        persons.extend(ns.iter().map(|(ps, _)| ps).flatten().cloned());
-                    }
-                    _ => {}
+                if let Some(ElemMeta::Names(ns)) = &e.meta {
+                    persons.extend(ns.iter().flat_map(|(ps, _)| ps).cloned());
                 }
                 helper(&e.children, persons);
             }
@@ -930,8 +927,7 @@ fn disambiguate_names<F, T>(
                                     .filter(|i| {
                                         i.cite_id != d.cite_id || i.item_id != d.item_id
                                     })
-                                    .map(|i| &i.names)
-                                    .flatten()
+                                    .flat_map(|i| &i.names)
                                     .collect::<Vec<_>>(),
                                 form,
                             ) {
