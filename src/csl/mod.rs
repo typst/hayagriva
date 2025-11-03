@@ -14,17 +14,18 @@ use citationberg::taxonomy::{
     PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
-    Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display,
-    GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
-    LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, TermForm, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
+    Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro,
+    DisambiguationRule, Display, GrammarGender, IndependentStyle, InheritableNameOptions,
+    Layout, LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign,
+    StyleCategory, StyleClass, TermForm, ToAffixes, ToFormatting,
+    taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
 
 use crate::csl::elem::{NonEmptyStack, simplify_children};
 use crate::csl::rendering::RenderCsl;
-use crate::csl::rendering::names::NameDisambiguationProperties;
+use crate::csl::rendering::names::{DisambiguatedNameForm, NameDisambiguationProperties};
 use crate::csl::taxonomy::NumberOrPageVariableResult;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Person};
@@ -297,10 +298,8 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug + Clone> BibliographyDriver<'_
                     continue;
                 };
 
-                let Some(name_elem) = cite.items[i]
-                    .rendered
-                    .find_meta(ElemMeta::Names)
-                    .map(|e| format!("{e:?}"))
+                let Some(name_elem) =
+                    cite.items[i].rendered.find_names().map(|e| format!("{e:?}"))
                 else {
                     continue;
                 };
@@ -707,6 +706,139 @@ fn last_purpose_render<T: EntryLike + Debug>(
 
 type AmbiguousGroup = Vec<(usize, usize)>;
 
+/// Get all names in `children`.
+///
+/// **NOTE**: These not just the rendered names, but all names where the corresponding variable occurs.
+fn get_names(children: &ElemChildren) -> Vec<Person> {
+    fn helper(children: &ElemChildren, persons: &mut Vec<Person>) {
+        for c in &children.0 {
+            if let ElemChild::Elem(e) = c {
+                match &e.meta {
+                    Some(ElemMeta::Names(ns)) => {
+                        persons.extend(ns.iter().map(|(ps, _)| ps).flatten().cloned());
+                    }
+                    _ => {}
+                }
+                helper(&e.children, persons);
+            }
+        }
+    }
+    let mut res = vec![];
+    helper(children, &mut res);
+    res
+}
+
+#[derive(Debug)]
+/// A state used for disambiguation.
+struct DisambData<'a, T: EntryLike + Debug> {
+    /// The citation index of the item.
+    cite_id: usize,
+    /// The item index.
+    item_id: usize,
+    /// Names occurring in this citation item.
+    names: Vec<Person>,
+    /// The related speculative render
+    item: &'a SpeculativeItemRender<'a, T>,
+}
+
+impl<'a, T: EntryLike + Debug> PartialEq for DisambData<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cite_id == other.cite_id && self.item_id == other.item_id
+    }
+}
+
+impl<'a, T: EntryLike + Debug> Eq for DisambData<'a, T> {}
+
+/// Returns true iff the item `x` is fully disambiguated w.r.t. `xs` where the first `et_al_min` are added and the `rule` is applied.
+fn is_disambiguated<T: EntryLike + Debug>(
+    et_al_min: usize,
+    xs: &[DisambData<T>],
+    x: &DisambData<T>,
+    rule: Option<DisambiguationRule>,
+) -> bool {
+    fn name_parts<'a>(
+        names: impl Iterator<Item = &'a Person>,
+        rule: Option<DisambiguationRule>,
+    ) -> Vec<Person> {
+        match rule {
+            Some(DisambiguationRule::AllNames | DisambiguationRule::ByCite) => {
+                names.cloned().collect()
+            }
+            Some(DisambiguationRule::AllNamesWithInitials) => names
+                .cloned()
+                .map(|n| {
+                    let mut given = String::new();
+                    n.initials(&mut given, None, false).unwrap();
+                    Person { given_name: Some(given), ..n }
+                })
+                .collect(),
+            Some(DisambiguationRule::PrimaryName) => names
+                .cloned()
+                .enumerate()
+                .map(|(i, n)| if i == 0 { n } else { Person { given_name: None, ..n } })
+                .collect(),
+            Some(DisambiguationRule::PrimaryNameWithInitials) => names
+                .cloned()
+                .enumerate()
+                .map(|(i, n)| {
+                    if i == 0 {
+                        let mut given = String::new();
+                        n.initials(&mut given, None, false).unwrap();
+                        Person { given_name: Some(given), ..n }
+                    } else {
+                        Person { given_name: None, ..n }
+                    }
+                })
+                .collect(),
+            None => names.map(|n| Person { given_name: None, ..n.clone() }).collect(),
+        }
+    }
+
+    let disamb_name =
+        |x: &DisambData<T>| name_parts(x.names.iter().take(et_al_min), rule);
+
+    let disamb_x = disamb_name(x);
+    xs.iter().all(|y| x == y || disamb_name(y) != disamb_x)
+}
+
+/// Adds a given name (potentially only the initial) to the name `x` if it disambiguates w.r.t. `xs`.
+///
+/// **Note**: This is only used to disambiguate a citation. Disambiguation of names needs to be handled differently.
+fn disamb_cite_add_given_name(
+    x: &Person,
+    xs: &[&Person],
+    form: &mut DisambiguatedNameForm,
+) -> bool {
+    if form == &DisambiguatedNameForm::Count {
+        // Cannot disambiguate
+        return false;
+    }
+    if form == &DisambiguatedNameForm::LongFull {
+        // Cannot expand full name
+        return false;
+    }
+    let mut changed = false;
+    for p in xs {
+        if &x == p || x.name != p.name {
+            continue;
+        }
+        let mut xi = String::new();
+        x.initials(&mut xi, None, false).unwrap();
+        let mut pi = String::new();
+        p.initials(&mut pi, None, false).unwrap();
+
+        if xi == pi {
+            *form = DisambiguatedNameForm::LongFull;
+            return true;
+        }
+        if form != &DisambiguatedNameForm::LongInitialized {
+            *form = DisambiguatedNameForm::LongInitialized;
+            changed = true;
+        }
+    }
+    changed
+}
+
 /// Progressively transform names to disambiguate them.
 fn disambiguate_names<F, T>(
     renders: &[SpeculativeCiteRender<'_, '_, T>],
@@ -716,66 +848,134 @@ fn disambiguate_names<F, T>(
     T: EntryLike + Eq + Hash + Clone + Debug,
     F: FnMut(&T, DisambiguateState),
 {
-    let max_names = group
+    let group = group
         .iter()
-        .map(|(c, i)| {
-            let cite = &renders[*c];
-            let item = &cite.items[*i];
-            if let DisambiguateState::NameDisambiguation(n) =
-                &item.cite_props.speculative.disambiguation
-            {
-                n.max_names()
-            } else {
-                item.first_name
-                    .as_ref()
-                    .map(NameDisambiguationProperties::max_names)
-                    .unwrap_or_default()
+        .map(|(cite_id, item_id)| {
+            let cite_id = *cite_id;
+            let item_id = *item_id;
+            let item = &renders[cite_id].items[item_id];
+            DisambData {
+                cite_id,
+                item_id,
+                names: get_names(&item.rendered),
+                item,
             }
         })
-        .max()
-        .unwrap_or_default();
-    for _ in 0..max_names {
-        let mut changed_states = HashMap::new();
-        for &(cite_idx, item_idx) in group.iter() {
-            let style = renders[cite_idx].request.style;
-            let item = &renders[cite_idx].items[item_idx];
+        .collect::<Vec<_>>();
 
-            if !item.cite_props.speculative.disambiguation.may_disambiguate_names() {
+    // How many names can we add at most? If we are not allowed to add names, it is only one.
+    let max_names = if renders[0].request.style.citation.disambiguate_add_names {
+        group.iter().map(|d| d.names.len()).max().unwrap_or_default()
+    } else {
+        1
+    };
+
+    // Tracks changes to the disambiguation state
+    let mut changed_states = HashMap::new();
+    // Tracks already disambiguated items
+    let mut disambiguated = HashSet::new();
+
+    // Successively add names
+    for i in 1..=max_names {
+        let disamb_len = disambiguated.len();
+        if disamb_len == group.len() {
+            // Already fully disambiguated
+            break;
+        }
+        for d in &group {
+            if disambiguated.contains(&(d.cite_id, d.item_id)) {
+                // Already done
+                continue;
+            }
+            let style = renders[d.cite_id].request.style;
+            // We only apply the rule if we are allowed to.
+            let rule = match (
+                style.citation.disambiguate_add_givenname,
+                style.citation.givenname_disambiguation_rule,
+            ) {
+                (true, r) => Some(r),
+                _ => None,
+            };
+
+            if !d.item.cite_props.speculative.disambiguation.may_disambiguate_names() {
                 continue;
             }
 
-            let name_props_slot = if let DisambiguateState::NameDisambiguation(n) =
-                &item.cite_props.speculative.disambiguation
-            {
-                Some(n)
-            } else {
-                item.first_name.as_ref()
-            };
+            if is_disambiguated(i, &group, d, rule) {
+                // Adding a name would disambiguate, so lets add it
+                disambiguated.insert((d.cite_id, d.item_id));
 
-            if let Some(name_props) = name_props_slot {
-                let mut name_props = name_props.clone();
-                if name_props.disambiguate(
-                    style.citation.disambiguate_add_givenname,
-                    style.citation.givenname_disambiguation_rule,
-                    style.citation.disambiguate_add_names,
-                ) {
+                // Only add given names here for "by-cite"; all other cases must take all names into account and must be handled elsewhere
+                if rule == Some(DisambiguationRule::ByCite) {
+                    let name_props_slot =
+                        if let Some(DisambiguateState::NameDisambiguation(ndp)) =
+                            changed_states.get(&(d.cite_id, d.item_id))
+                        {
+                            Some(ndp)
+                        } else if let DisambiguateState::NameDisambiguation(n) =
+                            &d.item.cite_props.speculative.disambiguation
+                        {
+                            Some(n)
+                        } else {
+                            d.item.first_name.as_ref()
+                        };
+                    if let Some(props) = name_props_slot {
+                        let mut props = props.clone();
+                        if let Some(form) = props.get_form_mut(i - 1) {
+                            // Try to add a given name
+                            if disamb_cite_add_given_name(
+                                &d.names[i - 1],
+                                &group
+                                    .iter()
+                                    .filter(|i| {
+                                        i.cite_id != d.cite_id || i.item_id != d.item_id
+                                    })
+                                    .map(|i| &i.names)
+                                    .flatten()
+                                    .collect::<Vec<_>>(),
+                                form,
+                            ) {
+                                changed_states.insert(
+                                    (d.cite_id, d.item_id),
+                                    DisambiguateState::NameDisambiguation(props),
+                                );
+                                disambiguated.insert((d.cite_id, d.item_id));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if disambiguated.len() > disamb_len {
+            for d in &group {
+                let name_props_slot =
+                    if let Some(DisambiguateState::NameDisambiguation(ndp)) =
+                        changed_states.get(&(d.cite_id, d.item_id))
+                    {
+                        Some(ndp)
+                    } else if let DisambiguateState::NameDisambiguation(n) =
+                        &d.item.cite_props.speculative.disambiguation
+                    {
+                        Some(n)
+                    } else {
+                        d.item.first_name.as_ref()
+                    };
+                if let Some(state) = name_props_slot {
+                    let mut state = state.clone();
+                    state.add_name(i);
                     changed_states.insert(
-                        (cite_idx, item_idx),
-                        DisambiguateState::NameDisambiguation(name_props),
+                        (d.cite_id, d.item_id),
+                        DisambiguateState::NameDisambiguation(state),
                     );
                 }
             }
         }
-        if changed_states.is_empty() {
-            // No disambiguation possible
-            return;
-        }
-        if !is_fully_ambiguous(&renders, group, &changed_states) {
-            for ((cite_id, item_id), state) in changed_states.into_iter() {
-                let entry = renders[cite_id].items[item_id].entry;
-                mark(entry, state)
-            }
-        }
+    }
+
+    // Mark all changed states
+    for ((cite_id, item_id), s) in changed_states.into_iter() {
+        let entry = renders[cite_id].items[item_id].entry;
+        mark(entry, s)
     }
 }
 
@@ -896,7 +1096,7 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
                 continue;
             }
 
-            let buf = format!("{:?}", item.rendered);
+            let buf = format!("{}", item.rendered);
             match map.entry(buf) {
                 HmEntry::Occupied(entry) => match *entry.get() {
                     PotentialDisambiguation::Single(pos) => {
@@ -927,41 +1127,6 @@ fn find_ambiguous_sets<T: EntryLike + PartialEq>(
                 .any(|(cite, item)| cites[*cite].items[*item].entry != first_entry)
         })
         .collect()
-}
-
-/// True iff the given group is still entirely ambiguous even with the changed state.
-fn is_fully_ambiguous<T: EntryLike + Clone>(
-    cites: &[SpeculativeCiteRender<'_, '_, T>],
-    group: &AmbiguousGroup,
-    changed_states: &HashMap<(usize, usize), DisambiguateState>,
-) -> bool {
-    let mut rendered: Option<String> = None;
-    eprintln!("Group: {group:?}");
-    for (cite_id, item_id) in group {
-        let cite = &cites[*cite_id];
-        let item = &cite.items[*item_id];
-        let mut item = item.clone();
-        let state = changed_states
-            .get(&(*cite_id, *item_id))
-            .unwrap_or_else(|| &item.cite_props.speculative.disambiguation);
-
-        item.cite_props.speculative.disambiguation =
-            item.cite_props.speculative.disambiguation.clone().max(state.clone());
-        let rerendered = do_rerender(&cite.request.style(), &item, cite.request);
-        let buf = format!("{:?}", rerendered);
-        eprintln!("-- {rerendered}");
-        match rendered.as_ref() {
-            Some(r) => {
-                if r != &buf {
-                    eprintln!("--> Change");
-                    return false;
-                }
-            }
-            None => rendered = Some(buf),
-        }
-    }
-    eprintln!("--> No Change");
-    true
 }
 
 fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>) {
@@ -1017,7 +1182,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                     // cannot be mutably borrowed below otherwise.
                     let item = &cite.items[i];
                     if item.hidden
-                        || item.rendered.find_meta(ElemMeta::CitationNumber).is_none()
+                        || item.rendered.find_meta(&ElemMeta::CitationNumber).is_none()
                     {
                         end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
                         continue;
