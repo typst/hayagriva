@@ -95,7 +95,7 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
 }
 
 /// Implementations for finishing the bibliography.
-impl<T: EntryLike + Hash + PartialEq + Eq + Debug + Clone> BibliographyDriver<'_, T> {
+impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
     /// Render the bibliography.
     pub fn finish(mut self, request: BibliographyRequest<'_>) -> Rendered {
         // 1.  Assign citation numbers by bibliography ordering or by citation
@@ -842,7 +842,7 @@ fn disambiguate_names<F, T>(
     group: &AmbiguousGroup,
     mut mark: F,
 ) where
-    T: EntryLike + Eq + Hash + Clone + Debug,
+    T: EntryLike + Eq + Hash + Debug,
     F: FnMut(&T, DisambiguateState),
 {
     let group = group
