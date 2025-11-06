@@ -399,7 +399,7 @@ impl RenderCsl for Names {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
 
-        let is_empty =
+        let mut is_empty =
             self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty());
         if !renders_given_special_form(self, ctx, is_empty) {
             return (false, UsageInfo::default());
@@ -413,6 +413,32 @@ impl RenderCsl for Names {
             .fold((false, UsageInfo::default()), |(a, b), (c, d)| {
                 (a || c, b.merge_child(d))
             });
+
+        let names_opts = self.options();
+
+        // If `et-al-use-first` is set to zero and the et al. is rendered (meaning, the number of names exceeds `et-al-min`),
+        // it is considered empty.
+        // If all children are empty, we do not render.
+        let children_will_render = self.children.is_empty()
+            || self.children.iter().any(|n| match n {
+                citationberg::NamesChild::Name(name) => {
+                    let opts = name.options(&names_opts);
+                    let Some(et_al_min) = opts.et_al_min else {
+                        return true;
+                    };
+                    let Some(et_al_use_first) = opts.et_al_use_first else {
+                        return true;
+                    };
+
+                    et_al_use_first != 0
+                        || !self.variable.iter().all(|v| {
+                            ctx.resolve_name_variable(*v).len() >= et_al_min as usize
+                        })
+                }
+                _ => false,
+            });
+
+        is_empty |= !children_will_render;
 
         if suppressing {
             ctx.writing.start_suppressing_queried_variables();
