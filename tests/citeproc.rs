@@ -389,15 +389,10 @@ impl TestSuiteResults {
 
         for path in iter_files_with_name(&test_path, "txt", |name| {
             ![
-                "affix_PrefixWithDecorations",
                 "flipflop_ApostropheInsideTag",
-                "date_OtherAlone",
                 // Upstream bug: https://github.com/tafia/quick-xml/issues/674
                 "bugreports_SelfLink",
                 "bugreports_SingleQuoteXml",
-                "number_SpacesMakeIsNumericFalse",
-                "textcase_LocaleUnicode",
-                "date_YearSuffixImplicitWithNoDateOneOnly",
                 "position_NearNoteWithPlugin",
             ]
             .contains(&name)

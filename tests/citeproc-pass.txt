@@ -136,6 +136,7 @@ date_SeasonSubstituteInGroup
 date_SortEmptyDatesBibliography
 date_SortEmptyDatesCitation
 date_YearSuffixDelimiter
+date_YearSuffixImplicitWithNoDateOneOnly
 decorations_SimpleQuotes
 disambiguate_AddNamesSuccess
 disambiguate_AllNamesWithInitialsBibliography
@@ -385,6 +386,7 @@ number_SimpleNumberArabic
 number_SimpleNumberOrdinalLong
 number_SimpleNumberOrdinalShort
 number_SimpleNumberRoman
+number_SpacesMakeIsNumericFalse
 number_StrangeError
 page_Chicago
 page_Chicago16
