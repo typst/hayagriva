@@ -148,7 +148,7 @@ fn expect_header(s: &mut Scanner) -> Result<SectionTag, TestParseError> {
     }
 
     s.jump(s.cursor() + start.len());
-    let eq = eat_equals(s);
+    eat_equals(s);
     s.eat_whitespace();
 
     let tag = s.eat_while(is_section_tag);
@@ -158,11 +158,7 @@ fn expect_header(s: &mut Scanner) -> Result<SectionTag, TestParseError> {
         return Err(TestParseError::SyntaxError(s.cursor()));
     }
 
-    s.eat_whitespace();
-    eat_n_equals(s, eq);
-    if !s.eat_if("==>>") && !s.eat_if("==") {
-        return Err(TestParseError::SyntaxError(s.cursor()));
-    }
+    s.eat_until('\n');
     s.eat_whitespace();
 
     Ok(tag)
@@ -393,7 +389,6 @@ impl TestSuiteResults {
 
         for path in iter_files_with_name(&test_path, "txt", |name| {
             ![
-                "affix_PrefixFullCitationTextOnly",
                 "affix_PrefixWithDecorations",
                 "flipflop_ApostropheInsideTag",
                 "date_OtherAlone",
