@@ -97,6 +97,8 @@ derive_or_from_str! {
         pub prefix: Option<String>,
         /// A suffix of the family name such as 'Jr.' or 'IV'.
         pub suffix: Option<String>,
+        /// Whether a comma should be inserted before the suffix.
+        pub comma_suffix: bool,
         /// Another name (often user name) the person might be known under.
         pub alias: Option<String>,
     }
@@ -228,7 +230,14 @@ impl Person {
             name = name.trim_start().to_string();
         }
 
-        Ok(Person { name, given_name, prefix, suffix, alias: None })
+        Ok(Person {
+            name,
+            given_name,
+            prefix,
+            suffix,
+            comma_suffix: false,
+            alias: None,
+        })
     }
 
     /// Formats the given name into initials.

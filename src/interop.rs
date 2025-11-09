@@ -50,6 +50,7 @@ impl From<&tex::Person> for Person {
             given_name: optional(&person.given_name),
             prefix: optional(&person.prefix),
             suffix: optional(&person.suffix),
+            comma_suffix: false,
             alias: None,
         }
     }

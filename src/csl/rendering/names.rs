@@ -599,6 +599,7 @@ fn write_name<T: EntryLike>(
         family_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
         family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
+    let comma_suffix = name.comma_suffix;
 
     let first_name = |ctx: &mut Context<T>| {
         if let Some(first) = &name.given_name {
@@ -809,6 +810,9 @@ fn write_name<T: EntryLike>(
             ctx.pop_format(idx);
 
             if let Some(suffix) = &name.suffix {
+                if comma_suffix {
+                    ctx.push_str(sort_sep);
+                }
                 ctx.ensure_space();
                 ctx.push_str(suffix);
             }
