@@ -101,11 +101,12 @@ impl RenderCsl for citationberg::Text {
                 MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
             },
             ResolvedTextTarget::Macro(mac) => {
-                // Treat macros as groups
+                // Treat macros as groups: don't render if all variables are empty.
                 let info = self.will_have_info(ctx).1;
                 should_render = info.should_render_group();
                 if should_render {
-                    // Delimiters from ancestor delimiting elements are NOT applied within.
+                    // Delimiters from ancestor delimiting elements are NOT
+                    // applied within.
                     let idx = ctx.writing.push_delimiter(None);
                     for child in &mac.children {
                         child.render(ctx);
@@ -220,7 +221,8 @@ impl RenderCsl for citationberg::Text {
                     info = info.merge_child(child_info)
                 }
 
-                // Treat macro as group
+                // Treat macro as group: don't render if all variables are
+                // empty.
                 will_print &= info.should_render_group();
 
                 (will_print, UsageInfo { has_used_macros: will_print, ..info })
