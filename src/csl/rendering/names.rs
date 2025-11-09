@@ -286,7 +286,7 @@ impl RenderCsl for Names {
         // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
             // Per the CSL spec on the `form` names option, only actually
-            // rendered authors should be counted.
+            // rendered names should be counted.
             write!(
                 ctx,
                 "{}",
