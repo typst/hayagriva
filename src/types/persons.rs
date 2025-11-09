@@ -260,8 +260,7 @@ impl Person {
         let mut last_was_lower = false;
 
         let delim_ends_in_whitespace = delimiter
-            .map(|d| d.chars().last().map(|d| d.is_whitespace()))
-            .flatten()
+            .and_then(|d| d.chars().last().map(|d| d.is_whitespace()))
             .unwrap_or_default();
 
         for (_, gr) in gn.grapheme_indices(true) {
