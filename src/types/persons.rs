@@ -254,14 +254,28 @@ impl Person {
 
         let mut collect = true;
         let mut non_empty = false;
+        // Whether we are at the start of a word (i.e., the initial char or following a whitespace)
+        let mut start_of_word = true;
+        // Whether the last char (excl. whitespace was lower case)
+        let mut last_was_lower = false;
+
+        let delim_ends_in_whitespace = delimiter
+            .map(|d| d.chars().last().map(|d| d.is_whitespace()))
+            .flatten()
+            .unwrap_or_default();
 
         for (_, gr) in gn.grapheme_indices(true) {
             if let Some(c) = gr.chars().next()
                 && (c.is_whitespace() || c == '-')
             {
+                // The last word was in lower case. We enounter a whitespace and stop collecting
+                if last_was_lower {
+                    collect = false;
+                }
                 if !collect {
                     let hyphenate = with_hyphen && c == '-';
-                    if let Some(delimiter) = delimiter {
+                    // Do not emit delim if we just had a lower case word
+                    if !last_was_lower && let Some(delimiter) = delimiter {
                         // Use the given delimiter, including any spaces at
                         // its end if there was a whitespace, but not if we
                         // should add a hyphen in a compound given name.
@@ -273,16 +287,34 @@ impl Person {
                     }
 
                     collect = true;
+                    start_of_word = true;
                     if hyphenate {
                         buf.write_char('-')?;
+                    } else if last_was_lower {
+                        // Write a space after a lower case word
+                        buf.write_char(' ')?;
                     }
                 }
                 continue;
             }
 
             if collect {
+                if gr.to_lowercase() != gr {
+                    // Upper case letter => stop collecting; print initials
+                    collect = false;
+                    last_was_lower = false;
+                } else if start_of_word {
+                    // We enter a lower-cased word
+                    last_was_lower = true;
+                }
+                if last_was_lower && start_of_word {
+                    start_of_word = false;
+                    if !delim_ends_in_whitespace {
+                        // Print a space if we just started a lower case word and the delimiter did not already put a space
+                        buf.write_char(' ')?;
+                    }
+                }
                 buf.write_str(gr)?;
-                collect = false;
                 non_empty = true;
             }
         }
