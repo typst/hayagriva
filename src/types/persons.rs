@@ -98,6 +98,7 @@ derive_or_from_str! {
         /// A suffix of the family name such as 'Jr.' or 'IV'.
         pub suffix: Option<String>,
         /// Whether a comma should be inserted before the suffix.
+        #[serde(default)]
         pub comma_suffix: bool,
         /// Another name (often user name) the person might be known under.
         pub alias: Option<String>,
