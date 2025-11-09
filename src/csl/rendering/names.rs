@@ -285,8 +285,29 @@ impl RenderCsl for Names {
 
         // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
-            write!(ctx, "{}", people.into_iter().fold(0, |acc, curr| acc + curr.0.len()))
-                .unwrap();
+            write!(
+                ctx,
+                "{}",
+                people
+                    .into_iter()
+                    .map(|(p, _)| p
+                        .iter()
+                        .enumerate()
+                        .map(|(i, _)| {
+                            if options.is_suppressed(
+                                i,
+                                p.len(),
+                                !ctx.instance.cite_props.certain.is_first,
+                            ) {
+                                0
+                            } else {
+                                1
+                            }
+                        })
+                        .sum::<usize>())
+                    .sum::<usize>()
+            )
+            .unwrap();
             ctx.apply_suffix(&self.to_affixes(), affix_loc);
             ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
             ctx.writing.pop_name_options();
