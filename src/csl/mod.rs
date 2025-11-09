@@ -905,7 +905,11 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         .or(style.citation.layout.delimiter.as_deref());
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
-    let year_suffix_delimiter = style.citation.year_suffix_delimiter.as_deref();
+    let year_suffix_delimiter = style
+        .citation
+        .year_suffix_delimiter
+        .as_deref()
+        .or(style.citation.cite_group_delimiter.as_deref());
 
     match style.citation.collapse {
         Some(Collapse::CitationNumber) => {
