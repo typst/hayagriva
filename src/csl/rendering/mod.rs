@@ -1162,7 +1162,7 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
             }
             BranchConditionPos::Position => {
                 if let Some(pos) = &self.cond.position {
-                    if self.idx >= pos.len() {
+                    if self.ctx.bibliography || self.idx >= pos.len() {
                         self.next_case();
                         return self.next();
                     }
