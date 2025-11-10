@@ -1162,7 +1162,10 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
             }
             BranchConditionPos::Position => {
                 if let Some(pos) = &self.cond.position {
-                    if self.idx >= pos.len() {
+                    // CSL 1.0.2 spec ("Choose" > "position"): "When called
+                    // within the scope of cs:bibliography, position tests
+                    // 'false'."
+                    if self.ctx.bibliography || self.idx >= pos.len() {
                         self.next_case();
                         return self.next();
                     }

@@ -400,6 +400,7 @@ page_NumberPageFirst
 page_PluralDetectWithEndash
 page_WithLocaleAndWeirdDelimiter
 plural_LabelForced
+position_FalseInBibliography
 position_IbidWithSuffix
 position_NearNoteUnsupported
 position_TrueInCitation
