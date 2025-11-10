@@ -396,7 +396,6 @@ impl TestSuiteResults {
                 "position_NearNoteWithPlugin",
             ]
             .contains(&name)
-                && !name.starts_with("magic_")
         }) {
             let str = std::fs::read_to_string(&path).unwrap();
             let case = match build_case(&str) {
