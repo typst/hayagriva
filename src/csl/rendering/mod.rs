@@ -169,7 +169,15 @@ impl RenderCsl for citationberg::Text {
         if suppressing {
             ctx.writing.start_suppressing_queried_variables();
         }
-        let targets_variable = matches!(self.target, TextTarget::Variable { .. });
+        let targets_variable = match self.target {
+            // Year suffix is not counted as a variable
+            TextTarget::Variable {
+                var: Variable::Standard(StandardVariable::YearSuffix),
+                ..
+            } => false,
+            TextTarget::Variable { .. } => true,
+            _ => false,
+        };
 
         let Some(target) = lookup_result else {
             return (
@@ -209,6 +217,7 @@ impl RenderCsl for citationberg::Text {
     }
 }
 
+#[derive(Debug)]
 enum ResolvedTextTarget<'a, 'b> {
     StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
     NumberVariable(NumberVariable, NumberVariableResult<'a>),
@@ -1153,7 +1162,10 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
             }
             BranchConditionPos::Position => {
                 if let Some(pos) = &self.cond.position {
-                    if self.idx >= pos.len() {
+                    // CSL 1.0.2 spec ("Choose" > "position"): "When called
+                    // within the scope of cs:bibliography, position tests
+                    // 'false'."
+                    if self.ctx.bibliography || self.idx >= pos.len() {
                         self.next_case();
                         return self.next();
                     }

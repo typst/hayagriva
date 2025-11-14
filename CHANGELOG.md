@@ -1,3 +1,10 @@
+# 0.9.1
+
+- Export the `TransparentLocator` struct so `LocatorPayload::Transparent` can be
+  constructed (#397)
+- Fixes the `location` conditional in CSL styles for citations with no locator (#399)
+- Fix a bug where accessing year suffix resulted in wrong CSL renders (#400) 
+
 # 0.9.0
 
 - Add `chapter` field corresponding to CSL `chapter-number` and BibLaTeX
