@@ -317,6 +317,14 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Adam Zeilinger.
     Trends,
+    /// Chicago Manual of Style 17th edition (author-date).
+    ///
+    /// Authors: Andrew Dunning.
+    TurabianAuthorDate,
+    /// Chicago Manual of Style 17th edition (notes and bibliography, subsequent author-title).
+    ///
+    /// Authors: Andrew Dunning.
+    TurabianFullnote8,
     /// Vancouver.
     ///
     /// Authors: Michael Berkowitz.
@@ -389,6 +397,7 @@ impl ArchivedStyle {
             "karger" => Some(Self::Karger),
             "mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
             "modern-humanities-research-association-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
+            "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
             "modern-language-association-8" => Some(Self::ModernLanguageAssociation8),
@@ -416,6 +425,8 @@ impl ArchivedStyle {
             "the-lancet" => Some(Self::TheLancet),
             "thieme" => Some(Self::Thieme),
             "trends" => Some(Self::Trends),
+            "turabian-author-date" => Some(Self::TurabianAuthorDate),
+            "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
             "vancouver" => Some(Self::Vancouver),
             "vancouver-superscript" => Some(Self::VancouverSuperscript),
             _ => None,
@@ -502,6 +513,8 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/the-lancet" => Some(Self::TheLancet),
             "http://www.zotero.org/styles/thieme-german" => Some(Self::Thieme),
             "http://www.zotero.org/styles/trends-journals" => Some(Self::Trends),
+            "http://www.zotero.org/styles/chicago-author-date-17th-edition" => Some(Self::TurabianAuthorDate),
+            "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition" => Some(Self::TurabianFullnote8),
             "http://www.zotero.org/styles/vancouver" => Some(Self::Vancouver),
             "http://www.zotero.org/styles/vancouver-superscript" => Some(Self::VancouverSuperscript),
             _ => None
@@ -588,6 +601,8 @@ impl ArchivedStyle {
             Self::TheLancet,
             Self::Thieme,
             Self::Trends,
+            Self::TurabianAuthorDate,
+            Self::TurabianFullnote8,
             Self::Vancouver,
             Self::VancouverSuperscript,
         ]
@@ -673,6 +688,8 @@ impl ArchivedStyle {
             Self::TheLancet => include_bytes!("../../archive/styles/the-lancet.cbor"),
             Self::Thieme => include_bytes!("../../archive/styles/thieme-german.cbor"),
             Self::Trends => include_bytes!("../../archive/styles/trends-journals.cbor"),
+            Self::TurabianAuthorDate => include_bytes!("../../archive/styles/chicago-author-date-17th-edition.cbor"),
+            Self::TurabianFullnote8 => include_bytes!("../../archive/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition.cbor"),
             Self::Vancouver => include_bytes!("../../archive/styles/vancouver.cbor"),
             Self::VancouverSuperscript => include_bytes!("../../archive/styles/vancouver-superscript.cbor"),
         }
@@ -848,6 +865,7 @@ impl ArchivedStyle {
             ],
             Self::ModernHumanitiesResearchAssociationNotes => &[
                 "modern-humanities-research-association-notes",
+                "modern-humanities-research-association",
             ],
             Self::ModernLanguageAssociation => &[
                 "modern-language-association",
@@ -923,6 +941,12 @@ impl ArchivedStyle {
             ],
             Self::Trends => &[
                 "trends",
+            ],
+            Self::TurabianAuthorDate => &[
+                "turabian-author-date",
+            ],
+            Self::TurabianFullnote8 => &[
+                "turabian-fullnote-8",
             ],
             Self::Vancouver => &[
                 "vancouver",
@@ -1013,6 +1037,8 @@ impl ArchivedStyle {
             Self::TheLancet => "The Lancet",
             Self::Thieme => "Thieme-German (Deutsch)",
             Self::Trends => "Trends journals",
+            Self::TurabianAuthorDate => "Chicago Manual of Style 17th edition (author-date)",
+            Self::TurabianFullnote8 => "Chicago Manual of Style 17th edition (notes and bibliography, subsequent author-title)",
             Self::Vancouver => "Vancouver",
             Self::VancouverSuperscript => "Vancouver (superscript)",
         }
@@ -1098,6 +1124,8 @@ impl ArchivedStyle {
             Self::TheLancet => "http://www.zotero.org/styles/the-lancet",
             Self::Thieme => "http://www.zotero.org/styles/thieme-german",
             Self::Trends => "http://www.zotero.org/styles/trends-journals",
+            Self::TurabianAuthorDate => "http://www.zotero.org/styles/chicago-author-date-17th-edition",
+            Self::TurabianFullnote8 => "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition",
             Self::Vancouver => "http://www.zotero.org/styles/vancouver",
             Self::VancouverSuperscript => "http://www.zotero.org/styles/vancouver-superscript",
         }
@@ -1163,7 +1191,8 @@ pub const LOCALES: &[&[u8]] = &[
     include_bytes!("../../archive/locales/ru-RU.cbor"),
     include_bytes!("../../archive/locales/sk-SK.cbor"),
     include_bytes!("../../archive/locales/sl-SI.cbor"),
-    include_bytes!("../../archive/locales/sr-RS.cbor"),
+    include_bytes!("../../archive/locales/sr-Cyrl-RS.cbor"),
+    include_bytes!("../../archive/locales/sr-Latn-RS.cbor"),
     include_bytes!("../../archive/locales/sv-SE.cbor"),
     include_bytes!("../../archive/locales/th-TH.cbor"),
     include_bytes!("../../archive/locales/tr-TR.cbor"),

@@ -169,7 +169,15 @@ impl RenderCsl for citationberg::Text {
         if suppressing {
             ctx.writing.start_suppressing_queried_variables();
         }
-        let targets_variable = matches!(self.target, TextTarget::Variable { .. });
+        let targets_variable = match self.target {
+            // Year suffix is not counted as a variable
+            TextTarget::Variable {
+                var: Variable::Standard(StandardVariable::YearSuffix),
+                ..
+            } => false,
+            TextTarget::Variable { .. } => true,
+            _ => false,
+        };
 
         let Some(target) = lookup_result else {
             return (
@@ -209,6 +217,7 @@ impl RenderCsl for citationberg::Text {
     }
 }
 
+#[derive(Debug)]
 enum ResolvedTextTarget<'a, 'b> {
     StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
     NumberVariable(NumberVariable, NumberVariableResult<'a>),
@@ -516,6 +525,7 @@ impl RenderCsl for citationberg::Label {
                 .cite_props
                 .speculative
                 .locator
+                .as_ref()
                 .is_some_and(|l| l.0 == Locator::Custom)
         {
             return (false, UsageInfo::default());
@@ -672,15 +682,33 @@ impl RenderCsl for citationberg::Date {
 
         // TODO: Date ranges
         let mut last_was_empty = true;
+
+        // Localized (base) delimiter takes precedence over the cs:date
+        // element's delimiter attribute, which should be ignored if a locale's
+        // date form is used, according to the CSL 1.0.2 spec (under "Style
+        // Behavior"):
+        //
+        // "Delimiter
+        //
+        // The delimiter attribute, whose value delimits non-empty pieces of
+        // output, may be set on cs:date (delimiting the date-parts; delimiter
+        // is not allowed when cs:date calls a localized date format)"
+        let chosen_delim = match base {
+            Some(base) => base.delimiter.as_deref(),
+            None => self.delimiter.as_deref(),
+        };
+
         for part in &base.unwrap_or(self).date_part {
             match part.name {
-                DatePartName::Month if !parts.has_month() => continue,
+                DatePartName::Month if !parts.has_month() && date.season.is_none() => {
+                    continue;
+                }
                 DatePartName::Day if !parts.has_day() => continue,
                 _ => {}
             }
 
             let cursor = ctx.writing.len();
-            if !last_was_empty && let Some(delim) = &self.delimiter {
+            if !last_was_empty && let Some(delim) = chosen_delim {
                 ctx.push_str(delim);
             }
 
@@ -749,7 +777,12 @@ fn render_date_part<T: EntryLike>(
 ) {
     let Some(val) = (match date_part.name {
         DatePartName::Day => date.day.map(|i| i as i32 + 1),
-        DatePartName::Month => date.month.map(|i| i as i32 + 1),
+        DatePartName::Month => {
+            // Fallback for month is the season
+            date.month
+                .map(|i| i as i32 + 1)
+                .or(date.season.map(|s| s.to_csl_number() as i32))
+        }
         DatePartName::Year => Some(date.year),
     }) else {
         return;
@@ -776,6 +809,19 @@ fn render_date_part<T: EntryLike>(
 
     if !is_only_suffix {
         match form {
+            DateStrongAnyForm::Month(_) if date.month.is_none() => {
+                debug_assert!(date.season.is_some());
+                let Some(season) = date.season else {
+                    return;
+                };
+                let season_term = season.into();
+                let Some(season) =
+                    ctx.term(Term::Other(season_term), TermForm::Short, false)
+                else {
+                    return;
+                };
+                write!(ctx, "{season}").unwrap();
+            }
             DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
             | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
                 write!(ctx, "{val:02}").unwrap();
@@ -1101,8 +1147,13 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     self.idx += 1;
 
                     Some(
-                        self.ctx.instance.cite_props.speculative.locator.map(|l| l.0)
-                            == Some(loc),
+                        self.ctx
+                            .instance
+                            .cite_props
+                            .speculative
+                            .locator
+                            .as_ref()
+                            .is_some_and(|l| l.0 == loc),
                     )
                 } else {
                     self.next_case();
@@ -1111,7 +1162,10 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
             }
             BranchConditionPos::Position => {
                 if let Some(pos) = &self.cond.position {
-                    if self.idx >= pos.len() {
+                    // CSL 1.0.2 spec ("Choose" > "position"): "When called
+                    // within the scope of cs:bibliography, position tests
+                    // 'false'."
+                    if self.ctx.bibliography || self.idx >= pos.len() {
                         self.next_case();
                         return self.next();
                     }

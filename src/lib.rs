@@ -91,7 +91,7 @@ default features by writing this in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hayagriva = { version = "0.8", default-features = false }
+hayagriva = { version = "0.9", default-features = false }
 ```
 
 # Selectors
@@ -158,7 +158,7 @@ pub use csl::{
     BibliographyDriver, BibliographyItem, BibliographyRequest, Brackets, BufWriteFormat,
     CitationItem, CitationRequest, CitePurpose, Elem, ElemChild, ElemChildren, ElemMeta,
     Formatted, Formatting, LocatorPayload, Rendered, RenderedBibliography,
-    RenderedCitation, SpecificLocator, standalone_citation,
+    RenderedCitation, SpecificLocator, TransparentLocator, standalone_citation,
 };
 pub use selectors::{Selector, SelectorError};
 
@@ -514,6 +514,12 @@ entry! {
     /// For an item whose parent has multiple issues, indicates the position in
     /// the issue sequence. Also used to indicate the episode number for TV.
     "issue" => issue: MaybeTyped<Numeric>,
+    /// The number of the chapter in the referenced work where this item can be found.
+    ///
+    /// When the chapter itself is the item being cited, which is common if it
+    /// has its own non-numeric title, prefer using `type: chapter` for the
+    /// entry while specifying the containing work's data as its parent.
+    "chapter" => chapter: MaybeTyped<Numeric>,
     /// For an item whose parent has multiple volumes/parts/seasons ... of which
     /// this item is one.
     "volume" => volume: MaybeTyped<Numeric>,
@@ -913,7 +919,7 @@ mod tests {
         select_all!(
             "(chapter | anthos) > (anthology | book)",
             entries,
-            ["harry", "gedanken"]
+            ["harry", "gedanken", "lamb-chapter", "snail-chapter"]
         );
         select_all!(
             "*[url]",
@@ -958,6 +964,10 @@ mod tests {
                 "swedish",
                 "latex-users",
                 "barb",
+                "lamb",
+                "snail",
+                "lamb-chapter",
+                "snail-chapter",
             ]
         );
         select_all!("*[abstract, note, genre]", entries, ["wire"]);
@@ -981,7 +991,7 @@ mod tests {
         use io::from_biblatex_str;
 
         let bibtex = r#"
-            @article{b, 
+            @article{b,
                 title={My page ranges},
                 pages={150--es}
             }

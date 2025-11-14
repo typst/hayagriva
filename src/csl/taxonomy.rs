@@ -58,16 +58,20 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
                     )))
                 })
             }
-            NumberVariable::Locator => match self.cite_props.speculative.locator?.1 {
-                LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
-                    Numeric::from_str(l)
-                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                        .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
-                )),
-                LocatorPayload::Transparent => Some(NumberVariableResult::Transparent(
-                    self.cite_props.certain.initial_idx,
-                )),
-            },
+            NumberVariable::Locator => {
+                match &self.cite_props.speculative.locator.as_ref()?.1 {
+                    &LocatorPayload::Str(l) => Some(NumberVariableResult::from_regular(
+                        Numeric::from_str(l)
+                            .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
+                            .unwrap_or_else(|_| MaybeTyped::String(l.to_owned())),
+                    )),
+                    LocatorPayload::Transparent(_) => {
+                        Some(NumberVariableResult::Transparent(
+                            self.cite_props.certain.initial_idx,
+                        ))
+                    }
+                }
+            }
             _ => self
                 .entry
                 .resolve_number_variable(variable)
@@ -142,16 +146,19 @@ impl EntryLike for Entry {
     ) -> Option<MaybeTyped<Cow<'_, Numeric>>> {
         match variable {
             NumberVariable::ChapterNumber => self
-                .bound_select(
-                    &select!(
-                        (("e":Anthos) > ("p":Anthology)) |
-                        (("e":*) > ("p":Reference)) |
-                        (("e":Article) > ("p":Proceedings)) |
-                        (("e":*) > ("p":Book))
-                    ),
-                    "e",
-                )
-                .and_then(Entry::volume)
+                .chapter()
+                .or_else(|| {
+                    self.bound_select(
+                        &select!(
+                            (("e":Anthos) > ("p":Anthology)) |
+                            (("e":*) > ("p":Reference)) |
+                            (("e":Article) > ("p":Proceedings)) |
+                            (("e":*) > ("p":Book))
+                        ),
+                        "e",
+                    )
+                    .and_then(Entry::volume)
+                })
                 .map(MaybeTyped::to_cow),
             NumberVariable::CitationNumber => panic!("processor must resolve this"),
             NumberVariable::CollectionNumber => {
@@ -163,13 +170,21 @@ impl EntryLike for Entry {
             }
             NumberVariable::Issue => self.map(|e| e.issue()).map(MaybeTyped::to_cow),
             NumberVariable::Locator => panic!("processor must resolve this"),
-            NumberVariable::Number => {
-                self.serial_number().and_then(|s| s.0.get("serial")).map(|s| {
+            NumberVariable::Number => self
+                .serial_number()
+                .and_then(|s| s.0.get("serial"))
+                .map(|s| {
                     Numeric::from_str(s)
                         .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
                         .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
                 })
-            }
+                .or_else(|| {
+                    // User can specify either 'serial-number: 3' or
+                    // 'chapter: 3' for chapter entries, with the same result.
+                    self.bound_select(&select!(("e":Chapter)), "e")
+                        .and_then(|s| s.chapter())
+                        .map(MaybeTyped::to_cow)
+                }),
             NumberVariable::NumberOfPages => {
                 self.page_total().map(|n| MaybeTyped::Typed(Cow::Borrowed(n)))
             }
@@ -748,6 +763,7 @@ impl EntryLike for citationberg::json::Item {
                     month: d.month,
                     day: d.day,
                     approximate: false,
+                    season: d.season,
                 }))
             }
             _ => None,

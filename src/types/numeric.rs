@@ -178,10 +178,11 @@ impl Numeric {
                         write!(buf, "{}{}", n, ords.lookup(n, gender).unwrap_or_default())
                     }
                 },
-                NumberForm::Roman if n > 0 && n <= i16::MAX as i32 => {
-                    write!(buf, "{:x}", numerals::roman::Roman::from(n as i16))
-                }
-                NumberForm::Numeric | NumberForm::Roman => write!(buf, "{n}"),
+                NumberForm::Roman => match roman_numerals_rs::RomanNumeral::try_from(n) {
+                    Ok(roman) => write!(buf, "{:x}", roman),
+                    Err(_) => write!(buf, "{n}"),
+                },
+                NumberForm::Numeric => write!(buf, "{n}"),
             }
         };
 

@@ -491,7 +491,7 @@ impl fmt::Display for ArchivalError {
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 79] = [
+const STYLE_IDS: [&str; 81] = [
     "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
@@ -518,7 +518,11 @@ const STYLE_IDS: [&str; 79] = [
     "http://www.zotero.org/styles/bristol-university-press",
     "http://www.zotero.org/styles/cell",
     "http://www.zotero.org/styles/chicago-author-date",
+    // Used for turabian styles
+    "http://www.zotero.org/styles/chicago-author-date-17th-edition",
     "http://www.zotero.org/styles/chicago-notes-bibliography",
+    // Used for turabian styles
+    "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition",
     "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-author-date",
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-note",
@@ -598,7 +602,7 @@ impl Override {
     }
 }
 
-const OVERRIDES: [Override; 19] = [
+const OVERRIDES: [Override; 21] = [
     Override::alias("apa", "american-psychological-association", &["apa"]),
     Override::alias("bmj", "british-medical-journal", &["bmj"]),
     Override::first(
@@ -630,6 +634,11 @@ const OVERRIDES: [Override; 19] = [
     Override::first("iso690-author-date-en", "iso-690-author-date"),
     Override::first("iso690-numeric-en", "iso-690-numeric"),
     Override::alias(
+        "modern-humanities-research-association-notes",
+        "modern-humanities-research-association-notes",
+        &["modern-humanities-research-association"],
+    ),
+    Override::alias(
         "modern-language-association",
         "modern-language-association",
         &["mla"],
@@ -646,7 +655,12 @@ const OVERRIDES: [Override; 19] = [
     ),
     Override::alias("plos", "public-library-of-science", &["plos"]),
     Override::first("thieme-german", "thieme"),
-    Override::first("turabian-fullnote-bibliography-8th-edition", "turabian-fullnote-8"),
+    // TODO: Support dependent styles?
+    Override::first("chicago-author-date-17th-edition", "turabian-author-date"),
+    Override::first(
+        "chicago-notes-bibliography-subsequent-author-title-17th-edition",
+        "turabian-fullnote-8",
+    ),
 ];
 
 fn to_cbor<T: Serialize>(
