@@ -1,0 +1,109 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+Sort position of empty dates differs in citations and bibliographies.
+In citations, empty dates have a value equivalent to zero.  In
+bibliographies, they are always placed at the end of the sort
+(whether ascending or descending).
+
+>>===== RESULT =====>>
+101 BC-7-13, 45 BC-3-15, 54 AD-10-13, 68 AD-6-11
+<<===== RESULT =====<<
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <macro name="mydate">
+      <date variable="issued" delimiter="-">
+        <date-part name="year"/>
+        <date-part name="month" form="numeric"/>
+        <date-part name="day" form="numeric"/>
+      </date>
+  </macro>
+  <citation>
+    <sort>
+      <key macro="mydate"/>
+    </sort>
+    <layout delimiter=", ">
+      <text macro="mydate"/>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "ITEM-1",
+        "issued": {
+            "date-parts": [
+                [
+                    -100,
+                    7,
+                    13
+                ]
+            ]
+        },
+        "title": "BookA",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-2",
+        "issued": {
+            "date-parts": [
+                [
+                    54,
+                    10,
+                    13
+                ]
+            ]
+        },
+        "title": "BookB",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-3",
+        "issued": {
+            "date-parts": [
+                [
+                    -44,
+                    3,
+                    15
+                ]
+            ]
+        },
+        "title": "BookC",
+        "type": "book"
+    },
+    {
+        "id": "ITEM-4",
+        "issued": {
+            "date-parts": [
+                [
+                    68,
+                    6,
+                    11
+                ]
+            ]
+        },
+        "title": "BookD",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<

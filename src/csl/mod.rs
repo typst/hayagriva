@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry as HmEntry;
@@ -5,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Write};
 use std::hash::Hash;
 use std::num::{NonZeroI16, NonZeroUsize};
+use std::sync::Arc;
 use std::{mem, vec};
 
 use citationberg::taxonomy::{
@@ -12,18 +14,18 @@ use citationberg::taxonomy::{
     PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
-    taxonomy as csl_taxonomy, Affixes, BaseLanguage, Citation, CitationFormat, Collapse,
-    CslMacro, Display, GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
+    Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro, Display,
+    GrammarGender, IndependentStyle, InheritableNameOptions, Layout,
     LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign, StyleCategory,
-    StyleClass, TermForm, ToAffixes, ToFormatting,
+    StyleClass, TermForm, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
 use quote::{apply_quotes, SmartQuotes};
 
-use crate::csl::elem::{simplify_children, NonEmptyStack};
-use crate::csl::rendering::names::NameDisambiguationProperties;
+use crate::csl::elem::{NonEmptyStack, simplify_children};
 use crate::csl::rendering::RenderCsl;
+use crate::csl::rendering::names::NameDisambiguationProperties;
 use crate::csl::taxonomy::NumberOrPageVariableResult;
 use crate::lang::CaseFolder;
 use crate::types::{ChunkKind, ChunkedString, Date, MaybeTyped, Person};
@@ -56,7 +58,7 @@ impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 struct SpeculativeItemRender<'a, T: EntryLike> {
     rendered: ElemChildren,
     entry: &'a T,
@@ -72,7 +74,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     collapse_verdict: Option<CollapseVerdict>,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 struct SpeculativeCiteRender<'a, 'b, T: EntryLike> {
     items: Vec<SpeculativeItemRender<'a, T>>,
     request: &'b CitationRequest<'a, T>,
@@ -197,7 +199,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                     first_name: ctx.writing.first_name.clone(),
                     delim_override: None,
                     group_idx: None,
-                    locator: item.locator,
+                    locator: item.locator.clone(),
                     rendered: ctx.flush(),
                     hidden: item.hidden,
                     locale: item.locale.clone(),
@@ -344,18 +346,19 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                 } else {
                     Some(&res[i].items[j - 1])
                 }
-                .map(|l| CitationItem::with_locator(l.entry, l.locator));
+                .map(|l| CitationItem::with_locator(l.entry, l.locator.clone()));
 
                 res[i].items[j].cite_props.speculative.ibid = IbidState::with_last(
                     &CitationItem::with_locator(
                         res[i].items[j].entry,
-                        res[i].items[j].locator,
+                        res[i].items[j].locator.clone(),
                     ),
                     last.as_ref(),
                 );
 
                 //     - Add final locator
-                res[i].items[j].cite_props.speculative.locator = res[i].items[j].locator;
+                res[i].items[j].cite_props.speculative.locator =
+                    res[i].items[j].locator.clone();
             }
         }
 
@@ -417,8 +420,8 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                             continue;
                         }
 
-                        if i != 0 {
-                            if let Some(delim) = cite
+                        if i != 0
+                            && let Some(delim) = cite
                                 .items
                                 .get(i)
                                 .and_then(|i: &SpeculativeItemRender<T>| i.delim_override)
@@ -429,12 +432,11 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                                     .layout
                                     .delimiter
                                     .as_deref())
-                            {
-                                elem_children.push(ElemChild::Text(Formatted {
-                                    text: delim.to_string(),
-                                    formatting,
-                                }));
-                            }
+                        {
+                            elem_children.push(ElemChild::Text(Formatted {
+                                text: delim.to_string(),
+                                formatting,
+                            }));
                         }
 
                         elem_children.push(ElemChild::Elem(Elem {
@@ -637,7 +639,14 @@ fn date_replacement<T: EntryLike>(
     ElemChildren(vec![ElemChild::Text(Formatted {
         text: if let Some(date) = date {
             let mut s = String::with_capacity(4);
-            write_year(date.year, false, &mut s).unwrap();
+            let c = ctx.ctx(entry, cite_props.clone(), locale, term_locale, false);
+            let ad = c
+                .term(Term::Other(OtherTerm::Ad), TermForm::default(), false)
+                .unwrap_or(" AD");
+            let bc = c
+                .term(Term::Other(OtherTerm::Bc), TermForm::default(), false)
+                .unwrap_or(" BC");
+            write_year(date.year, false, &mut s, ad, bc).unwrap();
             s
         } else if let Some(no_date) = ctx
             .ctx(entry, cite_props.clone(), locale, term_locale, false)
@@ -655,6 +664,8 @@ pub fn write_year<W: std::fmt::Write>(
     year: i32,
     short: bool,
     w: &mut W,
+    ad: &str,
+    bc: &str,
 ) -> std::fmt::Result {
     if short && year >= 1000 {
         return write!(w, "{:02}", year % 100);
@@ -666,11 +677,11 @@ pub fn write_year<W: std::fmt::Write>(
         if year > 0 { year } else { year.abs() + 1 },
         if year < 1000 {
             if year <= 0 {
-                "BC"
+                bc
             } else {
                 // AD is used as a postfix, see
                 // https://docs.citationstyles.org/en/stable/specification.html?#ad-and-bc
-                "AD"
+                ad
             }
         } else {
             ""
@@ -896,6 +907,11 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
         .or(style.citation.layout.delimiter.as_deref());
 
     let group_delimiter = style.citation.cite_group_delimiter.as_deref();
+    let year_suffix_delimiter = style
+        .citation
+        .year_suffix_delimiter
+        .as_deref()
+        .or(style.citation.cite_group_delimiter.as_deref());
 
     match style.citation.collapse {
         Some(Collapse::CitationNumber) => {
@@ -971,7 +987,9 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
 
             end_range(&mut cite.items, &mut range_start, &mut just_collapsed);
         }
-        Some(Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged) => {
+        Some(
+            c @ (Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged),
+        ) => {
             // Index of where the current group started and the group we are
             // currently in.
             let mut group_idx: Option<(usize, usize)> = None;
@@ -979,6 +997,21 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                 match group_idx {
                     // This is our group.
                     Some((_, idx)) if Some(idx) == cite.items[i].group_idx => {
+                        if c == Collapse::YearSuffix
+                            && let DisambiguateState::YearSuffix(s) =
+                                cite.items[i].cite_props.speculative.disambiguation
+                            && s > 0
+                        {
+                            // We want to collapse the years up to the suffix
+                            // and the current item has a year suffix greater
+                            // than zero, which means it follows another item
+                            // with the same year. In this case, we collapse
+                            // the year suffix.
+                            cite.items[i].delim_override = year_suffix_delimiter;
+                            cite.items[i].collapse_verdict =
+                                Some(CollapseVerdict::YearSuffix);
+                            continue;
+                        }
                         // FIXME: Retains delimiter in names.
                         cite.items[i].delim_override = group_delimiter;
                         cite.items[i].collapse_verdict = Some(CollapseVerdict::First);
@@ -995,7 +1028,7 @@ fn collapse_items<'a, T: EntryLike>(cite: &mut SpeculativeCiteRender<'a, '_, T>)
                 }
             }
 
-            // TODO: Year Suffix and Year Suffix ranged.
+            // TODO: Year ranged.
         }
         None => {}
     }
@@ -1007,7 +1040,6 @@ enum CollapseVerdict {
     /// Only the first date should be printed.
     First,
     /// Only the year suffix should be printed.
-    #[allow(dead_code)]
     YearSuffix,
 }
 
@@ -1065,6 +1097,12 @@ pub struct RenderedCitation {
     pub citation: ElemChildren,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sorting {
+    Variable,
+    Macro,
+}
+
 /// A context that contains all information related to rendering a single entry.
 #[derive(Debug, Clone, PartialEq)]
 struct InstanceContext<'a, T: EntryLike> {
@@ -1073,8 +1111,8 @@ struct InstanceContext<'a, T: EntryLike> {
     pub entry: &'a T,
     /// The position of this citation in the list of citations.
     pub cite_props: CiteProperties<'a>,
-    /// Whether we are sorting or formatting right now.
-    pub sorting: bool,
+    /// Whether we are sorting or formatting right now and if we are sorting with a variable or macro sort key.
+    pub sorting: Option<Sorting>,
     /// The locale for the content in the entry.
     pub locale: Option<&'a LocaleCode>,
     /// The locale for the terms.
@@ -1089,7 +1127,7 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
     fn new(
         entry: &'a T,
         cite_props: CiteProperties<'a>,
-        sorting: bool,
+        sorting: Option<Sorting>,
         locale: Option<&'a LocaleCode>,
         term_locale: Option<&'a LocaleCode>,
         kind: Option<SpecialForm>,
@@ -1105,11 +1143,11 @@ impl<'a, T: EntryLike> InstanceContext<'a, T> {
         }
     }
 
-    fn sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
+    fn variable_sort_instance(item: &CitationItem<'a, T>, idx: usize) -> Self {
         Self::new(
             item.entry,
-            CiteProperties::for_sorting(item.locator, idx),
-            true,
+            CiteProperties::for_sorting(item.locator.clone(), idx),
+            Some(Sorting::Variable),
             None,
             None,
             None,
@@ -1150,7 +1188,7 @@ impl<'a> StyleContext<'a> {
             instance: InstanceContext::new(
                 entry,
                 cite_props,
-                false,
+                None,
                 locale,
                 term_locale,
                 None,
@@ -1161,7 +1199,7 @@ impl<'a> StyleContext<'a> {
         }
     }
 
-    fn sorting_ctx<'b, T: EntryLike>(
+    fn macro_sorting_ctx<'b, T: EntryLike>(
         &'b self,
         item: &'b CitationItem<'b, T>,
         idx: usize,
@@ -1172,8 +1210,8 @@ impl<'a> StyleContext<'a> {
         Context {
             instance: InstanceContext::new(
                 item.entry,
-                CiteProperties::for_sorting(item.locator, idx),
-                true,
+                CiteProperties::for_sorting(item.locator.clone(), idx),
+                Some(Sorting::Macro),
                 locale,
                 term_locale,
                 None,
@@ -1325,20 +1363,19 @@ impl<'a> StyleContext<'a> {
                 bib.layout.render(&mut ctx);
                 ctx.writing.pop_name_options();
 
-                if bib.second_field_align.is_some() {
-                    if let Some(mut t) =
+                if bib.second_field_align.is_some()
+                    && let Some(mut t) =
                         ctx.writing.elem_stack.first_mut().remove_any_meta()
+                {
+                    if let ElemChild::Text(t) = &mut t {
+                        t.text.push(' ');
+                    } else if let ElemChild::Elem(e) = &mut t
+                        && let Some(t) = e.children.last_text_mut()
                     {
-                        if let ElemChild::Text(t) = &mut t {
-                            t.text.push(' ');
-                        } else if let ElemChild::Elem(e) = &mut t {
-                            if let Some(t) = e.children.last_text_mut() {
-                                t.text.push(' ');
-                            }
-                        }
-
-                        ctx.writing.elem_stack.first_mut().0.insert(0, t);
+                        t.text.push(' ');
                     }
+
+                    ctx.writing.elem_stack.first_mut().0.insert(0, t);
                 }
             }
             (Some(CitePurpose::Prose), _) => {
@@ -1423,7 +1460,7 @@ impl<'a> StyleContext<'a> {
 }
 
 /// A citation request. A citation can contain references to multiple items.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq)]
 pub struct CitationRequest<'a, T: EntryLike> {
     /// The items to format.
     pub items: Vec<CitationItem<'a, T>>,
@@ -1531,7 +1568,7 @@ impl<'a> BibliographyRequest<'a> {
 }
 
 /// A reference to an [`crate::Entry`] within a [`CitationRequest`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CitationItem<'a, T: EntryLike> {
     /// The entry to format.
     pub entry: &'a T,
@@ -1638,10 +1675,10 @@ impl<'a> StyleContext<'a> {
                 return Some(output);
             }
 
-            if fallback.is_some() {
-                if let Some(output) = lookup(resource, fallback.as_ref()) {
-                    return Some(output);
-                }
+            if fallback.is_some()
+                && let Some(output) = lookup(resource, fallback.as_ref())
+            {
+                return Some(output);
             }
 
             if i == 0 {
@@ -1777,17 +1814,12 @@ impl WritingContext {
         let format = *self.formatting();
 
         // Append to last child if formats match.
-        if let Some(child) = self.elem_stack.last_mut().0.last_mut().and_then(|c| {
-            if let ElemChild::Text(c) = c {
-                Some(c)
-            } else {
-                None
-            }
-        }) {
-            if format == child.formatting {
-                child.text.push_str(&mem::take(&mut self.buf).finish());
-                return;
-            }
+        if let Some(child) = self.elem_stack.last_mut().0.last_mut()
+            && let ElemChild::Text(child) = child
+            && format == child.formatting
+        {
+            child.text.push_str(&mem::take(&mut self.buf).finish());
+            return;
         }
 
         let formatted = format.add_text(mem::take(&mut self.buf).finish());
@@ -1897,10 +1929,11 @@ impl WritingContext {
             if !self.buf.ends_with(' ') && !self.buf.ends_with('\u{a0}') {
                 self.buf.push(' ');
             }
-        } else if let Some(l) = self.elem_stack.last_mut().last_text_mut() {
-            if !l.text.ends_with(' ') && !l.text.ends_with('\u{a0}') {
-                l.text.push(' ');
-            }
+        } else if let Some(l) = self.elem_stack.last_mut().last_text_mut()
+            && !l.text.ends_with(' ')
+            && !l.text.ends_with('\u{a0}')
+        {
+            l.text.push(' ');
         }
     }
 
@@ -2031,7 +2064,7 @@ pub(crate) struct Context<'a, T: EntryLike> {
     bibliography: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 struct CiteProperties<'a> {
     pub certain: CertainCiteProperties,
     pub speculative: SpeculativeCiteProperties<'a>,
@@ -2081,7 +2114,7 @@ impl CertainCiteProperties {
 
 /// Item properties that can only be determined after one or multiple renders.
 /// These require validation.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 struct SpeculativeCiteProperties<'a> {
     /// Locator with its type.
     ///
@@ -2212,7 +2245,8 @@ impl DisambiguateState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IbidState {
-    /// The previous cite referenced another entry.
+    /// The previous cite referenced another entry, or this cite has no locator
+    /// when the previous one did.
     Different,
     /// The previous cite referenced the same entry, but with a different
     /// locator.
@@ -2230,7 +2264,14 @@ impl IbidState {
             if last.entry == this.entry && !last.hidden {
                 if last.locator == this.locator {
                     IbidState::Ibid
+                } else if this.locator.is_none() {
+                    // Per CSL spec: "Preceding cite does have a locator: (...)
+                    // If the current cite lacks a locator its only position is
+                    // 'subsequent'."
+                    IbidState::Different
                 } else {
+                    // - Both have locators, but they differ
+                    // - Previous one has no locator, this one does
                     IbidState::IbidWithLocator
                 }
             } else {
@@ -2244,17 +2285,50 @@ impl IbidState {
 
 /// This struct allows to add context to where the information in a cite is
 /// found in the source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpecificLocator<'a>(pub Locator, pub LocatorPayload<'a>);
 
 /// The type of content a `cs:text` element should yield for a locator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LocatorPayload<'a> {
     /// Just print the string.
     Str(&'a str),
     /// An element with the original index of the locator will be yielded. The
     /// consumer can then recognize this and replace it with their own content.
-    Transparent,
+    Transparent(TransparentLocator),
+}
+
+/// Wraps an object that is used to determine whether two locators are the same.
+#[derive(Clone)]
+pub struct TransparentLocator(Arc<dyn TransparentLocatorPayload>);
+
+impl TransparentLocator {
+    /// Creates a new [`TransparentLocator`] which wraps the given payload.
+    pub fn new<T: PartialEq + 'static>(payload: T) -> Self {
+        Self(Arc::new(payload))
+    }
+}
+
+impl std::fmt::Debug for TransparentLocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TransparentLocator").finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for TransparentLocator {
+    fn eq(&self, other: &Self) -> bool {
+        TransparentLocatorPayload::dyn_eq(self.0.as_ref(), other.0.as_ref())
+    }
+}
+
+trait TransparentLocatorPayload: Any {
+    fn dyn_eq(&self, other: &dyn TransparentLocatorPayload) -> bool;
+}
+
+impl<T: PartialEq + 'static> TransparentLocatorPayload for T {
+    fn dyn_eq(&self, other: &dyn TransparentLocatorPayload) -> bool {
+        Some(self) == (other as &dyn Any).downcast_ref::<Self>()
+    }
 }
 
 impl<'a, T: EntryLike> Context<'a, T> {
@@ -2428,19 +2502,18 @@ impl<'a, T: EntryLike> Context<'a, T> {
             && s.chars().next().is_some_and(|c| {
                 c.is_whitespace() || c == '.' || c == ',' || c == ']' || c == ')'
             })
+            && let Some(buf) = last_buffer(&mut self.writing)
         {
-            if let Some(buf) = last_buffer(&mut self.writing) {
-                buf.truncate(buf.trim_end().len());
-            }
+            buf.truncate(buf.trim_end().len());
         }
 
         // Do not print duplicate affixes.
         if s.chars().all(|c| !c.is_alphabetic()) {
             let trimmed = s.trim_end();
-            if let Some(last) = last_buffer(&mut self.writing) {
-                if let Some(strip) = last.strip_suffix(trimmed) {
-                    last.truncate(strip.len());
-                }
+            if let Some(last) = last_buffer(&mut self.writing)
+                && let Some(strip) = last.strip_suffix(trimmed)
+            {
+                last.truncate(strip.len());
             }
         }
 
@@ -2515,10 +2588,10 @@ impl<'a, T: EntryLike> Context<'a, T> {
 
     /// Get a term from the style.
     fn term(&self, mut term: Term, form: TermForm, plural: bool) -> Option<&'a str> {
-        if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator) {
-            if let Some(locator) = self.instance.cite_props.speculative.locator {
-                term = locator.0.into();
-            }
+        if term == Term::NumberVariable(csl_taxonomy::NumberVariable::Locator)
+            && let Some(locator) = &self.instance.cite_props.speculative.locator
+        {
+            term = locator.0.into();
         }
 
         let mut form = Some(form);
@@ -2634,8 +2707,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         }
 
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.resolve_number_variable(variable);
-        res
+
+        self.instance.resolve_number_variable(variable)
     }
 
     fn resolve_page_variable(
@@ -2694,9 +2767,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         }
 
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.resolve_standard_variable(form, variable);
 
-        res
+        self.instance.resolve_standard_variable(form, variable)
     }
 
     /// Resolve a date variable.
@@ -2707,9 +2779,8 @@ impl<'a, T: EntryLike> Context<'a, T> {
         variable: csl_taxonomy::DateVariable,
     ) -> Option<Cow<'a, Date>> {
         self.writing.prepare_variable_query(variable)?;
-        let res = self.instance.entry.resolve_date_variable(variable);
 
-        res
+        self.instance.entry.resolve_date_variable(variable)
     }
 
     /// Resolve a name variable.
@@ -2723,8 +2794,7 @@ impl<'a, T: EntryLike> Context<'a, T> {
             return Vec::new();
         }
 
-        let res = self.instance.entry.resolve_name_variable(variable);
-        res
+        self.instance.entry.resolve_name_variable(variable)
     }
 
     /// Apply a prefix, but return a tuple that allows us to undo it if it
@@ -2912,7 +2982,10 @@ mod tests {
     use citationberg::LocaleFile;
 
     use super::*;
-    use crate::io::from_yaml_str;
+    use crate::{
+        io::from_yaml_str,
+        types::{Numeric, NumericValue},
+    };
 
     #[test]
     fn test_csl() {
@@ -2978,10 +3051,69 @@ mod tests {
     }
 
     #[test]
+    fn test_chapter_field() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let yaml = fs::read_to_string(workspace.join("tests/data/basic.yml")).unwrap();
+        let bib = from_yaml_str(&yaml).unwrap();
+        let book = bib.get("lamb").unwrap();
+        assert_eq!(book.chapter().unwrap(), &MaybeTyped::Typed(Numeric::new(20)));
+        assert_eq!(book.volume().unwrap(), &MaybeTyped::Typed(Numeric::new(10)));
+        assert_eq!(book.keyed_serial_number("serial"), None);
+        assert_eq!(book.resolve_number_variable(NumberVariable::Number), None);
+
+        let book = bib.get("snail").unwrap();
+        assert_eq!(
+            book.chapter().unwrap(),
+            &MaybeTyped::Typed(Numeric {
+                value: NumericValue::Number(2),
+                prefix: None,
+                suffix: Some(Box::new("A".into()))
+            })
+        );
+        assert_eq!(
+            book.volume().unwrap(),
+            &MaybeTyped::Typed(Numeric {
+                value: NumericValue::Number(4),
+                prefix: None,
+                suffix: Some(Box::new("B".into()))
+            })
+        );
+        assert_eq!(book.keyed_serial_number("serial"), None);
+        assert_eq!(book.resolve_number_variable(NumberVariable::Number), None);
+
+        let chapter = bib.get("lamb-chapter").unwrap();
+        assert_eq!(chapter.chapter().unwrap(), &MaybeTyped::Typed(Numeric::new(3)));
+        assert_eq!(chapter.keyed_serial_number("serial"), None);
+        assert_eq!(
+            chapter.resolve_number_variable(NumberVariable::Number),
+            Some(MaybeTyped::Typed(Cow::Borrowed(&Numeric::new(3))))
+        );
+        assert_eq!(chapter.volume(), None);
+        assert_eq!(
+            chapter.parents().first().unwrap().volume().unwrap(),
+            &MaybeTyped::Typed(Numeric::new(10))
+        );
+
+        let chapter = bib.get("snail-chapter").unwrap();
+        assert_eq!(chapter.chapter(), None);
+        assert_eq!(chapter.keyed_serial_number("serial").unwrap(), "3");
+
+        assert_eq!(chapter.volume(), None);
+        assert_eq!(
+            chapter.parents().first().unwrap().volume().unwrap(),
+            &MaybeTyped::Typed(Numeric {
+                value: NumericValue::Number(4),
+                prefix: None,
+                suffix: Some(Box::new("B".into()))
+            })
+        );
+    }
+
+    #[test]
     fn low_year_test() {
         let yield_year = |year, short| {
             let mut s = String::new();
-            write_year(year, short, &mut s).unwrap();
+            write_year(year, short, &mut s, "AD", "BC").unwrap();
             s
         };
 
@@ -2993,6 +3125,113 @@ mod tests {
         assert_eq!(yield_year(0, true), "1BC");
         assert_eq!(yield_year(-1, true), "2BC");
         assert_eq!(yield_year(1, true), "1AD");
+    }
+
+    #[test]
+    fn test_transparent_locator_ibid() {
+        let test_data = r#"
+            katalog:
+                type: Book
+                title: "Book"
+                author: "Surname, Name"
+                location: Warsaw
+                date: 1971
+            katalog2:
+                type: Book
+                title: "Book2"
+                author: "Surname, Name"
+                location: Warsaw
+                date: 1971
+        "#;
+        let test_style = r#"<?xml version="1.0" encoding="utf-8"?>
+        <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only">
+           <info>
+              <title>Citing style</title>
+              <id>http://www.example.com/</id>
+           </info>
+
+           <citation>
+              <layout prefix="" suffix="." delimiter="; ">
+                 <choose>
+                    <if position="first">
+                      <text value="first" />
+                    </if>
+                    <else-if position="ibid-with-locator">
+                      <text value="ibid-with-locator" />
+                    </else-if>
+                    <else-if position="ibid">
+                       <text value="ibid" />
+                    </else-if>
+                    <else-if position="subsequent">
+                      <text value="subsequent" />
+                    </else-if>
+                    <else>
+                      <text value="other" />
+                    </else>
+                 </choose>
+              </layout>
+           </citation>
+          <bibliography>
+            <sort>
+              <key macro="contributors-biblio"/>
+            </sort>
+            <layout suffix=".">
+              <group delimiter=", ">
+                <group delimiter=", ">
+                  <text macro="locators-chapter"/>
+                </group>
+              </group>
+            </layout>
+          </bibliography>
+        </style>"#;
+
+        let library = from_yaml_str(test_data).unwrap();
+        let style = citationberg::Style::from_xml(test_style).unwrap();
+        let citationberg::Style::Independent(style) = style else { unreachable!() };
+
+        let mut driver = BibliographyDriver::new();
+        let citations = [
+            ("katalog", Some([2, 3]), "first."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog", Some([2, 4]), "ibid-with-locator."),
+            ("katalog", None, "subsequent."),
+            ("katalog", Some([2, 3]), "ibid-with-locator."),
+            ("katalog", Some([2, 3]), "ibid."),
+            ("katalog2", Some([2, 3]), "first."),
+        ];
+
+        for (entry, supplement, _) in citations {
+            let entry = library.get(entry).unwrap();
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_locator(
+                    entry,
+                    supplement.map(|s| {
+                        SpecificLocator(
+                            Locator::Supplement,
+                            LocatorPayload::Transparent(TransparentLocator(Arc::new(s))),
+                        )
+                    }),
+                )],
+                &style,
+                None,
+                &[],
+                None,
+            ));
+        }
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &style,
+            locale: None,
+            locale_files: &[],
+        });
+
+        for (citation, (_, _, expected_value)) in finished.citations.iter().zip(citations)
+        {
+            let mut s = String::new();
+            citation.citation.write_buf(&mut s, BufWriteFormat::Plain).unwrap();
+            assert_eq!(s, expected_value);
+        }
     }
 
     #[test]
@@ -3141,7 +3380,7 @@ mod tests {
         let locator = SpecificLocator(Locator::Custom, LocatorPayload::Str("12"));
         for entry in library.iter() {
             driver.citation(CitationRequest::new(
-                vec![CitationItem::with_locator(entry, Some(locator))],
+                vec![CitationItem::with_locator(entry, Some(locator.clone()))],
                 &alphanumeric,
                 None,
                 &[],

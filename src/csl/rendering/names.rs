@@ -14,7 +14,7 @@ use crate::csl::taxonomy::EntryLike;
 use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm, UsageInfo};
 use crate::types::Person;
 
-use super::{render_label_with_var, RenderCsl};
+use super::{RenderCsl, render_label_with_var};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DisambiguatedNameForm {
@@ -285,8 +285,31 @@ impl RenderCsl for Names {
 
         // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
-            write!(ctx, "{}", people.into_iter().fold(0, |acc, curr| acc + curr.0.len()))
-                .unwrap();
+            // Per the CSL spec on the `form` names option, only actually
+            // rendered names should be counted.
+            write!(
+                ctx,
+                "{}",
+                people
+                    .into_iter()
+                    .map(|(p, _)| p
+                        .iter()
+                        .enumerate()
+                        .map(|(i, _)| {
+                            if options.is_suppressed(
+                                i,
+                                p.len(),
+                                !ctx.instance.cite_props.certain.is_first,
+                            ) {
+                                0
+                            } else {
+                                1
+                            }
+                        })
+                        .sum::<usize>())
+                    .sum::<usize>()
+            )
+            .unwrap();
             ctx.apply_suffix(&self.to_affixes(), affix_loc);
             ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
             ctx.writing.pop_name_options();
@@ -340,17 +363,15 @@ impl RenderCsl for Names {
             let label = self.label();
             let do_label = |requested_pos: NameLabelPosition,
                             ctx: &mut Context<'_, T>| {
-                if !ctx.instance.sorting {
-                    if let Some((label, pos)) = label {
-                        if pos == requested_pos {
-                            render_label_with_var(
-                                label,
-                                ctx,
-                                ctx.term(variable.into(), label.form, plural)
-                                    .unwrap_or_default(),
-                            )
-                        }
-                    }
+                if ctx.instance.sorting.is_none()
+                    && let Some((label, pos)) = label
+                    && pos == requested_pos
+                {
+                    render_label_with_var(
+                        label,
+                        ctx,
+                        ctx.term(variable.into(), label.form, plural).unwrap_or_default(),
+                    )
                 }
             };
 
@@ -388,10 +409,10 @@ impl RenderCsl for Names {
             return true;
         }
 
-        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty()) {
-            if let Some(substitute) = &self.substitute() {
-                return substitute.children.iter().any(|c| c.will_render(ctx, var));
-            }
+        if self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty())
+            && let Some(substitute) = &self.substitute()
+        {
+            return substitute.children.iter().any(|c| c.will_render(ctx, var));
         }
 
         false
@@ -401,7 +422,7 @@ impl RenderCsl for Names {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
 
-        let is_empty =
+        let mut is_empty =
             self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty());
         if !renders_given_special_form(self, ctx, is_empty) {
             return (false, UsageInfo::default());
@@ -415,6 +436,32 @@ impl RenderCsl for Names {
             .fold((false, UsageInfo::default()), |(a, b), (c, d)| {
                 (a || c, b.merge_child(d))
             });
+
+        let names_opts = self.options();
+
+        // If `et-al-use-first` is set to zero and the et al. is rendered (meaning, the number of names exceeds `et-al-min`),
+        // it is considered empty.
+        // If all children are empty, we do not render.
+        let children_will_render = self.children.is_empty()
+            || self.children.iter().any(|n| match n {
+                citationberg::NamesChild::Name(name) => {
+                    let opts = name.options(&names_opts);
+                    let Some(et_al_min) = opts.et_al_min else {
+                        return true;
+                    };
+                    let Some(et_al_use_first) = opts.et_al_use_first else {
+                        return true;
+                    };
+
+                    et_al_use_first != 0
+                        || !self.variable.iter().all(|v| {
+                            ctx.resolve_name_variable(*v).len() >= et_al_min as usize
+                        })
+                }
+                _ => false,
+            });
+
+        is_empty |= !children_will_render;
 
         if suppressing {
             ctx.writing.start_suppressing_queried_variables();
@@ -461,7 +508,7 @@ fn add_names<T: EntryLike>(
 
     let demote_non_dropping = match ctx.style.csl.settings.demote_non_dropping_particle {
         DemoteNonDroppingParticle::Never => false,
-        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting,
+        DemoteNonDroppingParticle::SortOnly => ctx.instance.sorting.is_some(),
         DemoteNonDroppingParticle::DisplayAndSort => true,
     };
 
@@ -473,16 +520,17 @@ fn add_names<T: EntryLike>(
 
         if !first {
             let mut delim = EndDelim::Delim;
-            if last && !has_et_al {
-                if let Some(d) = name_opts.and {
-                    delim = match name_opts.delimiter_precedes_last {
-                        DelimiterBehavior::Contextual if i >= 2 => EndDelim::DelimAnd(d),
-                        DelimiterBehavior::AfterInvertedName if last_inverted => {
-                            EndDelim::DelimAnd(d)
-                        }
-                        DelimiterBehavior::Always => EndDelim::DelimAnd(d),
-                        _ => EndDelim::And(d),
+            if last
+                && !has_et_al
+                && let Some(d) = name_opts.and
+            {
+                delim = match name_opts.delimiter_precedes_last {
+                    DelimiterBehavior::Contextual if i >= 2 => EndDelim::DelimAnd(d),
+                    DelimiterBehavior::AfterInvertedName if last_inverted => {
+                        EndDelim::DelimAnd(d)
                     }
+                    DelimiterBehavior::Always => EndDelim::DelimAnd(d),
+                    _ => EndDelim::And(d),
                 }
             }
 
@@ -736,7 +784,7 @@ fn write_name<T: EntryLike>(
 
     let elem_idx = ctx.push_elem(citationberg::Formatting::default());
     match (form.is_long(), reverse, demote_non_dropping) {
-        _ if name.is_institutional() && ctx.instance.sorting => {
+        _ if name.is_institutional() && ctx.instance.sorting.is_some() => {
             let idx = ctx.push_format(family_format);
             let cidx = ctx.push_case(family_case);
             // TODO make locale aware
@@ -771,8 +819,8 @@ fn write_name<T: EntryLike>(
             }
         }
         // Always reverse when sorting.
-        (true, _, false) if ctx.instance.sorting => reverse_keep_particle(ctx),
-        (true, _, true) if ctx.instance.sorting => reverse_demote_particle(ctx),
+        (true, _, false) if ctx.instance.sorting.is_some() => reverse_keep_particle(ctx),
+        (true, _, true) if ctx.instance.sorting.is_some() => reverse_demote_particle(ctx),
         (true, true, false) => reverse_keep_particle(ctx),
         (true, true, true) => reverse_demote_particle(ctx),
         (true, false, _) => {
