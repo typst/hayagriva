@@ -21,7 +21,7 @@ use citationberg::{
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
-use quote::{apply_quotes, SmartQuotes};
+use quote::{SmartQuotes, apply_quotes};
 
 use crate::csl::elem::{NonEmptyStack, simplify_children};
 use crate::csl::rendering::RenderCsl;

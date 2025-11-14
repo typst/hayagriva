@@ -1,8 +1,8 @@
-use citationberg::taxonomy::OtherTerm;
 use citationberg::TermForm;
+use citationberg::taxonomy::OtherTerm;
 
-use super::taxonomy::EntryLike;
 use super::Context;
+use super::taxonomy::EntryLike;
 
 pub fn apply_quotes(s: &str, quotes: &SmartQuotes, inner: bool) -> String {
     let mut res = String::with_capacity(s.len());
@@ -156,20 +156,12 @@ impl<'s> SmartQuotes<'s> {
 
     /// The opening quote.
     pub fn open(&self, double: bool) -> &'s str {
-        if double {
-            self.double_open
-        } else {
-            self.single_open
-        }
+        if double { self.double_open } else { self.single_open }
     }
 
     /// The closing quote.
     pub fn close(&self, double: bool) -> &'s str {
-        if double {
-            self.double_close
-        } else {
-            self.single_close
-        }
+        if double { self.double_close } else { self.single_close }
     }
 }
 
@@ -193,12 +185,28 @@ mod tests {
     #[test]
     fn typst_tests() {
         let cases = vec![
-            ("“The horse eats no cucumber salad” was the first sentence ever uttered on the ‘telephone.’", r#""The horse eats no cucumber salad" was the first sentence ever uttered on the 'telephone.'"#, &US_MARKS),
-            ("„Das Pferd frisst keinen Gurkensalat“ war der erste jemals am ‚Fernsprecher‘ gesagte Satz.", r#""Das Pferd frisst keinen Gurkensalat" war der erste jemals am 'Fernsprecher' gesagte Satz."#, &DE_MARKS),
+            (
+                "“The horse eats no cucumber salad” was the first sentence ever uttered on the ‘telephone.’",
+                r#""The horse eats no cucumber salad" was the first sentence ever uttered on the 'telephone.'"#,
+                &US_MARKS,
+            ),
+            (
+                "„Das Pferd frisst keinen Gurkensalat“ war der erste jemals am ‚Fernsprecher‘ gesagte Satz.",
+                r#""Das Pferd frisst keinen Gurkensalat" war der erste jemals am 'Fernsprecher' gesagte Satz."#,
+                &DE_MARKS,
+            ),
             ("“”", r#""""#, &US_MARKS),
-            ("The 5′11″ ‘quick’ brown fox jumps over the “lazy” dog’s ear.", r#"The 5'11" 'quick' brown fox jumps over the "lazy" dog's ear."#, &US_MARKS),
+            (
+                "The 5′11″ ‘quick’ brown fox jumps over the “lazy” dog’s ear.",
+                r#"The 5'11" 'quick' brown fox jumps over the "lazy" dog's ear."#,
+                &US_MARKS,
+            ),
             ("He said “I’m a big fella.”", r#"He said "I'm a big fella.""#, &US_MARKS),
-            (r#"The 5'11" ‘quick' brown fox jumps over the "lazy’ dog's ear."#, r#"The 5\'11\" 'quick\' brown fox jumps over the \"lazy' dog\'s ear."#, &US_MARKS),
+            (
+                r#"The 5'11" ‘quick' brown fox jumps over the "lazy’ dog's ear."#,
+                r#"The 5\'11\" 'quick\' brown fox jumps over the \"lazy' dog\'s ear."#,
+                &US_MARKS,
+            ),
             ("“Hello”/“World”", r#""Hello"/"World""#, &US_MARKS),
             ("‘“Hello”/“World”’", r#"'"Hello"/"World"'"#, &US_MARKS),
             ("“”Hello“/”World“”", r#"""Hello"/"World"""#, &US_MARKS),
@@ -207,7 +215,7 @@ mod tests {
             ("‘A 2″ nail.’", r#"'A 2" nail.'"#, &US_MARKS),
             ("“A 2” nail.“", r#""A 2" nail.""#, &US_MARKS),
             ("“a [“b”] c”", r#""a ["b"] c""#, &US_MARKS),
-            ("“a b”c“d e”", r#""a b"c"d e""#, &US_MARKS)
+            ("“a b”c“d e”", r#""a b"c"d e""#, &US_MARKS),
         ];
 
         for (expected, input, quotes) in cases {
