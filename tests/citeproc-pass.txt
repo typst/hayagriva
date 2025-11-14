@@ -239,6 +239,7 @@ magic_SecondFieldAlign
 magic_StripPeriodsExcludeAffixes
 magic_StripPeriodsFalse
 magic_StripPeriodsTrue
+magic_SubsequentAuthorSubstituteOfTitleField
 magic_SuppressDuplicateVariableRendering
 magic_TextRangeEnglish
 magic_TextRangeFrench
