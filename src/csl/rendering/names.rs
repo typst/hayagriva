@@ -597,7 +597,7 @@ fn add_names<T: EntryLike>(
                 persons.len() - 1,
             );
         }
-    } else if has_et_al {
+    } else if ctx.instance.sorting.is_none() && has_et_al {
         let cs_et_al = names.et_al().cloned().unwrap_or_default();
         if let Some(term) = ctx.term(cs_et_al.term.into(), TermForm::default(), false) {
             let delim = match name_opts.delimiter_precedes_et_al {
