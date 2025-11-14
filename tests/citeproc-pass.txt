@@ -169,7 +169,6 @@ disambiguate_YearSuffixWithEtAlSubsequent
 display_DisplayBlock
 etal_CitationAndBibliographyDecorationsInBibliography
 etal_UseZeroFirst
-flipflop_OrphanQuote
 flipflop_QuotesNodeLevelMarkup
 form_TitleShort
 form_TitleShortNoLong
