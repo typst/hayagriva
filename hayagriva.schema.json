@@ -1,742 +1,775 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://raw.githubusercontent.com/typst/hayagriva/main/hayagriva.schema.json",
-    "title": "Hayagriva Bibliography Format",
-    "type": "object",
-    "description": "A bibliography management format for the modern age.",
-    "additionalProperties": {
-        "$ref": "#/definitions/entry"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/typst/hayagriva/main/hayagriva.schema.json",
+  "title": "Hayagriva Bibliography Format",
+  "type": "object",
+  "description": "Schema for Hayagriva YAML bibliography files, a bibliography management format for the modern age.\nhttps://github.com/typst/hayagriva/blob/main/docs/file-format.md",
+  "propertyNames": {
+    "type": "string",
+    "minLength": 1
+  },
+  "additionalProperties": {
+    "$ref": "#/definitions/topLevelEntry"
+  },
+  "examples": [
+    {
+      "harry": {
+        "type": "Book",
+        "title": "Harry Potter and the Order of the Phoenix",
+        "author": "Rowling, J. K.",
+        "volume": 5,
+        "page-total": 768,
+        "date": "2003-06-21"
+      }
     },
-    "examples": [
-        {
-            "harry": {
-                "type": "Book",
-                "title": "Harry Potter and the Order of the Phoenix",
-                "author": "Rowling, J. K.",
-                "volume": 5,
-                "page-total": 768,
-                "date": "2003-06-21"
-            }
+    {
+      "electronic": {
+        "type": "Web",
+        "title": "Ishkur's Guide to Electronic Music",
+        "serial-number": "v2.5",
+        "author": "Ishkur",
+        "url": "http://www.techno.org/electronic-music-guide/"
+      }
+    },
+    {
+      "kinetics": {
+        "type": "Article",
+        "title": "Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate",
+        "author": ["Doan, T. D.", "Tran Thoai, D. B.", "Haug, Hartmut"],
+        "serial-number": {
+          "doi": "10.1103/PhysRevB.102.165126"
         },
-        {
-            "electronic": {
-                "type": "Web",
-                "title": "Ishkur's Guide to Electronic Music",
-                "serial-number": "v2.5",
-                "author": "Ishkur",
-                "url": "http://www.techno.org/electronic-music-guide/"
-            }
-        },
-        {
-            "kinetics": {
-                "type": "Article",
-                "title": "Kinetics and luminescence of the excitations of a nonequilibrium polariton condensate",
-                "author": [
-                    "Doan, T. D.",
-                    "Tran Thoai, D. B.",
-                    "Haug, Hartmut"
-                ],
-                "serial-number": {
-                    "doi": "10.1103/PhysRevB.102.165126"
-                },
-                "page-range": "165126-165139",
-                "date": "2020-10-14",
-                "parent": {
-                    "type": "Periodical",
-                    "title": "Physical Review B",
-                    "volume": 102,
-                    "issue": 16,
-                    "publisher": "American Physical Society"
-                }
-            }
-        },
-        {
-            "wwdc-network": {
-                "type": "Article",
-                "author": [
-                    "Mehta, Jiten",
-                    "Kinnear, Eric"
-                ],
-                "title": "Boost Performance and Security with Modern Networking",
-                "date": "2020-06-26",
-                "parent": [
-                    {
-                        "type": "Conference",
-                        "title": "World Wide Developer Conference 2020",
-                        "organization": "Apple Inc.",
-                        "location": "Mountain View, CA"
-                    },
-                    {
-                        "type": "Video",
-                        "runtime": "00:13:42",
-                        "url": "https://developer.apple.com/videos/play/wwdc2020/10111/"
-                    }
-                ]
-            }
-        },
-        {
-            "plaque": {
-                "type": "Misc",
-                "title": "Informational plaque about Jacoby's 1967 photos",
-                "publisher": {
-                    "name": "Stiftung Reinbeckhallen",
-                    "location": "Berlin, Germany"
-                },
-                "date": 2020,
-                "parent": {
-                    "type": "Artwork",
-                    "date": 1967,
-                    "author": "Jacoby, Max",
-                    "parent": {
-                        "type": "Anthology",
-                        "title": "Bleibtreustraße",
-                        "archive": "Landesmuseum Koblenz",
-                        "archive-location": "Koblenz, Germany"
-                    }
-                }
-            }
+        "page-range": "165126-165139",
+        "date": "2020-10-14",
+        "parent": {
+          "type": "Periodical",
+          "title": "Physical Review B",
+          "volume": 102,
+          "issue": 16,
+          "publisher": "American Physical Society"
         }
-    ],
-    "definitions": {
-        "entry": {
-            "title": "Bibliography Entry",
-            "type": "object",
-            "description": "A single bibliography entry.",
-            "properties": {
-                "type": {
-                    "$ref": "#/definitions/entryType",
-                    "title": "Type"
-                },
-                "title": {
-                    "title": "Title",
-                    "description": "The title of this entry.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "\"Rick Astley: How An Internet Joke Revived My Career\"",
-                        {
-                            "value": "\"Rick Astley: How An Internet Joke Revived My Career\"",
-                            "short": "Rick Astley",
-                            "verbatim": false
-                        }
-                    ]
-                },
-                "author": {
-                    "title": "Author",
-                    "description": "The person or people primarily responsible for the creation of this entry.",
-                    "$ref": "#/definitions/personOrList"
-                },
-                "date": {
-                    "title": "Date",
-                    "description": "The date of publication or creation of this entry.",
-                    "$ref": "#/definitions/date"
-                },
-                "parent": {
-                    "title": "Parent Entry",
-                    "description": "Entry in which the current entry was published, or to which it is strongly associated.",
-                    "$ref": "#/definitions/parentOrArray",
-                    "examples": [
-                        {
-                            "type": "Anthology",
-                            "title": "Automata studies",
-                            "editor": [
-                                "Shannon, Claude E.",
-                                "McCarthy, John"
-                            ]
-                        }
-                    ]
-                },
-                "abstract": {
-                    "title": "Abstract",
-                    "description": "The abstract or summary of the entry.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "The dominant sequence transduction models are based on complex..."
-                    ]
-                },
-                "genre": {
-                    "title": "Genre",
-                    "description": "The type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report). This field is not intended for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "Doctoral dissertation"
-                    ]
-                },
-                "editor": {
-                    "title": "Editor",
-                    "description": "The person or people responsible for selecting and revising the content of the entry.",
-                    "$ref": "#/definitions/personOrList"
-                },
-                "affiliated": {
-                    "description": "The people involved with the entry that do not fit `author` or `editor` roles.",
-                    "$ref": "#/definitions/affiliatedList"
-                },
-                "call-number": {
-                    "title": "Call Number",
-                    "description": "The number of the item in a library, institution, or collection. Use with the `archive` field.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "F16 D14"
-                    ]
-                },
-                "publisher": {
-                    "title": "Publisher",
-                    "description": "The name of the publisher. The publisher's location also be included.",
-                    "$ref": "#/definitions/publisher"
-                },
-                "location": {
-                    "title": "Location",
-                    "description": "The location at which the entry is physically located or took place. For the location where an item was published, use the `publisher` field instead.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "Lahore, Pakistan"
-                    ]
-                },
-                "organization": {
-                    "title": "Organization",
-                    "description": "The organization at/for which the entry was produced.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "Technische Universität Berlin"
-                    ]
-                },
-                "issue": {
-                    "title": "Issue",
-                    "description": "For an entry whose parent has multiple issues, this field identifies to which specific issue the entry belongs. Also used to indicate the episode number for TV series.",
-                    "$ref": "#/definitions/numericOrString",
-                    "examples": [
-                        5
-                    ]
-                },
-                "volume": {
-                    "title": "Volume",
-                    "description": "For an entry whose parent has multiple volumes, parts, seasons, etc., this field identifies to which specific volume the entry belongs.",
-                    "$ref": "#/definitions/numericOrString",
-                    "examples": [
-                        "2-3"
-                    ]
-                },
-                "volume-total": {
-                    "title": "Volume Total",
-                    "description": "The total number of volumes, parts, seasons, etc., in the series that contains this entry.",
-                    "type": "integer",
-                    "examples": [
-                        12
-                    ]
-                },
-                "edition": {
-                    "title": "Edition",
-                    "description": "The published version of the entry.",
-                    "examples": [
-                        "expanded and revised edition",
-                        "second",
-                        2
-                    ],
-                    "$ref": "#/definitions/numericOrString"
-                },
-                "page-range": {
-                    "title": "Page Range",
-                    "description": "The range of pages within that this entry occupies within the parent.",
-                    "$ref": "#/definitions/numericOrString",
-                    "examples": [
-                        "812-847"
-                    ]
-                },
-                "page-total": {
-                    "title": "Page Total",
-                    "description": "The total number of pages in the entry.",
-                    "type": "integer",
-                    "examples": [
-                        768
-                    ]
-                },
-                "time-range": {
-                    "title": "Time Range",
-                    "description": "The time range within the parent at which this entry starts and ends.",
-                    "$ref": "#/definitions/timestampRange"
-                },
-                "runtime": {
-                    "title": "Runtime",
-                    "description": "The total runtime of the entry.",
-                    "$ref": "#/definitions/timestamp"
-                },
-                "url": {
-                    "title": "URL",
-                    "description": "The canonical public URL of the entry, which may include an access date.",
-                    "$ref": "#/definitions/url"
-                },
-                "serial-number": {
-                    "title": "Serial Number",
-                    "description": "Any serial number, including article numbers, associated with the entry. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
-                    "$ref": "#/definitions/serialNumber"
-                },
-                "language": {
-                    "title": "Language",
-                    "description": "The language of the entry.",
-                    "$ref": "#/definitions/language"
-                },
-                "archive": {
-                    "title": "Archive",
-                    "description": "The name of the institution/collection where the entry is kept.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "National Library of New Zealand"
-                    ]
-                },
-                "archive-location": {
-                    "title": "Archive Location",
-                    "description": "The location of the institution/collection where the entry is kept.",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "Wellington, New Zealand"
-                    ]
-                },
-                "note": {
-                    "title": "Note",
-                    "description": "A short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
-                    "$ref": "#/definitions/formattableString",
-                    "examples": [
-                        "microfilm version"
-                    ]
-                }
-            },
-            "required": [
-                "type"
-            ],
-            "additionalProperties": false
-        },
+      }
+    },
+    {
+      "wwdc-network": {
+        "type": "Article",
+        "author": ["Mehta, Jiten", "Kinnear, Eric"],
+        "title": "Boost Performance and Security with Modern Networking",
+        "date": "2020-06-26",
+        "parent": [
+          {
+            "type": "Conference",
+            "title": "World Wide Developer Conference 2020",
+            "organization": "Apple Inc.",
+            "location": "Mountain View, CA"
+          },
+          {
+            "type": "Video",
+            "runtime": "00:13:42",
+            "url": "https://developer.apple.com/videos/play/wwdc2020/10111/"
+          }
+        ]
+      }
+    },
+    {
+      "plaque": {
+        "type": "Misc",
+        "title": "Informational plaque about Jacoby's 1967 photos",
         "publisher": {
-            "oneOf": [
-                {
-                    "type": "string"
-                },
-                {
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "title": "Publisher Name",
-                            "description": "The name of the publisher.",
-                            "type": "string"
-                        },
-                        "location": {
-                            "title": "Publisher Location",
-                            "description": "The location of the publisher.",
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "name"
-                    ],
-                    "additionalProperties": false
-                }
-            ],
-            "examples": [
-                "Penguin Books",
-                {
-                    "name": "Penguin Books",
-                    "location": "London"
-                }
-            ]
+          "name": "Stiftung Reinbeckhallen",
+          "location": "Berlin, Germany"
         },
-        "entryType": {
-            "type": "string",
-            "title": "Entry Type",
-            "description": "The media type of the entry. Often determines the structure of references.",
-            "default": "misc",
-            "pattern": "^(?:[Aa]rticle|[Cc]hapter|[Ee]ntry|[Aa]nthos|[Rr]eport|[Tt]hesis|[Ww]eb|[Ss]cene|[Aa]rtwork|[Pp]atent|[Cc]ase|[Nn]ewspaper|[Ll]egislation|[Mm]anuscript|[Oo]riginal|[Pp]ost|[Mm]isc|[Pp]erformance|[Pp]eriodical|[Pp]roceedings|[Bb]ook|[Bb]log|[Rr]eference|[Cc]onference|[Aa]nthology|[Rr]epository|[Tt]hread|[Vv]ideo|[Aa]udio|[Ee]xhibition)$",
-            "$comment": "Typst supports case insensitive for the first letter, but the rest must be lowercase.",
-            "examples": [
-                "article",
-                "chapter",
-                "entry",
-                "anthos",
-                "report",
-                "thesis",
-                "web",
-                "scene",
-                "artwork",
-                "patent",
-                "case",
-                "newspaper",
-                "legislation",
-                "manuscript",
-                "original",
-                "post",
-                "misc",
-                "performance",
-                "periodical",
-                "proceedings",
-                "book",
-                "blog",
-                "reference",
-                "conference",
-                "anthology",
-                "repository",
-                "thread",
-                "video",
-                "audio",
-                "exhibition"
-            ]
+        "date": 2020,
+        "parent": {
+          "type": "Artwork",
+          "date": 1967,
+          "author": "Jacoby, Max",
+          "parent": {
+            "type": "Anthology",
+            "title": "Bleibtreustraße",
+            "archive": "Landesmuseum Koblenz",
+            "archive-location": "Koblenz, Germany"
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "topLevelEntry": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/entry"
         },
-        "parentOrArray": {
-            "oneOf": [
-                {
-                    "$ref": "#/definitions/entry"
-                },
-                {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/entry"
-                    },
-                    "uniqueItems": true
-                }
-            ]
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "$ref": "#/definitions/entryType"
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "entry": {
+      "title": "Bibliography Entry",
+      "type": "object",
+      "description": "A single bibliography entry with fields describing a work.",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/entryType",
+          "title": "Entry Type",
+          "default": "misc"
         },
-        "affiliatedList": {
-            "$comment": "Typst doesn't throw error if this is an object.",
-            "title": "Affiliated People",
-            "type": "array",
-            "examples": [
-                {
-                    "role": "director",
-                    "names": "Cameron, James"
-                },
-                {
-                    "role": "cast-member",
-                    "names": [
-                        "Schwarzenegger, Arnold",
-                        "Hamilton, Linda",
-                        "Patrick, Robert"
-                    ]
-                }
-            ],
-            "items": {
-                "title": "Affiliated List",
-                "type": "object",
-                "properties": {
-                    "role": {
-                        "title": "Role",
-                        "description": "The role of the person or people in relation to the entry.",
-                        "$ref": "#/definitions/roleType"
-                    },
-                    "names": {
-                        "title": "People Involved",
-                        "description": "The name(s) of the person or people involved in the role.",
-                        "$ref": "#/definitions/personOrList"
-                    }
-                },
-                "required": [
-                    "role",
-                    "names"
-                ],
-                "additionalProperties": false
-            },
-            "uniqueItems": true
+        "title": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Title",
+          "description": "The title of this entry.",
+          "examples": [
+            "'Rick Astley: How An Internet Joke Revived My Career'",
+            {
+              "value": "'Rick Astley: How An Internet Joke Revived My Career'",
+              "short": "Rick Astley",
+              "verbatim": false
+            }
+          ]
         },
-        "roleType": {
-            "type": "string",
-            "$comment": "Typst only supports case sensitive roles, the docs are inconsistent with this.",
-            "enum": [
-                "translator",
-                "afterword",
-                "foreword",
-                "introduction",
-                "annotator",
-                "commentator",
-                "holder",
-                "compiler",
-                "founder",
-                "collaborator",
-                "organizer",
-                "cast-member",
-                "composer",
-                "producer",
-                "executive-producer",
-                "writer",
-                "cinematography",
-                "director",
-                "illustrator",
-                "narrator"
-            ]
-        },
-        "formattableString": {
-            "oneOf": [
-                {
-                    "type": "string"
-                },
-                {
-                    "type": "object",
-                    "properties": {
-                        "value": {
-                            "title": "Value",
-                            "type": "string"
-                        },
-                        "verbatim": {
-                            "title": "Verbatim",
-                            "description": "If true, disables text case transformations.",
-                            "type": "boolean"
-                        },
-                        "short": {
-                            "title": "Short Form",
-                            "description": "A short form that a citation style can choose to render over the longer form.",
-                            "type": "string"
-                        }
-                    },
-                    "dependencies": {
-                        "verbatim": [
-                            "value"
-                        ],
-                        "short": [
-                            "value"
-                        ]
-                    },
-                    "required": [
-                        "value"
-                    ],
-                    "additionalProperties": false
-                }
-            ]
-        },
-        "person": {
-            "oneOf": [
-                {
-                    "type": "string",
-                    "examples": [
-                        "Doe, Janet",
-                        "Luther King, Martin, Jr.",
-                        "UNICEF",
-                        "von der Leyen, Ursula"
-                    ]
-                },
-                {
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "title": "Name",
-                            "description": "The family name of the person.",
-                            "type": "string"
-                        },
-                        "given-name": {
-                            "title": "Given Name",
-                            "description": "The given name of the person.",
-                            "type": "string"
-                        },
-                        "prefix": {
-                            "title": "Prefix",
-                            "description": "The prefix of the person's name.",
-                            "type": "string"
-                        },
-                        "suffix": {
-                            "title": "Suffix",
-                            "description": "The suffix of the person's name.",
-                            "type": "string"
-                        },
-                        "alias": {
-                            "title": "Alias",
-                            "description": "An alias for the person.",
-                            "type": "string"
-                        }
-                    },
-                    "examples": [
-                        {
-                            "given-name": "Gloria Jean",
-                            "name": "Watkins",
-                            "alias": "bell hooks"
-                        },
-                        {
-                            "given-name": "Ursula",
-                            "name": "Le Guin",
-                            "alias": "Ursula K. Le Guin"
-                        }
-                    ],
-                    "required": [
-                        "name"
-                    ],
-                    "additionalProperties": false
-                }
-            ]
-        },
-        "personOrList": {
-            "title": "Person or List",
-            "oneOf": [
-                {
-                    "$ref": "#/definitions/person"
-                },
-                {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/person"
-                    },
-                    "uniqueItems": true
-                }
-            ]
+        "author": {
+          "$ref": "#/definitions/personOrList",
+          "title": "Author",
+          "description": "The person or people primarily responsible for the creation of this entry."
         },
         "date": {
-            "description": "A calendar date in ISO 8601 format.",
-            "examples": [
-                2025,
-                "2025-12-31",
-                "2025-12"
-            ],
-            "anyOf": [
-                {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "Shortened date for year only."
-                },
-                {
-                    "type": "string",
-                    "$comment": "ISO 8601 date format (YYYY-MM-DD | YYYY-MM | YYYY).",
-                    "pattern": "^([+-~]?\\d{4,})(-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
-                }
-            ]
+          "$ref": "#/definitions/date",
+          "title": "Date",
+          "description": "The date of publication or creation of this entry."
         },
-        "timestamp": {
-            "description": "A timestamp represents some time in a piece of media. It is given as a string of the form DD:HH:MM:SS,msms but everything except MM:SS can be omitted. The left-most time denomination allows values that could overflow into the next-largest denomination if that is not specified.",
-            "type": "string",
-            "examples": [
-                "12:34",
-                "137:00",
-                "1:12:34",
-                "2:01:12:34",
-                "12:34,567",
-                "1:12:34,567",
-                "2:01:12:34,567"
-            ],
-            "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
+        "parent": {
+          "$ref": "#/definitions/parentOrArray",
+          "title": "Parent Entry",
+          "description": "Entry in which the current entry was published, or to which it is strongly associated.",
+          "examples": [
+            {
+              "type": "Anthology",
+              "title": "Automata studies",
+              "editor": ["Shannon, Claude E.", "McCarthy, John"]
+            }
+          ]
         },
-        "timestampRange": {
-            "description": "A range of timestamps is a string containing two timestamps separated by a hyphen. The left-most time denomination in each timestamp allows values that could overflow into the next-largest denomination if that is not specified.",
-            "type": "string",
-            "examples": [
-                "00:12-00:34",
-                "1:00:12-1:00:34",
-                "2:01:12:34-2:01:12:56",
-                "00:12,567-00:34,890",
-                "1:00:12,567-1:00:34,890",
-                "137:00-140:00"
-            ],
-            "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?-(\\d+:[0-5]\\d|\\d{1,2}:[0-5]?\\d:[0-5]\\d|\\d{1,2}:[0-2]?\\d:[0-5]?\\d:[0-5]\\d)(,\\d+)?$"
+        "abstract": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Abstract",
+          "description": "The abstract or summary of the entry.",
+          "examples": [
+            "The dominant sequence transduction models are based on complex..."
+          ]
         },
-        "numericOrString": {
-            "description": "A numeric or string value.",
-            "oneOf": [
-                {
-                    "type": "number"
-                },
-                {
-                    "type": "string"
-                }
-            ]
+        "genre": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Genre",
+          "description": "The type, class, or subtype of the item (e.g. \"Doctoral dissertation\" for a PhD thesis; \"NIH Publication\" for an NIH technical report).\nDo not use for topical descriptions or categories (e.g. \"adventure\" for an adventure movie).",
+          "examples": ["Doctoral dissertation"]
+        },
+        "editor": {
+          "$ref": "#/definitions/personOrList",
+          "title": "Editor",
+          "description": "The person or people responsible for selecting and revising the content of the entry."
+        },
+        "affiliated": {
+          "$ref": "#/definitions/affiliatedList",
+          "title": "Affiliated People",
+          "description": "People involved with the entry that do not fit `author` or `editor` roles."
+        },
+        "call-number": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Call Number",
+          "description": "The number of the item in a library, institution, or collection. Use with the `archive` field.",
+          "examples": ["F16 D14"]
+        },
+        "publisher": {
+          "$ref": "#/definitions/publisher",
+          "title": "Publisher",
+          "description": "The publisher of the item. Can include name and location."
+        },
+        "location": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Location",
+          "description": "The location at which the entry is physically located or took place.\nFor the location where an item was published, use the `publisher` field instead.",
+          "examples": ["Lahore, Pakistan"]
+        },
+        "organization": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Organization",
+          "description": "The organization at/for which the entry was produced.",
+          "examples": ["Technische Universität Berlin"]
+        },
+        "issue": {
+          "$ref": "#/definitions/numericOrString",
+          "title": "Issue",
+          "description": "For an entry whose parent has multiple issues, this field identifies to which specific issue the entry belongs.\nAlso used to indicate the episode number for TV series.",
+          "examples": [5]
+        },
+        "volume": {
+          "$ref": "#/definitions/numericOrString",
+          "title": "Volume",
+          "description": "For an entry whose parent has multiple volumes, parts, seasons, etc., this field identifies to which specific volume the entry belongs.",
+          "examples": ["2-3"]
+        },
+        "volume-total": {
+          "title": "Volume Total",
+          "description": "The total number of volumes, parts, seasons, etc., in the series that contains this entry.",
+          "type": "integer",
+          "minimum": 1,
+          "examples": [12]
+        },
+        "chapter": {
+          "$ref": "#/definitions/numericOrString",
+          "title": "Chapter",
+          "description": "The number of the chapter in the referenced work where this item can be found.\nWhen the chapter itself is the item being cited (common if it has its own non-numeric title),\nprefer using `type: chapter` for the entry while specifying the containing work's data as its parent.",
+          "examples": ["4"]
+        },
+        "edition": {
+          "$ref": "#/definitions/numericOrString",
+          "title": "Edition",
+          "description": "The published version of the entry.",
+          "examples": ["expanded and revised edition", "second", 2]
+        },
+        "page-range": {
+          "$ref": "#/definitions/numericOrString",
+          "title": "Page Range",
+          "description": "The range of pages within the parent that this entry occupies.",
+          "examples": ["812-847", "S10-15"]
+        },
+        "page-total": {
+          "title": "Page Total",
+          "description": "The total number of pages in the entry.",
+          "type": "integer",
+          "minimum": 1,
+          "examples": [768]
+        },
+        "time-range": {
+          "$ref": "#/definitions/timestampRange",
+          "title": "Time Range",
+          "description": "The time range within the parent at which this entry starts and ends."
+        },
+        "runtime": {
+          "$ref": "#/definitions/timestamp",
+          "title": "Runtime",
+          "description": "The total runtime of the entry."
         },
         "url": {
-            "description": "Canonical public URL of the entry, can have access date.",
-            "oneOf": [
-                {
-                    "type": "string"
-                },
-                {
-                    "type": "object",
-                    "properties": {
-                        "value": {
-                            "title": "URL Value",
-                            "description": "The URL value.",
-                            "type": "string"
-                        },
-                        "date": {
-                            "title": "Access Date",
-                            "description": "The access date of the URL.",
-                            "$ref": "#/definitions/date"
-                        }
-                    },
-                    "examples": [
-                        "https://typst.app/",
-                        {
-                            "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
-                            "date": "2020-12-29"
-                        }
-                    ],
-                    "required": [
-                        "value"
-                    ],
-                    "additionalProperties": false
-                }
-            ]
+          "$ref": "#/definitions/url",
+          "title": "URL",
+          "description": "The canonical public URL of the entry, which may include an access date."
         },
-        "serialNumber": {
-            "$comment": "Typst allows these to be numbers, docs are inconsistent (strings).",
-            "description": "Any serial number, including article numbers. If you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary. Hayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`. You can also include `serial` for the serial number when you provide other formats as well.",
-            "oneOf": [
-                {
-                    "type": [
-                        "string",
-                        "number"
-                    ]
-                },
-                {
-                    "type": "object",
-                    "examples": [
-                        "\"2003.13722\"",
-                        {
-                            "doi": "\"10.22541/au.148771883.35456290\"",
-                            "arxiv": "\"1906.00356\"",
-                            "serial": "\"8516\""
-                        }
-                    ],
-                    "properties": {
-                        "doi": {
-                            "title": "DOI",
-                            "description": "Digital Object Identifier.",
-                            "type": "string"
-                        },
-                        "isbn": {
-                            "title": "ISBN",
-                            "description": "International Standard Book Number.",
-                            "type": "string"
-                        },
-                        "issn": {
-                            "title": "ISSN",
-                            "description": "International Standard Serial Number.",
-                            "type": "string"
-                        },
-                        "pmid": {
-                            "title": "PMID",
-                            "description": "PubMed Identifier.",
-                            "type": "string"
-                        },
-                        "pmcid": {
-                            "title": "PMCID",
-                            "description": "PubMed Central Identifier.",
-                            "type": "string"
-                        },
-                        "arxiv": {
-                            "title": "arXiv",
-                            "description": "arXiv Identifier.",
-                            "type": "string"
-                        },
-                        "serial": {
-                            "title": "Serial Number",
-                            "description": "Serial number.",
-                            "type": "string"
-                        }
-                    },
-                    "additionalProperties": false
-                }
-            ]
+        "serial-number": {
+          "$ref": "#/definitions/serialNumber",
+          "title": "Serial Number",
+          "description": "Any serial number, including article numbers, associated with the entry.\nIf you have serial numbers of well-known schemes like `doi`, you should put them into the serial number as a dictionary.\nHayagriva will recognize and specially treat `doi`, `isbn`, `issn`, `pmid`, `pmcid`, and `arxiv`.\nYou can also include `serial` for the serial number when you provide other formats as well."
         },
         "language": {
-            "description": "The Language of the entry.",
-            "$comment": "Unicode Language Identifier (BCP 47).",
-            "examples": [
-                "zh-Hans",
-                "en-US",
-                "de-AT",
-                "fr-FR",
-                "es-ES",
-                "pt-BR",
-                "ja-JP"
-            ],
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3,4})?(-[A-Z]{2})?$"
+          "$ref": "#/definitions/language",
+          "title": "Language",
+          "description": "The language of the entry as a Unicode Language Identifier."
+        },
+        "archive": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Archive",
+          "description": "The name of the institution/collection where the entry is kept.",
+          "examples": ["National Library of New Zealand"]
+        },
+        "archive-location": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Archive Location",
+          "description": "The location of the institution/collection where the entry is kept.",
+          "examples": ["Wellington, New Zealand"]
+        },
+        "note": {
+          "$ref": "#/definitions/formattableString",
+          "title": "Note",
+          "description": "A short markup, decoration, or annotation to the entry (e.g., to indicate items included in a review).",
+          "examples": ["microfilm version"]
         }
+      },
+      "additionalProperties": false
+    },
+    "publisher": {
+      "title": "Publisher",
+      "description": "Publisher information - can be a simple string or an object with name and location.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Publisher Name",
+              "description": "The name of the publisher.",
+              "type": "string",
+              "minLength": 1
+            },
+            "location": {
+              "title": "Publisher Location",
+              "description": "The location of the publisher.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      ],
+      "examples": [
+        "Penguin Books",
+        {
+          "name": "Penguin Books",
+          "location": "London"
+        }
+      ]
+    },
+    "entryType": {
+      "type": "string",
+      "title": "Entry Type",
+      "description": "The media type of the entry. Often determines the structure of references.\nEntry types are case-insensitive in Typst (first letter can be upper or lowercase).",
+      "default": "misc",
+      "pattern": "^(?:[Aa]rticle|[Cc]hapter|[Ee]ntry|[Aa]nthos|[Rr]eport|[Tt]hesis|[Ww]eb|[Ss]cene|[Aa]rtwork|[Pp]atent|[Cc]ase|[Nn]ewspaper|[Ll]egislation|[Mm]anuscript|[Oo]riginal|[Pp]ost|[Mm]isc|[Pp]erformance|[Pp]eriodical|[Pp]roceedings|[Bb]ook|[Bb]log|[Rr]eference|[Cc]onference|[Aa]nthology|[Rr]epository|[Tt]hread|[Vv]ideo|[Aa]udio|[Ee]xhibition)$",
+      "examples": [
+        "article",
+        "chapter",
+        "entry",
+        "anthos",
+        "report",
+        "thesis",
+        "web",
+        "scene",
+        "artwork",
+        "patent",
+        "case",
+        "newspaper",
+        "legislation",
+        "manuscript",
+        "original",
+        "post",
+        "misc",
+        "performance",
+        "periodical",
+        "proceedings",
+        "book",
+        "blog",
+        "reference",
+        "conference",
+        "anthology",
+        "repository",
+        "thread",
+        "video",
+        "audio",
+        "exhibition"
+      ]
+    },
+    "parentOrArray": {
+      "title": "Parent Entry or Array",
+      "description": "Parent entry/entries. Can be a single parent or an array of parents.\nMultiple parents are useful when media is published in multiple ways.",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/entry"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/entry"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ]
+    },
+    "affiliatedList": {
+      "title": "Affiliated People",
+      "description": "List of people involved with the entry in specific roles.",
+      "type": "array",
+      "items": {
+        "title": "Affiliated Role",
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/definitions/roleType",
+            "title": "Role",
+            "description": "The role of the person or people in relation to the entry."
+          },
+          "names": {
+            "$ref": "#/definitions/personOrList",
+            "title": "People Involved",
+            "description": "The name(s) of the person or people involved in the role."
+          }
+        },
+        "required": ["role", "names"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "examples": [
+        [
+          {
+            "role": "director",
+            "names": "Cameron, James"
+          },
+          {
+            "role": "cast-member",
+            "names": [
+              "Schwarzenegger, Arnold",
+              "Hamilton, Linda",
+              "Patrick, Robert"
+            ]
+          }
+        ]
+      ]
+    },
+    "roleType": {
+      "type": "string",
+      "title": "Role Type",
+      "description": "The role of an affiliated person. Must be one of the predefined roles (case-sensitive).",
+      "enum": [
+        "translator",
+        "afterword",
+        "foreword",
+        "introduction",
+        "annotator",
+        "commentator",
+        "holder",
+        "compiler",
+        "founder",
+        "collaborator",
+        "organizer",
+        "cast-member",
+        "composer",
+        "producer",
+        "executive-producer",
+        "writer",
+        "cinematography",
+        "director",
+        "illustrator",
+        "narrator"
+      ]
+    },
+    "formattableString": {
+      "title": "Formattable String",
+      "description": "A string that may run through a text case transformer when used in a reference or citation.\nCan disable transformations on segments or the whole string.\nCan include mathematical markup in dollars ($...$) and supports short forms.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "title": "Value",
+              "type": "string",
+              "minLength": 1
+            },
+            "verbatim": {
+              "title": "Verbatim",
+              "description": "If true, disables text case transformations. Preserves casing as it appears in source.",
+              "type": "boolean",
+              "default": false
+            },
+            "short": {
+              "title": "Short Form",
+              "description": "A short form that a citation style can choose to render over the longer form.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "dependencies": {
+            "verbatim": ["value"],
+            "short": ["value"]
+          },
+          "required": ["value"],
+          "additionalProperties": false
+        }
+      ],
+      "examples": [
+        "UN World Food Programme",
+        "\"{imagiNary} Publishing\"",
+        {
+          "value": "UN World Food Programme",
+          "verbatim": true
+        },
+        {
+          "value": "International Proceedings of Customs",
+          "short": "Int. Proc. Customs"
+        }
+      ]
+    },
+    "person": {
+      "title": "Person",
+      "description": "A person with a name and optionally given name, prefix, suffix, and alias.\nString format: \"Last, First\" or \"Prefix Last, First, Suffix\"\nPrefix is auto-detected using BibTeX algorithm (consecutive lowercase words at start).",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "Doe, Janet",
+            "Luther King, Martin, Jr.",
+            "UNICEF",
+            "von der Leyen, Ursula"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Family Name",
+              "description": "The family/last name of the person (required).",
+              "type": "string",
+              "minLength": 1
+            },
+            "given-name": {
+              "title": "Given Name",
+              "description": "The given/first name of the person.",
+              "type": "string",
+              "minLength": 1
+            },
+            "prefix": {
+              "title": "Name Prefix",
+              "description": "The prefix of the person's name (e.g., \"von\", \"van der\").",
+              "type": "string",
+              "minLength": 1
+            },
+            "suffix": {
+              "title": "Name Suffix",
+              "description": "The suffix of the person's name (e.g., \"Jr.\", \"III\").",
+              "type": "string",
+              "minLength": 1
+            },
+            "alias": {
+              "title": "Alias",
+              "description": "An alternative name or pseudonym for the person.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["name"],
+          "additionalProperties": false,
+          "examples": [
+            {
+              "given-name": "Gloria Jean",
+              "name": "Watkins",
+              "alias": "bell hooks"
+            },
+            {
+              "given-name": "Ursula",
+              "prefix": "von",
+              "name": "Leyen"
+            }
+          ]
+        }
+      ]
+    },
+    "personOrList": {
+      "title": "Person or List of Persons",
+      "description": "A single person or an array of persons.",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/person"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/person"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ]
+    },
+    "date": {
+      "title": "Date",
+      "description": "A calendar date in ISO 8601 format (YYYY-MM-DD, YYYY-MM, or YYYY).\nCan include sign prefix for years before 0000 (e.g., -0001 for 2 B.C.E.).\nYear 1 B.C.E. is represented as 0000.",
+      "examples": [2025, "2025-12-31", "2025-12", "-0001"],
+      "anyOf": [
+        {
+          "type": "integer",
+          "description": "Year only as integer."
+        },
+        {
+          "type": "string",
+          "pattern": "^[+-~]?\\d{4,}(-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\\d|3[01]))?)?$",
+          "description": "ISO 8601 date format (YYYY-MM-DD | YYYY-MM | YYYY) with optional sign prefix."
+        }
+      ]
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "description": "A timestamp within media content: DD:HH:MM:SS,msms (only MM:SS required).\nLeft-most denomination can overflow (e.g., \"138:00\" for 2h 18min is valid).\nFormat: [DD:][HH:]MM:SS[,msms]",
+      "type": "string",
+      "examples": [
+        "12:34",
+        "137:00",
+        "1:12:34",
+        "2:01:12:34",
+        "12:34,567",
+        "1:12:34,567",
+        "2:01:12:34,567"
+      ],
+      "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]\\d:[0-5]\\d|\\d{1,2}:\\d{1,2}:[0-5]\\d:[0-5]\\d)(,\\d+)?$"
+    },
+    "timestampRange": {
+      "title": "Timestamp Range",
+      "description": "A range of two timestamps separated by a hyphen: start-end.\nEach timestamp follows the timestamp format rules.",
+      "type": "string",
+      "examples": [
+        "00:12-00:34",
+        "1:00:12-1:00:34",
+        "2:01:12:34-2:01:12:56",
+        "00:12,567-00:34,890",
+        "1:00:12,567-1:00:34,890",
+        "137:00-140:00"
+      ],
+      "pattern": "^(\\d+:[0-5]\\d|\\d{1,2}:[0-5]\\d:[0-5]\\d|\\d{1,2}:\\d{1,2}:[0-5]\\d:[0-5]\\d)(,\\d+)?-(\\d+:[0-5]\\d|\\d{1,2}:[0-5]\\d:[0-5]\\d|\\d{1,2}:\\d{1,2}:[0-5]\\d:[0-5]\\d)(,\\d+)?$"
+    },
+    "numericOrString": {
+      "title": "Numeric or String",
+      "description": "A numeric variable: one or more numbers delimited by commas, ampersands, or hyphens.\nCan express single numbers or ranges. May contain negative numbers.\nCan have non-numeric prefix and suffix (e.g., \"S10-15\").",
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "url": {
+      "title": "URL",
+      "description": "Canonical public URL of the entry, optionally with access date.",
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uri",
+          "examples": ["https://typst.app/"],
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "examples": [
+            {
+              "value": "https://www.reddit.com/r/AccidentalRenaissance/comments/er1uxd/japanese_opposition_members_trying_to_block_the/",
+              "date": "2020-12-29"
+            }
+          ],
+          "properties": {
+            "value": {
+              "title": "URL Value",
+              "description": "The URL value.",
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            "date": {
+              "$ref": "#/definitions/date",
+              "title": "Access Date",
+              "description": "The date when the URL was accessed."
+            }
+          },
+          "required": ["value"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "serialNumber": {
+      "title": "Serial Number",
+      "description": "Any serial number including article numbers.\nCan be a simple string/number or an object with well-known schemes.\nHayagriva specially treats: doi, isbn, issn, pmid, pmcid, arxiv.\nUse 'serial' key for generic serial numbers when providing other formats.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "examples": ["2003.13722"]
+        },
+        {
+          "type": "number",
+          "examples": [2003.13722]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "doi": {
+              "title": "DOI",
+              "description": "Digital Object Identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "isbn": {
+              "title": "ISBN",
+              "description": "International Standard Book Number.",
+              "type": "string",
+              "minLength": 1
+            },
+            "issn": {
+              "title": "ISSN",
+              "description": "International Standard Serial Number.",
+              "type": "string",
+              "minLength": 1
+            },
+            "pmid": {
+              "title": "PMID",
+              "description": "PubMed Identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "pmcid": {
+              "title": "PMCID",
+              "description": "PubMed Central Identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "arxiv": {
+              "title": "arXiv",
+              "description": "arXiv Identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "serial": {
+              "title": "Serial Number",
+              "description": "Generic serial number.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minProperties": 1,
+          "examples": [
+            {
+              "doi": "10.22541/au.148771883.35456290",
+              "arxiv": "1906.00356",
+              "serial": "8516"
+            }
+          ]
+        }
+      ]
+    },
+    "language": {
+      "title": "Language",
+      "description": "Unicode Language Identifier (BCP 47 / ISO 639-1 based).\nFormat: language[-script][-region][-variant]\nExamples: \"en\" (English), \"en-US\" (American English), \"zh-Hans-CN\" (Simplified Chinese in China)\nScript uses title case (e.g., \"Hans\"), region uses uppercase (e.g., \"US\").",
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2})?$",
+      "examples": [
+        "en",
+        "zh-Hans",
+        "zh-Hans-CN",
+        "en-US",
+        "de-AT",
+        "fr-FR",
+        "es-ES",
+        "pt-BR",
+        "ja-JP"
+      ]
     }
+  }
 }
