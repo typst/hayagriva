@@ -8,11 +8,11 @@ use std::{fmt, fs};
 
 mod common;
 use citationberg::taxonomy::Locator;
-use citationberg::{Locale, LocaleCode, Style, XmlError};
-use common::{ensure_repo, iter_files_with_name, CACHE_PATH};
+use citationberg::{Locale, LocaleCode, Style, XmlDeError};
+use common::{CACHE_PATH, ensure_repo, iter_files_with_name};
 
 use citationberg::json as csl_json;
-use hayagriva::archive::{locales, ArchivedStyle};
+use hayagriva::archive::{ArchivedStyle, locales};
 use hayagriva::io::from_biblatex_str;
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, CitePurpose,
@@ -104,24 +104,24 @@ impl FromStr for TestMode {
 #[derive(Debug)]
 enum TestParseError {
     UnknownSection(String),
-    SyntaxError,
+    SyntaxError(usize),
     WrongClosingTag,
     MissingRequiredSection(SectionTag),
-    CslError(XmlError),
+    CslError(XmlDeError),
     JsonError(serde_json::Error),
 }
 
 impl fmt::Display for TestParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TestParseError::UnknownSection(s) => write!(f, "unknown section {}", s),
-            TestParseError::SyntaxError => write!(f, "syntax error"),
+            TestParseError::UnknownSection(s) => write!(f, "unknown section {s}"),
+            TestParseError::SyntaxError(pos) => write!(f, "syntax error at char {pos}"),
             TestParseError::WrongClosingTag => write!(f, "wrong closing tag"),
             TestParseError::MissingRequiredSection(s) => {
-                write!(f, "missing required section {}", s)
+                write!(f, "missing required section {s}")
             }
-            TestParseError::CslError(e) => write!(f, "csl error: {}", e),
-            TestParseError::JsonError(e) => write!(f, "json error: {}", e),
+            TestParseError::CslError(e) => write!(f, "csl error: {e}"),
+            TestParseError::JsonError(e) => write!(f, "json error: {e}"),
         }
     }
 }
@@ -144,25 +144,21 @@ fn expect_header(s: &mut Scanner) -> Result<SectionTag, TestParseError> {
     let start = ">>==";
     s.eat_until(start);
     if s.done() {
-        return Err(TestParseError::SyntaxError);
+        return Err(TestParseError::SyntaxError(s.cursor()));
     }
 
     s.jump(s.cursor() + start.len());
-    let eq = eat_equals(s);
+    eat_equals(s);
     s.eat_whitespace();
 
     let tag = s.eat_while(is_section_tag);
     let tag = SectionTag::from_str(tag)
         .map_err(|_| TestParseError::UnknownSection(tag.to_string()))?;
     if s.done() {
-        return Err(TestParseError::SyntaxError);
+        return Err(TestParseError::SyntaxError(s.cursor()));
     }
 
-    s.eat_whitespace();
-    eat_n_equals(s, eq);
-    if !s.eat_if("==>>") {
-        return Err(TestParseError::SyntaxError);
-    }
+    s.eat_until('\n');
     s.eat_whitespace();
 
     Ok(tag)
@@ -175,14 +171,14 @@ fn eat_section<'s>(
     let end = "<<==";
     let content = s.eat_until(end);
     if s.done() {
-        return Err(TestParseError::SyntaxError);
+        return Err(TestParseError::SyntaxError(s.cursor()));
     }
 
     s.jump(s.cursor() + end.len());
     let eq = eat_equals(s);
     s.eat_whitespace();
     if s.done() {
-        return Err(TestParseError::SyntaxError);
+        return Err(TestParseError::SyntaxError(s.cursor()));
     }
 
     if matches!(tag, SectionTag::Unknown) {
@@ -194,8 +190,8 @@ fn eat_section<'s>(
     s.eat_whitespace();
 
     eat_n_equals(s, eq);
-    if !s.eat_if("==<<") {
-        return Err(TestParseError::SyntaxError);
+    if !s.eat_if("==<<") && !s.eat_if("==") {
+        return Err(TestParseError::SyntaxError(s.cursor()));
     }
 
     Ok(content)
@@ -318,7 +314,7 @@ fn test_parse_tests() {
     );
     let percentage =
         results.passed.len() as f64 / (results.total - results.skipped) as f64 * 100.0;
-    eprintln!("{:.2}% passed", percentage);
+    eprintln!("{percentage:.2}% passed");
 
     let should_pass = load_passing_tests();
     // Enable binary search.
@@ -331,9 +327,9 @@ fn test_parse_tests() {
     for test in &should_pass {
         if results.passed.binary_search(test).is_err() {
             if results.failed.binary_search(test).is_ok() {
-                eprintln!("❌ Test {} should pass but failed", test);
+                eprintln!("❌ Test {test} should pass but failed");
             } else {
-                eprintln!("🤨 Test {} should pass but was not found", test);
+                eprintln!("🤨 Test {test} should pass but was not found");
             }
 
             fail = true;
@@ -349,12 +345,14 @@ fn test_parse_tests() {
 
     // Check that the `passing` file contains all passed tests.
     for test in &results.passed {
-        eprintln!("👁️ Test {} passed but is not in the `passing` file", test);
+        eprintln!("👁️ Test {test} passed but is not in the `passing` file");
         fail = true;
     }
 
     if fail {
-        panic!("⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`")
+        panic!(
+            "⚠️ Some test passed but were not found in the `passing` file.\nRebuild the file by running `cargo test --test citeproc --features csl-json -- write_passing --ignored`"
+        )
     }
 
     eprintln!("✅ All tests expected to pass passed");
@@ -391,24 +389,19 @@ impl TestSuiteResults {
 
         for path in iter_files_with_name(&test_path, "txt", |name| {
             ![
-                "bugreports_EnvAndUrb",
-                "affix_PrefixFullCitationTextOnly",
-                "affix_PrefixWithDecorations",
                 "flipflop_ApostropheInsideTag",
-                "date_OtherAlone",
                 // Upstream bug: https://github.com/tafia/quick-xml/issues/674
                 "bugreports_SelfLink",
                 "bugreports_SingleQuoteXml",
-                "number_SpacesMakeIsNumericFalse",
-                "textcase_LocaleUnicode",
-                "date_YearSuffixImplicitWithNoDateOneOnly",
                 "position_NearNoteWithPlugin",
             ]
             .contains(&name)
-                && !name.starts_with("magic_")
         }) {
             let str = std::fs::read_to_string(&path).unwrap();
-            let case = build_case(&str);
+            let case = match build_case(&str) {
+                Ok(c) => c,
+                Err(e) => panic!("Could not parse test {}: {e}", path.to_string_lossy()),
+            };
             total += 1;
 
             if !can_test(&case, || path.display(), false) {
@@ -432,12 +425,15 @@ impl TestSuiteResults {
 #[ignore]
 fn test_single_file() {
     let locales = locales();
-    let name = "nameattr_DelimiterPrecedesLastOnCitationInCitation.txt";
+    let name = "date_YearSuffixImplicitWithNoDate.txt";
     let test_path = PathBuf::from(CACHE_PATH)
         .join(TEST_REPO_NAME)
         .join("processor-tests/humans/");
     let path = test_path.join(name);
-    let case = build_case(&std::fs::read_to_string(&path).unwrap());
+    let case = match build_case(&std::fs::read_to_string(&path).unwrap()) {
+        Ok(c) => c,
+        Err(e) => panic!("Could not parse test {}: {e}", path.to_string_lossy()),
+    };
     assert!(can_test(&case, || path.display(), true));
     assert!(test_file(case, &locales, || path.display()));
 }
@@ -448,21 +444,24 @@ fn test_local_files() {
     let test_path = PathBuf::from("tests/local");
 
     for path in iter_files_with_name(&test_path, "txt", |_| true) {
-        let case = build_case(&std::fs::read_to_string(&path).unwrap());
+        let case = match build_case(&std::fs::read_to_string(&path).unwrap()) {
+            Ok(c) => c,
+            Err(e) => panic!("Could not parse test {}: {e}", path.to_string_lossy()),
+        };
         assert!(can_test(&case, || path.display(), true));
         assert!(test_file(case, &locales, || path.display()));
     }
 }
 
-fn build_case(s: &str) -> TestCase {
+fn build_case(s: &str) -> Result<TestCase, TestParseError> {
     let mut s = Scanner::new(s);
     let mut builder = TestCaseBuilder::new();
     while !s.done() {
-        let (tag, section) = section(&mut s).unwrap();
+        let (tag, section) = section(&mut s)?;
         builder.process(tag, section);
         eat_void(&mut s);
     }
-    builder.finish().unwrap()
+    builder.finish()
 }
 
 fn can_test<F, D>(case: &TestCase, mut display: F, print: bool) -> bool
@@ -473,7 +472,7 @@ where
     let can_test = case.bib_entries.is_none()
         && case.bib_section.is_none()
         && case.citations.is_none()
-        && case.citation_items.as_ref().map_or(true, |cites| {
+        && case.citation_items.as_ref().is_none_or(|cites| {
             cites.iter().flatten().all(|i| {
                 i.prefix.is_none()
                     && i.suffix.is_none()
@@ -488,8 +487,7 @@ where
         .flat_map(|i| i.0.values())
         .filter_map(|v| if let csl_json::Value::Date(d) = v { Some(d) } else { None })
         .any(|d| {
-            csl_json::FixedDateRange::try_from(d.clone())
-                .map_or(false, |d| d.end.is_some())
+            csl_json::FixedDateRange::try_from(d.clone()).is_ok_and(|d| d.end.is_some())
         });
 
     if !can_test {
@@ -615,7 +613,7 @@ where
     } else {
         eprintln!("Test {} failed", display());
         eprintln!("Expected:\n{}", case.result);
-        eprintln!("Got:\n{}", output);
+        eprintln!("Got:\n{output}");
         false
     }
 }
@@ -625,7 +623,9 @@ where
 mod citeproc_bib {
     use core::fmt;
 
-    use citationberg::{Display, FontStyle, FontVariant, FontWeight, VerticalAlign};
+    use citationberg::{
+        Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
+    };
     use hayagriva::{BufWriteFormat, Elem, ElemChild, Formatting};
 
     pub(super) fn render(
@@ -739,6 +739,13 @@ mod citeproc_bib {
         match formatting.font_variant {
             FontVariant::SmallCaps => css.push_str("font-variant:small-caps;"),
             FontVariant::Normal => {}
+        }
+
+        match formatting.text_decoration {
+            // NOTE: No existing citeproc tests use this, so this is guesswork.
+            // However, we can use this in local tests.
+            TextDecoration::Underline => push_elem("<u>", "</u>"),
+            TextDecoration::None => {}
         }
 
         if !css.is_empty() {
@@ -901,7 +908,7 @@ fn case_folding() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, ". my lowercase container title.");
+    assert_eq!(buf, "my lowercase container title.");
 }
 
 #[test]
@@ -937,7 +944,7 @@ fn access_date() {
         .content
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
-    assert_eq!(buf, "Retrieved 2021, from https://example.com/");
+    assert_eq!(buf, "(n.d.). Retrieved 2021, from https://example.com/");
 }
 
 #[test]
@@ -979,7 +986,10 @@ fn no_author() {
         .write_buf(&mut buf, hayagriva::BufWriteFormat::Plain)
         .unwrap();
 
-    assert_eq!(buf, "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323");
+    assert_eq!(
+        buf,
+        "Definition and objectives of systems development. (2016, January 19). https://www.opentextbooks.org.hk/ditatopic/25323"
+    );
 
     let mut buf = String::new();
     rendered.citations[0]

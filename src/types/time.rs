@@ -4,7 +4,8 @@ use std::{
     str::FromStr,
 };
 
-use serde::{de, Deserialize, Serialize};
+use citationberg::taxonomy::Season;
+use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 use unscanny::Scanner;
 
@@ -21,6 +22,8 @@ pub struct Date {
     pub day: Option<u8>,
     /// Whether the date is approximate.
     pub approximate: bool,
+    /// The season. Between 1 and 4 (inclusive).
+    pub season: Option<Season>,
 }
 
 impl<'de> Deserialize<'de> for Date {
@@ -57,6 +60,7 @@ impl<'de> Deserialize<'de> for Date {
                     pub day: Option<u8>,
                     #[serde(default)]
                     pub approximate: bool,
+                    pub season: Option<u8>,
                 }
 
                 Deserialize::deserialize(de::value::MapAccessDeserializer::new(map)).map(
@@ -65,6 +69,9 @@ impl<'de> Deserialize<'de> for Date {
                         month: inner.month,
                         day: inner.day,
                         approximate: inner.approximate,
+                        season: inner
+                            .season
+                            .and_then(|v| Season::try_from_csl_number(v).ok()),
                     },
                 )
             }
@@ -185,6 +192,7 @@ impl FromStr for Date {
                     month: Some(month),
                     day: Some(day),
                     approximate: approx,
+                    season: None,
                 });
             }
             Err(DateError::UnknownFormat) => {
@@ -202,6 +210,7 @@ impl FromStr for Date {
                     month: Some(month),
                     day: None,
                     approximate: approx,
+                    season: None,
                 });
             }
             Err(DateError::UnknownFormat) => {
@@ -218,14 +227,26 @@ impl FromStr for Date {
             return Err(DateError::UnknownFormat);
         }
 
-        Ok(Self { year, month: None, day: None, approximate: approx })
+        Ok(Self {
+            year,
+            month: None,
+            day: None,
+            approximate: approx,
+            season: None,
+        })
     }
 }
 
 impl Date {
     /// Get a date from an integer.
     pub fn from_year(year: i32) -> Self {
-        Self { year, month: None, day: None, approximate: false }
+        Self {
+            year,
+            month: None,
+            day: None,
+            approximate: false,
+            season: None,
+        }
     }
 
     /// Returns the year as a human-readable gregorian year.
@@ -243,7 +264,7 @@ impl Date {
     /// - `periods`   Determines whether to use punctuation in the abbreviations
     /// - `designate_positive`    Show a denomination for positive years
     /// - `ad_prefix` Use the "AD" designation for positive years in a prefix
-    ///               position. Will be ignored if `designate_positive` is negative.
+    ///   position. Will be ignored if `designate_positive` is negative.
     pub fn display_year_opt(
         &self,
         secular: bool,
@@ -261,8 +282,8 @@ impl Date {
         let positive_dn = match (periods, ad_prefix) {
             (true, false) => "C.E.",
             (false, false) => "CE",
-            (true, true) => "AD",
-            (false, true) => "A.D.",
+            (true, true) => "A.D.",
+            (false, true) => "AD",
         };
 
         if self.year > 0 {
@@ -378,7 +399,7 @@ impl Duration {
                     if num.is_empty() {
                         return Err(DurationError::Malformed);
                     }
-                    let str = format!("0.{}", num);
+                    let str = format!("0.{num}");
                     let ms: f64 = str.parse().map_err(|_| DurationError::Malformed)?;
                     milliseconds = (ms * 1000.0).round() as u16;
                 }
@@ -672,11 +693,7 @@ fn parse_full_date(s: &mut Scanner) -> Result<(i32, u8, u8), DateError> {
 
 fn days_in_month(month: u8, year: i32) -> u8 {
     if month == 1 {
-        if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-            29
-        } else {
-            28
-        }
+        if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 29 } else { 28 }
     } else if month < 7 {
         31 - month % 2
     } else {

@@ -256,28 +256,28 @@ impl Person {
         let mut non_empty = false;
 
         for (_, gr) in gn.grapheme_indices(true) {
-            if let Some(c) = gr.chars().next() {
-                if c.is_whitespace() || c == '-' {
-                    if !collect {
-                        let hyphenate = with_hyphen && c == '-';
-                        if let Some(delimiter) = delimiter {
-                            // Use the given delimiter, including any spaces at
-                            // its end if there was a whitespace, but not if we
-                            // should add a hyphen in a compound given name.
-                            buf.write_str(if hyphenate {
-                                delimiter.trim_end()
-                            } else {
-                                delimiter
-                            })?;
-                        }
-
-                        collect = true;
-                        if hyphenate {
-                            buf.write_char('-')?;
-                        }
+            if let Some(c) = gr.chars().next()
+                && (c.is_whitespace() || c == '-')
+            {
+                if !collect {
+                    let hyphenate = with_hyphen && c == '-';
+                    if let Some(delimiter) = delimiter {
+                        // Use the given delimiter, including any spaces at
+                        // its end if there was a whitespace, but not if we
+                        // should add a hyphen in a compound given name.
+                        buf.write_str(if hyphenate {
+                            delimiter.trim_end()
+                        } else {
+                            delimiter
+                        })?;
                     }
-                    continue;
+
+                    collect = true;
+                    if hyphenate {
+                        buf.write_char('-')?;
+                    }
                 }
+                continue;
             }
 
             if collect {
@@ -287,10 +287,11 @@ impl Person {
             }
         }
 
-        if non_empty && !collect {
-            if let Some(delim) = delimiter {
-                buf.write_str(delim.trim_end())?;
-            }
+        if non_empty
+            && !collect
+            && let Some(delim) = delimiter
+        {
+            buf.write_str(delim.trim_end())?;
         }
 
         Ok(())
@@ -315,10 +316,10 @@ impl Person {
 
             buf.write_str(item)?;
 
-            if let Some(delimiter) = delimiter {
-                if item.graphemes(true).count() == 1 {
-                    buf.write_str(delimiter)?;
-                }
+            if let Some(delimiter) = delimiter
+                && item.graphemes(true).count() == 1
+            {
+                buf.write_str(delimiter)?;
             }
 
             first = false;
@@ -350,14 +351,12 @@ impl Person {
             res += given_name;
         }
 
-        if prefix_given_name {
-            if let Some(prefix) = &self.prefix {
-                if self.given_name.is_some() {
-                    res.push(' ');
-                }
-
-                res += prefix;
+        if prefix_given_name && let Some(prefix) = &self.prefix {
+            if self.given_name.is_some() {
+                res.push(' ');
             }
+
+            res += prefix;
         }
 
         if let Some(suffix) = &self.suffix {
@@ -423,10 +422,10 @@ impl Person {
     }
 
     /// Get only the dropping and non-dropping particle of the family name.
-    pub fn name_particles(&self) -> Option<Cow<str>> {
+    pub fn name_particles(&self) -> Option<Cow<'_, str>> {
         match (&self.prefix, self.name_particle()) {
             (Some(dropping), Some(non_dropping)) => {
-                Some(Cow::Owned(format!("{} {}", dropping, non_dropping)))
+                Some(Cow::Owned(format!("{dropping} {non_dropping}")))
             }
             (Some(dropping), None) => Some(Cow::Borrowed(dropping.as_str())),
             (None, Some(non_dropping)) => Some(Cow::Borrowed(non_dropping)),
@@ -442,7 +441,7 @@ impl Person {
     /// Whether the name contains CJK characters.
     pub fn is_cjk(&self) -> bool {
         self.name.chars().any(is_cjk)
-            || self.given_name.as_ref().map_or(false, |gn| gn.chars().any(is_cjk))
+            || self.given_name.as_ref().is_some_and(|gn| gn.chars().any(is_cjk))
     }
 
     /// Get the name without the leading article.

@@ -14,13 +14,14 @@ use citationberg::{
 };
 use citationberg::{TermForm, TextTarget};
 
+use crate::PageRanges;
+use crate::csl::Sorting;
 use crate::csl::taxonomy::{NumberVariableResult, PageVariableResult};
 use crate::lang::{Case, SentenceCase, TitleCase};
 use crate::types::{ChunkedString, Date, MaybeTyped, Numeric};
-use crate::PageRanges;
 
-use super::taxonomy::EntryLike;
-use super::{write_year, Context, ElemMeta, IbidState, SpecialForm, UsageInfo};
+use super::taxonomy::{EntryLike, NumberOrPageVariableResult};
+use super::{Context, ElemMeta, IbidState, SpecialForm, UsageInfo, write_year};
 
 pub mod names;
 
@@ -168,7 +169,15 @@ impl RenderCsl for citationberg::Text {
         if suppressing {
             ctx.writing.start_suppressing_queried_variables();
         }
-        let targets_variable = matches!(self.target, TextTarget::Variable { .. });
+        let targets_variable = match self.target {
+            // Year suffix is not counted as a variable
+            TextTarget::Variable {
+                var: Variable::Standard(StandardVariable::YearSuffix),
+                ..
+            } => false,
+            TextTarget::Variable { .. } => true,
+            _ => false,
+        };
 
         let Some(target) = lookup_result else {
             return (
@@ -208,6 +217,7 @@ impl RenderCsl for citationberg::Text {
     }
 }
 
+#[derive(Debug)]
 enum ResolvedTextTarget<'a, 'b> {
     StandardVariable(StandardVariable, Cow<'a, ChunkedString>),
     NumberVariable(NumberVariable, NumberVariableResult<'a>),
@@ -278,11 +288,20 @@ impl RenderCsl for citationberg::Number {
             return;
         }
 
-        let value = ctx.resolve_number_variable(self.variable);
-        if ctx.instance.sorting {
-            if let Some(NumberVariableResult::Regular(MaybeTyped::Typed(n))) = value {
-                n.fmt_value(ctx, true).unwrap();
-                return;
+        let value = ctx.resolve_number_or_page_variable(self.variable);
+        if ctx.instance.sorting.is_some() {
+            match value {
+                Some(NumberOrPageVariableResult::Number(
+                    NumberVariableResult::Regular(MaybeTyped::Typed(n)),
+                )) => {
+                    n.fmt_value(ctx, true).unwrap();
+                    return;
+                }
+                Some(NumberOrPageVariableResult::Page(MaybeTyped::Typed(p))) => {
+                    write!(ctx, "{p}").unwrap();
+                    return;
+                }
+                _ => {}
             }
         }
 
@@ -292,18 +311,32 @@ impl RenderCsl for citationberg::Number {
         let gender = ctx.gender(self.variable.into());
 
         match value {
-            Some(NumberVariableResult::Regular(MaybeTyped::Typed(num)))
-                if num.will_transform() =>
-            {
+            Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
+                MaybeTyped::Typed(num),
+            ))) if num.will_transform() => {
                 render_typed_num(num.as_ref(), self.form, gender, ctx);
             }
-            Some(NumberVariableResult::Regular(MaybeTyped::Typed(num))) => {
-                write!(ctx, "{}", num).unwrap()
+
+            Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
+                MaybeTyped::Typed(num),
+            ))) => write!(ctx, "{num}").unwrap(),
+
+            Some(NumberOrPageVariableResult::Number(NumberVariableResult::Regular(
+                MaybeTyped::String(s),
+            ))) => ctx.push_str(&s),
+
+            Some(NumberOrPageVariableResult::Number(
+                NumberVariableResult::Transparent(n),
+            )) => ctx.push_transparent(n),
+
+            Some(NumberOrPageVariableResult::Page(MaybeTyped::Typed(p))) => {
+                render_page_range(&p, ctx)
             }
-            Some(NumberVariableResult::Regular(MaybeTyped::String(s))) => {
+
+            Some(NumberOrPageVariableResult::Page(MaybeTyped::String(s))) => {
                 ctx.push_str(&s)
             }
-            Some(NumberVariableResult::Transparent(n)) => ctx.push_transparent(n),
+
             None => {}
         }
 
@@ -312,25 +345,36 @@ impl RenderCsl for citationberg::Number {
         ctx.commit_elem(
             depth,
             self.display,
-            (self.variable == NumberVariable::CitationNumber)
-                .then_some(ElemMeta::CitationNumber)
-                .or(Some(ElemMeta::Number)),
+            Some(
+                if self.variable
+                    == NumberOrPageVariable::Number(NumberVariable::CitationNumber)
+                {
+                    ElemMeta::CitationNumber
+                } else {
+                    ElemMeta::Number
+                },
+            ),
         );
     }
 
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
         match ctx.instance.kind {
-            Some(SpecialForm::VarOnly(Variable::Number(n))) if self.variable != n => {
-                return false
+            Some(SpecialForm::VarOnly(Variable::Number(n)))
+                if self.variable != NumberOrPageVariable::Number(n) =>
+            {
+                return false;
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
-                return self.variable == NumberVariable::Locator
+                return matches!(
+                    self.variable,
+                    NumberOrPageVariable::Number(NumberVariable::Locator)
+                );
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
         }
 
-        var == Variable::Number(self.variable)
+        var == Variable::from(self.variable)
     }
 
     fn will_have_info<T: EntryLike>(&self, ctx: &mut Context<T>) -> (bool, UsageInfo) {
@@ -339,7 +383,7 @@ impl RenderCsl for citationberg::Number {
             // silent lookup, otherwise we need to perform a regular lookup.
             let suppressing = ctx.writing.suppress_queried_variables;
             ctx.writing.stop_suppressing_queried_variables();
-            let lookup_result = ctx.resolve_number_variable(self.variable);
+            let lookup_result = ctx.resolve_number_or_page_variable(self.variable);
 
             if suppressing {
                 ctx.writing.start_suppressing_queried_variables();
@@ -439,7 +483,7 @@ impl RenderCsl for citationberg::Label {
                 };
 
                 let depth = ctx.push_elem(citationberg::Formatting::default());
-                let plural = p.as_typed().map_or(false, |p| p.is_plural());
+                let plural = p.as_typed().is_some_and(|p| p.is_plural());
 
                 let content =
                     ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
@@ -481,7 +525,8 @@ impl RenderCsl for citationberg::Label {
                 .cite_props
                 .speculative
                 .locator
-                .map_or(false, |l| l.0 == Locator::Custom)
+                .as_ref()
+                .is_some_and(|l| l.0 == Locator::Custom)
         {
             return (false, UsageInfo::default());
         }
@@ -501,7 +546,7 @@ impl RenderCsl for citationberg::Label {
             }
             NumberOrPageVariable::Page(pv) => {
                 if let Some(p) = ctx.resolve_page_variable(pv) {
-                    let plural = p.as_typed().map_or(false, |p| p.is_plural());
+                    let plural = p.as_typed().is_some_and(|p| p.is_plural());
                     (
                         ctx.term(Term::from(pv), self.label.form, plural).is_some(),
                         UsageInfo::default(),
@@ -548,7 +593,7 @@ impl RenderCsl for citationberg::Date {
 
         let Some(date) = ctx.resolve_date_variable(variable) else { return };
 
-        if ctx.instance.sorting {
+        if let Some(sorting) = ctx.instance.sorting {
             let year;
             let mut month = false;
             let mut day = false;
@@ -566,14 +611,34 @@ impl RenderCsl for citationberg::Date {
                         day = true;
                     }
                 }
+            } else if sorting == Sorting::Variable {
+                // According to the CSL 1.0.2 spec (section "Sorting"):
+                //
+                // "Number variables rendered within the macro with cs:number
+                // and date variables are treated the same as when they are
+                // called via variable. The only exception is that the complete
+                // date is returned if a date variable is called via the
+                // variable attribute. In contrast, macros return only those
+                // date-parts that would otherwise be rendered (...)."
+                year = true;
+                month = true;
+                day = true;
             } else {
                 year = self.date_part.iter().any(|i| i.name == DatePartName::Year);
                 month = self.date_part.iter().any(|i| i.name == DatePartName::Month);
                 day = self.date_part.iter().any(|i| i.name == DatePartName::Day);
-            };
+            }
 
             if year {
-                write!(ctx, "{:04}", date.year).unwrap();
+                // Smart hack taken from citeproc: This prints negative (BC) dates as N(999,999,999 + y)
+                // and positive (AD) dates as Py so they sort properly. (Use i32::MAX to avoid problems
+                // with large dates.)
+                let (prefix, yr) = if date.year < 0 {
+                    ("N", i32::MAX + date.year)
+                } else {
+                    ("P", date.year)
+                };
+                write!(ctx, "{prefix}{yr:09}").unwrap();
                 render_year_suffix_implicitly(ctx);
             }
 
@@ -617,18 +682,34 @@ impl RenderCsl for citationberg::Date {
 
         // TODO: Date ranges
         let mut last_was_empty = true;
+
+        // Localized (base) delimiter takes precedence over the cs:date
+        // element's delimiter attribute, which should be ignored if a locale's
+        // date form is used, according to the CSL 1.0.2 spec (under "Style
+        // Behavior"):
+        //
+        // "Delimiter
+        //
+        // The delimiter attribute, whose value delimits non-empty pieces of
+        // output, may be set on cs:date (delimiting the date-parts; delimiter
+        // is not allowed when cs:date calls a localized date format)"
+        let chosen_delim = match base {
+            Some(base) => base.delimiter.as_deref(),
+            None => self.delimiter.as_deref(),
+        };
+
         for part in &base.unwrap_or(self).date_part {
             match part.name {
-                DatePartName::Month if !parts.has_month() => continue,
+                DatePartName::Month if !parts.has_month() && date.season.is_none() => {
+                    continue;
+                }
                 DatePartName::Day if !parts.has_day() => continue,
                 _ => {}
             }
 
             let cursor = ctx.writing.len();
-            if !last_was_empty {
-                if let Some(delim) = &self.delimiter {
-                    ctx.push_str(delim);
-                }
+            if !last_was_empty && let Some(delim) = chosen_delim {
+                ctx.push_str(delim);
             }
 
             let over_ride = base
@@ -648,10 +729,10 @@ impl RenderCsl for citationberg::Date {
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
         match ctx.instance.kind {
             Some(SpecialForm::VarOnly(Variable::Date(d))) if self.variable != Some(d) => {
-                return false
+                return false;
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix) => {
-                return ctx.peek_is_first_date()
+                return ctx.peek_is_first_date();
             }
             Some(SpecialForm::VarOnly(_)) => return false,
             _ => {}
@@ -696,10 +777,13 @@ fn render_date_part<T: EntryLike>(
 ) {
     let Some(val) = (match date_part.name {
         DatePartName::Day => date.day.map(|i| i as i32 + 1),
-        DatePartName::Month => date.month.map(|i| i as i32 + 1),
-        DatePartName::Year => {
-            Some(if date.year > 0 { date.year } else { date.year.abs() + 1 })
+        DatePartName::Month => {
+            // Fallback for month is the season
+            date.month
+                .map(|i| i as i32 + 1)
+                .or(date.season.map(|s| s.to_csl_number() as i32))
         }
+        DatePartName::Year => Some(date.year),
     }) else {
         return;
     };
@@ -725,12 +809,25 @@ fn render_date_part<T: EntryLike>(
 
     if !is_only_suffix {
         match form {
+            DateStrongAnyForm::Month(_) if date.month.is_none() => {
+                debug_assert!(date.season.is_some());
+                let Some(season) = date.season else {
+                    return;
+                };
+                let season_term = season.into();
+                let Some(season) =
+                    ctx.term(Term::Other(season_term), TermForm::Short, false)
+                else {
+                    return;
+                };
+                write!(ctx, "{season}").unwrap();
+            }
             DateStrongAnyForm::Day(DateDayForm::NumericLeadingZeros)
             | DateStrongAnyForm::Month(DateMonthForm::NumericLeadingZeros) => {
-                write!(ctx, "{:02}", val).unwrap();
+                write!(ctx, "{val:02}").unwrap();
             }
             DateStrongAnyForm::Day(DateDayForm::Ordinal)
-                if val != 1
+                if val == 1
                     || !ctx
                         .style
                         .lookup_locale(|l| {
@@ -757,7 +854,7 @@ fn render_date_part<T: EntryLike>(
             }
             DateStrongAnyForm::Day(DateDayForm::Numeric | DateDayForm::Ordinal)
             | DateStrongAnyForm::Month(DateMonthForm::Numeric) => {
-                write!(ctx, "{}", val).unwrap();
+                write!(ctx, "{val}").unwrap();
             }
             DateStrongAnyForm::Month(DateMonthForm::Long) => {
                 if let Some(month) = OtherTerm::month((val - 1) as u8)
@@ -765,7 +862,7 @@ fn render_date_part<T: EntryLike>(
                 {
                     ctx.push_str(month);
                 } else {
-                    write!(ctx, "{}", val).unwrap();
+                    write!(ctx, "{val}").unwrap();
                 }
             }
             DateStrongAnyForm::Month(DateMonthForm::Short) => {
@@ -774,19 +871,25 @@ fn render_date_part<T: EntryLike>(
                 {
                     ctx.push_str(month);
                 } else {
-                    write!(ctx, "{}", val).unwrap();
+                    write!(ctx, "{val}").unwrap();
                 }
             }
             DateStrongAnyForm::Year(brevity) => {
-                write_year(val, brevity == LongShortForm::Short, ctx).unwrap();
+                let ad = ctx
+                    .term(Term::Other(OtherTerm::Ad), TermForm::default(), false)
+                    .unwrap_or(" AD");
+                let bc = ctx
+                    .term(Term::Other(OtherTerm::Bc), TermForm::default(), false)
+                    .unwrap_or(" BC");
+                write_year(val, brevity == LongShortForm::Short, ctx, ad, bc).unwrap();
             }
         }
     }
 
-    if let DateStrongAnyForm::Year(_) = form {
-        if first {
-            render_year_suffix_implicitly(ctx);
-        }
+    if let DateStrongAnyForm::Year(_) = form
+        && first
+    {
+        render_year_suffix_implicitly(ctx);
     }
 
     if let Some(affix_loc) = affix_loc {
@@ -800,13 +903,13 @@ fn render_date_part<T: EntryLike>(
 /// Render the year suffix if it is set and the style will not render it
 /// explicitly.
 fn render_year_suffix_implicitly<T: EntryLike>(ctx: &mut Context<T>) {
-    if ctx.renders_year_suffix_implicitly() {
-        if let Some(year_suffix) = ctx.resolve_standard_variable(
+    if ctx.renders_year_suffix_implicitly()
+        && let Some(year_suffix) = ctx.resolve_standard_variable(
             LongShortForm::default(),
             StandardVariable::YearSuffix,
-        ) {
-            ctx.push_chunked(year_suffix.as_ref());
-        }
+        )
+    {
+        ctx.push_chunked(year_suffix.as_ref());
     }
 }
 
@@ -883,17 +986,15 @@ fn render_with_delimiter<T: EntryLike>(
             continue;
         }
 
-        if !first {
-            if let Some(delim) = &delimiter {
-                let prev_loc = std::mem::take(&mut loc);
+        if !first && let Some(delim) = &delimiter {
+            let prev_loc = std::mem::take(&mut loc);
 
-                if let Some(prev_loc) = prev_loc {
-                    ctx.commit_elem(prev_loc, None, None);
-                }
-
-                loc = Some(ctx.push_elem(citationberg::Formatting::default()));
-                ctx.push_str(delim);
+            if let Some(prev_loc) = prev_loc {
+                ctx.commit_elem(prev_loc, None, None);
             }
+
+            loc = Some(ctx.push_elem(citationberg::Formatting::default()));
+            ctx.push_str(delim);
         }
         first = false;
 
@@ -1028,7 +1129,7 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     Some(
                         self.ctx
                             .resolve_date_variable(var)
-                            .map_or(false, |d| d.approximate),
+                            .is_some_and(|d| d.approximate),
                     )
                 } else {
                     self.next_case();
@@ -1051,8 +1152,8 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                             .cite_props
                             .speculative
                             .locator
-                            .map(|l| l.0)
-                            .map_or(false, |l| l == loc),
+                            .as_ref()
+                            .is_some_and(|l| l.0 == loc),
                     )
                 } else {
                     self.next_case();
@@ -1061,7 +1162,10 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
             }
             BranchConditionPos::Position => {
                 if let Some(pos) = &self.cond.position {
-                    if self.idx >= pos.len() {
+                    // CSL 1.0.2 spec ("Choose" > "position"): "When called
+                    // within the scope of cs:bibliography, position tests
+                    // 'false'."
+                    if self.ctx.bibliography || self.idx >= pos.len() {
                         self.next_case();
                         return self.next();
                     }
@@ -1074,9 +1178,14 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                     Some(match spec_pos {
                         TestPosition::First => props.certain.is_first,
                         TestPosition::Subsequent => !props.certain.is_first,
-                        TestPosition::Ibid => props.speculative.ibid == IbidState::Ibid,
+                        TestPosition::Ibid => {
+                            matches!(
+                                props.speculative.ibid,
+                                IbidState::Ibid | IbidState::IbidWithLocator
+                            )
+                        }
                         TestPosition::IbidWithLocator => {
-                            props.speculative.ibid.is_ibid_with_locator()
+                            matches!(props.speculative.ibid, IbidState::IbidWithLocator)
                         }
                         TestPosition::NearNote => props.certain.is_near_note,
                     })
@@ -1115,7 +1224,7 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                             let val = self
                                 .ctx
                                 .resolve_standard_variable(LongShortForm::default(), s);
-                            val.map_or(false, |s| {
+                            val.is_some_and(|s| {
                                 !s.to_string().chars().all(char::is_whitespace)
                             })
                         }

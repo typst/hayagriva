@@ -6,8 +6,8 @@ use citationberg::{
     SortDirection, SortKey,
 };
 
-use crate::csl::rendering::RenderCsl;
 use crate::csl::BufWriteFormat;
+use crate::csl::rendering::RenderCsl;
 
 use super::taxonomy::EntryLike;
 use super::{CitationItem, InstanceContext, StyleContext};
@@ -23,26 +23,26 @@ impl StyleContext<'_> {
         key: &SortKey,
         term_locale: Option<&LocaleCode>,
     ) -> Ordering {
-        let ordering = match key {
+        let (ordering, empty_value) = match key {
             SortKey::Variable { variable: Variable::Standard(s), .. } => {
-                let a = InstanceContext::sort_instance(a, a_idx)
+                let a = InstanceContext::variable_sort_instance(a, a_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
-                let b = InstanceContext::sort_instance(b, b_idx)
+                let b = InstanceContext::variable_sort_instance(b, b_idx)
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
 
-                a.cmp(&b)
+                (a.cmp(&b), a.is_none() || b.is_none())
             }
             SortKey::Variable { variable: Variable::Date(d), .. } => {
                 let a = a.entry.resolve_date_variable(*d);
                 let b = b.entry.resolve_date_variable(*d);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(&b),
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
+                    (Some(a), Some(b)) => (a.csl_cmp(&b), false),
+                    (Some(_), None) => (Ordering::Greater, true),
+                    (None, Some(_)) => (Ordering::Less, true),
+                    (None, None) => (Ordering::Equal, true),
                 }
             }
             SortKey::Variable { variable: Variable::Name(n), .. } => {
@@ -61,38 +61,41 @@ impl StyleContext<'_> {
                     }
                 }
 
-                if a.len() < b.len() {
-                    Ordering::Less
-                } else if a.len() > b.len() {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
+                (
+                    if a.len() < b.len() {
+                        Ordering::Less
+                    } else if a.len() > b.len() {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Equal
+                    },
+                    false,
+                )
             }
             SortKey::Variable { variable: Variable::Number(n), .. } => {
-                let a =
-                    InstanceContext::sort_instance(a, a_idx).resolve_number_variable(*n);
-                let b =
-                    InstanceContext::sort_instance(b, b_idx).resolve_number_variable(*n);
+                let a = InstanceContext::variable_sort_instance(a, a_idx)
+                    .resolve_number_variable(*n);
+                let b = InstanceContext::variable_sort_instance(b, b_idx)
+                    .resolve_number_variable(*n);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(&b),
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
+                    (Some(a), Some(b)) => (a.csl_cmp(&b), false),
+                    (Some(_), None) => (Ordering::Greater, true),
+                    (None, Some(_)) => (Ordering::Less, true),
+                    (None, None) => (Ordering::Equal, true),
                 }
             }
             SortKey::Variable { variable: Variable::Page(pv), .. } => {
-                let a =
-                    InstanceContext::sort_instance(a, a_idx).resolve_page_variable(*pv);
-                let b =
-                    InstanceContext::sort_instance(b, b_idx).resolve_page_variable(*pv);
+                let a = InstanceContext::variable_sort_instance(a, a_idx)
+                    .resolve_page_variable(*pv);
+                let b = InstanceContext::variable_sort_instance(b, b_idx)
+                    .resolve_page_variable(*pv);
 
                 match (a, b) {
-                    (Some(a), Some(b)) => a.csl_cmp(&b),
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
+                    (Some(a), Some(b)) => (a.csl_cmp(&b), false),
+                    (Some(_), None) => (Ordering::Greater, true),
+                    (None, Some(_)) => (Ordering::Less, true),
+                    (None, None) => (Ordering::Equal, true),
                 }
             }
             SortKey::MacroName {
@@ -103,7 +106,7 @@ impl StyleContext<'_> {
                 ..
             } => {
                 let render = |entry: &CitationItem<T>, idx: usize| {
-                    let mut ctx = self.sorting_ctx(
+                    let mut ctx = self.macro_sorting_ctx(
                         entry,
                         idx,
                         entry.locale.as_ref(),
@@ -133,11 +136,14 @@ impl StyleContext<'_> {
                 let a_rendered = render(a, a_idx);
                 let b_rendered = render(b, b_idx);
 
-                a_rendered.cmp(&b_rendered)
+                (a_rendered.cmp(&b_rendered), false)
             }
         };
 
-        if key.sort_direction() == SortDirection::Descending {
+        // Per CSL 1.0.2 spec (https://docs.citationstyles.org/en/v1.0.2/specification.html):
+        // Entries with empty values are always displayed at the end, even with reversed order.
+        // So we always reverse the order if either entry is empty.
+        if empty_value || key.sort_direction() == SortDirection::Descending {
             ordering.reverse()
         } else {
             ordering
