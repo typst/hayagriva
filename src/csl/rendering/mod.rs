@@ -52,7 +52,9 @@ impl RenderCsl for citationberg::Text {
             _ => true,
         };
 
-        let affix_loc = print_affixes.then(|| ctx.apply_prefix(&self.affixes));
+        let affix_loc = (print_affixes
+            && self.affixes.prefix != Some("https://doi.org/".to_owned()))
+        .then(|| ctx.apply_prefix(&self.affixes));
 
         if self.quotes {
             ctx.push_quotes();
@@ -69,7 +71,8 @@ impl RenderCsl for citationberg::Text {
                 }
                 StandardVariable::DOI => {
                     let url = format!("https://doi.org/{}", val.to_str());
-                    ctx.push_link(&val, url);
+                    let chunked_url = url.clone().into();
+                    ctx.push_link(&chunked_url, url);
                 }
                 StandardVariable::PMID => {
                     let url =
