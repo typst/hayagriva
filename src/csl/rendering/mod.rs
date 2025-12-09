@@ -52,19 +52,26 @@ impl RenderCsl for citationberg::Text {
             _ => true,
         };
 
-        // Only print affixes if not covered by Appendix IV of the CSL
-        // standard as we have to manually add these to push proper links
-        let is_link_variable = matches!(
-            &target,
-            ResolvedTextTarget::StandardVariable(v, _)
-            if matches!(
-                v,
-                StandardVariable::DOI | StandardVariable::PMID | StandardVariable::PMCID
-            )
-        );
+        // Avoid printing affixes covered by Appendix IV of the CSL
+        // standard as we have to manually add these later to push
+        // proper links. This would otherwise cause a duplicated prefix.
+        let has_duplicate_url_prefix = match &target {
+            ResolvedTextTarget::StandardVariable(StandardVariable::DOI, _) => {
+                self.affixes.prefix.as_deref() == Some("https://doi.org/")
+            }
+            ResolvedTextTarget::StandardVariable(StandardVariable::PMID, _) => {
+                self.affixes.prefix.as_deref()
+                    == Some("https://www.ncbi.nlm.nih.gov/pubmed/")
+            }
+            ResolvedTextTarget::StandardVariable(StandardVariable::PMCID, _) => {
+                self.affixes.prefix.as_deref()
+                    == Some("https://www.ncbi.nlm.nih.gov/pmc/articles/")
+            }
+            _ => false,
+        };
 
-        let affix_loc =
-            (print_affixes && !is_link_variable).then(|| ctx.apply_prefix(&self.affixes));
+        let affix_loc = (print_affixes && !has_duplicate_url_prefix)
+            .then(|| ctx.apply_prefix(&self.affixes));
 
         if self.quotes {
             ctx.push_quotes();
