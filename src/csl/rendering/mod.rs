@@ -52,21 +52,26 @@ impl RenderCsl for citationberg::Text {
             _ => true,
         };
 
-        // Avoid printing affixes covered by Appendix IV of the CSL
-        // standard as we have to manually add these later to push
-        // proper links. This would otherwise cause a duplicated prefix.
+        /// Gets the url prefix for a given StandardVariable if one exists.
+        ///
+        /// These are those prefixes in the Appendix IV of the CSL 1.0.2 spec.
+        fn get_url_prefix(var: StandardVariable) -> Option<&'static str> {
+            match var {
+                StandardVariable::DOI => Some("https://doi.org/"),
+                StandardVariable::PMID => Some("https://www.ncbi.nlm.nih.gov/pubmed/"),
+                StandardVariable::PMCID => {
+                    Some("https://www.ncbi.nlm.nih.gov/pmc/articles/")
+                }
+                _ => None,
+            }
+        }
+
+        // Check if a URL prefix exists for the target and if so, if the CSL specifies
+        // the URL prefix as the affix. If this is the case, we want to make sure the
+        // URL prefix is a part of the link (and therefore not printed here, but later).
         let affix_is_url_prefix = match &target {
-            ResolvedTextTarget::StandardVariable(StandardVariable::DOI, _) => {
-                self.affixes.prefix.as_deref() == Some("https://doi.org/")
-            }
-            ResolvedTextTarget::StandardVariable(StandardVariable::PMID, _) => {
-                self.affixes.prefix.as_deref()
-                    == Some("https://www.ncbi.nlm.nih.gov/pubmed/")
-            }
-            ResolvedTextTarget::StandardVariable(StandardVariable::PMCID, _) => {
-                self.affixes.prefix.as_deref()
-                    == Some("https://www.ncbi.nlm.nih.gov/pmc/articles/")
-            }
+            ResolvedTextTarget::StandardVariable(var, _) => get_url_prefix(*var)
+                .is_some_and(|prefix| self.affixes.prefix.as_deref() == Some(prefix)),
             _ => false,
         };
 
@@ -81,37 +86,28 @@ impl RenderCsl for citationberg::Text {
         let cidx = ctx.push_case(self.text_case);
 
         match target {
-            ResolvedTextTarget::StandardVariable(var, val) => match var {
-                StandardVariable::URL => {
-                    ctx.push_link(&val, val.to_string());
-                }
-                StandardVariable::DOI
-                | StandardVariable::PMID
-                | StandardVariable::PMCID => {
-                    // Make sure link types are formatted as proper links as per
-                    // CSL standard.
-                    let url_prefix = match var {
-                        StandardVariable::DOI => "https://doi.org/",
-                        StandardVariable::PMID => "https://www.ncbi.nlm.nih.gov/pubmed/",
-                        StandardVariable::PMCID => {
-                            "https://www.ncbi.nlm.nih.gov/pmc/articles/"
-                        }
-                        _ => unreachable!(),
-                    };
-
+            ResolvedTextTarget::StandardVariable(var, val) => {
+                if let Some(url_prefix) = get_url_prefix(var) {
+                    // For link variables, create the full URL for the destination of the link.
                     let full_url = format!("{}{}", url_prefix, val);
+
                     let (display, destination) = if affix_is_url_prefix {
-                        // Affix was the URL prefix, include it in the displayed link
+                        // If the affix in the CSL was the URL prefix, then use
+                        // the full URL as both the link displayed and its destination.
                         (full_url.clone(), full_url)
                     } else {
-                        // Affix was not the URL prefix, just display the value
+                        // Otherwise, display the value (e.g. the DOI) with the full URL
+                        // as its destination.
                         (val.to_string(), full_url)
                     };
 
                     ctx.push_link(&display.into(), destination);
+                } else if var == StandardVariable::URL {
+                    ctx.push_link(&val, val.to_string());
+                } else {
+                    ctx.push_chunked(&val);
                 }
-                _ => ctx.push_chunked(&val),
-            },
+            }
             ResolvedTextTarget::NumberVariable(_, n) => match n {
                 NumberVariableResult::Regular(MaybeTyped::Typed(num))
                     if num.will_transform() =>
