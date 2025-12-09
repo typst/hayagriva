@@ -52,9 +52,19 @@ impl RenderCsl for citationberg::Text {
             _ => true,
         };
 
-        let affix_loc = (print_affixes
-            && self.affixes.prefix != Some("https://doi.org/".to_owned()))
-        .then(|| ctx.apply_prefix(&self.affixes));
+        // Only print affixes if not covered by Appendix IV of the CSL
+        // standard as we have to manually add these to push proper links
+        let is_link_variable = matches!(
+            &target,
+            ResolvedTextTarget::StandardVariable(v, _)
+            if matches!(
+                v,
+                StandardVariable::DOI | StandardVariable::PMID | StandardVariable::PMCID
+            )
+        );
+
+        let affix_loc =
+            (print_affixes && !is_link_variable).then(|| ctx.apply_prefix(&self.affixes));
 
         if self.quotes {
             ctx.push_quotes();
@@ -65,26 +75,27 @@ impl RenderCsl for citationberg::Text {
 
         match target {
             ResolvedTextTarget::StandardVariable(var, val) => match var {
-                StandardVariable::URL => {
-                    let str = val.to_string();
-                    ctx.push_link(&val, str);
-                }
-                StandardVariable::DOI => {
-                    let url = format!("https://doi.org/{}", val.to_str());
-                    let chunked_url = url.clone().into();
-                    ctx.push_link(&chunked_url, url);
-                }
-                StandardVariable::PMID => {
-                    let url =
-                        format!("https://www.ncbi.nlm.nih.gov/pubmed/{}", val.to_str());
-                    ctx.push_link(&val, url);
-                }
-                StandardVariable::PMCID => {
-                    let url = format!(
-                        "https://www.ncbi.nlm.nih.gov/pmc/articles/{}",
-                        val.to_str()
-                    );
-                    ctx.push_link(&val, url);
+                StandardVariable::URL
+                | StandardVariable::DOI
+                | StandardVariable::PMID
+                | StandardVariable::PMCID => {
+                    // Make sure link types are formatted as proper links as per
+                    // CSL standard.
+                    let url = match var {
+                        StandardVariable::URL => val.to_string(),
+                        StandardVariable::DOI => {
+                            format!("https://doi.org/{}", val)
+                        }
+                        StandardVariable::PMID => {
+                            format!("https://www.ncbi.nlm.nih.gov/pubmed/{}", val)
+                        }
+                        StandardVariable::PMCID => {
+                            format!("https://www.ncbi.nlm.nih.gov/pmc/articles/{}", val)
+                        }
+                        _ => todo!(),
+                    };
+
+                    ctx.push_link(&url.clone().into(), url);
                 }
                 _ => ctx.push_chunked(&val),
             },
