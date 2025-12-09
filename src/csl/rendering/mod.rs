@@ -55,7 +55,7 @@ impl RenderCsl for citationberg::Text {
         // Avoid printing affixes covered by Appendix IV of the CSL
         // standard as we have to manually add these later to push
         // proper links. This would otherwise cause a duplicated prefix.
-        let has_duplicate_url_prefix = match &target {
+        let affix_is_url_prefix = match &target {
             ResolvedTextTarget::StandardVariable(StandardVariable::DOI, _) => {
                 self.affixes.prefix.as_deref() == Some("https://doi.org/")
             }
@@ -70,7 +70,7 @@ impl RenderCsl for citationberg::Text {
             _ => false,
         };
 
-        let affix_loc = (print_affixes && !has_duplicate_url_prefix)
+        let affix_loc = (print_affixes && !affix_is_url_prefix)
             .then(|| ctx.apply_prefix(&self.affixes));
 
         if self.quotes {
@@ -82,27 +82,33 @@ impl RenderCsl for citationberg::Text {
 
         match target {
             ResolvedTextTarget::StandardVariable(var, val) => match var {
-                StandardVariable::URL
-                | StandardVariable::DOI
+                StandardVariable::URL => {
+                    todo!()
+                }
+                StandardVariable::DOI
                 | StandardVariable::PMID
                 | StandardVariable::PMCID => {
                     // Make sure link types are formatted as proper links as per
                     // CSL standard.
-                    let url = match var {
-                        StandardVariable::URL => val.to_string(),
-                        StandardVariable::DOI => {
-                            format!("https://doi.org/{}", val)
-                        }
-                        StandardVariable::PMID => {
-                            format!("https://www.ncbi.nlm.nih.gov/pubmed/{}", val)
-                        }
+                    let url_prefix = match var {
+                        StandardVariable::DOI => "https://doi.org/",
+                        StandardVariable::PMID => "https://www.ncbi.nlm.nih.gov/pubmed/",
                         StandardVariable::PMCID => {
-                            format!("https://www.ncbi.nlm.nih.gov/pmc/articles/{}", val)
+                            "https://www.ncbi.nlm.nih.gov/pmc/articles/"
                         }
-                        _ => todo!(),
+                        _ => unreachable!(),
                     };
 
-                    ctx.push_link(&url.clone().into(), url);
+                    let full_url = format!("{}{}", url_prefix, val);
+                    let (display, destination) = if affix_is_url_prefix {
+                        // Affix was the URL prefix, include it in the displayed link
+                        (full_url.clone(), full_url)
+                    } else {
+                        // Affix was not the URL prefix, just display the value
+                        (val.to_string(), full_url)
+                    };
+
+                    ctx.push_link(&display.into(), destination);
                 }
                 _ => ctx.push_chunked(&val),
             },
