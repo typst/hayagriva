@@ -83,7 +83,7 @@ impl RenderCsl for citationberg::Text {
         match target {
             ResolvedTextTarget::StandardVariable(var, val) => match var {
                 StandardVariable::URL => {
-                    todo!()
+                    ctx.push_link(&val, val.to_string());
                 }
                 StandardVariable::DOI
                 | StandardVariable::PMID
