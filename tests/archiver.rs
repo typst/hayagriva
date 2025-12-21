@@ -59,6 +59,18 @@ fn no_dupe_id() {
     assert_eq!(set.len(), STYLE_IDS.len());
 }
 
+#[test]
+fn ids_are_sorted() {
+    for window in STYLE_IDS.windows(2) {
+        assert!(
+            window[0] < window[1],
+            "STYLE_IDS is not sorted: {:?} should come after {:?}",
+            window[0],
+            window[1]
+        );
+    }
+}
+
 /// Download the CSL styles and locales repos.
 fn ensure_repos() -> Result<(), ArchivalError> {
     ensure_repo(CSL_REPO, STYLES_REPO_NAME, "master")?;
