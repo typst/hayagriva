@@ -491,13 +491,15 @@ impl fmt::Display for ArchivalError {
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 81] = [
+const STYLE_IDS: [&str; 83] = [
     "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
     "http://www.zotero.org/styles/american-geophysical-union",
     "http://www.zotero.org/styles/american-institute-of-aeronautics-and-astronautics",
     "http://www.zotero.org/styles/american-institute-of-physics",
+    "http://www.zotero.org/styles/american-mathematical-society-label",
+    "http://www.zotero.org/styles/american-mathematical-society-numeric",
     "http://www.zotero.org/styles/american-medical-association",
     "http://www.zotero.org/styles/american-meteorological-society",
     "http://www.zotero.org/styles/american-physics-society",
