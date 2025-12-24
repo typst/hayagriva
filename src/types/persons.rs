@@ -35,7 +35,7 @@ impl PersonsWithRoles {
 
 /// Specifies the role a group of persons had in the creation to the
 /// cited item.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 #[serde(rename_all = "kebab-case")]
 pub enum PersonRole {
@@ -83,6 +83,60 @@ pub enum PersonRole {
     /// Various other roles described by the contained string.
     #[serde(skip)]
     Unknown(String),
+}
+
+impl<'de> Deserialize<'de> for PersonRole {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Visitor};
+        use std::fmt;
+
+        struct PersonRoleVisitor;
+
+        impl<'de> Visitor<'de> for PersonRoleVisitor {
+            type Value = PersonRole;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a person role (case-insensitive)")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                // Convert to lowercase for case-insensitive matching
+                let lower = value.to_lowercase();
+                // Match against kebab-case names
+                match lower.as_str() {
+                    "translator" => Ok(PersonRole::Translator),
+                    "afterword" => Ok(PersonRole::Afterword),
+                    "foreword" => Ok(PersonRole::Foreword),
+                    "introduction" => Ok(PersonRole::Introduction),
+                    "annotator" => Ok(PersonRole::Annotator),
+                    "commentator" => Ok(PersonRole::Commentator),
+                    "holder" => Ok(PersonRole::Holder),
+                    "compiler" => Ok(PersonRole::Compiler),
+                    "founder" => Ok(PersonRole::Founder),
+                    "collaborator" => Ok(PersonRole::Collaborator),
+                    "organizer" => Ok(PersonRole::Organizer),
+                    "cast-member" => Ok(PersonRole::CastMember),
+                    "composer" => Ok(PersonRole::Composer),
+                    "producer" => Ok(PersonRole::Producer),
+                    "executive-producer" => Ok(PersonRole::ExecutiveProducer),
+                    "writer" => Ok(PersonRole::Writer),
+                    "cinematography" => Ok(PersonRole::Cinematography),
+                    "director" => Ok(PersonRole::Director),
+                    "illustrator" => Ok(PersonRole::Illustrator),
+                    "narrator" => Ok(PersonRole::Narrator),
+                    _ => Err(E::custom(format!("unknown role: `{}`", value))),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(PersonRoleVisitor)
+    }
 }
 
 derive_or_from_str! {
