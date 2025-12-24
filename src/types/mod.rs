@@ -137,7 +137,7 @@ use deserialize_from_str;
 use serialize_display;
 
 /// Describes which kind of work a database entry refers to.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 #[serde(rename_all = "kebab-case")]
 pub enum EntryType {
@@ -248,6 +248,70 @@ pub enum EntryType {
     /// A prior publication of the same item.
     #[serde(alias = "Original")]
     Original,
+}
+
+impl<'de> Deserialize<'de> for EntryType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Visitor};
+        use std::fmt;
+
+        struct EntryTypeVisitor;
+
+        impl<'de> Visitor<'de> for EntryTypeVisitor {
+            type Value = EntryType;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an entry type (case-insensitive)")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                // Convert to lowercase for case-insensitive matching
+                let lower = value.to_lowercase();
+                // Match against kebab-case names
+                match lower.as_str() {
+                    "article" => Ok(EntryType::Article),
+                    "chapter" => Ok(EntryType::Chapter),
+                    "entry" => Ok(EntryType::Entry),
+                    "anthos" => Ok(EntryType::Anthos),
+                    "report" => Ok(EntryType::Report),
+                    "thesis" => Ok(EntryType::Thesis),
+                    "web" => Ok(EntryType::Web),
+                    "scene" => Ok(EntryType::Scene),
+                    "artwork" => Ok(EntryType::Artwork),
+                    "patent" => Ok(EntryType::Patent),
+                    "case" => Ok(EntryType::Case),
+                    "newspaper" => Ok(EntryType::Newspaper),
+                    "legislation" => Ok(EntryType::Legislation),
+                    "manuscript" => Ok(EntryType::Manuscript),
+                    "post" => Ok(EntryType::Post),
+                    "misc" => Ok(EntryType::Misc),
+                    "performance" => Ok(EntryType::Performance),
+                    "periodical" => Ok(EntryType::Periodical),
+                    "proceedings" => Ok(EntryType::Proceedings),
+                    "book" => Ok(EntryType::Book),
+                    "blog" => Ok(EntryType::Blog),
+                    "reference" => Ok(EntryType::Reference),
+                    "conference" => Ok(EntryType::Conference),
+                    "anthology" => Ok(EntryType::Anthology),
+                    "repository" => Ok(EntryType::Repository),
+                    "thread" => Ok(EntryType::Thread),
+                    "video" => Ok(EntryType::Video),
+                    "audio" => Ok(EntryType::Audio),
+                    "exhibition" => Ok(EntryType::Exhibition),
+                    "original" => Ok(EntryType::Original),
+                    _ => Err(E::custom(format!("unknown entry type: `{}`", value))),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(EntryTypeVisitor)
+    }
 }
 
 impl EntryType {
