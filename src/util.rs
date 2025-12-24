@@ -79,6 +79,23 @@ where
     }
 }
 
+/// Function that always serializes as a list, even for single items.
+/// This is used for fields like `affiliated` that should only accept lists.
+pub fn serialize_list_only_opt<T, S>(
+    value: &Option<Vec<T>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    T: Serialize,
+{
+    if let Some(value) = value {
+        value.serialize(serializer)
+    } else {
+        serializer.serialize_none()
+    }
+}
+
 /// This is a wrapper for [`OneOrMany`] that assumes that the single
 /// representation isn't a sequence. This allows better error messages.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -184,4 +201,68 @@ where
     T: Deserialize<'de>,
 {
     <Option<MapOneOrMany<T>>>::deserialize(deserializer).map(|v| v.map(|v| v.into()))
+}
+
+/// Wrapper that only accepts sequences (lists), rejecting maps (single objects).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ListOnly<T>(Vec<T>);
+
+impl<'de, T> Deserialize<'de> for ListOnly<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ListOnlyVisitor<T>(std::marker::PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for ListOnlyVisitor<T>
+        where
+            T: Deserialize<'de>,
+        {
+            type Value = ListOnly<T>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a list")
+            }
+
+            fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                Vec::deserialize(serde::de::value::SeqAccessDeserializer::new(seq))
+                    .map(ListOnly)
+            }
+
+            fn visit_map<A>(self, _map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                Err(serde::de::Error::custom(
+                    "expected a list, found a single object. `affiliated` must be a list of objects, not a single object.",
+                ))
+            }
+        }
+
+        deserializer.deserialize_any(ListOnlyVisitor(std::marker::PhantomData))
+    }
+}
+
+impl<T> From<ListOnly<T>> for Vec<T> {
+    fn from(list_only: ListOnly<T>) -> Self {
+        list_only.0
+    }
+}
+
+/// Function that only accepts a list (sequence) for deserialization, rejecting single objects.
+/// This is used for fields like `affiliated` that should only accept a list of objects.
+pub fn deserialize_list_only_opt<'de, T, D>(
+    deserializer: D,
+) -> Result<Option<Vec<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    <Option<ListOnly<T>>>::deserialize(deserializer).map(|opt| opt.map(Into::into))
 }
