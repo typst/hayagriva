@@ -168,8 +168,8 @@ use serde::{Deserialize, Serialize, de::Visitor};
 use types::*;
 use unic_langid::LanguageIdentifier;
 use util::{
-    OneOrMany, deserialize_list_only_opt, deserialize_one_or_many_opt, serialize_list_only_opt,
-    serialize_one_or_many, serialize_one_or_many_opt,
+    OneOrMany, deserialize_one_or_many_opt, serialize_one_or_many,
+    serialize_one_or_many_opt,
 };
 
 /// A collection of bibliographic entries.
@@ -502,8 +502,8 @@ entry! {
     #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "editor" => editors: Vec<Person> | [Person],
     /// Persons involved in the production of the item that are not authors or editors.
-    #[serde(serialize_with = "serialize_list_only_opt")]
-    #[serde(deserialize_with = "deserialize_list_only_opt")]
+    #[serde(serialize_with = "serialize_one_or_many_opt")]
+    #[serde(deserialize_with = "deserialize_one_or_many_opt")]
     "affiliated" => affiliated: Vec<PersonsWithRoles> | [PersonsWithRoles],
     /// Publisher of the item, which may have a name and a location.
     "publisher" => publisher: Publisher,
