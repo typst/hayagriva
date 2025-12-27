@@ -87,6 +87,16 @@ impl fmt::Display for SectionTag {
 enum TestMode {
     Citation,
     Bibliography,
+
+    /// Same as bibliography but made for hayagriva's local tests.
+    /// Includes links, which are normally not printed by citeproc tests.
+    BibliographyFull,
+}
+
+impl TestMode {
+    fn is_bibliography(self) -> bool {
+        matches!(self, Self::Bibliography | Self::BibliographyFull)
+    }
 }
 
 impl FromStr for TestMode {
@@ -96,6 +106,7 @@ impl FromStr for TestMode {
         match s {
             "citation" => Ok(TestMode::Citation),
             "bibliography" => Ok(TestMode::Bibliography),
+            "bibliography-full" => Ok(TestMode::BibliographyFull),
             _ => Err(()),
         }
     }
@@ -495,7 +506,7 @@ where
             eprintln!("Skipping test {}\t(cause: unsupported test feature)", display());
         }
         false
-    } else if case.mode != TestMode::Bibliography && case.result.contains('<') {
+    } else if !case.mode.is_bibliography() && case.result.contains('<') {
         if print {
             eprintln!(
                 "Skipping test {}\t(cause: HTML suspected in citation result)",
@@ -588,13 +599,18 @@ where
 
             case.result.trim()
         }
-        TestMode::Bibliography => {
+        TestMode::Bibliography | TestMode::BibliographyFull => {
             static INDENT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 
             let bib = rendered
                 .bibliography
                 .expect("Bibliography mode test but no bibliography was rendered");
-            citeproc_bib::render(&bib, &mut output).unwrap();
+            citeproc_bib::render(
+                &bib,
+                &mut output,
+                case.mode == TestMode::BibliographyFull,
+            )
+            .unwrap();
             output.push('\n');
 
             // Remove indentation from original result to match our own output,
@@ -631,10 +647,11 @@ mod citeproc_bib {
     pub(super) fn render(
         bib: &hayagriva::RenderedBibliography,
         output: &mut String,
+        is_full: bool,
     ) -> Result<(), fmt::Error> {
         output.push_str(r#"<div class="csl-bib-body">"#);
         for item in &bib.items {
-            render_item(item, output)?;
+            render_item(item, output, is_full)?;
         }
         output.push_str("</div>");
         Ok(())
@@ -643,6 +660,7 @@ mod citeproc_bib {
     fn render_item(
         item: &hayagriva::BibliographyItem,
         output: &mut String,
+        is_full: bool,
     ) -> Result<(), fmt::Error> {
         let mut second_field_align_suffix = "";
         output.push_str(r#"<div class="csl-entry">"#);
@@ -650,22 +668,33 @@ mod citeproc_bib {
             // Uses 'second-field-align', so add implicit alignment
             // (cf. test bugreports_AsmJournals.txt)
             output.push_str("<div class=\"csl-left-margin\">");
-            render_child(field, output)?;
+            render_child(field, output, is_full)?;
             output.push_str("</div><div class=\"csl-right-inline\">");
             second_field_align_suffix = "</div>";
         }
         for child in &item.content.0 {
-            render_child(child, output)?;
+            render_child(child, output, is_full)?;
         }
         output.push_str(second_field_align_suffix);
         output.push_str("</div>");
         Ok(())
     }
 
-    fn render_child(child: &ElemChild, output: &mut String) -> Result<(), fmt::Error> {
+    fn render_child(
+        child: &ElemChild,
+        output: &mut String,
+        is_full: bool,
+    ) -> Result<(), fmt::Error> {
         match child {
             ElemChild::Text(formatted) => render_formatted_text(formatted, output),
-            ElemChild::Elem(e) => render_elem(e, output),
+            ElemChild::Elem(e) => render_elem(e, output, is_full),
+
+            ElemChild::Link { text, url } if is_full => {
+                output.push_str(&format!("<a href=\"{url}\">"));
+                render_formatted_text(text, output)?;
+                output.push_str("</a>");
+                Ok(())
+            }
 
             // Citeproc bib tests do not output <a href=...></a> for links
             ElemChild::Link { text, url: _ } => render_formatted_text(text, output),
@@ -757,7 +786,11 @@ mod citeproc_bib {
         Ok(())
     }
 
-    fn render_elem(elem: &Elem, output: &mut String) -> Result<(), fmt::Error> {
+    fn render_elem(
+        elem: &Elem,
+        output: &mut String,
+        is_full: bool,
+    ) -> Result<(), fmt::Error> {
         let mut div_suffix = "";
         if let Some(display) = elem.display {
             div_suffix = "</div>";
@@ -772,7 +805,7 @@ mod citeproc_bib {
         }
 
         for child in &elem.children.0 {
-            render_child(child, output)?;
+            render_child(child, output, is_full)?;
         }
 
         if !div_suffix.is_empty() {
