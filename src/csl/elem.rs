@@ -7,6 +7,8 @@ use citationberg::{
     Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
 };
 
+use crate::types::Person;
+
 /// A container for elements with useful methods.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Elem {
@@ -118,10 +120,10 @@ pub(super) fn simplify_children(children: ElemChildren) -> ElemChildren {
 }
 
 /// Which CSL construct created an element.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ElemMeta {
-    /// The element is the output of `cs:names`.
-    Names,
+    /// The element is the output of `cs:names` with the names of the corresponding variables for this elem.
+    Names(Vec<(Vec<Person>, NameVariable)>),
     /// The element is the output of `cs:date`.
     Date,
     /// The element is the output of `cs:text`.
@@ -164,8 +166,14 @@ impl ElemChildren {
 
     /// Retrieve a reference to the first child with a matching meta by
     /// DFS.
-    pub fn find_meta(&self, meta: ElemMeta) -> Option<&Elem> {
-        self.find_elem_by(&|e| e.meta == Some(meta))
+    pub fn find_meta(&self, meta: &ElemMeta) -> Option<&Elem> {
+        self.find_elem_by(&|e| e.meta.as_ref() == Some(meta))
+    }
+
+    /// Retrieve a reference to the first child with a names meta by
+    /// DFS.
+    pub fn find_names(&self) -> Option<&Elem> {
+        self.find_elem_by(&|e| matches!(e.meta, Some(ElemMeta::Names(_))))
     }
 
     /// Retrieve a mutable reference to the first child matching the predicate
