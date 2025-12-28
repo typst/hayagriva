@@ -271,9 +271,7 @@ impl<'de> Deserialize<'de> for EntryType {
             where
                 E: de::Error,
             {
-                // Convert to lowercase for case-insensitive matching
                 let lower = value.to_lowercase();
-                // Match against kebab-case names
                 match lower.as_str() {
                     "article" => Ok(EntryType::Article),
                     "chapter" => Ok(EntryType::Chapter),

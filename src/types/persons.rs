@@ -106,9 +106,7 @@ impl<'de> Deserialize<'de> for PersonRole {
             where
                 E: de::Error,
             {
-                // Convert to lowercase for case-insensitive matching
                 let lower = value.to_lowercase();
-                // Match against kebab-case names
                 match lower.as_str() {
                     "translator" => Ok(PersonRole::Translator),
                     "afterword" => Ok(PersonRole::Afterword),
