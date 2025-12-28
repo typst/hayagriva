@@ -208,7 +208,7 @@ This section lists all possible fields and data types for them.
 
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
-| **Data type:**   | person with role / list of persons with role |
+| **Data type:**   | persons with role / list of persons with role |
 | **Description:** | persons involved with the item that do not fit `author` or `editor`. Can be specified as a single object or a list of objects. |
 | **Example:**     | <pre>affiliated:<br>    - role: Director<br>      names: Cameron, James<br>    - role: CastMember<br>      names: ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]<br></pre> or <pre>affiliated:<br>    role: Director<br>    names: Cameron, James</pre> |
 
