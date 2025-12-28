@@ -439,6 +439,7 @@ punctuation_SemicolonDelimiter
 quotes_Punctuation
 quotes_PunctuationNasty
 sort_AguStyle
+sort_AguStyleReverseGroups
 sort_BibliographyResortOnUpdate
 sort_CaseInsensitiveBibliography
 sort_CaseInsensitiveCitation
