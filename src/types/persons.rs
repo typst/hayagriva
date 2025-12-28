@@ -130,7 +130,7 @@ impl<'de> Deserialize<'de> for PersonRole {
                     "director" => Ok(PersonRole::Director),
                     "illustrator" => Ok(PersonRole::Illustrator),
                     "narrator" => Ok(PersonRole::Narrator),
-                    _ => Err(E::custom(format!("unknown role: `{}`", value))),
+                    _ => Ok(PersonRole::Unknown(value.to_owned())),
                 }
             }
         }
