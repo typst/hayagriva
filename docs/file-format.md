@@ -83,7 +83,7 @@ kinetics:
         publisher: American Physical Society
 ```
 
-This means that the article was published in issue 16, volume 102 of the journal "Physical Review B". Notice that the `title` field is in use for both the article and its parent - every field is available for both top-level use and all parents.
+This means that the article was published in issue 16, volume 102 of the journal "Physical Review B". Notice that the `title` field is in use for both the article and its parent - every field is available for both top-level use and all parents. The `volume` and `issue` fields can be placed on either the entry or its parent container; when placed on the parent, they identify the specific volume and issue of the periodical in which the article appears.
 
 To specify parent information, write the `parent` field name and a colon and then put all fields for that parent on indented lines below.
 
@@ -249,7 +249,7 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | numeric or string                                         |
-| **Description:** | For an item whose parent has multiple issues, indicates the position in the issue sequence. Also used to indicate the episode number for TV. |
+| **Description:** | For an item whose parent has multiple issues, indicates the position in the issue sequence. Also used to indicate the episode number for TV. This field can be placed on either the entry or its parent container; when placed on the parent (e.g., a Periodical), it identifies the specific issue in which the entry appears. |
 | **Example:**     | `issue: 5`                                                |
 
 #### `volume`
@@ -257,7 +257,7 @@ This section lists all possible fields and data types for them.
 |                  |                                                           |
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | numeric or string                                         |
-| **Description:** | For an item whose parent has multiple volumes/parts/seasons ... of which this item is one |
+| **Description:** | For an item whose parent has multiple volumes/parts/seasons ... of which this item is one. This field can be placed on either the entry or its parent container; when placed on the parent (e.g., a Periodical), it identifies the specific volume in which the entry appears. |
 | **Example:**     | `volume: 2-3`                                             |
 
 #### `volume-total`
