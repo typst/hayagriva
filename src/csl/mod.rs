@@ -48,11 +48,17 @@ mod taxonomy;
 pub struct BibliographyDriver<'a, T: EntryLike> {
     /// The citations we have seen so far.
     citations: Vec<CitationRequest<'a, T>>,
+    /// Offset to apply to the citation number (for numeric styles).
+    /// Useful when managing several bibliographies.
+    pub citation_number_offset: Option<usize>,
 }
 
 impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
     fn default() -> Self {
-        Self { citations: Vec::new() }
+        Self {
+            citations: Vec::new(),
+            citation_number_offset: None,
+        }
     }
 }
 
@@ -378,6 +384,15 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                             start += 1;
                             num
                         });
+                }
+            }
+        }
+
+        // If asked, offset the citation numbers
+        if let Some(citation_number_offset) = self.citation_number_offset {
+            for cite in res.iter_mut() {
+                for item in cite.items.iter_mut() {
+                    item.cite_props.speculative.citation_number += citation_number_offset;
                 }
             }
         }
