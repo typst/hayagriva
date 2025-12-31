@@ -137,7 +137,7 @@ use deserialize_from_str;
 use serialize_display;
 
 /// Describes which kind of work a database entry refers to.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 #[serde(rename_all = "kebab-case")]
 pub enum EntryType {
@@ -250,6 +250,68 @@ pub enum EntryType {
     Original,
 }
 
+impl<'de> Deserialize<'de> for EntryType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Visitor};
+        use std::fmt;
+
+        struct EntryTypeVisitor;
+
+        impl<'de> Visitor<'de> for EntryTypeVisitor {
+            type Value = EntryType;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an entry type (case-insensitive)")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let lower = value.to_lowercase();
+                match lower.as_str() {
+                    "article" => Ok(EntryType::Article),
+                    "chapter" => Ok(EntryType::Chapter),
+                    "entry" => Ok(EntryType::Entry),
+                    "anthos" => Ok(EntryType::Anthos),
+                    "report" => Ok(EntryType::Report),
+                    "thesis" => Ok(EntryType::Thesis),
+                    "web" => Ok(EntryType::Web),
+                    "scene" => Ok(EntryType::Scene),
+                    "artwork" => Ok(EntryType::Artwork),
+                    "patent" => Ok(EntryType::Patent),
+                    "case" => Ok(EntryType::Case),
+                    "newspaper" => Ok(EntryType::Newspaper),
+                    "legislation" => Ok(EntryType::Legislation),
+                    "manuscript" => Ok(EntryType::Manuscript),
+                    "post" => Ok(EntryType::Post),
+                    "misc" => Ok(EntryType::Misc),
+                    "performance" => Ok(EntryType::Performance),
+                    "periodical" => Ok(EntryType::Periodical),
+                    "proceedings" => Ok(EntryType::Proceedings),
+                    "book" => Ok(EntryType::Book),
+                    "blog" => Ok(EntryType::Blog),
+                    "reference" => Ok(EntryType::Reference),
+                    "conference" => Ok(EntryType::Conference),
+                    "anthology" => Ok(EntryType::Anthology),
+                    "repository" => Ok(EntryType::Repository),
+                    "thread" => Ok(EntryType::Thread),
+                    "video" => Ok(EntryType::Video),
+                    "audio" => Ok(EntryType::Audio),
+                    "exhibition" => Ok(EntryType::Exhibition),
+                    "original" => Ok(EntryType::Original),
+                    _ => Err(E::custom(format!("unknown entry type: `{}`", value))),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(EntryTypeVisitor)
+    }
+}
+
 impl EntryType {
     /// Entry parents have implicit defaults. This function returns the default
     /// parent for this entry type.
@@ -305,7 +367,7 @@ pub enum DeserializationError {
 }
 
 /// A type that may be a string or a strictly typed value.
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash)]
 #[serde(untagged)]
 pub enum MaybeTyped<T> {
     /// The typed variant.
@@ -379,6 +441,69 @@ where
 impl<T> From<T> for MaybeTyped<T> {
     fn from(t: T) -> Self {
         MaybeTyped::Typed(t)
+    }
+}
+
+// Custom deserializer for MaybeTyped that allows fallback to String
+impl<'de, T> Deserialize<'de> for MaybeTyped<T>
+where
+    T: Deserialize<'de> + FromStr,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Visitor};
+        use std::fmt;
+
+        struct MaybeTypedVisitor<T>(std::marker::PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for MaybeTypedVisitor<T>
+        where
+            T: Deserialize<'de> + FromStr,
+        {
+            type Value = MaybeTyped<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a typed value or a string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match T::from_str(value) {
+                    Ok(t) => Ok(MaybeTyped::Typed(t)),
+                    Err(_) => Ok(MaybeTyped::String(value.to_owned())),
+                }
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                T::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+                    .map(MaybeTyped::Typed)
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                T::deserialize(serde::de::value::I64Deserializer::new(value))
+                    .map(MaybeTyped::Typed)
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                T::deserialize(serde::de::value::U64Deserializer::new(value))
+                    .map(MaybeTyped::Typed)
+            }
+        }
+
+        deserializer.deserialize_any(MaybeTypedVisitor(std::marker::PhantomData))
     }
 }
 
