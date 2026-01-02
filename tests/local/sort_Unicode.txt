@@ -1,0 +1,120 @@
+>>==== MODE ====>>
+citation
+<<==== MODE ====<<
+
+>>==== RESULT ====>>
+Ambroise-Rendu; Ère; Łakomy; Roux; Žižek
+<<==== RESULT ====<<
+
+>>==== CITATION-ITEMS ====>>
+[
+    [
+        {
+            "id": "ITEM-1"
+        },
+        {
+            "id": "ITEM-2"
+        },
+        {
+            "id": "ITEM-3"
+        },
+        {
+            "id": "ITEM-4"
+        },
+        {
+            "id": "ITEM-5"
+        }
+    ]
+]
+<<==== CITATION-ITEMS ====<<
+
+>>==== CSL ====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <title>Test fixture</title>
+    <id>http://citationstyles.org/tests/fixture</id>
+    <link href="http://citationstyles.org/tests/fixture" rel="self"/>
+    <link href="http://citationstyles.org/documentation/text" rel="documentation"/>
+    <category citation-format="author-date"/>
+    <updated>2014-04-30T13:19:38+00:00</updated>
+    <rights license="http://creativecommons.org/licenses/by-sa/3.0/">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <name form="short" />
+    </names>
+  </macro>
+  <citation>
+    <sort>
+      <key macro="author" />
+    </sort>
+    <layout delimiter="; ">
+      <text macro="author" />
+    </layout>
+  </citation>
+</style>
+<<==== CSL ====<<
+
+>>==== INPUT ====>>
+[
+  {
+    "author": [
+      {
+        "family": "Ambroise-Rendu",
+        "given": "Marc"
+      }
+    ],
+    "id": "ITEM-1",
+    "type": "book"
+  },
+  {
+    "author": [
+      {
+        "family": "Roux",
+        "given": "Nicolas"
+      }
+    ],
+    "id": "ITEM-2",
+    "type": "book"
+  },
+  {
+    "author": [
+      {
+        "family": "Łakomy",
+        "given": "Henryk"
+      }
+    ],
+    "id": "ITEM-3",
+    "type": "book"
+  },
+  {
+    "author": [
+      {
+        "family": "Ère",
+        "given": "Informatique"
+      }
+    ],
+    "id": "ITEM-4",
+    "type": "book"
+  },
+  {
+    "author": [
+      {
+        "family": "Žižek",
+        "given": "Slavoj"
+      }
+    ],
+    "id": "ITEM-5",
+    "type": "book"
+  }
+]
+<<==== INPUT ====<<
+
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<

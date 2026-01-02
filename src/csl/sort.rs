@@ -5,12 +5,48 @@ use citationberg::{
     DemoteNonDroppingParticle, InheritableNameOptions, LocaleCode, LongShortForm, Sort,
     SortDirection, SortKey,
 };
+use icu_collator::Collator;
+use icu_collator::options::CollatorOptions;
+use icu_locale::Locale as IcuLocale;
 
 use crate::csl::BufWriteFormat;
 use crate::csl::rendering::RenderCsl;
 
 use super::taxonomy::EntryLike;
 use super::{CitationItem, InstanceContext, StyleContext};
+
+trait CollationOrd: Ord {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering;
+}
+
+impl CollationOrd for str {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
+        if let Ok(locale) = locale.0.parse::<IcuLocale>() {
+            let options = CollatorOptions::default();
+            let collator = Collator::try_new(locale.into(), options).unwrap();
+            collator.compare(self, other)
+        } else {
+            self.cmp(other)
+        }
+    }
+}
+
+impl<T: CollationOrd> CollationOrd for Option<T> {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
+        match (self, other) {
+            (Some(a), Some(b)) => a.collation_cmp(b, locale),
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => Ordering::Equal,
+        }
+    }
+}
+
+impl CollationOrd for String {
+    fn collation_cmp(&self, other: &Self, locale: LocaleCode) -> Ordering {
+        CollationOrd::collation_cmp(self as &str, other, locale)
+    }
+}
 
 impl StyleContext<'_> {
     /// Retrieve the ordering of two entries according to the given sort key.
@@ -32,7 +68,7 @@ impl StyleContext<'_> {
                     .resolve_standard_variable(LongShortForm::default(), *s)
                     .map(|s| s.to_string().to_lowercase());
 
-                (a.cmp(&b), a.is_none() || b.is_none())
+                (a.collation_cmp(&b, self.locale()), a.is_none() || b.is_none())
             }
             SortKey::Variable { variable: Variable::Date(d), .. } => {
                 let a = a.entry.resolve_date_variable(*d);
@@ -136,7 +172,7 @@ impl StyleContext<'_> {
                 let a_rendered = render(a, a_idx);
                 let b_rendered = render(b, b_idx);
 
-                (a_rendered.cmp(&b_rendered), false)
+                (a_rendered.collation_cmp(&b_rendered, self.locale()), false)
             }
         };
 
