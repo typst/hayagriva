@@ -250,6 +250,7 @@ name_ArticularNameAsSortOrder
 name_ArticularPlain
 name_ArticularShortForm
 name_ArticularShortFormCommaSuffix
+name_ArticularWithComma
 name_ArticularWithCommaNameAsSortOrder
 name_AsianGlyphs
 name_AuthorCount

@@ -17,7 +17,7 @@ archive = ["ciborium"]
 csl-json = ["citationberg/json"]
 
 [dependencies]
-citationberg = "0.6.1"
+citationberg = { git = "https://github.com/DerDrodt/Citationberg.git", branch = "comma-suffix" }
 indexmap = { version = "2.0.2", features = ["serde"] }
 roman-numerals-rs = "3.1.0"
 paste = "1.0.14"
@@ -28,9 +28,7 @@ unic-langid = { version = "0.9.6", features = ["serde"] }
 unicode-segmentation = "1.6.0"
 unscanny = "0.1.0"
 url = { version = "2.4", features = ["serde"] }
-biblatex = { version = "0.11.0", features = [
-  "unic-langid",
-], optional = true }
+biblatex = { version = "0.11.0", features = ["unic-langid"], optional = true }
 ciborium = { version = "0.2.1", optional = true }
 clap = { version = "4", optional = true, features = ["cargo"] }
 strum = { version = "0.26", features = ["derive"], optional = true }
