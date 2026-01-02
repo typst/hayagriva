@@ -628,8 +628,8 @@ where
         true
     } else {
         eprintln!("Test {} failed", display());
-        eprintln!("Expected:\n{}", case.result);
-        eprintln!("Got:\n{output}");
+        eprintln!("Expected:\n{}", formatted_result);
+        eprintln!("Got:\n{}", output);
         false
     }
 }
