@@ -246,8 +246,8 @@ impl FromStr for Numeric {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let mut s = Scanner::new(value);
-        let prefix =
-            s.eat_while(|c: char| !c.is_numeric() && !c.is_whitespace() && c != '-');
+        s.eat_whitespace();
+        let prefix = s.eat_while(|c: char| !c.is_numeric() && c != '-');
 
         let value = number(&mut s).ok_or(NumericError::NoNumber)?;
         s.eat_whitespace();
@@ -258,6 +258,7 @@ impl FromStr for Numeric {
                 s.eat_until(|c: char| !is_delimiter(c));
                 let mut items = vec![(value, Some(NumericDelimiter::try_from(c)?))];
                 loop {
+                    s.eat_whitespace();
                     let num = number(&mut s).ok_or(NumericError::NoNumber)?;
                     s.eat_whitespace();
                     match NumericDelimiter::from_str(s.eat_while(is_delimiter)) {
@@ -276,7 +277,7 @@ impl FromStr for Numeric {
             _ => NumericValue::Number(value),
         };
         s.eat_whitespace();
-        let post = s.eat_while(|c: char| !c.is_whitespace());
+        let post = s.eat_while(|c: char| !c.is_numeric() && !c.is_whitespace());
 
         if !s.after().is_empty() {
             return Err(NumericError::UnexpectedCharactersAfterPostfix);
@@ -324,15 +325,23 @@ pub enum NumericError {
     MissingDelimiter,
 }
 
+/// Eat a number from the scanner.
+/// The number can be positive, negative, or zero, but can't have leading zeros.
 fn number(s: &mut Scanner) -> Option<i32> {
-    s.eat_whitespace();
-    let negative = s.eat_if('-');
-    let num = s.eat_while(|c: char| c.is_numeric());
-    if num.is_empty() {
-        return None;
-    }
+    let start = s.cursor();
 
-    num.parse::<i32>().ok().map(|n| if negative { -n } else { n })
+    let negative = s.eat_if('-');
+    let leading_zero = s.eat_if('0');
+    let num = s.eat_while(|c: char| c.is_numeric());
+
+    match (leading_zero, num.is_empty()) {
+        (true, true) => Some(0),
+        (false, false) => num.parse::<i32>().ok().map(|n| if negative { -n } else { n }),
+        _ => {
+            s.jump(start);
+            None
+        }
+    }
 }
 
 impl Display for Numeric {

@@ -607,6 +607,33 @@ mod tests {
     }
 
     #[test]
+    fn test_preserve_space_separator() {
+        // https://github.com/typst/hayagriva/issues/312
+        // https://github.com/typst/hayagriva/issues/440
+        let serial_numbers = &["ISO/IEC 23009-1:2022(E)", "GB/T 7714—2025", "GB/T 7714"];
+        for s in serial_numbers {
+            let val: MaybeTyped<Numeric> = MaybeTyped::infallible_from_str(s);
+            // It can be either typed or string, as long as whitespaces between
+            // prefixes and numbers are preserved.
+            assert_eq!(val.to_string(), *s);
+        }
+
+        // For GB standards, em dash is the recommended separator, but
+        // hyphen-minus and en dash should also be supported.
+        let dashes = ["-", "–", "—"];
+        for dash in dashes {
+            let s = format!("GB/T 7714{dash}2015");
+            let val: MaybeTyped<Numeric> = MaybeTyped::infallible_from_str(&s);
+            assert_eq!(
+                val.to_string()
+                    .replace(dashes[0], dashes[2])
+                    .replace(dashes[1], dashes[2]),
+                format!("GB/T 7714{}2015", dashes[2])
+            );
+        }
+    }
+
+    #[test]
     #[cfg(feature = "biblatex")]
     fn test_issue_227() {
         let yaml = r#"
