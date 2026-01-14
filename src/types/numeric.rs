@@ -250,7 +250,7 @@ impl FromStr for Numeric {
         let prefix = s.eat_while(|c: char| !c.is_numeric() && c != '-');
 
         let value = number(&mut s).ok_or(NumericError::NoNumber)?;
-        s.eat_whitespace();
+        let space_after_value = s.eat_whitespace();
 
         let value = match s.peek() {
             Some(c) if is_delimiter(c) => {
@@ -290,7 +290,11 @@ impl FromStr for Numeric {
             } else {
                 Some(Box::new(prefix.to_string()))
             },
-            suffix: if post.is_empty() { None } else { Some(Box::new(post.to_string())) },
+            suffix: if post.is_empty() {
+                None
+            } else {
+                Some(Box::new(format!("{space_after_value}{post}")))
+            },
         })
     }
 }

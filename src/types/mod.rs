@@ -610,11 +610,12 @@ mod tests {
     fn test_preserve_space_separator() {
         // https://github.com/typst/hayagriva/issues/312
         // https://github.com/typst/hayagriva/issues/440
-        let serial_numbers = &["ISO/IEC 23009-1:2022(E)", "GB/T 7714—2025", "GB/T 7714"];
+        let serial_numbers =
+            &["ISO/IEC 23009-1:2022(E)", "GB/T 7714—2025", "GB/T 7714", "第 6 册"];
         for s in serial_numbers {
             let val: MaybeTyped<Numeric> = MaybeTyped::infallible_from_str(s);
             // It can be either typed or string, as long as whitespaces between
-            // prefixes and numbers are preserved.
+            // affixes and numbers are preserved.
             assert_eq!(val.to_string(), *s);
         }
 
