@@ -552,6 +552,12 @@ mod tests {
         assert!(val.suffix.is_none());
         assert_eq!(&val.to_string(), "-5");
 
+        let val = Numeric::from_str("01").unwrap();
+        assert!(val.value == NumericValue::Number(1));
+        assert_eq!(val.prefix_str(), Some("0"));
+        assert!(val.suffix.is_none());
+        assert_eq!(&val.to_string(), "01");
+
         let val = Numeric::from_str("1st").unwrap();
         assert!(val.value == NumericValue::Number(1));
         assert!(val.prefix.is_none());

@@ -540,10 +540,9 @@ range and contain only integers, but may contain negative numbers. Numeric varia
 page-range: S10-15  # Page S10 to 15
 ```
 
-Note that the prefix and suffix for a numeric variable should be non-numeric. If
-you specify a number with leading zeros or numeric suffix, then the whole variable
-will be interpreted as a [string](#string) instead. This improves the style for
-atypical page numbers like `011` and `11E201`.
+Note that if you specify a number with a numeric affix, the whole variable will
+be interpreted as a [string](#string) instead. This improves the style for
+atypical page numbers like `11E201`.
 
 #### Unicode Language Identifier
 

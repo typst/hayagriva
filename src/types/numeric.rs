@@ -247,7 +247,18 @@ impl FromStr for Numeric {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let mut s = Scanner::new(value);
         s.eat_whitespace();
-        let prefix = s.eat_while(|c: char| !c.is_numeric() && c != '-');
+
+        let prefix = {
+            // Eat non-numeric characters and leading zeros.
+            let start = s.cursor();
+            s.eat_while(|c: char| !c.is_numeric() && c != '-');
+            let zeros = s.eat_while('0');
+            if !zeros.is_empty() && s.peek().is_none_or(|c| !c.is_numeric()) {
+                // Uneat the last zero if the value is just zero.
+                s.uneat();
+            }
+            s.from(start)
+        };
 
         let value = number(&mut s).ok_or(NumericError::NoNumber)?;
         let space_after_value = s.eat_whitespace();
@@ -329,23 +340,18 @@ pub enum NumericError {
     MissingDelimiter,
 }
 
-/// Eat a number from the scanner.
-/// The number can be positive, negative, or zero, but can't have leading zeros.
+/// Eat a number from the scanner, assuming leading whitespaces and zeros have
+/// already been eaten.
+///
+/// The number can be positive, negative, or zero.
 fn number(s: &mut Scanner) -> Option<i32> {
-    let start = s.cursor();
-
     let negative = s.eat_if('-');
-    let leading_zero = s.eat_if('0');
     let num = s.eat_while(|c: char| c.is_numeric());
-
-    match (leading_zero, num.is_empty()) {
-        (true, true) => Some(0),
-        (false, false) => num.parse::<i32>().ok().map(|n| if negative { -n } else { n }),
-        _ => {
-            s.jump(start);
-            None
-        }
+    if num.is_empty() {
+        return None;
     }
+
+    num.parse::<i32>().ok().map(|n| if negative { -n } else { n })
 }
 
 impl Display for Numeric {

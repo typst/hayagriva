@@ -416,7 +416,7 @@ mod test {
     #[test]
     fn nonnumeric_page() {
         // https://github.com/typst/hayagriva/issues/170
-        for s in &["11E201", "072711", "1.1-1.36", "011-012"] {
+        for s in &["11E201", "1.36"] {
             let n: MaybeTyped<PageRanges> = MaybeTyped::infallible_from_str(s);
             assert_eq!(n, MaybeTyped::String(s.to_string()));
         }
@@ -427,6 +427,13 @@ mod test {
             MaybeTyped::Typed(PageRanges::new(vec![PageRangesPart::Range(
                 Numeric::from_str("S10").unwrap(),
                 Numeric::from_str("15").unwrap(),
+            )]))
+        );
+        assert_eq!(
+            MaybeTyped::<PageRanges>::infallible_from_str("011-012"),
+            MaybeTyped::Typed(PageRanges::new(vec![PageRangesPart::Range(
+                Numeric::from_str("011").unwrap(),
+                Numeric::from_str("012").unwrap(),
             )]))
         );
     }

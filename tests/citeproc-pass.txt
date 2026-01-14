@@ -409,6 +409,7 @@ nameorder_ShortNameAsSortDemoteNever
 namespaces_NonNada3
 number_FailingDelimiters
 number_IsNumericWithAlpha
+number_LeadingZeros
 number_MixedPageRange
 number_MixedText
 number_PageFirst
