@@ -92,8 +92,19 @@ bibliographies.
 Should you need more manual control, the library's native `Entry` struct also
 offers an implementation of the `From<&biblatex::Entry>`-Trait. You will need to
 depend on the [biblatex](https://docs.rs/biblatex/latest/biblatex/) crate to
-obtain its `Entry`. Therefore, you could also use your BibLaTeX content like
-this:
+obtain its `Entry`. For a few common mappings, see the notes below.
+
+The conversion is intentionally opinionated. A few common mappings are worth
+knowing up front:
+
+- BibLaTeX `number` becomes Hayagriva `issue` for journal/book-style entries,
+  but `serial-number` for patent/report/manual/dataset-style entries.
+- Roles such as `producer`, `scriptwriter`, and `translator` are normalized to
+  Hayagriva person roles; some media-specific BibLaTeX roles such as `writer`
+  (for video) and `none` (for video/music) are also mapped explicitly.
+
+If you need the full field-by-field conversion behavior, see
+`src/interop.rs`, which contains the authoritative conversion logic.
 
 ```rust
 use hayagriva::Entry;
