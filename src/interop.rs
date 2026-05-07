@@ -491,6 +491,17 @@ impl TryFrom<&tex::Entry> for Entry {
             item.set_url(QualifiedUrl { value: url, visit_date: date });
         }
 
+        // For @inproceedings/@proceedings, treat `organization` as a
+        // publisher fallback when `publisher` is absent (matches plain.bst
+        // and citeproc-js).
+        let conference_like = matches!(
+            entry.entry_type,
+            tex::EntryType::InProceedings
+                | tex::EntryType::Proceedings
+                | tex::EntryType::MvProceedings
+        );
+        let mut org_consumed_as_publisher = false;
+
         if let Some(publisher_name) =
             map_res(entry.publisher())?.map(|pubs| comma_list(&pubs))
         {
@@ -508,21 +519,36 @@ impl TryFrom<&tex::Entry> for Entry {
             } else {
                 item.set_publisher(publisher);
             }
+        } else if conference_like
+            && let Some(organization) =
+                map_res(entry.organization())?.map(|orgs| comma_list(&orgs))
+        {
+            let publisher = Publisher::new(Some(organization), None);
+            if let Some(parent) = book(&mut item, parent) {
+                parent.set_publisher(publisher);
+            } else {
+                item.set_publisher(publisher);
+            }
+            org_consumed_as_publisher = true;
         }
 
-        if let Some(organization) =
-            map_res(entry.organization())?.map(|orgs| comma_list(&orgs))
-        {
-            if let Some(parent) = book(&mut item, parent) {
-                parent.set_organization(organization);
-            } else {
-                item.set_organization(organization);
-            }
-        } else if let Some(organization) = map_res(entry.institution())?.map(Into::into) {
-            if let Some(parent) = book(&mut item, parent) {
-                parent.set_organization(organization);
-            } else {
-                item.set_organization(organization);
+        if !org_consumed_as_publisher {
+            if let Some(organization) =
+                map_res(entry.organization())?.map(|orgs| comma_list(&orgs))
+            {
+                if let Some(parent) = book(&mut item, parent) {
+                    parent.set_organization(organization);
+                } else {
+                    item.set_organization(organization);
+                }
+            } else if let Some(organization) =
+                map_res(entry.institution())?.map(Into::into)
+            {
+                if let Some(parent) = book(&mut item, parent) {
+                    parent.set_organization(organization);
+                } else {
+                    item.set_organization(organization);
+                }
             }
         }
 
@@ -847,5 +873,59 @@ mod tests {
             pine.parents()[0].title().unwrap().to_string(),
             "Modern Games: Deep Research and Analysis"
         );
+    }
+
+    #[test]
+    fn inproceedings_organization_routes_to_publisher() {
+        let entries = crate::io::from_biblatex_str(
+            r#"
+        @inproceedings{org_only,
+            title = {Paper A},
+            author = {Smith, John},
+            booktitle = {Some Conference},
+            pages = {1--10},
+            year = 2020,
+            organization = {Springer}
+        }
+        @inproceedings{both_pub_and_org,
+            title = {Paper B},
+            author = {Smith, John},
+            booktitle = {Some Conference},
+            pages = {1--10},
+            year = 2020,
+            publisher = {Wiley},
+            organization = {IEEE}
+        }
+        @phdthesis{th,
+            author = {Doe, Jane},
+            title = {A Thesis},
+            institution = {Imperial College},
+            year = 2020
+        }"#,
+        )
+        .unwrap();
+
+        // organization-only: routes to publisher (the fix).
+        let a = entries.get("org_only").unwrap();
+        assert_eq!(
+            &a.parents()[0].publisher().and_then(|p| p.name()).unwrap().to_string(),
+            "Springer"
+        );
+        assert!(a.parents()[0].organization().is_none());
+
+        // both publisher and organization: publisher wins, organization
+        // remains in its own slot (so styles reading authority still see it).
+        let b = entries.get("both_pub_and_org").unwrap();
+        assert_eq!(
+            &b.parents()[0].publisher().and_then(|p| p.name()).unwrap().to_string(),
+            "Wiley"
+        );
+        assert_eq!(&b.parents()[0].organization().unwrap().to_string(), "IEEE");
+
+        // Regression: thesis institution must still route to the
+        // organization slot (CSL `authority`), not be reinterpreted.
+        let th = entries.get("th").unwrap();
+        assert_eq!(&th.organization().unwrap().to_string(), "Imperial College");
+        assert!(th.publisher().is_none());
     }
 }
