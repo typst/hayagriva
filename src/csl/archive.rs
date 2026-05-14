@@ -1153,6 +1153,7 @@ pub const LOCALES: &[&[u8]] = &[
     include_bytes!("../../archive/locales/sr-Latn-RS.cbor"),
     include_bytes!("../../archive/locales/sv-SE.cbor"),
     include_bytes!("../../archive/locales/th-TH.cbor"),
+    include_bytes!("../../archive/locales/tl-PH.cbor"),
     include_bytes!("../../archive/locales/tr-TR.cbor"),
     include_bytes!("../../archive/locales/uk-UA.cbor"),
     include_bytes!("../../archive/locales/vi-VN.cbor"),
