@@ -176,6 +176,24 @@ impl ElemChildren {
         self.find_elem_by(&|e| matches!(e.meta, Some(ElemMeta::Names(_))))
     }
 
+    /// Retrieve a mutable reference to the first child with a names meta by
+    /// DFS.
+    pub fn find_names_mut(&mut self) -> Option<&mut Elem> {
+        self.0
+            .iter_mut()
+            .filter_map(|c| match c {
+                ElemChild::Elem(e) => {
+                    if matches!(e.meta, Some(ElemMeta::Names(_))) {
+                        Some(e)
+                    } else {
+                        e.children.find_names_mut()
+                    }
+                }
+                _ => None,
+            })
+            .next()
+    }
+
     /// Retrieve a mutable reference to the first child matching the predicate
     /// by DFS.
     pub fn find_elem_by<F: Fn(&Elem) -> bool>(&self, f: &F) -> Option<&Elem> {

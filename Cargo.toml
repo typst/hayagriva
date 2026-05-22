@@ -17,7 +17,7 @@ archive = ["ciborium"]
 csl-json = ["citationberg/json"]
 
 [dependencies]
-citationberg = "0.6.1"
+citationberg = { git = "https://github.com/typst/citationberg.git", branch = "main" }
 indexmap = { version = "2.0.2", features = ["serde"] }
 roman-numerals-rs = "3.1.0"
 paste = "1.0.14"

@@ -232,10 +232,18 @@ impl RenderCsl for Names {
             return;
         }
 
+        let meta_people = people
+            .iter()
+            .map(|(ps, v)| {
+                (ps.iter().map(|p| p.clone().into_owned()).collect::<Vec<_>>(), *v)
+            })
+            .collect::<Vec<_>>();
+
         if is_empty {
             if let Some(substitute) = &self.substitute() {
                 ctx.writing.start_suppressing_queried_variables();
 
+                let depth = ctx.push_elem(self.to_formatting());
                 for child in &substitute.children {
                     let len = ctx.writing.len();
                     if let LayoutRenderingElement::Names(names_child) = child {
@@ -248,6 +256,7 @@ impl RenderCsl for Names {
                     }
                 }
 
+                ctx.commit_elem(depth, self.display, Some(ElemMeta::Names(meta_people)));
                 ctx.writing.stop_suppressing_queried_variables();
             }
 
@@ -261,13 +270,6 @@ impl RenderCsl for Names {
         let options = cs_name.options(ctx.writing.name_options.last());
 
         let default_form = DisambiguatedNameForm::from(&options);
-
-        let meta_people = people
-            .iter()
-            .map(|(ps, v)| {
-                (ps.iter().map(|p| p.clone().into_owned()).collect::<Vec<_>>(), *v)
-            })
-            .collect::<Vec<_>>();
 
         // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
@@ -636,6 +638,7 @@ fn write_name<T: EntryLike>(
         family_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
         family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
+    let comma_suffix = name.comma_suffix;
 
     let first_name = |ctx: &mut Context<T>| {
         if let Some(first) = &name.given_name {
@@ -846,6 +849,9 @@ fn write_name<T: EntryLike>(
             ctx.pop_format(idx);
 
             if let Some(suffix) = &name.suffix {
+                if comma_suffix {
+                    ctx.push_str(sort_sep);
+                }
                 ctx.ensure_space();
                 ctx.push_str(suffix);
             }
