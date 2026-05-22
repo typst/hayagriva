@@ -3541,27 +3541,29 @@ mod tests {
         let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
         let citationberg::Style::Independent(apa) = apa else { unreachable!() };
 
+        let locales = archive::locales();
+
         let mut driver = BibliographyDriver::new();
         for entry in library.iter() {
             driver.citation(CitationRequest::new(
                 vec![CitationItem::new(
                     entry,
                     None,
-                    None,
+                    Some(LocaleCode::en_us()),
                     false,
                     Some(CitePurpose::Prose),
                 )],
                 &apa,
-                None,
-                &[],
+                Some(LocaleCode::en_us()),
+                &locales,
                 None,
             ));
         }
 
         let finished = driver.finish(BibliographyRequest {
             style: &apa,
-            locale: None,
-            locale_files: &[],
+            locale: Some(LocaleCode::en_us()),
+            locale_files: &locales,
         });
 
         let mut c1 = String::new();
