@@ -1,0 +1,63 @@
+
+>>===== MODE =====>>
+bibliography-full
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+<div class="csl-bib-body">
+  <div class="csl-entry">
+    DOI <a href="https://doi.org/12345">12345</a>; https://typst.app/<a href="https://doi.org/12345">12345</a>; <a href="https://doi.org/12345">https://doi.org/12345</a>
+  </div>
+</div>
+<<===== RESULT =====<<
+
+
+>>===== CSL =====>>
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0">
+   <info>
+      <id />
+      <title />
+      <updated>2009-08-10T04:49:00+09:00</updated>
+   </info>
+   <citation>
+      <layout>
+        <text value="Bib only" />
+      </layout>
+   </citation>
+   <bibliography>
+      <layout>
+        <group delimiter="; ">
+            <text prefix="DOI " variable="DOI"/>
+            <text prefix="https://typst.app/" variable="DOI"/>
+            <text prefix="https://doi.org/" variable="DOI"/>
+        </group>
+      </layout>
+   </bibliography>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "author": [
+            {
+                "family": "Doe Co.",
+                "isInstitution": true
+            }
+        ],
+        "id": "ITEM-1",
+        "title": "His Collectively Anonymous Life",
+        "DOI": "12345",
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<
