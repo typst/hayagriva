@@ -125,6 +125,14 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Julian Onions.
     Copernicus,
+    /// CSE Manual: Scientific Style and Format 8th edition (citation-sequence, brackets).
+    ///
+    /// Authors: Pavel Giverts.
+    CseCitationSequenceBrackets8thEdition,
+    /// CSE Manual: Scientific Style and Format 9th edition (name-year).
+    ///
+    /// Authors: Patrick O'Brien.
+    CseNameYear,
     /// Current Opinion journals.
     ///
     /// Authors: David M. Kaplan.
@@ -212,7 +220,7 @@ pub enum ArchivedStyle {
     /// MHRA Style Guide 4th edition (notes).
     ///
     /// Authors: Andrew Dunning.
-    MhraNotes,
+    ModernHumanitiesResearchAssociationNotes,
     /// MLA Handbook 9th edition (in-text citations).
     ///
     /// Authors: Sebastian Karcher, Andrew Dunning.
@@ -360,6 +368,10 @@ impl ArchivedStyle {
             "chicago-fullnotes" => Some(Self::ChicagoNotes),
             "chicago-shortened-notes" => Some(Self::ChicagoShortenedNotes),
             "copernicus" => Some(Self::Copernicus),
+            "cse-citation-sequence-brackets-8th-edition" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "council-of-science-editors" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "cse-name-year" => Some(Self::CseNameYear),
+            "council-of-science-editors-author-date" => Some(Self::CseNameYear),
             "current-opinion" => Some(Self::CurrentOpinion),
             "deutsche-gesellschaft-für-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
             "deutsche-sprache" => Some(Self::DeutscheSprache),
@@ -382,13 +394,16 @@ impl ArchivedStyle {
             "iso-690-numeric" => Some(Self::Iso690Numeric),
             "karger" => Some(Self::Karger),
             "mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
-            "mhra-notes" => Some(Self::MhraNotes),
+            "modern-humanities-research-association-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
+            "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
             "multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
             "nature" => Some(Self::Nature),
             "nlm-citation-sequence" => Some(Self::NlmCitationSequence),
+            "vancouver" => Some(Self::NlmCitationSequence),
             "nlm-citation-sequence-superscript" => Some(Self::NlmCitationSequenceSuperscript),
+            "vancouver-superscript" => Some(Self::NlmCitationSequenceSuperscript),
             "pensoft" => Some(Self::Pensoft),
             "public-library-of-science" => Some(Self::PublicLibraryOfScience),
             "plos" => Some(Self::PublicLibraryOfScience),
@@ -448,6 +463,8 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/chicago-notes-bibliography" => Some(Self::ChicagoNotes),
             "http://www.zotero.org/styles/chicago-shortened-notes-bibliography" => Some(Self::ChicagoShortenedNotes),
             "http://www.zotero.org/styles/copernicus-publications" => Some(Self::Copernicus),
+            "http://www.zotero.org/styles/cse-citation-sequence-brackets-8th-edition" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "http://www.zotero.org/styles/cse-name-year" => Some(Self::CseNameYear),
             "http://www.zotero.org/styles/current-opinion" => Some(Self::CurrentOpinion),
             "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
             "http://www.zotero.org/styles/deutsche-sprache" => Some(Self::DeutscheSprache),
@@ -469,7 +486,7 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/iso690-numeric-en" => Some(Self::Iso690Numeric),
             "http://www.zotero.org/styles/karger-journals" => Some(Self::Karger),
             "http://www.zotero.org/styles/mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
-            "http://www.zotero.org/styles/mhra-notes" => Some(Self::MhraNotes),
+            "http://www.zotero.org/styles/mhra-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "http://www.zotero.org/styles/modern-language-association" => Some(Self::ModernLanguageAssociation),
             "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
             "http://www.zotero.org/styles/nature" => Some(Self::Nature),
@@ -533,6 +550,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes,
             Self::ChicagoShortenedNotes,
             Self::Copernicus,
+            Self::CseCitationSequenceBrackets8thEdition,
+            Self::CseNameYear,
             Self::CurrentOpinion,
             Self::DeutscheGesellschaftFürPsychologie,
             Self::DeutscheSprache,
@@ -554,7 +573,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric,
             Self::Karger,
             Self::MaryAnnLiebertVancouver,
-            Self::MhraNotes,
+            Self::ModernHumanitiesResearchAssociationNotes,
             Self::ModernLanguageAssociation,
             Self::MultidisciplinaryDigitalPublishingInstitute,
             Self::Nature,
@@ -617,6 +636,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes => include_bytes!("../../archive/styles/chicago-notes-bibliography.cbor"),
             Self::ChicagoShortenedNotes => include_bytes!("../../archive/styles/chicago-shortened-notes-bibliography.cbor"),
             Self::Copernicus => include_bytes!("../../archive/styles/copernicus-publications.cbor"),
+            Self::CseCitationSequenceBrackets8thEdition => include_bytes!("../../archive/styles/cse-citation-sequence-brackets-8th-edition.cbor"),
+            Self::CseNameYear => include_bytes!("../../archive/styles/cse-name-year.cbor"),
             Self::CurrentOpinion => include_bytes!("../../archive/styles/current-opinion.cbor"),
             Self::DeutscheGesellschaftFürPsychologie => include_bytes!("../../archive/styles/deutsche-gesellschaft-fur-psychologie.cbor"),
             Self::DeutscheSprache => include_bytes!("../../archive/styles/deutsche-sprache.cbor"),
@@ -638,7 +659,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => include_bytes!("../../archive/styles/iso690-numeric-en.cbor"),
             Self::Karger => include_bytes!("../../archive/styles/karger-journals.cbor"),
             Self::MaryAnnLiebertVancouver => include_bytes!("../../archive/styles/mary-ann-liebert-vancouver.cbor"),
-            Self::MhraNotes => include_bytes!("../../archive/styles/mhra-notes.cbor"),
+            Self::ModernHumanitiesResearchAssociationNotes => include_bytes!("../../archive/styles/mhra-notes.cbor"),
             Self::ModernLanguageAssociation => include_bytes!("../../archive/styles/modern-language-association.cbor"),
             Self::MultidisciplinaryDigitalPublishingInstitute => include_bytes!("../../archive/styles/multidisciplinary-digital-publishing-institute.cbor"),
             Self::Nature => include_bytes!("../../archive/styles/nature.cbor"),
@@ -767,6 +788,14 @@ impl ArchivedStyle {
             Self::Copernicus => &[
                 "copernicus",
             ],
+            Self::CseCitationSequenceBrackets8thEdition => &[
+                "cse-citation-sequence-brackets-8th-edition",
+                "council-of-science-editors",
+            ],
+            Self::CseNameYear => &[
+                "cse-name-year",
+                "council-of-science-editors-author-date",
+            ],
             Self::CurrentOpinion => &[
                 "current-opinion",
             ],
@@ -831,8 +860,9 @@ impl ArchivedStyle {
             Self::MaryAnnLiebertVancouver => &[
                 "mary-ann-liebert-vancouver",
             ],
-            Self::MhraNotes => &[
-                "mhra-notes",
+            Self::ModernHumanitiesResearchAssociationNotes => &[
+                "modern-humanities-research-association-notes",
+                "modern-humanities-research-association",
             ],
             Self::ModernLanguageAssociation => &[
                 "modern-language-association",
@@ -846,9 +876,11 @@ impl ArchivedStyle {
             ],
             Self::NlmCitationSequence => &[
                 "nlm-citation-sequence",
+                "vancouver",
             ],
             Self::NlmCitationSequenceSuperscript => &[
                 "nlm-citation-sequence-superscript",
+                "vancouver-superscript",
             ],
             Self::Pensoft => &[
                 "pensoft",
@@ -952,6 +984,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes => "Chicago Manual of Style 18th edition (notes and bibliography)",
             Self::ChicagoShortenedNotes => "Chicago Manual of Style 18th edition (shortened notes and bibliography)",
             Self::Copernicus => "Copernicus Publications",
+            Self::CseCitationSequenceBrackets8thEdition => "CSE Manual: Scientific Style and Format 8th edition (citation-sequence, brackets)",
+            Self::CseNameYear => "CSE Manual: Scientific Style and Format 9th edition (name-year)",
             Self::CurrentOpinion => "Current Opinion journals",
             Self::DeutscheGesellschaftFürPsychologie => "Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch)",
             Self::DeutscheSprache => "Deutsche Sprache (Deutsch)",
@@ -973,7 +1007,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "ISO-690 (numeric, English)",
             Self::Karger => "Karger journals",
             Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - NLM/Vancouver",
-            Self::MhraNotes => "MHRA Style Guide 4th edition (notes)",
+            Self::ModernHumanitiesResearchAssociationNotes => "MHRA Style Guide 4th edition (notes)",
             Self::ModernLanguageAssociation => "MLA Handbook 9th edition (in-text citations)",
             Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
             Self::Nature => "Nature",
@@ -1036,6 +1070,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes => "http://www.zotero.org/styles/chicago-notes-bibliography",
             Self::ChicagoShortenedNotes => "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
             Self::Copernicus => "http://www.zotero.org/styles/copernicus-publications",
+            Self::CseCitationSequenceBrackets8thEdition => "http://www.zotero.org/styles/cse-citation-sequence-brackets-8th-edition",
+            Self::CseNameYear => "http://www.zotero.org/styles/cse-name-year",
             Self::CurrentOpinion => "http://www.zotero.org/styles/current-opinion",
             Self::DeutscheGesellschaftFürPsychologie => "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
             Self::DeutscheSprache => "http://www.zotero.org/styles/deutsche-sprache",
@@ -1057,7 +1093,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "http://www.zotero.org/styles/iso690-numeric-en",
             Self::Karger => "http://www.zotero.org/styles/karger-journals",
             Self::MaryAnnLiebertVancouver => "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
-            Self::MhraNotes => "http://www.zotero.org/styles/mhra-notes",
+            Self::ModernHumanitiesResearchAssociationNotes => "http://www.zotero.org/styles/mhra-notes",
             Self::ModernLanguageAssociation => "http://www.zotero.org/styles/modern-language-association",
             Self::MultidisciplinaryDigitalPublishingInstitute => "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
             Self::Nature => "http://www.zotero.org/styles/nature",
