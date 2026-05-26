@@ -267,18 +267,17 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                 }
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix)
-                if !matches!(&text.target, TextTarget::Macro { .. }) =>
+                if !matches!(&text.target, TextTarget::Macro { .. })
+                    && !matches!(
+                        text.target,
+                        TextTarget::Variable {
+                            var: Variable::Standard(StandardVariable::YearSuffix)
+                                | Variable::Number(NumberVariable::Locator),
+                            ..
+                        },
+                    ) =>
             {
-                if !matches!(
-                    text.target,
-                    TextTarget::Variable {
-                        var: Variable::Standard(StandardVariable::YearSuffix)
-                            | Variable::Number(NumberVariable::Locator),
-                        ..
-                    },
-                ) {
-                    return None;
-                }
+                return None;
             }
             _ => {}
         }
@@ -532,11 +531,10 @@ impl RenderCsl for citationberg::Label {
                 SpecialForm::VarOnly(_)
                 | SpecialForm::OnlyFirstDate
                 | SpecialForm::OnlyYearSuffix,
-            ) => {
-                if self.variable != NumberOrPageVariable::Number(NumberVariable::Locator)
-                {
-                    return (true, UsageInfo::default());
-                }
+            ) if self.variable
+                != NumberOrPageVariable::Number(NumberVariable::Locator) =>
+            {
+                return (true, UsageInfo::default());
             }
             _ => {}
         }
