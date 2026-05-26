@@ -665,7 +665,7 @@ const OVERRIDES: [Override; 23] = [
     Override::alias(
         "modern-language-association",
         "modern-language-association",
-        &["mla"],
+        &["mla", "modern-language-association-8", "mla-8"],
     ),
     Override::alias("plos", "public-library-of-science", &["plos"]),
     Override::first("thieme-german", "thieme"),

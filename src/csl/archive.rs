@@ -398,6 +398,8 @@ impl ArchivedStyle {
             "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
+            "modern-language-association-8" => Some(Self::ModernLanguageAssociation),
+            "mla-8" => Some(Self::ModernLanguageAssociation),
             "multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
             "nature" => Some(Self::Nature),
             "nlm-citation-sequence" => Some(Self::NlmCitationSequence),
@@ -867,6 +869,8 @@ impl ArchivedStyle {
             Self::ModernLanguageAssociation => &[
                 "modern-language-association",
                 "mla",
+                "modern-language-association-8",
+                "mla-8",
             ],
             Self::MultidisciplinaryDigitalPublishingInstitute => &[
                 "multidisciplinary-digital-publishing-institute",
