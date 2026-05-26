@@ -491,7 +491,7 @@ impl fmt::Display for ArchivalError {
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 81] = [
+const STYLE_IDS: [&str; 80] = [
     "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
@@ -529,8 +529,8 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric",
     "http://www.zotero.org/styles/chinese-gb7714-2005-numeric",
     "http://www.zotero.org/styles/copernicus-publications",
-    "http://www.zotero.org/styles/council-of-science-editors-author-date",
-    "http://www.zotero.org/styles/council-of-science-editors-brackets",
+    "http://www.zotero.org/styles/cse-name-year",
+    "http://www.zotero.org/styles/cse-citation-sequence-brackets-8th-edition",
     "http://www.zotero.org/styles/current-opinion",
     "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
     "http://www.zotero.org/styles/deutsche-sprache",
@@ -548,11 +548,12 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/iso690-numeric-en",
     "http://www.zotero.org/styles/karger-journals",
     "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
-    "http://www.zotero.org/styles/modern-humanities-research-association-notes",
+    "http://www.zotero.org/styles/mhra-notes",
     "http://www.zotero.org/styles/modern-language-association",
-    "http://www.zotero.org/styles/modern-language-association-8th-edition",
     "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
     "http://www.zotero.org/styles/nature",
+    "http://www.zotero.org/styles/nlm-citation-sequence",
+    "http://www.zotero.org/styles/nlm-citation-sequence-superscript",
     "http://www.zotero.org/styles/pensoft-journals",
     "http://www.zotero.org/styles/plos",
     "http://www.zotero.org/styles/royal-society-of-chemistry",
@@ -573,8 +574,6 @@ const STYLE_IDS: [&str; 81] = [
     "http://www.zotero.org/styles/the-lancet",
     "http://www.zotero.org/styles/thieme-german",
     "http://www.zotero.org/styles/trends-journals",
-    "http://www.zotero.org/styles/vancouver",
-    "http://www.zotero.org/styles/vancouver-superscript",
 ];
 
 /// Override for the name of a style.

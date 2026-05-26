@@ -2,13 +2,13 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::Write;
 
+use citationberg::TermForm;
 use citationberg::taxonomy::{NameVariable, OtherTerm, Term, Variable};
 use citationberg::{
     DelimiterBehavior, DemoteNonDroppingParticle, LayoutRenderingElement, NameAnd,
     NameAsSortOrder, NameForm, NameLabelPosition, NameOptions, Names, ToAffixes,
     ToFormatting,
 };
-use citationberg::{DisambiguationRule, TermForm};
 
 use crate::csl::taxonomy::EntryLike;
 use crate::csl::{Context, DisambiguateState, ElemMeta, SpecialForm, UsageInfo};
@@ -20,9 +20,9 @@ use super::{RenderCsl, render_label_with_var};
 pub enum DisambiguatedNameForm {
     /// Count the names.
     Count,
-    /// Print only the given name. Initialization is available.
+    /// Print only the family name. Initialization is available.
     ShortInitialized,
-    /// Print only the given name. Initialization is unavailable.
+    /// Print only the family name. Initialization is unavailable.
     ShortFull,
     /// Print the name with a first name initial.
     LongInitialized,
@@ -77,49 +77,18 @@ pub struct NameDisambiguationProperties {
 }
 
 impl NameDisambiguationProperties {
-    /// Disambiguate the name further. Return none if the name cannot be
-    /// disambiguated further.
-    pub fn disambiguate(
-        &mut self,
-        may_upgrade: bool,
-        rule: DisambiguationRule,
-        add_names: bool,
-    ) -> bool {
-        let allow_full_first_name = rule.allows_full_first_names();
-
-        for list in self.name_forms.iter_mut() {
-            let mut idx = 0;
-
-            if may_upgrade {
-                // First try to step an item that is `Some`.
-                for (i, form) in list.iter_mut().enumerate() {
-                    if let Some(form) = form {
-                        if let Some(new_form) = form.disambiguate(allow_full_first_name) {
-                            *form = new_form;
-                            return true;
-                        }
-
-                        if !rule.allows_multiple_names() {
-                            return false;
-                        }
-
-                        idx = i;
-                    }
+    /// Adds the first `num` names (i.e., makes their name forms visible).
+    pub fn add_name(&mut self, num: usize) -> bool {
+        if let Some(lst) = self.name_forms.iter_mut().find(|lst| lst.len() >= num) {
+            for n in lst.iter_mut().take(num) {
+                if n.is_none() {
+                    *n = Some(self.default_name_form);
                 }
             }
-
-            if add_names {
-                // Process the remaining items by setting the default.
-                for form in list[idx..].iter_mut() {
-                    if form.is_none() {
-                        *form = Some(self.default_name_form);
-                        return true;
-                    }
-                }
-            }
+            true
+        } else {
+            false
         }
-
-        false
     }
 
     /// Disambuiguate a list of identical names.
@@ -163,6 +132,16 @@ impl NameDisambiguationProperties {
             Ordering::Greater => self,
             _ => other,
         }
+    }
+
+    /// Gets a mutable reference to the `idx`-th name form or the default name form if it does not yet exist.
+    pub fn get_form_mut(&mut self, idx: usize) -> Option<&mut DisambiguatedNameForm> {
+        self.name_forms
+            .iter_mut()
+            .flat_map(|l| l.iter_mut())
+            .nth(idx)
+            .and_then(|d| d.as_mut())
+            .or(Some(&mut self.default_name_form))
     }
 }
 
@@ -253,10 +232,18 @@ impl RenderCsl for Names {
             return;
         }
 
+        let meta_people = people
+            .iter()
+            .map(|(ps, v)| {
+                (ps.iter().map(|p| p.clone().into_owned()).collect::<Vec<_>>(), *v)
+            })
+            .collect::<Vec<_>>();
+
         if is_empty {
             if let Some(substitute) = &self.substitute() {
                 ctx.writing.start_suppressing_queried_variables();
 
+                let depth = ctx.push_elem(self.to_formatting());
                 for child in &substitute.children {
                     let len = ctx.writing.len();
                     if let LayoutRenderingElement::Names(names_child) = child {
@@ -269,6 +256,7 @@ impl RenderCsl for Names {
                     }
                 }
 
+                ctx.commit_elem(depth, self.display, Some(ElemMeta::Names(meta_people)));
                 ctx.writing.stop_suppressing_queried_variables();
             }
 
@@ -285,10 +273,33 @@ impl RenderCsl for Names {
 
         // Return here if we should only count the names.
         if default_form == DisambiguatedNameForm::Count {
-            write!(ctx, "{}", people.into_iter().fold(0, |acc, curr| acc + curr.0.len()))
-                .unwrap();
+            // Per the CSL spec on the `form` names option, only actually
+            // rendered names should be counted.
+            write!(
+                ctx,
+                "{}",
+                people
+                    .into_iter()
+                    .map(|(p, _)| p
+                        .iter()
+                        .enumerate()
+                        .map(|(i, _)| {
+                            if options.is_suppressed(
+                                i,
+                                p.len(),
+                                !ctx.instance.cite_props.certain.is_first,
+                            ) {
+                                0
+                            } else {
+                                1
+                            }
+                        })
+                        .sum::<usize>())
+                    .sum::<usize>()
+            )
+            .unwrap();
             ctx.apply_suffix(&self.to_affixes(), affix_loc);
-            ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
+            ctx.commit_elem(depth, self.display, Some(ElemMeta::Names(meta_people)));
             ctx.writing.pop_name_options();
             return;
         }
@@ -372,7 +383,7 @@ impl RenderCsl for Names {
         // pairs. Rerender if necessary.
 
         ctx.apply_suffix(&self.to_affixes(), affix_loc);
-        ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
+        ctx.commit_elem(depth, self.display, Some(ElemMeta::Names(meta_people)));
         ctx.writing.pop_name_options();
         ctx.writing.first_name_properties(|| props);
     }
@@ -399,7 +410,7 @@ impl RenderCsl for Names {
         let suppressing = ctx.writing.suppress_queried_variables;
         ctx.writing.stop_suppressing_queried_variables();
 
-        let is_empty =
+        let mut is_empty =
             self.variable.iter().all(|v| ctx.resolve_name_variable(*v).is_empty());
         if !renders_given_special_form(self, ctx, is_empty) {
             return (false, UsageInfo::default());
@@ -413,6 +424,32 @@ impl RenderCsl for Names {
             .fold((false, UsageInfo::default()), |(a, b), (c, d)| {
                 (a || c, b.merge_child(d))
             });
+
+        let names_opts = self.options();
+
+        // If `et-al-use-first` is set to zero and the et al. is rendered (meaning, the number of names exceeds `et-al-min`),
+        // it is considered empty.
+        // If all children are empty, we do not render.
+        let children_will_render = self.children.is_empty()
+            || self.children.iter().any(|n| match n {
+                citationberg::NamesChild::Name(name) => {
+                    let opts = name.options(&names_opts);
+                    let Some(et_al_min) = opts.et_al_min else {
+                        return true;
+                    };
+                    let Some(et_al_use_first) = opts.et_al_use_first else {
+                        return true;
+                    };
+
+                    et_al_use_first != 0
+                        || !self.variable.iter().all(|v| {
+                            ctx.resolve_name_variable(*v).len() >= et_al_min as usize
+                        })
+                }
+                _ => false,
+            });
+
+        is_empty |= !children_will_render;
 
         if suppressing {
             ctx.writing.start_suppressing_queried_variables();
@@ -454,7 +491,9 @@ fn add_names<T: EntryLike>(
     let take = forms.iter().position(|f| f.is_none()).unwrap_or(persons.len());
     let names_opts = ctx.writing.name_options.last().clone();
     let name_opts = cs_name.options(&names_opts);
-    let et_al_use_last = has_et_al.then(|| forms.last().copied().flatten()).flatten();
+    let et_al_use_last = (name_opts.et_al_use_last && has_et_al)
+        .then(|| forms.last().copied().flatten())
+        .flatten();
     let mut last_inverted = false;
 
     let demote_non_dropping = match ctx.style.csl.settings.demote_non_dropping_particle {
@@ -548,7 +587,7 @@ fn add_names<T: EntryLike>(
                 persons.len() - 1,
             );
         }
-    } else if has_et_al {
+    } else if ctx.instance.sorting.is_none() && has_et_al {
         let cs_et_al = names.et_al().cloned().unwrap_or_default();
         if let Some(term) = ctx.term(cs_et_al.term.into(), TermForm::default(), false) {
             let delim = match name_opts.delimiter_precedes_et_al {
@@ -599,6 +638,7 @@ fn write_name<T: EntryLike>(
         family_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
         family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
+    let comma_suffix = name.comma_suffix;
 
     let first_name = |ctx: &mut Context<T>| {
         if let Some(first) = &name.given_name {
@@ -809,6 +849,9 @@ fn write_name<T: EntryLike>(
             ctx.pop_format(idx);
 
             if let Some(suffix) = &name.suffix {
+                if comma_suffix {
+                    ctx.push_str(sort_sep);
+                }
                 ctx.ensure_space();
                 ctx.push_str(suffix);
             }
