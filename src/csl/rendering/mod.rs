@@ -1130,6 +1130,10 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                             self.ctx.resolve_number_variable(var),
                             Some(NumberVariableResult::Regular(MaybeTyped::Typed(_)))
                         ),
+                        Variable::Page(var) => matches!(
+                            self.ctx.resolve_page_variable(var),
+                            Some(MaybeTyped::Typed(_))
+                        ),
                         _ => false,
                     })
                 } else {

@@ -246,11 +246,22 @@ impl FromStr for Numeric {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let mut s = Scanner::new(value);
-        let prefix =
-            s.eat_while(|c: char| !c.is_numeric() && !c.is_whitespace() && c != '-');
+        s.eat_whitespace();
+
+        let prefix = {
+            // Eat non-numeric characters and leading zeros.
+            let start = s.cursor();
+            s.eat_while(|c: char| !c.is_numeric() && c != '-');
+            let zeros = s.eat_while('0');
+            if !zeros.is_empty() && s.peek().is_none_or(|c| !c.is_numeric()) {
+                // Uneat the last zero if the value is just zero.
+                s.uneat();
+            }
+            s.from(start)
+        };
 
         let value = number(&mut s).ok_or(NumericError::NoNumber)?;
-        s.eat_whitespace();
+        let space_after_value = s.eat_whitespace();
 
         let value = match s.peek() {
             Some(c) if is_delimiter(c) => {
@@ -258,6 +269,7 @@ impl FromStr for Numeric {
                 s.eat_until(|c: char| !is_delimiter(c));
                 let mut items = vec![(value, Some(NumericDelimiter::try_from(c)?))];
                 loop {
+                    s.eat_whitespace();
                     let num = number(&mut s).ok_or(NumericError::NoNumber)?;
                     s.eat_whitespace();
                     match NumericDelimiter::from_str(s.eat_while(is_delimiter)) {
@@ -276,7 +288,7 @@ impl FromStr for Numeric {
             _ => NumericValue::Number(value),
         };
         s.eat_whitespace();
-        let post = s.eat_while(|c: char| !c.is_whitespace());
+        let post = s.eat_while(|c: char| !c.is_numeric() && !c.is_whitespace());
 
         if !s.after().is_empty() {
             return Err(NumericError::UnexpectedCharactersAfterPostfix);
@@ -289,7 +301,11 @@ impl FromStr for Numeric {
             } else {
                 Some(Box::new(prefix.to_string()))
             },
-            suffix: if post.is_empty() { None } else { Some(Box::new(post.to_string())) },
+            suffix: if post.is_empty() {
+                None
+            } else {
+                Some(Box::new(format!("{space_after_value}{post}")))
+            },
         })
     }
 }
@@ -324,8 +340,11 @@ pub enum NumericError {
     MissingDelimiter,
 }
 
+/// Eat a number from the scanner, assuming leading whitespaces and zeros have
+/// already been eaten.
+///
+/// The number can be positive, negative, or zero.
 fn number(s: &mut Scanner) -> Option<i32> {
-    s.eat_whitespace();
     let negative = s.eat_if('-');
     let num = s.eat_while(|c: char| c.is_numeric());
     if num.is_empty() {

@@ -537,8 +537,12 @@ ampersands, and hyphens. Numeric variables can express a single number or a
 range and contain only integers, but may contain negative numbers. Numeric variables can have a non-numeric prefix and suffix.
 
 ```yaml
-page-range: S10-15
+page-range: S10-15  # Page S10 to 15
 ```
+
+Note that if you specify a number with a numeric affix, the whole variable will
+be interpreted as a [string](#string) instead. This improves the style for
+atypical page numbers like `11E201`.
 
 #### Unicode Language Identifier
 
