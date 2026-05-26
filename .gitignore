@@ -7,7 +7,6 @@
 # Rust
 /target
 /main/target
-Cargo.lock
 **/*.rs.bk
 
 # macOS
