@@ -601,7 +601,7 @@ impl Override {
     }
 }
 
-const OVERRIDES: [Override; 21] = [
+const OVERRIDES: [Override; 23] = [
     Override::alias("apa", "american-psychological-association", &["apa"]),
     Override::alias("bmj", "british-medical-journal", &["bmj"]),
     Override::first(
@@ -659,6 +659,12 @@ const OVERRIDES: [Override; 21] = [
     Override::first(
         "chicago-notes-bibliography-subsequent-author-title-17th-edition",
         "turabian-fullnote-8",
+    ),
+    Override::alias("nlm-citation-sequence", "nlm-citation-sequence", &["vancouver"]),
+    Override::alias(
+        "nlm-citation-sequence-superscript",
+        "nlm-citation-sequence-superscript",
+        &["vancouver-superscript"],
     ),
 ];
 

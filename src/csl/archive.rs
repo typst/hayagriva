@@ -388,7 +388,9 @@ impl ArchivedStyle {
             "multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
             "nature" => Some(Self::Nature),
             "nlm-citation-sequence" => Some(Self::NlmCitationSequence),
+            "vancouver" => Some(Self::NlmCitationSequence),
             "nlm-citation-sequence-superscript" => Some(Self::NlmCitationSequenceSuperscript),
+            "vancouver-superscript" => Some(Self::NlmCitationSequenceSuperscript),
             "pensoft" => Some(Self::Pensoft),
             "public-library-of-science" => Some(Self::PublicLibraryOfScience),
             "plos" => Some(Self::PublicLibraryOfScience),
@@ -846,9 +848,11 @@ impl ArchivedStyle {
             ],
             Self::NlmCitationSequence => &[
                 "nlm-citation-sequence",
+                "vancouver",
             ],
             Self::NlmCitationSequenceSuperscript => &[
                 "nlm-citation-sequence-superscript",
+                "vancouver-superscript",
             ],
             Self::Pensoft => &[
                 "pensoft",
