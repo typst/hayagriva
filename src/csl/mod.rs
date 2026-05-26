@@ -49,11 +49,13 @@ mod taxonomy;
 pub struct BibliographyDriver<'a, T: EntryLike> {
     /// The citations we have seen so far.
     citations: Vec<CitationRequest<'a, T>>,
+    /// Offset to apply to the citation number (for numeric styles).
+    citation_number_offset: usize,
 }
 
 impl<T: EntryLike> Default for BibliographyDriver<'_, T> {
     fn default() -> Self {
-        Self { citations: Vec::new() }
+        Self { citations: Vec::new(), citation_number_offset: 0 }
     }
 }
 
@@ -83,6 +85,18 @@ impl<'a, T: EntryLike> BibliographyDriver<'a, T> {
     /// Create a new bibliography driver.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Adds a citation number offset to the driver.
+    ///
+    /// This is used when determining the number of numeric styles. When a
+    /// citation would usually be numbered `[1]` and this is set to `2`, it
+    /// would be numbered as `[3]`.
+    ///
+    /// This is primarily useful when managing multiple bibliographies.
+    pub fn with_citation_number_offset(mut self, offset: usize) -> Self {
+        self.citation_number_offset = offset;
+        self
     }
 
     /// Create a new citation with the given items.
@@ -368,7 +382,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
             .is_none()
         {
             let mut seen: HashMap<*const T, usize> = HashMap::new();
-            let mut start = 0;
+            let mut start = self.citation_number_offset;
             for cite in res.iter_mut() {
                 for item in cite.items.iter_mut() {
                     item.cite_props.speculative.citation_number =
