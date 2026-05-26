@@ -5,12 +5,15 @@ env:
   RUSTFLAGS: "-Dwarnings"
   RUSTDOCFLAGS: "-Dwarnings"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dtolnay/rust-toolchain@3056ad9b1fc916cb9a55f7f72ae4a848b7d50249 # 1.91.0
       - run: cargo build
       - run: cargo test --features csl-json
 
@@ -18,11 +21,11 @@ jobs:
     name: Check clippy, formatting, and documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.91.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dtolnay/rust-toolchain@3056ad9b1fc916cb9a55f7f72ae4a848b7d50249 # 1.91.0
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - run: cargo clippy --workspace --all-targets --all-features
       - run: cargo fmt --check --all
       - run: cargo doc --workspace --no-deps
