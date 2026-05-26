@@ -452,10 +452,10 @@ journal:
 
 #### Person
 
-A person consists of a name and optionally, a given name, a prefix, and a suffix for the (family) name as well as an alias. Usually, you specify a person as a string with the prefix and the last name first, then a comma, followed by a given name, another comma, and then finally the suffix. Following items are valid persons:
+A person consists of a name and optionally, a given name, a prefix, and a suffix for the (family) name as well as an alias. Usually, you specify a person as a string with the prefix and the last name first, then a comma, optionally followed by a suffix, another comma, and then finally the given name. Following items are valid persons:
 
 - `Doe, Janet`
-- `Luther King, Martin, Jr.`
+- `Luther King, Jr., Martin`
 - `UNICEF`
 - `von der Leyen, Ursula`
 

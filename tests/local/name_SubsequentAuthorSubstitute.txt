@@ -1,0 +1,92 @@
+>>==== MODE ====>>
+bibliography
+<<==== MODE ====<<
+
+>>==== RESULT ====>>
+<div class="csl-bib-body">
+  <div class="csl-entry">Bumke, Courtly Culture: Literature and Society in the High Middle Ages</div>
+  <div class="csl-entry">-----, Höfische</div>
+</div>
+<<==== RESULT ====<<
+
+>>==== CITATION-ITEMS ====>>
+[
+    [
+        {
+            "id": "ITEM1"
+        }
+    ],
+    [
+        {
+            "id": "ITEM2"
+        }
+    ]
+]
+<<==== CITATION-ITEMS ====<<
+
+>>==== CSL ====>>
+<?xml version="1.0" encoding="utf-8"?>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout>
+      <text value="Bogus"/>
+    </layout>
+  </citation>
+  <bibliography subsequent-author-substitute="-----">
+    <layout>
+      <group delimiter=", ">
+        <names variable="author">
+          <name form="short" and="text"/>
+        </names>
+        <text variable="title"/>
+        <names variable="translator">
+          <name form="short" and="text"/>
+          <label form="short" prefix=" "/>
+        </names>
+      </group>
+    </layout>
+  </bibliography>
+</style>
+<<==== CSL ====<<
+
+>>==== INPUT ====>>
+[
+  {
+    "id": "ITEM1",
+    "author": [
+        {
+            "family": "Bumke",
+            "given": "Joachim"
+        }
+    ],
+    "title": "Courtly Culture: Literature and Society in the High Middle Ages",
+    "type": "book"
+  },
+  {
+    "id": "ITEM2",
+    "author": [
+        {
+            "family": "Bumke",
+            "given": "Joachim"
+        }
+    ],
+    "title": "Höfische",
+    "type": "book"
+  }
+]
+<<==== INPUT ====<<
+
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<
+
