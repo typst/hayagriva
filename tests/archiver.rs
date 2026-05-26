@@ -689,7 +689,7 @@ const OVERRIDES: [Override; 23] = [
     Override::alias(
         "cse-citation-sequence-brackets-8th-edition",
         "cse-citation-sequence-brackets-8th-edition",
-        &["council-of-science-editors-brackets"],
+        &["council-of-science-editors"],
     ),
 ];
 

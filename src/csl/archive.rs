@@ -369,7 +369,7 @@ impl ArchivedStyle {
             "chicago-shortened-notes" => Some(Self::ChicagoShortenedNotes),
             "copernicus" => Some(Self::Copernicus),
             "cse-citation-sequence-brackets-8th-edition" => Some(Self::CseCitationSequenceBrackets8thEdition),
-            "council-of-science-editors-brackets" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "council-of-science-editors" => Some(Self::CseCitationSequenceBrackets8thEdition),
             "cse-name-year" => Some(Self::CseNameYear),
             "council-of-science-editors-author-date" => Some(Self::CseNameYear),
             "current-opinion" => Some(Self::CurrentOpinion),
@@ -790,7 +790,7 @@ impl ArchivedStyle {
             ],
             Self::CseCitationSequenceBrackets8thEdition => &[
                 "cse-citation-sequence-brackets-8th-edition",
-                "council-of-science-editors-brackets",
+                "council-of-science-editors",
             ],
             Self::CseNameYear => &[
                 "cse-name-year",
