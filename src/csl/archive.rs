@@ -17,7 +17,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Sebastian Karcher.
     AmericanAnthropologicalAssociation,
-    /// American Chemical Society.
+    /// ACS Guide 2022 revision.
     ///
     /// Authors: Julian Onions.
     AmericanChemicalSociety,
@@ -29,19 +29,19 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Garrett Foster.
     AmericanInstituteOfAeronauticsAndAstronautics,
-    /// American Institute of Physics 4th edition.
+    /// AIP Style Manual 4th edition.
     ///
     /// Authors: Richard Karnesky.
     AmericanInstituteOfPhysics,
-    /// Amercian Mathematical Society (label).
+    /// American Mathematical Society (label).
     ///
     /// Authors: American Mathematical Society.
     AmericanMathematicalSocietyLabel,
-    /// Amercian Mathematical Society (numeric).
+    /// American Mathematical Society (numeric).
     ///
     /// Authors: American Mathematical Society.
     AmericanMathematicalSocietyNumeric,
-    /// American Medical Association 11th edition.
+    /// AMA Manual of Style 11th edition.
     ///
     /// Authors: Julian Onions.
     AmericanMedicalAssociation,
@@ -57,13 +57,13 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Michael Berkowitz.
     AmericanPhysiologicalSociety,
-    /// American Political Science Association.
+    /// APSA Style Manual revised 2018 edition.
     ///
     /// Authors: Julian Onions.
     AmericanPoliticalScienceAssociation,
-    /// American Psychological Association 7th edition.
+    /// APA Style 7th edition.
     ///
-    /// Authors: Brenton M. Wiernik.
+    /// Authors: Brenton M. Wiernik, Andrew Dunning.
     AmericanPsychologicalAssociation,
     /// American Society for Microbiology.
     ///
@@ -77,7 +77,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Richard Karnesky.
     AmericanSocietyOfMechanicalEngineers,
-    /// American Sociological Association 6th/7th edition.
+    /// ASA Style Guide 6th/7th edition.
     ///
     /// Authors: Julian Onions.
     AmericanSociologicalAssociation,
@@ -133,14 +133,14 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Julian Onions.
     Copernicus,
-    /// Council of Science Editors, Citation-Sequence (numeric, brackets).
+    /// CSE Manual: Scientific Style and Format 8th edition (citation-sequence, brackets).
     ///
     /// Authors: Pavel Giverts.
-    CouncilOfScienceEditors,
-    /// Council of Science Editors, Name-Year 9th edition (author-date).
+    CseCitationSequenceBrackets8thEdition,
+    /// CSE Manual: Scientific Style and Format 9th edition (name-year).
     ///
     /// Authors: Patrick O'Brien.
-    CouncilOfScienceEditorsAuthorDate,
+    CseNameYear,
     /// Current Opinion journals.
     ///
     /// Authors: David M. Kaplan.
@@ -153,11 +153,11 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Philipp Zumstein.
     DeutscheSprache,
-    /// Elsevier - Harvard (with titles).
+    /// Elsevier (author-date/Harvard, with titles).
     ///
     /// Authors: David Kaplan.
     ElsevierHarvard,
-    /// Elsevier - Vancouver.
+    /// Elsevier - NLM/Vancouver (citation-sequence).
     ///
     /// Authors: Richard Karnesky.
     ElsevierVancouver,
@@ -197,11 +197,11 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Yurkin Maxim.
     GostR7052008Numeric,
-    /// Cite Them Right 12th edition - Harvard.
+    /// Cite Them Right 12th edition (author-date/Harvard).
     ///
     /// Authors: Patrick O'Brien.
     HarvardCiteThemRight,
-    /// IEEE.
+    /// IEEE Reference Guide version 11.29.2023.
     ///
     /// Authors: Michael Berkowitz.
     InstituteOfElectricalAndElectronicsEngineers,
@@ -221,22 +221,18 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Sebastian Karcher.
     Karger,
-    /// Mary Ann Liebert - Vancouver.
+    /// Mary Ann Liebert - NLM/Vancouver.
     ///
     /// Authors: Patrick O'Brien.
     MaryAnnLiebertVancouver,
-    /// Modern Humanities Research Association 4th edition (notes).
+    /// MHRA Style Guide 4th edition (notes).
     ///
     /// Authors: Andrew Dunning.
     ModernHumanitiesResearchAssociationNotes,
-    /// Modern Language Association 9th edition (in-text citations).
+    /// MLA Handbook 9th edition (in-text citations).
     ///
     /// Authors: Sebastian Karcher, Andrew Dunning.
     ModernLanguageAssociation,
-    /// Modern Language Association 8th edition.
-    ///
-    /// Authors: Sebastian Karcher.
-    ModernLanguageAssociation8,
     /// Multidisciplinary Digital Publishing Institute.
     ///
     /// Authors: Sebastian Karcher.
@@ -245,6 +241,14 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Michael Berkowitz.
     Nature,
+    /// NLM/Vancouver: Citing Medicine 2nd edition (citation-sequence).
+    ///
+    /// Authors: Michael Berkowitz, Andrew Dunning.
+    NlmCitationSequence,
+    /// NLM/Vancouver: Citing Medicine 2nd edition (citation-sequence, superscript).
+    ///
+    /// Authors: Michael Berkowitz, Andrew Dunning.
+    NlmCitationSequenceSuperscript,
     /// Pensoft Journals.
     ///
     /// Authors: Brian Stucky, Teodor Georgiev.
@@ -257,7 +261,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Julian Onions.
     RoyalSocietyOfChemistry,
-    /// SAGE - Vancouver.
+    /// SAGE - NLM/Vancouver.
     ///
     /// Authors: Michael Berkowitz.
     SageVancouver,
@@ -297,7 +301,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Charles Parnot.
     SpringerSocpsychAuthorDate,
-    /// Springer - Vancouver (brackets).
+    /// Springer - NLM/Vancouver (citation-sequence, brackets).
     ///
     /// Authors: Charles Parnot.
     SpringerVancouver,
@@ -305,7 +309,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Andrew Dunning.
     TaylorAndFrancisChicagoAuthorDate,
-    /// Taylor & Francis - National Library of Medicine.
+    /// Taylor & Francis - NLM/Vancouver (citation-sequence, brackets).
     ///
     /// Authors: Sebastian Karcher.
     TaylorAndFrancisNationalLibraryOfMedicine,
@@ -333,14 +337,6 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Andrew Dunning.
     TurabianFullnote8,
-    /// Vancouver.
-    ///
-    /// Authors: Michael Berkowitz.
-    Vancouver,
-    /// Vancouver (superscript).
-    ///
-    /// Authors: Michael Berkowitz.
-    VancouverSuperscript,
 }
 
 #[rustfmt::skip]
@@ -382,8 +378,10 @@ impl ArchivedStyle {
             "chicago-fullnotes" => Some(Self::ChicagoNotes),
             "chicago-shortened-notes" => Some(Self::ChicagoShortenedNotes),
             "copernicus" => Some(Self::Copernicus),
-            "council-of-science-editors" => Some(Self::CouncilOfScienceEditors),
-            "council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
+            "cse-citation-sequence-brackets-8th-edition" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "council-of-science-editors" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "cse-name-year" => Some(Self::CseNameYear),
+            "council-of-science-editors-author-date" => Some(Self::CseNameYear),
             "current-opinion" => Some(Self::CurrentOpinion),
             "deutsche-gesellschaft-für-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
             "deutsche-sprache" => Some(Self::DeutscheSprache),
@@ -410,10 +408,12 @@ impl ArchivedStyle {
             "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
-            "modern-language-association-8" => Some(Self::ModernLanguageAssociation8),
-            "mla-8" => Some(Self::ModernLanguageAssociation8),
             "multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
             "nature" => Some(Self::Nature),
+            "nlm-citation-sequence" => Some(Self::NlmCitationSequence),
+            "vancouver" => Some(Self::NlmCitationSequence),
+            "nlm-citation-sequence-superscript" => Some(Self::NlmCitationSequenceSuperscript),
+            "vancouver-superscript" => Some(Self::NlmCitationSequenceSuperscript),
             "pensoft" => Some(Self::Pensoft),
             "public-library-of-science" => Some(Self::PublicLibraryOfScience),
             "plos" => Some(Self::PublicLibraryOfScience),
@@ -437,8 +437,6 @@ impl ArchivedStyle {
             "trends" => Some(Self::Trends),
             "turabian-author-date" => Some(Self::TurabianAuthorDate),
             "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
-            "vancouver" => Some(Self::Vancouver),
-            "vancouver-superscript" => Some(Self::VancouverSuperscript),
             _ => None,
         }
     }
@@ -477,8 +475,8 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/chicago-notes-bibliography" => Some(Self::ChicagoNotes),
             "http://www.zotero.org/styles/chicago-shortened-notes-bibliography" => Some(Self::ChicagoShortenedNotes),
             "http://www.zotero.org/styles/copernicus-publications" => Some(Self::Copernicus),
-            "http://www.zotero.org/styles/council-of-science-editors-brackets" => Some(Self::CouncilOfScienceEditors),
-            "http://www.zotero.org/styles/council-of-science-editors-author-date" => Some(Self::CouncilOfScienceEditorsAuthorDate),
+            "http://www.zotero.org/styles/cse-citation-sequence-brackets-8th-edition" => Some(Self::CseCitationSequenceBrackets8thEdition),
+            "http://www.zotero.org/styles/cse-name-year" => Some(Self::CseNameYear),
             "http://www.zotero.org/styles/current-opinion" => Some(Self::CurrentOpinion),
             "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie" => Some(Self::DeutscheGesellschaftFürPsychologie),
             "http://www.zotero.org/styles/deutsche-sprache" => Some(Self::DeutscheSprache),
@@ -500,11 +498,12 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/iso690-numeric-en" => Some(Self::Iso690Numeric),
             "http://www.zotero.org/styles/karger-journals" => Some(Self::Karger),
             "http://www.zotero.org/styles/mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
-            "http://www.zotero.org/styles/modern-humanities-research-association-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
+            "http://www.zotero.org/styles/mhra-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "http://www.zotero.org/styles/modern-language-association" => Some(Self::ModernLanguageAssociation),
-            "http://www.zotero.org/styles/modern-language-association-8th-edition" => Some(Self::ModernLanguageAssociation8),
             "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute" => Some(Self::MultidisciplinaryDigitalPublishingInstitute),
             "http://www.zotero.org/styles/nature" => Some(Self::Nature),
+            "http://www.zotero.org/styles/nlm-citation-sequence" => Some(Self::NlmCitationSequence),
+            "http://www.zotero.org/styles/nlm-citation-sequence-superscript" => Some(Self::NlmCitationSequenceSuperscript),
             "http://www.zotero.org/styles/pensoft-journals" => Some(Self::Pensoft),
             "http://www.zotero.org/styles/plos" => Some(Self::PublicLibraryOfScience),
             "http://www.zotero.org/styles/royal-society-of-chemistry" => Some(Self::RoyalSocietyOfChemistry),
@@ -527,8 +526,6 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/trends-journals" => Some(Self::Trends),
             "http://www.zotero.org/styles/chicago-author-date-17th-edition" => Some(Self::TurabianAuthorDate),
             "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition" => Some(Self::TurabianFullnote8),
-            "http://www.zotero.org/styles/vancouver" => Some(Self::Vancouver),
-            "http://www.zotero.org/styles/vancouver-superscript" => Some(Self::VancouverSuperscript),
             _ => None
         }
     }
@@ -567,8 +564,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes,
             Self::ChicagoShortenedNotes,
             Self::Copernicus,
-            Self::CouncilOfScienceEditors,
-            Self::CouncilOfScienceEditorsAuthorDate,
+            Self::CseCitationSequenceBrackets8thEdition,
+            Self::CseNameYear,
             Self::CurrentOpinion,
             Self::DeutscheGesellschaftFürPsychologie,
             Self::DeutscheSprache,
@@ -592,9 +589,10 @@ impl ArchivedStyle {
             Self::MaryAnnLiebertVancouver,
             Self::ModernHumanitiesResearchAssociationNotes,
             Self::ModernLanguageAssociation,
-            Self::ModernLanguageAssociation8,
             Self::MultidisciplinaryDigitalPublishingInstitute,
             Self::Nature,
+            Self::NlmCitationSequence,
+            Self::NlmCitationSequenceSuperscript,
             Self::Pensoft,
             Self::PublicLibraryOfScience,
             Self::RoyalSocietyOfChemistry,
@@ -617,8 +615,6 @@ impl ArchivedStyle {
             Self::Trends,
             Self::TurabianAuthorDate,
             Self::TurabianFullnote8,
-            Self::Vancouver,
-            Self::VancouverSuperscript,
         ]
     }
 
@@ -656,8 +652,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes => include_bytes!("../../archive/styles/chicago-notes-bibliography.cbor"),
             Self::ChicagoShortenedNotes => include_bytes!("../../archive/styles/chicago-shortened-notes-bibliography.cbor"),
             Self::Copernicus => include_bytes!("../../archive/styles/copernicus-publications.cbor"),
-            Self::CouncilOfScienceEditors => include_bytes!("../../archive/styles/council-of-science-editors-brackets.cbor"),
-            Self::CouncilOfScienceEditorsAuthorDate => include_bytes!("../../archive/styles/council-of-science-editors-author-date.cbor"),
+            Self::CseCitationSequenceBrackets8thEdition => include_bytes!("../../archive/styles/cse-citation-sequence-brackets-8th-edition.cbor"),
+            Self::CseNameYear => include_bytes!("../../archive/styles/cse-name-year.cbor"),
             Self::CurrentOpinion => include_bytes!("../../archive/styles/current-opinion.cbor"),
             Self::DeutscheGesellschaftFürPsychologie => include_bytes!("../../archive/styles/deutsche-gesellschaft-fur-psychologie.cbor"),
             Self::DeutscheSprache => include_bytes!("../../archive/styles/deutsche-sprache.cbor"),
@@ -679,11 +675,12 @@ impl ArchivedStyle {
             Self::Iso690Numeric => include_bytes!("../../archive/styles/iso690-numeric-en.cbor"),
             Self::Karger => include_bytes!("../../archive/styles/karger-journals.cbor"),
             Self::MaryAnnLiebertVancouver => include_bytes!("../../archive/styles/mary-ann-liebert-vancouver.cbor"),
-            Self::ModernHumanitiesResearchAssociationNotes => include_bytes!("../../archive/styles/modern-humanities-research-association-notes.cbor"),
+            Self::ModernHumanitiesResearchAssociationNotes => include_bytes!("../../archive/styles/mhra-notes.cbor"),
             Self::ModernLanguageAssociation => include_bytes!("../../archive/styles/modern-language-association.cbor"),
-            Self::ModernLanguageAssociation8 => include_bytes!("../../archive/styles/modern-language-association-8th-edition.cbor"),
             Self::MultidisciplinaryDigitalPublishingInstitute => include_bytes!("../../archive/styles/multidisciplinary-digital-publishing-institute.cbor"),
             Self::Nature => include_bytes!("../../archive/styles/nature.cbor"),
+            Self::NlmCitationSequence => include_bytes!("../../archive/styles/nlm-citation-sequence.cbor"),
+            Self::NlmCitationSequenceSuperscript => include_bytes!("../../archive/styles/nlm-citation-sequence-superscript.cbor"),
             Self::Pensoft => include_bytes!("../../archive/styles/pensoft-journals.cbor"),
             Self::PublicLibraryOfScience => include_bytes!("../../archive/styles/plos.cbor"),
             Self::RoyalSocietyOfChemistry => include_bytes!("../../archive/styles/royal-society-of-chemistry.cbor"),
@@ -706,8 +703,6 @@ impl ArchivedStyle {
             Self::Trends => include_bytes!("../../archive/styles/trends-journals.cbor"),
             Self::TurabianAuthorDate => include_bytes!("../../archive/styles/chicago-author-date-17th-edition.cbor"),
             Self::TurabianFullnote8 => include_bytes!("../../archive/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition.cbor"),
-            Self::Vancouver => include_bytes!("../../archive/styles/vancouver.cbor"),
-            Self::VancouverSuperscript => include_bytes!("../../archive/styles/vancouver-superscript.cbor"),
         }
     }
 
@@ -815,10 +810,12 @@ impl ArchivedStyle {
             Self::Copernicus => &[
                 "copernicus",
             ],
-            Self::CouncilOfScienceEditors => &[
+            Self::CseCitationSequenceBrackets8thEdition => &[
+                "cse-citation-sequence-brackets-8th-edition",
                 "council-of-science-editors",
             ],
-            Self::CouncilOfScienceEditorsAuthorDate => &[
+            Self::CseNameYear => &[
+                "cse-name-year",
                 "council-of-science-editors-author-date",
             ],
             Self::CurrentOpinion => &[
@@ -893,15 +890,19 @@ impl ArchivedStyle {
                 "modern-language-association",
                 "mla",
             ],
-            Self::ModernLanguageAssociation8 => &[
-                "modern-language-association-8",
-                "mla-8",
-            ],
             Self::MultidisciplinaryDigitalPublishingInstitute => &[
                 "multidisciplinary-digital-publishing-institute",
             ],
             Self::Nature => &[
                 "nature",
+            ],
+            Self::NlmCitationSequence => &[
+                "nlm-citation-sequence",
+                "vancouver",
+            ],
+            Self::NlmCitationSequenceSuperscript => &[
+                "nlm-citation-sequence-superscript",
+                "vancouver-superscript",
             ],
             Self::Pensoft => &[
                 "pensoft",
@@ -970,12 +971,6 @@ impl ArchivedStyle {
             Self::TurabianFullnote8 => &[
                 "turabian-fullnote-8",
             ],
-            Self::Vancouver => &[
-                "vancouver",
-            ],
-            Self::VancouverSuperscript => &[
-                "vancouver-superscript",
-            ],
         }
     }
 
@@ -984,22 +979,22 @@ impl ArchivedStyle {
         match self {
             Self::Alphanumeric => "Alphanumeric",
             Self::AmericanAnthropologicalAssociation => "American Anthropological Association",
-            Self::AmericanChemicalSociety => "American Chemical Society",
+            Self::AmericanChemicalSociety => "ACS Guide 2022 revision",
             Self::AmericanGeophysicalUnion => "American Geophysical Union",
             Self::AmericanInstituteOfAeronauticsAndAstronautics => "American Institute of Aeronautics and Astronautics",
-            Self::AmericanInstituteOfPhysics => "American Institute of Physics 4th edition",
-            Self::AmericanMathematicalSocietyLabel => "Amercian Mathematical Society (label)",
-            Self::AmericanMathematicalSocietyNumeric => "Amercian Mathematical Society (numeric)",
-            Self::AmericanMedicalAssociation => "American Medical Association 11th edition",
+            Self::AmericanInstituteOfPhysics => "AIP Style Manual 4th edition",
+            Self::AmericanMathematicalSocietyLabel => "American Mathematical Society (label)",
+            Self::AmericanMathematicalSocietyNumeric => "American Mathematical Society (numeric)",
+            Self::AmericanMedicalAssociation => "AMA Manual of Style 11th edition",
             Self::AmericanMeteorologicalSociety => "American Meteorological Society",
             Self::AmericanPhysicsSociety => "American Physical Society",
             Self::AmericanPhysiologicalSociety => "American Physiological Society",
-            Self::AmericanPoliticalScienceAssociation => "American Political Science Association",
-            Self::AmericanPsychologicalAssociation => "American Psychological Association 7th edition",
+            Self::AmericanPoliticalScienceAssociation => "APSA Style Manual revised 2018 edition",
+            Self::AmericanPsychologicalAssociation => "APA Style 7th edition",
             Self::AmericanSocietyForMicrobiology => "American Society for Microbiology",
             Self::AmericanSocietyOfCivilEngineers => "American Society of Civil Engineers",
             Self::AmericanSocietyOfMechanicalEngineers => "American Society of Mechanical Engineers",
-            Self::AmericanSociologicalAssociation => "American Sociological Association 6th/7th edition",
+            Self::AmericanSociologicalAssociation => "ASA Style Guide 6th/7th edition",
             Self::AngewandteChemie => "Angewandte Chemie International Edition",
             Self::AnnualReviews => "Annual Reviews (sorted by order of appearance)",
             Self::AnnualReviewsAuthorDate => "Annual Reviews (author-date)",
@@ -1013,13 +1008,13 @@ impl ArchivedStyle {
             Self::ChicagoNotes => "Chicago Manual of Style 18th edition (notes and bibliography)",
             Self::ChicagoShortenedNotes => "Chicago Manual of Style 18th edition (shortened notes and bibliography)",
             Self::Copernicus => "Copernicus Publications",
-            Self::CouncilOfScienceEditors => "Council of Science Editors, Citation-Sequence (numeric, brackets)",
-            Self::CouncilOfScienceEditorsAuthorDate => "Council of Science Editors, Name-Year 9th edition (author-date)",
+            Self::CseCitationSequenceBrackets8thEdition => "CSE Manual: Scientific Style and Format 8th edition (citation-sequence, brackets)",
+            Self::CseNameYear => "CSE Manual: Scientific Style and Format 9th edition (name-year)",
             Self::CurrentOpinion => "Current Opinion journals",
             Self::DeutscheGesellschaftFürPsychologie => "Deutsche Gesellschaft für Psychologie 5. Auflage (Deutsch)",
             Self::DeutscheSprache => "Deutsche Sprache (Deutsch)",
-            Self::ElsevierHarvard => "Elsevier - Harvard (with titles)",
-            Self::ElsevierVancouver => "Elsevier - Vancouver",
+            Self::ElsevierHarvard => "Elsevier (author-date/Harvard, with titles)",
+            Self::ElsevierVancouver => "Elsevier - NLM/Vancouver (citation-sequence)",
             Self::ElsevierWithTitles => "Elsevier (numeric, with titles)",
             Self::Frontiers => "Frontiers journals",
             Self::FutureMedicine => "Future Medicine journals",
@@ -1029,22 +1024,23 @@ impl ArchivedStyle {
             Self::Gb77142015Note => "China National Standard GB/T 7714-2015 (note, 中文)",
             Self::Gb77142015Numeric => "China National Standard GB/T 7714-2015 (numeric, 中文)",
             Self::GostR7052008Numeric => "Russian GOST R 7.0.5-2008 (numeric)",
-            Self::HarvardCiteThemRight => "Cite Them Right 12th edition - Harvard",
-            Self::InstituteOfElectricalAndElectronicsEngineers => "IEEE",
+            Self::HarvardCiteThemRight => "Cite Them Right 12th edition (author-date/Harvard)",
+            Self::InstituteOfElectricalAndElectronicsEngineers => "IEEE Reference Guide version 11.29.2023",
             Self::InstituteOfPhysicsNumeric => "Institute of Physics (numeric)",
             Self::Iso690AuthorDate => "ISO-690 (author-date, English)",
             Self::Iso690Numeric => "ISO-690 (numeric, English)",
             Self::Karger => "Karger journals",
-            Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - Vancouver",
-            Self::ModernHumanitiesResearchAssociationNotes => "Modern Humanities Research Association 4th edition (notes)",
-            Self::ModernLanguageAssociation => "Modern Language Association 9th edition (in-text citations)",
-            Self::ModernLanguageAssociation8 => "Modern Language Association 8th edition",
+            Self::MaryAnnLiebertVancouver => "Mary Ann Liebert - NLM/Vancouver",
+            Self::ModernHumanitiesResearchAssociationNotes => "MHRA Style Guide 4th edition (notes)",
+            Self::ModernLanguageAssociation => "MLA Handbook 9th edition (in-text citations)",
             Self::MultidisciplinaryDigitalPublishingInstitute => "Multidisciplinary Digital Publishing Institute",
             Self::Nature => "Nature",
+            Self::NlmCitationSequence => "NLM/Vancouver: Citing Medicine 2nd edition (citation-sequence)",
+            Self::NlmCitationSequenceSuperscript => "NLM/Vancouver: Citing Medicine 2nd edition (citation-sequence, superscript)",
             Self::Pensoft => "Pensoft Journals",
             Self::PublicLibraryOfScience => "Public Library of Science",
             Self::RoyalSocietyOfChemistry => "Royal Society of Chemistry",
-            Self::SageVancouver => "SAGE - Vancouver",
+            Self::SageVancouver => "SAGE - NLM/Vancouver",
             Self::Sist02 => "SIST02 (日本語)",
             Self::Spie => "SPIE journals",
             Self::SpringerBasic => "Springer - Basic (numeric, brackets)",
@@ -1054,17 +1050,15 @@ impl ArchivedStyle {
             Self::SpringerLectureNotesInComputerScience => "Springer - Lecture Notes in Computer Science",
             Self::SpringerMathphys => "Springer - MathPhys (numeric, brackets)",
             Self::SpringerSocpsychAuthorDate => "Springer - SocPsych (author-date)",
-            Self::SpringerVancouver => "Springer - Vancouver (brackets)",
+            Self::SpringerVancouver => "Springer - NLM/Vancouver (citation-sequence, brackets)",
             Self::TaylorAndFrancisChicagoAuthorDate => "Taylor & Francis Journals Standard Reference Style Guide: Chicago author-date version 2.0",
-            Self::TaylorAndFrancisNationalLibraryOfMedicine => "Taylor & Francis - National Library of Medicine",
+            Self::TaylorAndFrancisNationalLibraryOfMedicine => "Taylor & Francis - NLM/Vancouver (citation-sequence, brackets)",
             Self::TheInstitutionOfEngineeringAndTechnology => "The Institution of Engineering and Technology",
             Self::TheLancet => "The Lancet",
             Self::Thieme => "Thieme-German (Deutsch)",
             Self::Trends => "Trends journals",
             Self::TurabianAuthorDate => "Chicago Manual of Style 17th edition (author-date)",
             Self::TurabianFullnote8 => "Chicago Manual of Style 17th edition (notes and bibliography, subsequent author-title)",
-            Self::Vancouver => "Vancouver",
-            Self::VancouverSuperscript => "Vancouver (superscript)",
         }
     }
 
@@ -1102,8 +1096,8 @@ impl ArchivedStyle {
             Self::ChicagoNotes => "http://www.zotero.org/styles/chicago-notes-bibliography",
             Self::ChicagoShortenedNotes => "http://www.zotero.org/styles/chicago-shortened-notes-bibliography",
             Self::Copernicus => "http://www.zotero.org/styles/copernicus-publications",
-            Self::CouncilOfScienceEditors => "http://www.zotero.org/styles/council-of-science-editors-brackets",
-            Self::CouncilOfScienceEditorsAuthorDate => "http://www.zotero.org/styles/council-of-science-editors-author-date",
+            Self::CseCitationSequenceBrackets8thEdition => "http://www.zotero.org/styles/cse-citation-sequence-brackets-8th-edition",
+            Self::CseNameYear => "http://www.zotero.org/styles/cse-name-year",
             Self::CurrentOpinion => "http://www.zotero.org/styles/current-opinion",
             Self::DeutscheGesellschaftFürPsychologie => "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
             Self::DeutscheSprache => "http://www.zotero.org/styles/deutsche-sprache",
@@ -1125,11 +1119,12 @@ impl ArchivedStyle {
             Self::Iso690Numeric => "http://www.zotero.org/styles/iso690-numeric-en",
             Self::Karger => "http://www.zotero.org/styles/karger-journals",
             Self::MaryAnnLiebertVancouver => "http://www.zotero.org/styles/mary-ann-liebert-vancouver",
-            Self::ModernHumanitiesResearchAssociationNotes => "http://www.zotero.org/styles/modern-humanities-research-association-notes",
+            Self::ModernHumanitiesResearchAssociationNotes => "http://www.zotero.org/styles/mhra-notes",
             Self::ModernLanguageAssociation => "http://www.zotero.org/styles/modern-language-association",
-            Self::ModernLanguageAssociation8 => "http://www.zotero.org/styles/modern-language-association-8th-edition",
             Self::MultidisciplinaryDigitalPublishingInstitute => "http://www.zotero.org/styles/multidisciplinary-digital-publishing-institute",
             Self::Nature => "http://www.zotero.org/styles/nature",
+            Self::NlmCitationSequence => "http://www.zotero.org/styles/nlm-citation-sequence",
+            Self::NlmCitationSequenceSuperscript => "http://www.zotero.org/styles/nlm-citation-sequence-superscript",
             Self::Pensoft => "http://www.zotero.org/styles/pensoft-journals",
             Self::PublicLibraryOfScience => "http://www.zotero.org/styles/plos",
             Self::RoyalSocietyOfChemistry => "http://www.zotero.org/styles/royal-society-of-chemistry",
@@ -1152,8 +1147,6 @@ impl ArchivedStyle {
             Self::Trends => "http://www.zotero.org/styles/trends-journals",
             Self::TurabianAuthorDate => "http://www.zotero.org/styles/chicago-author-date-17th-edition",
             Self::TurabianFullnote8 => "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition",
-            Self::Vancouver => "http://www.zotero.org/styles/vancouver",
-            Self::VancouverSuperscript => "http://www.zotero.org/styles/vancouver-superscript",
         }
     }
 }
@@ -1194,6 +1187,7 @@ pub const LOCALES: &[&[u8]] = &[
     include_bytes!("../../archive/locales/hi-IN.cbor"),
     include_bytes!("../../archive/locales/hr-HR.cbor"),
     include_bytes!("../../archive/locales/hu-HU.cbor"),
+    include_bytes!("../../archive/locales/hy-AM.cbor"),
     include_bytes!("../../archive/locales/id-ID.cbor"),
     include_bytes!("../../archive/locales/is-IS.cbor"),
     include_bytes!("../../archive/locales/it-IT.cbor"),
@@ -1221,6 +1215,7 @@ pub const LOCALES: &[&[u8]] = &[
     include_bytes!("../../archive/locales/sr-Latn-RS.cbor"),
     include_bytes!("../../archive/locales/sv-SE.cbor"),
     include_bytes!("../../archive/locales/th-TH.cbor"),
+    include_bytes!("../../archive/locales/tl-PH.cbor"),
     include_bytes!("../../archive/locales/tr-TR.cbor"),
     include_bytes!("../../archive/locales/uk-UA.cbor"),
     include_bytes!("../../archive/locales/vi-VN.cbor"),
