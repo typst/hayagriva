@@ -257,6 +257,7 @@ impl RenderCsl for Names {
             if let Some(substitute) = &self.substitute() {
                 ctx.writing.start_suppressing_queried_variables();
 
+                let depth = ctx.push_elem(self.to_formatting());
                 for child in &substitute.children {
                     let len = ctx.writing.len();
                     if let LayoutRenderingElement::Names(names_child) = child {
@@ -269,6 +270,7 @@ impl RenderCsl for Names {
                     }
                 }
 
+                ctx.commit_elem(depth, self.display, Some(ElemMeta::Names));
                 ctx.writing.stop_suppressing_queried_variables();
             }
 
@@ -648,6 +650,7 @@ fn write_name<T: EntryLike>(
         family_part.map(|p| &p.affixes).and_then(|f| f.prefix.as_ref()),
         family_part.map(|p| &p.affixes).and_then(|f| f.suffix.as_ref()),
     ];
+    let comma_suffix = name.comma_suffix;
 
     let first_name = |ctx: &mut Context<T>| {
         if let Some(first) = &name.given_name {
@@ -858,6 +861,9 @@ fn write_name<T: EntryLike>(
             ctx.pop_format(idx);
 
             if let Some(suffix) = &name.suffix {
+                if comma_suffix {
+                    ctx.push_str(sort_sep);
+                }
                 ctx.ensure_space();
                 ctx.push_str(suffix);
             }
