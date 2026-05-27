@@ -107,8 +107,8 @@ impl From<&[Spanned<Chunk>]> for MaybeTyped<Numeric> {
 }
 
 impl From<&PermissiveType<i64>> for MaybeTyped<Numeric> {
-    fn from(edition: &PermissiveType<i64>) -> Self {
-        match edition {
+    fn from(edition_or_volume: &PermissiveType<i64>) -> Self {
+        match edition_or_volume {
             PermissiveType::Typed(i) => Self::Typed(Numeric::new(*i as i32)),
             PermissiveType::Chunks(c) => Self::infallible_from_str(&c.format_verbatim()),
         }
@@ -428,8 +428,8 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
-        if let Some(PermissiveType::Typed(volume)) = map_res(entry.volume())? {
-            let val = Numeric::new(volume as i32).into();
+        if let Some(volume) = map_res(entry.volume())? {
+            let val = (&volume).into();
             if let Some(parent) = book(&mut item, parent) {
                 parent.set_volume(val);
             } else {
@@ -681,6 +681,23 @@ mod tests {
         let entry = entries.get("test_article").unwrap();
         assert_eq!(Some("54678"), entry.keyed_serial_number("pmid"));
         assert_eq!(Some("54678"), entry.pmid());
+    }
+
+    #[test]
+    fn test_volume_from_biblatex() {
+        let entries = crate::io::from_biblatex_str(
+            // https://github.com/typst/hayagriva/issues/463
+            r#"@article{isprs-annals-IV-1-W1-215-2017,
+            volume  = {IV-1/W1},
+            }"#,
+        )
+        .unwrap();
+        let entry = entries.get("isprs-annals-IV-1-W1-215-2017").unwrap();
+        assert_eq!(None, entry.volume());
+        assert_eq!(
+            Some(&MaybeTyped::String("IV-1/W1".to_string())),
+            entry.parents.first().and_then(|parent| parent.volume())
+        );
     }
 
     #[test]
