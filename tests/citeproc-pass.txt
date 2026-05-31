@@ -488,6 +488,9 @@ sort_NumberOfAuthorsAsKey
 sort_StatusFieldAscending
 sort_StatusFieldDescending
 sort_TestInheritance
+sort_VariousNameMacros1
+sort_VariousNameMacros2
+sort_VariousNameMacros3
 sortseparator_SortSeparatorEmpty
 substitute_RepeatedNamesOk
 substitute_SubstituteOnlyOnceString
