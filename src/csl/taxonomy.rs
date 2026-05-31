@@ -453,7 +453,7 @@ impl EntryLike for Entry {
             NameVariable::Director => self
                 .bound_select(
                     &select!(
-                        (* > ("p":(Audio | Video)))
+                        (* > ("p":(Audio | Video))) | ("p":(Audio | Video))
                     ),
                     "p",
                 )
