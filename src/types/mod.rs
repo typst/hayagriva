@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::convert::Infallible;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -369,7 +370,7 @@ impl<T> FromStr for MaybeTyped<T>
 where
     T: FromStr,
 {
-    type Err = ();
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::infallible_from_str(s))
