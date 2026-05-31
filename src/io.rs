@@ -103,4 +103,56 @@ mod tests {
             assert_eq!(match_e, &entry);
         }
     }
+
+    fn assert_error_location(err: &serde_yaml::Error, line: usize, column: usize) {
+        let location = err
+            .location()
+            .unwrap_or_else(|| panic!("Expected error location. Got: {err}"));
+        assert_eq!(
+            (location.line(), location.column()),
+            (line, column),
+            "Error location mismatch. Got: {}:{}",
+            location.line(),
+            location.column()
+        );
+    }
+
+    #[test]
+    fn issue_441() {
+        // Exact scenario from GitHub issue #441
+        let yaml = r#"a:
+  type: article
+
+b:
+  title: "Bee movie"
+"#;
+        let err = from_yaml_str(yaml).unwrap_err();
+
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("`b`"),
+            "Error should identify entry 'b'. Got: {err_str}",
+        );
+        assert_error_location(&err, 5, 3);
+    }
+
+    #[test]
+    fn missing_type_first() {
+        // Edge case: the first entry is missing its type
+        let yaml = r#"first-entry:
+  title: "Missing type"
+
+second-entry:
+  type: article
+  title: "This one is fine"
+"#;
+        let err = from_yaml_str(yaml).unwrap_err();
+
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("first-entry"),
+            "Error should identify 'first-entry'. Got: {err_str}",
+        );
+        assert_error_location(&err, 2, 3);
+    }
 }
