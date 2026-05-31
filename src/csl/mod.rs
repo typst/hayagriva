@@ -1823,7 +1823,9 @@ impl<'a> StyleContext<'a> {
                 }
             }
             (Some(CitePurpose::Prose), _) => {
+                ctx.writing.use_text_and = true;
                 do_author(&mut ctx);
+                ctx.writing.use_text_and = false;
                 if !self
                     .csl
                     .citation
@@ -2181,6 +2183,8 @@ pub(crate) struct WritingContext {
     /// Delimiters from ancestor delimiting elements (e.g., `cs:group`).
     /// To be applied within `cs:choose`, but not another delimiting element or a macro.
     delimiters: NonEmptyStack<Option<String>>,
+    /// Use "and" instead of "&" when joining names, for prose citations.
+    use_text_and: bool,
 
     // Buffers.
     /// The buffer we're writing to. If block-level or formatting changes, we
@@ -2206,6 +2210,7 @@ impl Default for WritingContext {
             cases: NonEmptyStack::default(),
             name_options: NonEmptyStack::default(),
             delimiters: NonEmptyStack::default(),
+            use_text_and: false,
             buf: CaseFolder::default(),
             elem_stack: NonEmptyStack::default(),
         }
@@ -3795,7 +3800,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(c1, "Downs (1957)");
-        assert_eq!(c2, "Brady & Collier (2010)");
+        assert_eq!(c2, "Brady and Collier (2010)");
     }
     #[test]
     #[cfg(feature = "archive")]
