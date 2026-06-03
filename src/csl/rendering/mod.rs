@@ -85,6 +85,8 @@ impl RenderCsl for citationberg::Text {
         ctx.may_strip_periods(self.strip_periods);
         let cidx = ctx.push_case(self.text_case);
 
+        let mut should_render = true;
+
         match target {
             ResolvedTextTarget::StandardVariable(var, val) => {
                 if let Some(url_prefix) = get_url_prefix(var) {
@@ -122,12 +124,18 @@ impl RenderCsl for citationberg::Text {
                 MaybeTyped::String(s) => ctx.push_str(&s.replace('-', "–")),
             },
             ResolvedTextTarget::Macro(mac) => {
-                // Delimiters from ancestor delimiting elements are NOT applied within.
-                let idx = ctx.writing.push_delimiter(None);
-                for child in &mac.children {
-                    child.render(ctx);
+                // Treat macros as groups: don't render if all variables are empty.
+                let info = self.will_have_info(ctx).1;
+                should_render = info.should_render_group();
+                if should_render {
+                    // Delimiters from ancestor delimiting elements are NOT
+                    // applied within.
+                    let idx = ctx.writing.push_delimiter(None);
+                    for child in &mac.children {
+                        child.render(ctx);
+                    }
+                    ctx.writing.pop_delimiter(idx);
                 }
-                ctx.writing.pop_delimiter(idx);
             }
             ResolvedTextTarget::Term(s) => ctx.push_str(s),
             ResolvedTextTarget::Value(val) => ctx.push_str(val),
@@ -144,24 +152,28 @@ impl RenderCsl for citationberg::Text {
         if let Some(affix_loc) = affix_loc {
             ctx.apply_suffix(&self.affixes, affix_loc);
         }
-        ctx.commit_elem(
-            depth,
-            self.display,
-            match self.target {
-                TextTarget::Variable { var, .. }
-                    if var == NumberVariable::CitationNumber.into() =>
-                {
-                    Some(ElemMeta::CitationNumber)
-                }
-                TextTarget::Variable { var, .. }
-                    if var == StandardVariable::CitationLabel.into() =>
-                {
-                    Some(ElemMeta::CitationLabel)
-                }
-                TextTarget::Variable { .. } => Some(ElemMeta::Text),
-                _ => None,
-            },
-        );
+        if should_render {
+            ctx.commit_elem(
+                depth,
+                self.display,
+                match self.target {
+                    TextTarget::Variable { var, .. }
+                        if var == NumberVariable::CitationNumber.into() =>
+                    {
+                        Some(ElemMeta::CitationNumber)
+                    }
+                    TextTarget::Variable { var, .. }
+                        if var == StandardVariable::CitationLabel.into() =>
+                    {
+                        Some(ElemMeta::CitationLabel)
+                    }
+                    TextTarget::Variable { .. } => Some(ElemMeta::Text),
+                    _ => None,
+                },
+            );
+        } else {
+            ctx.discard_elem(depth);
+        }
     }
 
     fn will_render<T: EntryLike>(&self, ctx: &mut Context<T>, var: Variable) -> bool {
@@ -232,6 +244,10 @@ impl RenderCsl for citationberg::Text {
                     info = info.merge_child(child_info)
                 }
 
+                // Treat macro as group: don't render if all variables are
+                // empty.
+                will_print &= info.should_render_group();
+
                 (will_print, UsageInfo { has_used_macros: will_print, ..info })
             }
             ResolvedTextTarget::Term(_) => (true, UsageInfo::default()),
@@ -267,18 +283,17 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                 }
             }
             Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix)
-                if !matches!(&text.target, TextTarget::Macro { .. }) =>
+                if !matches!(&text.target, TextTarget::Macro { .. })
+                    && !matches!(
+                        text.target,
+                        TextTarget::Variable {
+                            var: Variable::Standard(StandardVariable::YearSuffix)
+                                | Variable::Number(NumberVariable::Locator),
+                            ..
+                        },
+                    ) =>
             {
-                if !matches!(
-                    text.target,
-                    TextTarget::Variable {
-                        var: Variable::Standard(StandardVariable::YearSuffix)
-                            | Variable::Number(NumberVariable::Locator),
-                        ..
-                    },
-                ) {
-                    return None;
-                }
+                return None;
             }
             _ => {}
         }
@@ -532,11 +547,10 @@ impl RenderCsl for citationberg::Label {
                 SpecialForm::VarOnly(_)
                 | SpecialForm::OnlyFirstDate
                 | SpecialForm::OnlyYearSuffix,
-            ) => {
-                if self.variable != NumberOrPageVariable::Number(NumberVariable::Locator)
-                {
-                    return (true, UsageInfo::default());
-                }
+            ) if self.variable
+                != NumberOrPageVariable::Number(NumberVariable::Locator) =>
+            {
+                return (true, UsageInfo::default());
             }
             _ => {}
         }
@@ -1131,6 +1145,10 @@ impl<T: EntryLike> Iterator for BranchConditionIter<'_, '_, T> {
                         Variable::Number(var) => matches!(
                             self.ctx.resolve_number_variable(var),
                             Some(NumberVariableResult::Regular(MaybeTyped::Typed(_)))
+                        ),
+                        Variable::Page(var) => matches!(
+                            self.ctx.resolve_page_variable(var),
+                            Some(MaybeTyped::Typed(_))
                         ),
                         _ => false,
                     })

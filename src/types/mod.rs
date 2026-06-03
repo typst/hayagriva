@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::convert::Infallible;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -369,7 +370,7 @@ impl<T> FromStr for MaybeTyped<T>
 where
     T: FromStr,
 {
-    type Err = ();
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::infallible_from_str(s))
@@ -552,6 +553,12 @@ mod tests {
         assert!(val.suffix.is_none());
         assert_eq!(&val.to_string(), "-5");
 
+        let val = Numeric::from_str("01").unwrap();
+        assert!(val.value == NumericValue::Number(1));
+        assert_eq!(val.prefix_str(), Some("0"));
+        assert!(val.suffix.is_none());
+        assert_eq!(&val.to_string(), "01");
+
         let val = Numeric::from_str("1st").unwrap();
         assert!(val.value == NumericValue::Number(1));
         assert!(val.prefix.is_none());
@@ -604,6 +611,34 @@ mod tests {
 
         assert!(Numeric::from_str("second").is_err());
         assert!(Numeric::from_str("2nd edition").is_err());
+    }
+
+    #[test]
+    fn test_preserve_space_separator() {
+        // https://github.com/typst/hayagriva/issues/312
+        // https://github.com/typst/hayagriva/issues/440
+        let serial_numbers =
+            &["ISO/IEC 23009-1:2022(E)", "GB/T 7714—2025", "GB/T 7714", "第 6 册"];
+        for s in serial_numbers {
+            let val: MaybeTyped<Numeric> = MaybeTyped::infallible_from_str(s);
+            // It can be either typed or string, as long as whitespaces between
+            // affixes and numbers are preserved.
+            assert_eq!(val.to_string(), *s);
+        }
+
+        // For GB standards, em dash is the recommended separator, but
+        // hyphen-minus and en dash should also be supported.
+        let dashes = ["-", "–", "—"];
+        for dash in dashes {
+            let s = format!("GB/T 7714{dash}2015");
+            let val: MaybeTyped<Numeric> = MaybeTyped::infallible_from_str(&s);
+            assert_eq!(
+                val.to_string()
+                    .replace(dashes[0], dashes[2])
+                    .replace(dashes[1], dashes[2]),
+                format!("GB/T 7714{}2015", dashes[2])
+            );
+        }
     }
 
     #[test]

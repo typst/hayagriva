@@ -392,6 +392,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use super::*;
+
     #[test]
     fn group_by() {
         fn group(s: &str) -> Vec<&'_ str> {
@@ -409,5 +411,30 @@ mod test {
         assert_eq!(["–a"], group("–a").as_slice());
         assert_eq!(["–a", ","], group("–a,").as_slice());
         assert_eq!(["a–", ",", "–b"], group("a–,–b").as_slice());
+    }
+
+    #[test]
+    fn nonnumeric_page() {
+        // https://github.com/typst/hayagriva/issues/170
+        for s in &["11E201", "1.36"] {
+            let n: MaybeTyped<PageRanges> = MaybeTyped::infallible_from_str(s);
+            assert_eq!(n, MaybeTyped::String(s.to_string()));
+        }
+
+        // Page ranges should still be parsed as numeric values.
+        assert_eq!(
+            MaybeTyped::<PageRanges>::infallible_from_str("S10-15"),
+            MaybeTyped::Typed(PageRanges::new(vec![PageRangesPart::Range(
+                Numeric::from_str("S10").unwrap(),
+                Numeric::from_str("15").unwrap(),
+            )]))
+        );
+        assert_eq!(
+            MaybeTyped::<PageRanges>::infallible_from_str("011-012"),
+            MaybeTyped::Typed(PageRanges::new(vec![PageRangesPart::Range(
+                Numeric::from_str("011").unwrap(),
+                Numeric::from_str("012").unwrap(),
+            )]))
+        );
     }
 }

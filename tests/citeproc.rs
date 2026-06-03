@@ -628,8 +628,8 @@ where
         true
     } else {
         eprintln!("Test {} failed", display());
-        eprintln!("Expected:\n{}", case.result);
-        eprintln!("Got:\n{output}");
+        eprintln!("Expected:\n{}", formatted_result);
+        eprintln!("Got:\n{}", output);
         false
     }
 }
@@ -746,7 +746,15 @@ mod citeproc_bib {
 
         match formatting.font_weight {
             FontWeight::Bold => {
-                push_elem("<b>", "</b>");
+                // Make regular texts bold, but keep whitespaces unformatted.
+                //
+                // A CSL style may set `font-weight="bold"` on `<group>` with
+                // whitespace affixes. It does not matter whether such affixes
+                // are bold or regular. Citeproc tests prefer regular at present.
+                // (cf. test sort_VariousNameMacros1.txt)
+                if text.text.chars().any(|c| !c.is_whitespace()) {
+                    push_elem("<b>", "</b>");
+                }
             }
             FontWeight::Light => {
                 // NOTE: This is not used in any tests, so we can only assume

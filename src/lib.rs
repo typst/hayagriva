@@ -381,7 +381,7 @@ macro_rules! entry {
                     {
                         let entry_type = self.entry_type
                             .or_else(|| child_entry_type.map(|e| e.default_parent()))
-                            .ok_or_else(|| E::custom("no entry type"))?;
+                            .ok_or_else(|| E::custom(format!("no entry type for `{}`", key)))?;
 
                         let parents: Result<Vec<_>, _> = self.parents
                             .into_iter()
@@ -415,7 +415,47 @@ macro_rules! entry {
                     where
                         A: serde::de::MapAccess<'de>,
                     {
-                        let mut entries = Vec::with_capacity(
+                        struct EntrySeed<'a> {
+                            key: &'a str,
+                        }
+
+                        impl<'de, 'a> serde::de::DeserializeSeed<'de> for EntrySeed<'a> {
+                            type Value = Entry;
+
+                            fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                            where
+                                D: serde::de::Deserializer<'de>,
+                            {
+                                struct EntryVisitor<'a> {
+                                    key: &'a str,
+                                }
+
+                                impl<'de, 'a> Visitor<'de> for EntryVisitor<'a> {
+                                    type Value = Entry;
+
+                                    fn expecting(
+                                        &self,
+                                        formatter: &mut std::fmt::Formatter,
+                                    ) -> std::fmt::Result {
+                                        formatter.write_str("a map representing a bibliography entry")
+                                    }
+
+                                    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+                                    where
+                                        A: serde::de::MapAccess<'de>,
+                                    {
+                                        let deserializer =
+                                            serde::de::value::MapAccessDeserializer::new(map);
+                                        let naked_entry = NakedEntry::deserialize(deserializer)?;
+                                        naked_entry.into_entry(self.key, None)
+                                    }
+                                }
+
+                                deserializer.deserialize_map(EntryVisitor { key: self.key })
+                            }
+                        }
+
+                        let mut entries: Vec<(String, Entry)> = Vec::with_capacity(
                             map.size_hint().unwrap_or(0).min(128)
                         );
                         while let Some(key) = map.next_key::<String>()? {
@@ -426,16 +466,12 @@ macro_rules! entry {
                                 )));
                             }
 
-                            let entry: NakedEntry = map.next_value()?;
+                            // Convert immediately so errors report the correct position
+                            let entry = map.next_value_seed(EntrySeed { key: &key })?;
                             entries.push((key, entry));
                         }
 
-                        let entries: Result<IndexMap<_, _>, A::Error> =
-                            entries.into_iter().map(|(k, v)| {
-                                v.into_entry(&k, None).map(|e| (k, e))
-                            }).collect();
-
-                        Ok(Library(entries?))
+                        Ok(Library(entries.into_iter().collect()))
                     }
                 }
 

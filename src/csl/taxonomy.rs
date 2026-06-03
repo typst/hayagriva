@@ -453,7 +453,7 @@ impl EntryLike for Entry {
             NameVariable::Director => self
                 .bound_select(
                     &select!(
-                        (* > ("p":(Audio | Video)))
+                        (* > ("p":(Audio | Video))) | ("p":(Audio | Video))
                     ),
                     "p",
                 )
@@ -605,9 +605,10 @@ impl EntryLike for Entry {
 
                 !(is_periodical || is_collection)
             }
-            Kind::Chapter => {
-                select!(Chapter > (Book | Anthology | Proceedings)).matches(self)
-            }
+            Kind::Chapter => select!(
+                (Anthos > Anthology) | (Chapter > (Book | Anthology | Proceedings))
+            )
+            .matches(self),
             Kind::Entry | Kind::EntryDictionary | Kind::EntryEncyclopedia => {
                 if kind == Kind::EntryDictionary {
                     // TODO: We do not differentiate between dictionaries and other
@@ -762,7 +763,7 @@ impl EntryLike for citationberg::json::Item {
                     year: d.year as i32,
                     month: d.month,
                     day: d.day,
-                    approximate: false,
+                    approximate: d.circa,
                     season: d.season,
                 }))
             }
@@ -782,6 +783,7 @@ impl EntryLike for citationberg::json::Item {
                             suffix: None,
                             given_name: None,
                             alias: None,
+                            comma_suffix: false,
                         },
                         csl_json::NameValue::Item(csl_json::NameItem {
                             family,
@@ -789,6 +791,7 @@ impl EntryLike for citationberg::json::Item {
                             non_dropping_particle: None,
                             dropping_particle: None,
                             suffix,
+                            comma_suffix,
                         }) => {
                             let mut parts = vec![family.as_str()];
                             if let Some(given) = given {
@@ -797,6 +800,9 @@ impl EntryLike for citationberg::json::Item {
                             let mut p = Person::from_strings(parts).ok()?;
                             if let Some(suffix) = suffix {
                                 p.suffix = Some(suffix.as_str().to_owned());
+                            }
+                            if comma_suffix.unwrap_or_default() {
+                                p.comma_suffix = true;
                             }
 
                             p
@@ -807,6 +813,7 @@ impl EntryLike for citationberg::json::Item {
                             non_dropping_particle,
                             dropping_particle,
                             suffix,
+                            comma_suffix,
                         }) => Person {
                             name: if let Some(non_drop) = non_dropping_particle {
                                 format!("{non_drop} {family}")
@@ -817,6 +824,7 @@ impl EntryLike for citationberg::json::Item {
                             suffix: suffix.clone(),
                             given_name: given.clone(),
                             alias: None,
+                            comma_suffix: comma_suffix.unwrap_or_default(),
                         },
                     }))
                 })

@@ -122,6 +122,11 @@ fn create_archive() -> Result<(), ArchivalError> {
         std::env::var_os(UPDATE_ARCHIVES_ENV_VAR).is_some_and(|var| var == "1");
 
     let mut expected_styles: HashSet<&str, RandomState> = HashSet::from_iter(STYLE_IDS);
+    let mut overwritte_styles: HashSet<&str, RandomState> =
+        HashSet::from_iter(OVERRIDES.iter().map(|o| o.id));
+    if !STYLE_IDS.is_sorted() {
+        return Err(ArchivalError::StylesNotSorted);
+    }
 
     let mut w = String::new();
     let mut styles: Vec<_> = iter_files(&style_path, "csl")
@@ -147,6 +152,9 @@ fn create_archive() -> Result<(), ArchivalError> {
                 let stripped_id = strip_id(indep.info.id.as_str());
 
                 let over = OVERRIDES.iter().find(|o| o.id == stripped_id);
+                if over.is_some() {
+                    overwritte_styles.remove(stripped_id);
+                }
                 let names = get_names(stripped_id, over);
                 let variant_name = heck::AsUpperCamelCase(&names[0]).to_string();
 
@@ -161,6 +169,11 @@ fn create_archive() -> Result<(), ArchivalError> {
                 .into_iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
+        ));
+    }
+    if !overwritte_styles.is_empty() {
+        return Err(ArchivalError::OverwrittenStylesNotFound(
+            overwritte_styles.into_iter().map(ToString::to_string).collect(),
         ));
     }
 
@@ -439,6 +452,8 @@ pub enum ArchivalError {
     LocaleValidationError(String),
     NeedsUpdate(String),
     MissingStyles(Vec<String>),
+    OverwrittenStylesNotFound(Vec<String>),
+    StylesNotSorted,
 }
 
 impl From<io::Error> for ArchivalError {
@@ -486,6 +501,16 @@ impl fmt::Display for ArchivalError {
             Self::MissingStyles(styles) => {
                 write!(f, "Missing the following expected styles: {}", styles.join(", "))
             }
+            Self::OverwrittenStylesNotFound(styles) => {
+                write!(
+                    f,
+                    "Missing the following overwritten styles: {}",
+                    styles.join(", ")
+                )
+            }
+            Self::StylesNotSorted => {
+                write!(f, "The expected style ids are not in sorted order")
+            }
         }
     }
 }
@@ -529,8 +554,8 @@ const STYLE_IDS: [&str; 80] = [
     "http://www.zotero.org/styles/china-national-standard-gb-t-7714-2015-numeric",
     "http://www.zotero.org/styles/chinese-gb7714-2005-numeric",
     "http://www.zotero.org/styles/copernicus-publications",
-    "http://www.zotero.org/styles/cse-name-year",
     "http://www.zotero.org/styles/cse-citation-sequence-brackets-8th-edition",
+    "http://www.zotero.org/styles/cse-name-year",
     "http://www.zotero.org/styles/current-opinion",
     "http://www.zotero.org/styles/deutsche-gesellschaft-fur-psychologie",
     "http://www.zotero.org/styles/deutsche-sprache",
@@ -601,7 +626,7 @@ impl Override {
     }
 }
 
-const OVERRIDES: [Override; 21] = [
+const OVERRIDES: [Override; 23] = [
     Override::alias("apa", "american-psychological-association", &["apa"]),
     Override::alias("bmj", "british-medical-journal", &["bmj"]),
     Override::first(
@@ -633,24 +658,14 @@ const OVERRIDES: [Override; 21] = [
     Override::first("iso690-author-date-en", "iso-690-author-date"),
     Override::first("iso690-numeric-en", "iso-690-numeric"),
     Override::alias(
-        "modern-humanities-research-association-notes",
+        "mhra-notes",
         "modern-humanities-research-association-notes",
         &["modern-humanities-research-association"],
     ),
     Override::alias(
         "modern-language-association",
         "modern-language-association",
-        &["mla"],
-    ),
-    Override::alias(
-        "modern-language-association-8th-edition",
-        "modern-language-association-8",
-        &["mla-8"],
-    ),
-    Override::alias(
-        "spie",
-        "society-of-photo-optical-instrumentation-engineers",
-        &["spie"],
+        &["mla", "modern-language-association-8", "mla-8"],
     ),
     Override::alias("plos", "public-library-of-science", &["plos"]),
     Override::first("thieme-german", "thieme"),
@@ -659,6 +674,22 @@ const OVERRIDES: [Override; 21] = [
     Override::first(
         "chicago-notes-bibliography-subsequent-author-title-17th-edition",
         "turabian-fullnote-8",
+    ),
+    Override::alias("nlm-citation-sequence", "nlm-citation-sequence", &["vancouver"]),
+    Override::alias(
+        "nlm-citation-sequence-superscript",
+        "nlm-citation-sequence-superscript",
+        &["vancouver-superscript"],
+    ),
+    Override::alias(
+        "cse-name-year",
+        "cse-name-year",
+        &["council-of-science-editors-author-date"],
+    ),
+    Override::alias(
+        "cse-citation-sequence-brackets-8th-edition",
+        "cse-citation-sequence-brackets-8th-edition",
+        &["council-of-science-editors"],
     ),
 ];
 
