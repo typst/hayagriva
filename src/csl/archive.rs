@@ -394,7 +394,8 @@ impl ArchivedStyle {
             "iso-690-numeric" => Some(Self::Iso690Numeric),
             "karger" => Some(Self::Karger),
             "mary-ann-liebert-vancouver" => Some(Self::MaryAnnLiebertVancouver),
-            "mhra-notes" => Some(Self::MhraNotes),
+            "modern-humanities-research-association-notes" => Some(Self::ModernHumanitiesResearchAssociationNotes),
+            "modern-humanities-research-association" => Some(Self::ModernHumanitiesResearchAssociationNotes),
             "modern-language-association" => Some(Self::ModernLanguageAssociation),
             "mla" => Some(Self::ModernLanguageAssociation),
             "modern-language-association-8" => Some(Self::ModernLanguageAssociation),
@@ -574,7 +575,7 @@ impl ArchivedStyle {
             Self::Iso690Numeric,
             Self::Karger,
             Self::MaryAnnLiebertVancouver,
-            Self::MhraNotes,
+            Self::ModernHumanitiesResearchAssociationNotes,
             Self::ModernLanguageAssociation,
             Self::MultidisciplinaryDigitalPublishingInstitute,
             Self::Nature,
@@ -861,8 +862,9 @@ impl ArchivedStyle {
             Self::MaryAnnLiebertVancouver => &[
                 "mary-ann-liebert-vancouver",
             ],
-            Self::MhraNotes => &[
-                "mhra-notes",
+            Self::ModernHumanitiesResearchAssociationNotes => &[
+                "modern-humanities-research-association-notes",
+                "modern-humanities-research-association",
             ],
             Self::ModernLanguageAssociation => &[
                 "modern-language-association",
