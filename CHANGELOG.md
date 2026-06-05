@@ -1,3 +1,41 @@
+# 0.10.0
+
+- Update archived CSL styles and locales (#404, #424, #453)
+  - **Breaking change:** Styles were renamed:
+    - `council-of-science-editors-author-date` => `cse-name-year`
+    - `council-of-science-editors-brackets` => `cse-citation-sequence-brackets-8th-edition`
+    - `modern-humanities-research-association-notes` => `mhra-notes`
+    - `vancouver` => `nlm-citation-sequence`
+    - `vancouver-superscript` => `nlm-citation-sequence-superscript`
+    - `modern-language-association-8th-edition` was removed
+    - The old style names are deprecated but still available
+- Add collation-based string sorting (#314)
+- Add option for offsetting the citation number (#409)
+- Fix parsing of atypical page numbers and serial numbers (#445)
+- Fix error span pointing to wrong entry when type is missing (#447)
+- Do not render et al. for empty name lists (#415)
+- Use cite-group-delimiter as fallback for year-suffix-delimiter (#423)
+- Respect et al. setting when rendering author count (#421)
+- Position always tests false when in bibliography (#425)
+- Fix DOI, PMID, and PMCID's not forming proper links with some styles. (#432)
+- Add support for subsequent author substitution (#228)
+- Allow for uncertain JSON dates (#396)
+- Recognize `Anthos` as `Chapter` in CSL (#427)
+- Pass directors for unparented video (#450)
+- Change error type of `FromStr` for `MaybeTyped` as `Infallible` (#480)
+- Include non-integer volume when converting from biblatex (#478)
+- Do not initialize lower case words (#422)
+- Handle comma-suffix in names (#420)
+- Suppress et al. in sort (#426)
+- Rework citation disambiguation (#413)
+- Fix rendering of macros (#419)
+- Fix name suffix example in documentation (#456)
+- Improve CSL test parsing (#417)
+- Allow "magic" CSL tests (#418)
+- Do not make whitespaces bold in citeproc tests (#479)
+- Bumped the `biblatex` crate to [version 0.12.0](https://github.com/typst/biblatex/releases/tag/v0.12.0)
+- Bumped the `citationberg` crate to [version 0.7.0](https://github.com/typst/citationberg/releases/tag/v0.7.0)
+
 # 0.9.1
 
 - Export the `TransparentLocator` struct so `LocatorPayload::Transparent` can be
