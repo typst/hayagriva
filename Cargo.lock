@@ -63,9 +63,9 @@ dependencies = [
 
 [[package]]
 name = "biblatex"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53d0c374feba1b9a59042a7c1cf00ce7c34b977b9134fe7c42b08e5183729f66"
+checksum = "591eba69b7c085632e22ca03606f0bbea68d53bbe26c8962e2d549af20c6a561"
 dependencies = [
  "paste",
  "roman-numerals-rs",
@@ -110,11 +110,13 @@ dependencies = [
 
 [[package]]
 name = "citationberg"
-version = "0.6.1"
-source = "git+https://github.com/typst/citationberg?rev=0999ab7#0999ab79842d79c7aae665cf1c6eece5a4b9ef2e"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "756ff1e3d43a9ecc8183932fb4d9fd3971236f3ce4acb62fe51d1cd43297547d"
 dependencies = [
  "quick-xml",
  "serde",
+ "serde_path_to_error",
  "unscanny",
 ]
 
@@ -574,6 +576,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
