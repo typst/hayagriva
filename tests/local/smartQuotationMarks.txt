@@ -1,0 +1,143 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+>>===== DESCRIPTION =====>>
+Quotation marks are correctly prettified.
+
+https://github.com/typst/hayagriva/issues/70
+<<===== DESCRIPTION =====<<
+
+
+>>===== RESULT =====>>
+B. Meyer, “Applying ‘Design by contract’,” Computer, vol. 25, no. 10, pp. 40–51, 1992, doi: 10.1109/2.161279.
+<<===== RESULT =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "M1992",
+		    "type": "article-journal",
+		    "container-title": "Computer",
+		    "DOI": "10.1109/2.161279",
+		    "issue": "10",
+		    "page": "40–51",
+		    "title": "Applying \"Design by contract\"",
+		    "volume": "25",
+		    "author": [
+		    	{
+		    		"family": "Meyer",
+		    		"given": "Bertrand"
+		    	}
+		    ],
+		    "issued": {
+		    	"date-parts": [
+		    		[
+		    			"1992"
+		    		]
+		    	]
+		    }
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== CSL =====>>
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+  <info>
+    <id />
+    <title />
+  </info>
+  <macro name="status">
+    <choose>
+      <if variable="page issue volume" match="none">
+        <text variable="status" text-case="capitalize-first" suffix="" font-weight="bold"/>
+      </if>
+    </choose>
+  </macro>
+  <macro name="issued">
+    <date variable="issued">
+      <date-part name="month" form="short" suffix=" "/>
+      <date-part name="year" form="long"/>
+    </date>
+  </macro>
+  <macro name="author">
+    <names variable="author">
+      <name and="text" et-al-min="7" et-al-use-first="1" initialize-with=". "/>
+      <label form="short" prefix=", " text-case="capitalize-first"/>
+      <et-al font-style="italic"/>
+      <substitute>
+        <names variable="editor"/>
+        <names variable="translator"/>
+        <text macro="director"/>
+      </substitute>
+    </names>
+  </macro>
+  <macro name="locators">
+    <group delimiter=", ">
+      <text macro="edition"/>
+      <group delimiter=" ">
+        <text term="volume" form="short"/>
+        <number variable="volume" form="numeric"/>
+      </group>
+      <group delimiter=" ">
+        <number variable="number-of-volumes" form="numeric"/>
+        <text term="volume" form="short" plural="true"/>
+      </group>
+      <group delimiter=" ">
+        <text term="issue" form="short"/>
+        <number variable="issue" form="numeric"/>
+      </group>
+    </group>
+  </macro>
+  <macro name="title">
+    <text variable="title" quotes="true"/>
+  </macro>
+  <macro name="access">
+    <text variable="DOI" prefix=" doi: " suffix="."/>
+  </macro>
+  <macro name="page">
+    <choose>
+      <if type="article-journal" variable="number" match="all">
+        <group delimiter=" ">
+          <text value="Art."/>
+          <text term="issue" form="short"/>
+          <text variable="number"/>
+        </group>
+      </if>
+      <else>
+        <group delimiter=" ">
+          <label variable="page" form="short"/>
+          <text variable="page"/>
+        </group>
+      </else>
+    </choose>
+  </macro>
+  <citation>
+    <layout>
+      <text macro="author" suffix=", "/>
+      <group delimiter=", ">
+        <text macro="title"/>
+        <text variable="container-title" font-style="italic" form="short"/>
+        <text macro="locators"/>
+        <text macro="page"/>
+        <text macro="issued"/>
+        <text macro="status"/>
+      </group>
+      <choose>
+        <if variable="URL DOI" match="none">
+          <text value="."/>
+        </if>
+        <else>
+          <text value=","/>
+        </else>
+      </choose>
+      <text macro="access"/>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
