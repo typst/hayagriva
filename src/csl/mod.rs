@@ -133,7 +133,8 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
             |_| 0,
         );
         let citation_number = |item: &T| {
-            entries.iter().position(|e| e.entry == item).expect("entry not found")
+            self.citation_number_offset
+                + entries.iter().position(|e| e.entry == item).expect("entry not found")
         };
 
         let mut seen: HashSet<*const T> = HashSet::new();
