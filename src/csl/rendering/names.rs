@@ -532,6 +532,10 @@ fn add_names<T: EntryLike>(
                         NameAnd::Text => ctx
                             .term(Term::Other(OtherTerm::And), TermForm::default(), false)
                             .unwrap_or_default(),
+                        // Prose citations use "and" instead of "&".
+                        NameAnd::Symbol if ctx.writing.use_text_and => ctx
+                            .term(Term::Other(OtherTerm::And), TermForm::default(), false)
+                            .unwrap_or("and"),
                         NameAnd::Symbol => "&",
                     });
                     ctx.ensure_space();
@@ -542,6 +546,9 @@ fn add_names<T: EntryLike>(
                         NameAnd::Text => ctx
                             .term(Term::Other(OtherTerm::And), TermForm::default(), false)
                             .unwrap_or_default(),
+                        NameAnd::Symbol if ctx.writing.use_text_and => ctx
+                            .term(Term::Other(OtherTerm::And), TermForm::default(), false)
+                            .unwrap_or("and"),
                         NameAnd::Symbol => "&",
                     });
                     ctx.ensure_space();
