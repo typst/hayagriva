@@ -265,6 +265,8 @@ impl EntryLike for Entry {
             }
             StandardVariable::ArchivePlace => None,
             StandardVariable::Authority => {
+                // `Entry::organization` may also appear as `StandardVariable::Publisher`.
+                // See the comment in that arm.
                 entry.organization().map(|f| f.select(form)).map(Cow::Borrowed)
             }
             StandardVariable::CallNumber => {
@@ -354,6 +356,20 @@ impl EntryLike for Entry {
             StandardVariable::Publisher => entry
                 .map(|e| e.publisher())
                 .and_then(Publisher::name)
+                // Fallback to `organization` if `publisher` is missing.
+                //
+                // Many CSL styles use `<text variable="publisher"/>` to display
+                // the university where a thesis was written, because Zotero
+                // exports the university to `publisher` in CSL-JSON.
+                //
+                // However, Zotero exports university to `institution` in BibLaTeX.
+                // In BibLaTeX, `publisher` and `institution` are separate fields
+                // (`school` is an alias for `institution`). We map them to
+                // `Entry::publisher` and `Entry::organization` respectively.
+                //
+                // Therefore, this fallback is necessary to make BibLaTeX data
+                // usable for such CSL styles.
+                .or_else(|| entry.organization())
                 .map(|n| n.select(form))
                 .map(Cow::Borrowed),
             StandardVariable::PublisherPlace => entry
@@ -936,4 +952,59 @@ fn letter(val: u8) -> String {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::io::from_biblatex_str;
+
+    #[test]
+    fn zotero_university_interop() {
+        let entry = from_biblatex_str(
+        r#"
+        @thesis{zotero-export-better-biblatex,
+            type = {Unpublished master’s thesis},
+            title = {Fathers’ Participation in Family Work: {{Consequences}} for Fathers’ Stress and Father-Child Relations},
+            author = {Almeida, David M.},
+            namea = {Galambos, Nancy L.},
+            nameatype = {collaborator},
+            date = {1990-11},
+            institution = {University of Victoria},
+            location = {Victoria, British Columbia, Canada},
+            langid = {american}
+        }
+        "#,
+    ).unwrap().into_iter().next().unwrap();
+        assert_eq!(entry.publisher().unwrap().name(), None);
+        assert_eq!(
+            entry.publisher().unwrap().location().unwrap(),
+            &"Victoria, British Columbia, Canada".parse().unwrap()
+        );
+        assert_eq!(
+            entry.organization().unwrap(),
+            &"University of Victoria".parse().unwrap()
+        );
+
+        assert_eq!(
+            entry
+                .resolve_standard_variable(
+                    Default::default(),
+                    StandardVariable::Publisher
+                )
+                .unwrap()
+                .to_str(),
+            "University of Victoria"
+        );
+        assert_eq!(
+            entry
+                .resolve_standard_variable(
+                    Default::default(),
+                    StandardVariable::PublisherPlace
+                )
+                .unwrap()
+                .to_str(),
+            "Victoria, British Columbia, Canada"
+        );
+    }
 }
