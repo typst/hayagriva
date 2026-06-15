@@ -1,3 +1,7 @@
+# 0.10.1
+
+- Fix citation number offsetting for sorted bibliographies (#487)
+
 # 0.10.0
 
 - Update archived CSL styles and locales (#404, #424, #453)
