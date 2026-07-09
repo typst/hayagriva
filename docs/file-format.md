@@ -226,7 +226,7 @@ This section lists all possible fields and data types for them.
 |------------------|-----------------------------------------------------------|
 | **Data type:**   | publisher                                                 |
 | **Description:** | publisher of the item                                     |
-| **Example:**     | <pre>publisher: Penguin Books</pre> or <pre>publisher:<br>    name: Penguin Books<br>    location: London</pre> |
+| **Example:**     | <pre>publisher: Penguin Books</pre> or <pre>publisher:<br>    name: Penguin Books<br>    location: London, UK</pre> |
 
 #### `location`
 
@@ -506,6 +506,26 @@ names: ["Simon, David", "Colesberry, Robert F.", "Noble, Nina Kostroff"]
 
 The `role` field is case insensitive.
 
+#### Publisher
+
+A publisher, possibly with a location.
+
+The simplest scenario is to provide only the name of the publisher:
+
+```yaml
+publisher: Penguin Books
+```
+
+You may also provide a location for the publisher:
+
+```yaml
+publisher:
+    name: Penguin Books
+    location: London, UK
+```
+
+Both `name` and `location` are [formattable strings](#formattable-string). Refer to that section to control letter case and other formatting details.
+
 #### Date
 
 A calendar date as ISO 8601. This means that you specify the full date as `YYYY-MM-DD` with an optional sign in front to represent years earlier than `0000` in the Gregorian calendar. The year 1 B.C.E. is represented as `0000`, the year 2 B.C.E. as `-0001` and so forth.
@@ -549,3 +569,29 @@ atypical page numbers like `11E201`.
 A [Unicode Language Identifier](https://unicode.org/reports/tr35/tr35.html#unicode_language_id) identifies a language or its variants. At the simplest, you can specify an all-lowercase [two-letter ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) like `en` or `es` as a language. It is possible to specify regions, scripts, or variants to more precisely identify a variety of a language, especially in cases where the ISO 639-1 code is considered a "macrolanguage" (`zh` includes both Cantonese and Mandarin). In such cases, specify values like `en-US` for American English or `zh-Hans-CN` for Mandarin written in simplified script in mainland China. The region tags have to be written in all-caps and are mostly corresponding to [ISO 3166-1 alpha_2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#Officially_assigned_code_elements) codes.
 
 Consult the [documentation of the Rust crate unic-langid](https://docs.rs/unic-langid/latest/unic_langid/index.html) we use for parsing these language identifiers for more information.
+
+#### URL
+
+A valid absolute URL, possibly with a last visited date.
+
+```yaml
+url: https://www.w3.org/Provider/Style/URI
+```
+
+Many style guides require specifying the date at which you last accessed the URL. You can describe it as follows. Note that the last visited date is usually different from the publication date. The latter is not covered by this data type.
+
+```yaml
+url:
+    value: https://www.w3.org/Provider/Style/URI
+    date: 2026-07-09
+```
+
+The specified URL will be parsed and normalized. As a result, the following two are equivalent:
+
+```yaml
+url: https://w3c.github.io/clreq/README.zh-Hans.html#征求协助
+```
+
+```yaml
+url: https://w3c.github.io/clreq/README.zh-Hans.html#%E8%81%94%E7%B3%BB%E6%88%91%E4%BB%AC
+```
