@@ -165,7 +165,7 @@ impl Person {
     /// The call site of this function in the library obtains the slice by
     /// calling `split(",")` on a string like `"Des Egdens, Britta"`.
     ///
-    /// [taming]: https://ftp.rrze.uni-erlangen.de/ctan/info/bibtex/tamethebeast/ttb_en.pdf
+    /// [taming]: https://mirrors.ctan.org/info/bibtex/tamethebeast/ttb_en.pdf#section.11
     pub fn from_strings(mut parts: Vec<&str>) -> Result<Self, PersonError> {
         if parts.is_empty() {
             return Err(PersonError::Empty);

@@ -459,7 +459,7 @@ A person consists of a name and optionally, a given name, a prefix, and a suffix
 - `UNICEF`
 - `von der Leyen, Ursula`
 
-The prefix and the last name will be separated automatically using [the same algorithm as BibTeX (p. 24)](https://ftp.rrze.uni-erlangen.de/ctan/info/bibtex/tamethebeast/ttb_en.pdf) which can be summarized as "put all the consecutive lower case words at the start into the prefix."
+The prefix and the last name will be separated automatically using [the same algorithm as BibTeX (p. 24)](https://mirrors.ctan.org/info/bibtex/tamethebeast/ttb_en.pdf#section.11) which can be summarized as "put all the consecutive lower case words at the start into the prefix."
 
 Usually, this is all you need to specify a person's name. However, if a part of a name contains a comma, the prefix is not lowercased, or if one needs to specify an alias, the person can also be specified using sub-fields:
 
