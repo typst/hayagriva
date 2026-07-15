@@ -1,0 +1,25 @@
+[package]
+name = "tests"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+publish = false
+
+[dev-dependencies]
+citationberg = { workspace = true, features = ["json"] }
+hayagriva-archive = { path = "../hayagriva-archive" }
+hayagriva-core = { path = "../hayagriva-core" }
+hayagriva-csl = { path = "../hayagriva-csl" }
+hayagriva-format = { path = "../hayagriva-format", features = ["biblatex"] }
+hayagriva-json = { path = "../hayagriva-json" }
+serde_json = "1"
+regex = "1"
+unscanny = { workspace = true }
+
+[[test]]
+name = "citeproc"
+path = "tests/citeproc.rs"

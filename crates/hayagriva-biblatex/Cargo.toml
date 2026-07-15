@@ -1,0 +1,16 @@
+[package]
+name = "hayagriva-biblatex"
+description = "Archived CSL styles and locales for Hayagriva/Typst"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+
+[dependencies]
+hayagriva-core = { path = "../hayagriva-core", features = ["biblatex"] }
+biblatex = { workspace = true, features = ["unic-langid"] }
+citationberg = { workspace = true }
+unic-langid = { workspace = true }

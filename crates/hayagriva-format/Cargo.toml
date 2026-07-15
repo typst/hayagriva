@@ -1,0 +1,31 @@
+[package]
+name = "hayagriva-format"
+description = "Archived CSL styles and locales for Hayagriva/Typst"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+
+[dependencies]
+biblatex = { workspace = true, optional = true }
+citationberg = { workspace = true }
+indexmap = { workspace = true }
+paste = "1.0.14"
+serde = { workspace = true }
+unic-langid = { workspace = true }
+serde_yaml = "0.9.25"
+unicode-segmentation = { workspace = true }
+hayagriva-core = { path = "../hayagriva-core", features = ["biblatex"] }
+hayagriva-biblatex = { path = "../hayagriva-biblatex", optional = true }
+thiserror = { workspace = true }
+unscanny = { workspace = true }
+url = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = "1"
+
+[features]
+biblatex = ["dep:biblatex", "dep:hayagriva-biblatex", "dep:url"]

@@ -25,4 +25,4 @@ jobs:
           cd ..
           git clone --depth 1 https://github.com/citation-style-language/styles
       - name: Check if archives are up-to-date
-        run: cargo test --test archiver -- --ignored
+        run: cargo test -p hayagriva-archive --test archiver -- --ignored

@@ -1,0 +1,21 @@
+[package]
+name = "hayagriva-csl"
+description = "Work with references: Literature database management, storage, and citation formatting"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+
+[dependencies]
+citationberg = { workspace = true }
+indexmap = { workspace = true }
+icu_collator = "2.2.0"
+icu_locale = "2.2.0"
+hayagriva-core = { path = "../hayagriva-core" }
+unic-langid = { workspace = true }
+
+[dev-dependencies]
+hayagriva-format = { path = "../hayagriva-format" }
