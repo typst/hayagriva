@@ -2532,7 +2532,7 @@ impl<'a> CiteProperties<'a> {
 /// citation or bibliography entry.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 struct CertainCiteProperties {
-    /// The number of the footnote this citation appears in.
+    /// The number of the footnote this citation appears in, starting at 1.
     ///
     /// We can determine this because it depends on citation order only. May be
     /// none if the current style is in-text.

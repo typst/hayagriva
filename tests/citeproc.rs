@@ -227,7 +227,202 @@ struct TestCase {
     bib_entries: Option<Vec<Vec<String>>>,
     bib_section: Option<String>,
     citation_items: Option<Vec<Vec<csl_json::CitationItem>>>,
-    citations: Option<String>,
+    citations: Option<citeproc_js::CitationRequestList>,
+}
+
+/// Types to parse the `citations` field of CSL test cases.
+mod citeproc_js {
+    use super::csl_json;
+    use indexmap::IndexMap;
+    use serde::Deserialize;
+    use std::{fmt, iter};
+
+    #[derive(Deserialize)]
+    struct RawCitationRef(String, usize);
+
+    #[derive(Debug, Deserialize)]
+    #[serde(from = "RawCitationRef")]
+    pub struct CitationRef {
+        citation_id: String,
+        note_number: usize,
+    }
+    impl From<RawCitationRef> for CitationRef {
+        fn from(raw: RawCitationRef) -> Self {
+            Self { citation_id: raw.0, note_number: raw.1 }
+        }
+    }
+
+    #[derive(Deserialize)]
+    struct RawCitationRequest(csl_json::Citation, Vec<CitationRef>, Vec<CitationRef>);
+
+    /// An invocation of citeproc.js [`processCitationCluster`](https://citeproc-js.readthedocs.io/en/latest/running.html#processcitationcluster).
+    #[derive(Debug, Deserialize)]
+    #[serde(from = "RawCitationRequest")]
+    struct CitationRequest {
+        citation: csl_json::Citation,
+        citations_pre: Vec<CitationRef>,
+        citations_post: Vec<CitationRef>,
+    }
+    impl From<RawCitationRequest> for CitationRequest {
+        fn from(raw: RawCitationRequest) -> Self {
+            Self {
+                citation: raw.0,
+                citations_pre: raw.1,
+                citations_post: raw.2,
+            }
+        }
+    }
+
+    /// The `citations` field of a CSL test case.
+    ///
+    /// It serves as an alternative to the `citation_items` field. This field
+    /// mimics a list of interactions with a word processor plugin, and the exact
+    /// format is tightly coupled to citeproc.js.
+    ///
+    /// In most cases, the `citations` field is simple enough to be converted
+    /// to `citation_items` with [`TryInto`].
+    #[derive(Debug, Deserialize)]
+    pub struct CitationRequestList(Vec<CitationRequest>);
+
+    #[derive(Debug)]
+    pub enum NormalizationError {
+        NonSequentialCitations {
+            seen: Vec<String>,
+            current: String,
+            pre: Vec<String>,
+            post: Vec<String>,
+        },
+        NonSequentialNoteNumbers {
+            pre: Vec<usize>,
+            post: Vec<usize>,
+        },
+        MissingResultPrefix {
+            line: String,
+            index: usize,
+        },
+    }
+
+    impl fmt::Display for NormalizationError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                NormalizationError::NonSequentialCitations {
+                    seen,
+                    current,
+                    pre,
+                    post,
+                } => write!(
+                    f,
+                    "only sequential citations can be tested at present, but got seen = {seen:?}, current = {current:?}, pre = {pre:?}, post = {post:?}"
+                ),
+                NormalizationError::NonSequentialNoteNumbers { pre, post } => write!(
+                    f,
+                    "only sequential note numbers can be tested at present, but got pre = {pre:?}, post = {post:?}"
+                ),
+                NormalizationError::MissingResultPrefix { line, index } => write!(
+                    f,
+                    "expected the line to start with `>>[{index}] ` or `..[{index}] `, but got {line:?}"
+                ),
+            }
+        }
+    }
+
+    impl TryInto<Vec<Vec<csl_json::CitationItem>>> for CitationRequestList {
+        type Error = NormalizationError;
+        fn try_into(self) -> Result<Vec<Vec<csl_json::CitationItem>>, Self::Error> {
+            let is_note_number_sequential = |cites: &[CitationRef]| {
+                let Some(first) = cites.first().map(|c| c.note_number) else {
+                    return true;
+                };
+                cites.iter().enumerate().all(|(i, c)| c.note_number == i + first)
+            };
+
+            let mut seen = IndexMap::new();
+            for cites in self.0 {
+                // Check if the test case is simple enough.
+
+                if !is_note_number_sequential(&cites.citations_pre)
+                    || !is_note_number_sequential(&cites.citations_post)
+                {
+                    return Err(NormalizationError::NonSequentialNoteNumbers {
+                        pre: cites.citations_pre.iter().map(|c| c.note_number).collect(),
+                        post: cites
+                            .citations_post
+                            .iter()
+                            .map(|c| c.note_number)
+                            .collect(),
+                    });
+                }
+
+                let pre = || cites.citations_pre.iter().map(|c| &c.citation_id);
+                let current = &cites.citation.citation_id;
+                let post = || cites.citations_post.iter().map(|c| &c.citation_id);
+                // Either adding a new citation or replacing an existing citation.
+                if !(pre().eq(seen.keys()) && post().next().is_none()
+                    || pre().chain(iter::once(current)).chain(post()).eq(seen.keys()))
+                {
+                    return Err(NormalizationError::NonSequentialCitations {
+                        seen: seen.keys().cloned().collect(),
+                        current: current.clone(),
+                        pre: pre().cloned().collect(),
+                        post: post().cloned().collect(),
+                    });
+                }
+
+                // If the `citation_id` already exists, replace it in position.
+                seen.insert(cites.citation.citation_id, cites.citation.citation_items);
+            }
+
+            Ok(seen.into_values().collect())
+        }
+    }
+
+    /// Remove the special prefixes from the citation result.
+    ///
+    /// For test cases that use the `citations` field and in the citation mode,
+    /// the citeproc.js test runner prepends `>>` to entries updated in the last
+    /// citation request, and prepends `..` to others. It also prepends indices
+    /// as `[n] ` (with a trailing space).
+    ///
+    /// https://github.com/Juris-M/citeproc-js/blob/cc9153c45293af878de08cafddbefe6ea150c380/src/test_runner.js#L179-L212
+    /// https://github.com/Juris-M/citeproc-js/blob/cc9153c45293af878de08cafddbefe6ea150c380/src/test_runner.js#L352-L354
+    ///
+    /// However, Hayagriva works differently with citeproc.js. It is meaningless
+    /// to test which entries were updated by Hayagriva. Therefore, we trim
+    /// these prefixes before comparison.
+    pub fn trim_result_prefixes(result: &str) -> Result<String, NormalizationError> {
+        Ok(result
+            .lines()
+            .enumerate()
+            .map(|(index, line)| {
+                line.strip_prefix("..")
+                    .or(line.strip_prefix(">>"))
+                    .and_then(|line| line.strip_prefix(&format!("[{index}] ")))
+                    .ok_or(NormalizationError::MissingResultPrefix {
+                        line: line.to_string(),
+                        index,
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .join("\n"))
+    }
+}
+
+impl TestCase {
+    /// Normalize `citations` to `citation_items` if possible.
+    ///
+    /// Returns an error if [`can_test`] is expected to be false after normalization.
+    fn normalize(self) -> Result<Self, citeproc_js::NormalizationError> {
+        let mut case = self;
+        if case.citation_items.is_none()
+            && let Some(citations) = case.citations.take()
+        {
+            case.citation_items = Some(citations.try_into()?);
+            if !case.mode.is_bibliography() {
+                case.result = citeproc_js::trim_result_prefixes(&case.result)?;
+            }
+        }
+        Ok(case)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -308,7 +503,10 @@ impl<'s> TestCaseBuilder<'s> {
                 .citation_items
                 .map(|e| serde_json::from_str(e).map_err(TestParseError::JsonError))
                 .transpose()?,
-            citations: self.citations.map(ToString::to_string),
+            citations: self
+                .citations
+                .map(|e| serde_json::from_str(e).map_err(TestParseError::JsonError))
+                .transpose()?,
         })
     }
 }
@@ -415,7 +613,21 @@ impl TestSuiteResults {
             };
             total += 1;
 
-            if !can_test(&case, || path.display(), false) {
+            let print = false;
+            let case = match case.normalize() {
+                Ok(c) => c,
+                Err(e) => {
+                    if print {
+                        eprintln!(
+                            "Skipping test {}\t(cannot normalize: {e})",
+                            path.to_string_lossy()
+                        );
+                    }
+                    skipped += 1;
+                    continue;
+                }
+            };
+            if !can_test(&case, || path.display(), print) {
                 skipped += 1;
                 continue;
             }
@@ -541,7 +753,7 @@ where
     let mut driver: BibliographyDriver<'_, csl_json::Item> = BibliographyDriver::new();
     let mut output = String::new();
     if let Some(cites) = &case.citation_items {
-        for cite in cites {
+        for (n, cite) in cites.iter().enumerate() {
             driver.citation(CitationRequest::new(
                 cite.iter()
                     .map(|i| {
@@ -572,7 +784,7 @@ where
                 &style,
                 None,
                 locales,
-                Some(1),
+                Some(n + 1),
             ));
         }
     } else {
