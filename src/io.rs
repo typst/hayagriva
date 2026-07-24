@@ -24,13 +24,13 @@ use crate::Library;
 /// let bib = from_yaml_str(yaml).unwrap();
 /// assert_eq!(bib.nth(0).unwrap().date().unwrap().year, 2014);
 /// ```
-pub fn from_yaml_str(s: &str) -> Result<Library, serde_yaml::Error> {
-    serde_yaml::from_str(s)
+pub fn from_yaml_str(s: &str) -> Result<Library, yaml_serde::Error> {
+    yaml_serde::from_str(s)
 }
 
 /// Serialize a bibliography to a YAML string.
-pub fn to_yaml_str(entries: &Library) -> Result<String, serde_yaml::Error> {
-    serde_yaml::to_string(&entries)
+pub fn to_yaml_str(entries: &Library) -> Result<String, yaml_serde::Error> {
+    yaml_serde::to_string(&entries)
 }
 
 /// Errors that may occur when parsing a BibLaTeX file.
@@ -104,7 +104,7 @@ mod tests {
         }
     }
 
-    fn assert_error_location(err: &serde_yaml::Error, line: usize, column: usize) {
+    fn assert_error_location(err: &yaml_serde::Error, line: usize, column: usize) {
         let location = err
             .location()
             .unwrap_or_else(|| panic!("Expected error location. Got: {err}"));
