@@ -174,6 +174,7 @@ fn renders_given_special_form<T: EntryLike>(
             | SpecialForm::OnlyFirstDate
             | SpecialForm::OnlyYearSuffix,
         ) => return false,
+        #[allow(clippy::collapsible_match)]
         Some(SpecialForm::SuppressAuthor) => {
             if names.will_render(ctx, Variable::Name(NameVariable::Author)) {
                 return false;
