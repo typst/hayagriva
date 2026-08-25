@@ -1824,17 +1824,10 @@ impl<'a> StyleContext<'a> {
                 }
             }
             (Some(CitePurpose::Prose), _) => {
+                let author_loc = ctx.apply_prefix(&Affixes::default());
                 do_author(&mut ctx);
-                if !self
-                    .csl
-                    .citation
-                    .layout
-                    .prefix
-                    .as_ref()
-                    .is_some_and(|f| f.chars().next().is_some_and(char::is_whitespace))
-                {
-                    ctx.ensure_space();
-                }
+                let has_author = ctx.writing.has_content_since(&author_loc);
+                ctx.apply_suffix(&Affixes::default(), author_loc);
 
                 if self.csl.info.category.iter().any(|c| {
                     matches!(
@@ -1844,6 +1837,14 @@ impl<'a> StyleContext<'a> {
                         }
                     )
                 }) {
+                    if has_author
+                        && !self.csl.citation.layout.prefix.as_ref().is_some_and(|f| {
+                            f.chars().next().is_some_and(char::is_whitespace)
+                        })
+                    {
+                        ctx.ensure_space();
+                    }
+
                     // Print the label.
                     if let Some(prefix) = self.csl.citation.layout.prefix.as_ref() {
                         ctx.push_str(prefix);
@@ -1855,15 +1856,39 @@ impl<'a> StyleContext<'a> {
                 } else {
                     // Print the citation surrounded by parentheses and suppress
                     // the author.
-                    ctx.push_str(
-                        self.csl.citation.layout.prefix.as_deref().unwrap_or("("),
-                    );
+                    let mut prefix = self
+                        .csl
+                        .citation
+                        .layout
+                        .prefix
+                        .clone()
+                        .unwrap_or_else(|| "(".to_string());
+                    if has_author
+                        && !prefix.chars().next().is_some_and(char::is_whitespace)
+                    {
+                        prefix.insert(0, ' ');
+                    }
+                    let affixes = Affixes {
+                        prefix: Some(prefix),
+                        suffix: Some(
+                            self.csl
+                                .citation
+                                .layout
+                                .suffix
+                                .clone()
+                                .unwrap_or_else(|| ")".to_string()),
+                        ),
+                    };
+                    let affix_loc = ctx.apply_prefix(&affixes);
                     ctx.set_special_form(Some(SpecialForm::SuppressAuthor));
                     do_regular(&mut ctx);
                     ctx.set_special_form(None);
-                    ctx.push_str(
-                        self.csl.citation.layout.suffix.as_deref().unwrap_or(")"),
-                    );
+                    if has_author {
+                        ctx.apply_suffix(&affixes, affix_loc);
+                    } else {
+                        ctx.push_str(affixes.suffix.as_deref().unwrap());
+                        ctx.commit_elem(affix_loc.0, None, None);
+                    }
                 }
             }
             (Some(CitePurpose::Year) | Some(CitePurpose::Full) | None, _) => {
@@ -3729,6 +3754,40 @@ mod tests {
 
         assert_eq!(c1, "[Che+21a]");
         assert_eq!(c2, "[Che+21b]");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    fn issue_347() {
+        let bibtex = r#"@book{pratchett96,
+            title = {Eric},
+            author = {Pratchett, T.},
+            year = {1996},
+            publisher = {Vista}
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let mla = archive::ArchivedStyle::ModernLanguageAssociation.get();
+        let citationberg::Style::Independent(mla) = mla else { unreachable!() };
+        let entry = library.iter().next().unwrap();
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_entry(entry).kind(CitePurpose::Prose)],
+            &mla,
+            None,
+            &locales,
+            None,
+        ));
+        let rendered = driver.finish(BibliographyRequest::new(&mla, None, &locales));
+        let mut output = String::new();
+        rendered.citations[0]
+            .citation
+            .write_buf(&mut output, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(output, "Pratchett");
     }
 
     #[test]
