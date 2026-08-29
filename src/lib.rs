@@ -955,7 +955,7 @@ mod tests {
         select_all!(
             "(chapter | anthos) > (anthology | book)",
             entries,
-            ["harry", "gedanken", "lamb-chapter", "snail-chapter"]
+            ["brisngr", "gedanken", "lamb-chapter", "snail-chapter"]
         );
         select_all!(
             "*[url]",
@@ -984,7 +984,7 @@ mod tests {
             entries,
             [
                 "zygos",
-                "harry",
+                "brisngr",
                 "terminator-2",
                 "interior",
                 "wire",

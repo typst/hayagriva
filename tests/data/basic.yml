@@ -77,18 +77,18 @@ swedish:
         date: 1978
         edition: 2
 
-harry:
+brisngr:
     type: Chapter
-    page-range: 135-139
-    serial-number: 3
+    page-range: 218-231
+    serial-number: 14
     parent:
-        title: Harry Potter and the Order of the Phoenix
-        author: Rowling, J. K.
-        volume: 5
-        volume-total: 7
-        serial-number: { isbn: 978-0747551003 }
-        page-total: 768
-        date: ~2003-06-21
+        title: Brisngr
+        author: Paolini, Christopher
+        volume: 3
+        volume-total: 4
+        serial-number: { isbn: 978-0739368046 }
+        page-total: 831
+        date: ~2008-09-20
 
 science-e-issue:
     type: Web
