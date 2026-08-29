@@ -1,0 +1,252 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+From Hayagriva#507
+
+>>===== RESULT =====>>
+(Alpha, 2026a; Alpha, 2026b; Beta, 2026a; Beta, 2026b; Gamma, 2026a; Gamma, 2026b; Delta, 2026a; Delta, 2026b; Epsilon, 2026a; Epsilon, 2026b)
+<<===== RESULT =====<<
+
+>>===== CITATION-ITEMS =====>>
+[
+    [
+        {
+            "id": "A1"
+        },
+        {
+            "id": "A2"
+        },
+        {
+            "id": "B1"
+        },
+        {
+            "id": "B2"
+        },
+        {
+            "id": "C1"
+        },
+        {
+            "id": "C2"
+        },
+        {
+            "id": "D1"
+        },
+        {
+            "id": "D2"
+        },
+        {
+            "id": "E1"
+        },
+        {
+            "id": "E2"
+        }
+    ]
+]
+<<===== CITATION-ITEMS =====<<
+
+
+>>===== CSL =====>>
+<style
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation disambiguate-add-year-suffix="true">
+    <layout delimiter="; " prefix="(" suffix=")">
+      <group delimiter=", ">
+        <names variable="author">
+        </names>
+        <date variable="issued">
+          <date-part name="year"/>
+        </date>
+      </group>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "A1",
+        "title": "One",
+        "author": [
+            {
+                "family": "Alpha"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "A2",
+        "title": "Two",
+        "author": [
+            {
+                "family": "Alpha"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "B1",
+        "title": "Three",
+        "author": [
+            {
+                "family": "Beta"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "B2",
+        "title": "Four",
+        "author": [
+            {
+                "family": "Beta"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "C1",
+        "title": "Five",
+        "author": [
+            {
+                "family": "Gamma"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "C2",
+        "title": "Six",
+        "author": [
+            {
+                "family": "Gamma"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "D1",
+        "title": "Seven",
+        "author": [
+            {
+                "family": "Delta"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "D2",
+        "title": "Eight",
+        "author": [
+            {
+                "family": "Delta"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "E1",
+        "title": "Nine",
+        "author": [
+            {
+                "family": "Epsilon"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    },
+    {
+        "id": "E2",
+        "title": "Ten",
+        "author": [
+            {
+                "family": "Epsilon"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2026
+                ]
+            ]
+        }
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<

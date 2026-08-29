@@ -247,13 +247,14 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
             };
 
             for group in ambiguous.iter() {
+                let len_rerender = rerender.len();
                 // 2a. Name Disambiguation loop
                 disambiguate_names(&res, group, |entry, state| {
                     mark(&mut rerender, entry, state)
                 });
 
-                // Do not try other methods if the previous method succeeded.
-                if !rerender.is_empty() {
+                // Do not try other methods for this group if the previous method succeeded.
+                if rerender.len() > len_rerender {
                     continue;
                 }
 
@@ -262,7 +263,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                     mark(&mut rerender, entry, state)
                 });
 
-                if !rerender.is_empty() {
+                if rerender.len() > len_rerender {
                     continue;
                 }
 
