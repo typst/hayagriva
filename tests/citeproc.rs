@@ -450,6 +450,21 @@ fn test_single_file() {
 }
 
 #[test]
+#[ignore]
+fn test_single_local_file() {
+    let locales = locales();
+    let name = "disamb_Issue507.txt";
+    let test_path = PathBuf::from("tests/local");
+    let path = test_path.join(name);
+    let case = match build_case(&std::fs::read_to_string(&path).unwrap()) {
+        Ok(c) => c,
+        Err(e) => panic!("Could not parse test {}: {e}", path.to_string_lossy()),
+    };
+    assert!(can_test(&case, || path.display(), true));
+    assert!(test_file(case, &locales, || path.display()));
+}
+
+#[test]
 fn test_local_files() {
     let locales = locales();
     let test_path = PathBuf::from("tests/local");
