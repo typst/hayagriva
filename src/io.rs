@@ -93,7 +93,7 @@ mod tests {
         let contents = fs::read_to_string("tests/data/basic.yml").unwrap();
         let entries = from_yaml_str(&contents).unwrap();
         let yaml = to_yaml_str(&entries).unwrap();
-        println!("{}", &yaml);
+        println!("{}", yaml);
 
         let reconstructed = from_yaml_str(&yaml).unwrap();
         assert_eq!(entries.len(), reconstructed.len());

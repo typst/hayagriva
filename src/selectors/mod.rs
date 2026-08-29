@@ -165,6 +165,7 @@ impl Selector {
                 bound
             }),
 
+            #[allow(clippy::manual_filter)]
             Self::Attr(expr, attributes) => expr.apply(entry).and_then(|bound| {
                 if attributes.iter().all(|arg| entry.has(arg.as_ref())) {
                     Some(bound)
