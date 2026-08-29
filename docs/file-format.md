@@ -8,13 +8,13 @@ In technical terms, a Hayagriva file is a YAML document that contains a single m
 Or, in simpler terms: Every literature item needs to be identifiable by some name (the _key_) and have some properties that describe it (the _fields_). Suppose a file like this:
 
 ```yaml
-brisngr:
+inheritance:
     type: Book
-    title: Brisngr
+    title: Inheritance
     author: Paolini, Christopher
-    volume: 3
-    page-total: 831
-    date: 2008-09-20
+    volume: 4
+    page-total: 860
+    date: 2011-11-08
 
 electronic:
     type: Web
@@ -24,7 +24,7 @@ electronic:
     url: http://www.techno.org/electronic-music-guide/
 ```
 
-You can see that it refers to two items: The third volume of the Inheritance Cycle (key: `brisngr`) and a web page called "Ishkur's Guide to Electronic Music" (key: `electronic`). The key always comes first and is followed by a colon. Below the key, indented, you can find one field on each line: They start with the field name, then a colon, and then the field value.
+You can see that it refers to two items: The fourth volume of the Inheritance Cycle (key: `inheritance`) and a web page called "Ishkur's Guide to Electronic Music" (key: `electronic`). The key always comes first and is followed by a colon. Below the key, indented, you can find one field on each line: They start with the field name, then a colon, and then the field value.
 
 Sometimes, this value can be more complex than just some text after the colon. If you have an article that was authored by multiple people, its `author` field can look like this instead:
 

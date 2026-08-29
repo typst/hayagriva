@@ -77,18 +77,18 @@ swedish:
         date: 1978
         edition: 2
 
-brisngr:
+inheritance:
     type: Chapter
     page-range: 218-231
     serial-number: 14
     parent:
-        title: Brisngr
+        title: Inheritance
         author: Paolini, Christopher
-        volume: 3
+        volume: 4
         volume-total: 4
-        serial-number: { isbn: 978-0739368046 }
-        page-total: 831
-        date: ~2008-09-20
+        serial-number: { isbn: 978-0375856112 }
+        page-total: 860
+        date: ~2011-11-08
 
 science-e-issue:
     type: Web
