@@ -247,13 +247,14 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
             };
 
             for group in ambiguous.iter() {
+                let len_rerender = rerender.len();
                 // 2a. Name Disambiguation loop
                 disambiguate_names(&res, group, |entry, state| {
                     mark(&mut rerender, entry, state)
                 });
 
-                // Do not try other methods if the previous method succeeded.
-                if !rerender.is_empty() {
+                // Do not try other methods for this group if the previous method succeeded.
+                if rerender.len() > len_rerender {
                     continue;
                 }
 
@@ -262,7 +263,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                     mark(&mut rerender, entry, state)
                 });
 
-                if !rerender.is_empty() {
+                if rerender.len() > len_rerender {
                     continue;
                 }
 
@@ -1824,17 +1825,10 @@ impl<'a> StyleContext<'a> {
                 }
             }
             (Some(CitePurpose::Prose), _) => {
+                let author_loc = ctx.apply_prefix(&Affixes::default());
                 do_author(&mut ctx);
-                if !self
-                    .csl
-                    .citation
-                    .layout
-                    .prefix
-                    .as_ref()
-                    .is_some_and(|f| f.chars().next().is_some_and(char::is_whitespace))
-                {
-                    ctx.ensure_space();
-                }
+                let has_author = ctx.writing.has_content_since(&author_loc);
+                ctx.apply_suffix(&Affixes::default(), author_loc);
 
                 if self.csl.info.category.iter().any(|c| {
                     matches!(
@@ -1844,6 +1838,14 @@ impl<'a> StyleContext<'a> {
                         }
                     )
                 }) {
+                    if has_author
+                        && !self.csl.citation.layout.prefix.as_ref().is_some_and(|f| {
+                            f.chars().next().is_some_and(char::is_whitespace)
+                        })
+                    {
+                        ctx.ensure_space();
+                    }
+
                     // Print the label.
                     if let Some(prefix) = self.csl.citation.layout.prefix.as_ref() {
                         ctx.push_str(prefix);
@@ -1855,15 +1857,39 @@ impl<'a> StyleContext<'a> {
                 } else {
                     // Print the citation surrounded by parentheses and suppress
                     // the author.
-                    ctx.push_str(
-                        self.csl.citation.layout.prefix.as_deref().unwrap_or("("),
-                    );
+                    let mut prefix = self
+                        .csl
+                        .citation
+                        .layout
+                        .prefix
+                        .clone()
+                        .unwrap_or_else(|| "(".to_string());
+                    if has_author
+                        && !prefix.chars().next().is_some_and(char::is_whitespace)
+                    {
+                        prefix.insert(0, ' ');
+                    }
+                    let affixes = Affixes {
+                        prefix: Some(prefix),
+                        suffix: Some(
+                            self.csl
+                                .citation
+                                .layout
+                                .suffix
+                                .clone()
+                                .unwrap_or_else(|| ")".to_string()),
+                        ),
+                    };
+                    let affix_loc = ctx.apply_prefix(&affixes);
                     ctx.set_special_form(Some(SpecialForm::SuppressAuthor));
                     do_regular(&mut ctx);
                     ctx.set_special_form(None);
-                    ctx.push_str(
-                        self.csl.citation.layout.suffix.as_deref().unwrap_or(")"),
-                    );
+                    if has_author {
+                        ctx.apply_suffix(&affixes, affix_loc);
+                    } else {
+                        ctx.push_str(affixes.suffix.as_deref().unwrap());
+                        ctx.commit_elem(affix_loc.0, None, None);
+                    }
                 }
             }
             (Some(CitePurpose::Year) | Some(CitePurpose::Full) | None, _) => {
@@ -3733,6 +3759,40 @@ mod tests {
 
     #[test]
     #[cfg(feature = "archive")]
+    fn issue_347() {
+        let bibtex = r#"@book{pratchett96,
+            title = {Eric},
+            author = {Pratchett, T.},
+            year = {1996},
+            publisher = {Vista}
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let mla = archive::ArchivedStyle::ModernLanguageAssociation.get();
+        let citationberg::Style::Independent(mla) = mla else { unreachable!() };
+        let entry = library.iter().next().unwrap();
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_entry(entry).kind(CitePurpose::Prose)],
+            &mla,
+            None,
+            &locales,
+            None,
+        ));
+        let rendered = driver.finish(BibliographyRequest::new(&mla, None, &locales));
+        let mut output = String::new();
+        rendered.citations[0]
+            .citation
+            .write_buf(&mut output, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(output, "Pratchett");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
     /// See https://github.com/typst/hayagriva/issues/243
     fn issue_243() {
         let bibtex = r#"@book{downs57,
@@ -3798,6 +3858,60 @@ mod tests {
         assert_eq!(c1, "Downs (1957)");
         assert_eq!(c2, "Brady & Collier (2010)");
     }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    /// A webpage with only a year (no month/day) as its issued date must not render a dangling delimiter before the (empty) month/day part.
+    ///
+    /// See https://github.com/typst/hayagriva/issues/246
+    fn issue_year_only_date_apa() {
+        let yaml = r#"
+        nistCVE:
+            type: Web
+            author: "NIST"
+            title: "CVE-2021-44228"
+            date: "2021"
+            url:
+                value: "https://nvd.nist.gov/vuln/detail/CVE-2021-44228"
+                date: 2024-10-28
+        "#;
+
+        let library = from_yaml_str(yaml).unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_entry(library.iter().next().unwrap())],
+            &apa,
+            None,
+            &locales,
+            None,
+        ));
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &apa,
+            locale: None,
+            locale_files: &locales,
+        });
+
+        let mut bib_entry = String::new();
+        finished
+            .bibliography
+            .unwrap()
+            .items
+            .remove(0)
+            .content
+            .write_buf(&mut bib_entry, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(
+            bib_entry,
+            "NIST. (2021). CVE-2021-44228. https://nvd.nist.gov/vuln/detail/CVE-2021-44228"
+        );
+    }
+
     #[test]
     #[cfg(feature = "archive")]
     /// See https://github.com/typst/hayagriva/issues/48

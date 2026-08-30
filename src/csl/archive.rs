@@ -17,7 +17,7 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Sebastian Karcher.
     AmericanAnthropologicalAssociation,
-    /// ACS Guide 2022 revision.
+    /// ACS Guide 2026 revision.
     ///
     /// Authors: Julian Onions.
     AmericanChemicalSociety,
@@ -983,7 +983,7 @@ impl ArchivedStyle {
         match self {
             Self::Alphanumeric => "Alphanumeric",
             Self::AmericanAnthropologicalAssociation => "American Anthropological Association",
-            Self::AmericanChemicalSociety => "ACS Guide 2022 revision",
+            Self::AmericanChemicalSociety => "ACS Guide 2026 revision",
             Self::AmericanGeophysicalUnion => "American Geophysical Union",
             Self::AmericanInstituteOfAeronauticsAndAstronautics => "American Institute of Aeronautics and Astronautics",
             Self::AmericanInstituteOfPhysics => "AIP Style Manual 4th edition",

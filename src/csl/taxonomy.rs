@@ -173,11 +173,9 @@ impl EntryLike for Entry {
             NumberVariable::Number => self
                 .serial_number()
                 .and_then(|s| s.0.get("serial"))
-                .map(|s| {
-                    Numeric::from_str(s)
-                        .map(|n| MaybeTyped::Typed(Cow::Owned(n)))
-                        .unwrap_or_else(|_| MaybeTyped::String(s.to_owned()))
-                })
+                // Serial numbers should always be treated as untyped strings,
+                // even if sometimes they are valid number ranges with affixes.
+                .map(|s| MaybeTyped::String(s.to_owned()))
                 .or_else(|| {
                     // User can specify either 'serial-number: 3' or
                     // 'chapter: 3' for chapter entries, with the same result.
@@ -957,7 +955,7 @@ fn letter(val: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::from_biblatex_str;
+    use crate::io::{from_biblatex_str, from_yaml_str};
 
     #[test]
     fn zotero_university_interop() {
@@ -1005,6 +1003,39 @@ mod tests {
                 .unwrap()
                 .to_str(),
             "Victoria, British Columbia, Canada"
+        );
+    }
+
+    #[test]
+    fn verbatim_serial_number() {
+        let entry = from_yaml_str(
+            // https://github.com/typst/hayagriva/issues/506
+            r#"
+            report:
+              type: report
+              serial-number: USDL-26-0599
+              volume: XY-1-5
+            "#,
+        )
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+        // Hyphens in serial numbers should not be converted to en dashes.
+        assert_eq!(
+            entry
+                .resolve_number_variable(NumberVariable::Number)
+                .unwrap()
+                .to_str(),
+            "USDL-26-0599"
+        );
+        // But hyphens in number ranges can be converted.
+        assert_eq!(
+            entry
+                .resolve_number_variable(NumberVariable::Volume)
+                .unwrap()
+                .to_str(),
+            "XY-1–5"
         );
     }
 }

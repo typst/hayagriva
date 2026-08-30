@@ -524,8 +524,8 @@ verse       volume"#)
         Some(("styles", _)) => {
             for key in ArchivedStyle::all() {
                 let style = key.get();
-                println!("- {}", &key.names()[0]);
-                println!("  Full name: {}", &style.info().title.value);
+                println!("- {}", key.names()[0]);
+                println!("  Full name: {}", style.info().title.value);
                 println!("  Authors:");
                 for author in style.info().authors.iter() {
                     print!("  - {}", author.name);
@@ -536,7 +536,7 @@ verse       volume"#)
                     }
                 }
                 if let Some(desc) = &style.info().summary {
-                    println!("  Summary: {}", &desc.value);
+                    println!("  Summary: {}", desc.value);
                 }
             }
         }

@@ -792,7 +792,20 @@ impl RenderCsl for citationberg::Date {
         if !self.will_render(ctx, variable.into()) {
             (false, UsageInfo::default())
         } else {
-            let has_non_empty_vars = ctx.resolve_date_variable(variable).is_some();
+            let base = self.form.and_then(|form| ctx.localized_date(form));
+            let parts = self.parts.or(base.and_then(|b| b.parts)).unwrap_or_default();
+
+            let has_non_empty_vars =
+                ctx.resolve_date_variable(variable).is_some_and(|date| {
+                    base.unwrap_or(self).date_part.iter().any(|part| match part.name {
+                        DatePartName::Year => true,
+                        DatePartName::Month => {
+                            (parts.has_month() || date.season.is_some())
+                                && (date.month.is_some() || date.season.is_some())
+                        }
+                        DatePartName::Day => parts.has_day() && date.day.is_some(),
+                    })
+                });
             (
                 has_non_empty_vars,
                 UsageInfo {

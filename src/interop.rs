@@ -412,18 +412,20 @@ impl TryFrom<&tex::Entry> for Entry {
         // report, manual, and dataset, where it fits the use for patent.
         // Hayagriva uses "issue" for the journal/book sense of biblatex's number,
         // and "serial-number" for the record number / token sense.
-        if let Some(number) = map_res(entry.number())?.map(|d| d.into()) {
+        if let Some(number) = map_res(entry.number())? {
             if let Some(parent) = book(&mut item, parent) {
-                parent.set_issue(number);
+                parent.set_issue(number.into());
             } else {
                 match item.entry_type {
                     EntryType::Report
                     | EntryType::Patent
                     | EntryType::Entry
                     | EntryType::Reference => {
-                        item.set_keyed_serial_number("serial", number.to_string())
+                        // Serial numbers should always be kept as verbatim, even
+                        // if sometimes they are valid number ranges with affixes.
+                        item.set_keyed_serial_number("serial", number.format_verbatim());
                     }
-                    _ => item.set_issue(number),
+                    _ => item.set_issue(number.into()),
                 }
             }
         }
@@ -865,5 +867,28 @@ mod tests {
             pine.parents()[0].title().unwrap().to_string(),
             "Modern Games: Deep Research and Analysis"
         );
+    }
+
+    #[test]
+    fn verbatim_serial_number() {
+        let entry = crate::io::from_biblatex_str(
+            // https://github.com/typst/hayagriva/issues/506
+            r#"
+            @report{key,
+              number = {USDL-26-0599},
+              volume = {XY-1-5},
+            }"#,
+        )
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+        // Hyphens in serial numbers should not be converted to en dashes.
+        assert_eq!(
+            entry.serial_number().unwrap().0.get("serial").unwrap(),
+            "USDL-26-0599"
+        );
+        // But hyphens in number ranges can be converted.
+        assert_eq!(entry.volume().unwrap().to_str(), "XY-1–5");
     }
 }
