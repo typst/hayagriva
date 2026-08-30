@@ -131,7 +131,7 @@ impl fmt::Display for TestParseError {
             TestParseError::MissingRequiredSection(s) => {
                 write!(f, "missing required section {s}")
             }
-            TestParseError::CslError(e) => write!(f, "csl error: {e}"),
+            TestParseError::CslError(e) => write!(f, "csl error: {e}; {}", e.source),
             TestParseError::JsonError(e) => write!(f, "json error: {e}"),
         }
     }

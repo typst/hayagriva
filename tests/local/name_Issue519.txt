@@ -1,0 +1,106 @@
+>>===== MODE =====>>
+bibliography
+<<===== MODE =====<<
+
+From Hayagriva#519
+
+>>===== RESULT =====>>
+<div class="csl-bib-body">
+  <div class="csl-entry">
+    <div class="csl-left-margin">1.</div>
+    <div class="csl-right-inline">Jun Wang, Liangjiang Wang. Deep analysis.</div>
+  </div>
+</div>
+<<===== RESULT =====<<
+
+>>===== CITATION-ITEMS =====>>
+[
+    [
+        {
+            "id": "Wang"
+        }
+    ]
+]
+<<===== CITATION-ITEMS =====<<
+
+
+>>===== CSL =====>>
+<style
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <label prefix=", "/>
+      <substitute>
+        <names variable="editor-translator"/>
+        <names variable="editor translator"/>
+        <names variable="editor"/>
+        <names variable="collection-editor"/>
+      </substitute>
+    </names>
+  </macro>
+  <macro name="title">
+    <text variable="title"/>
+  </macro>
+  <macro name="bibliography">
+    <group delimiter=" ">
+      <group delimiter=". " suffix=".">
+        <text macro="author"/>
+        <group delimiter=" ">
+          <text macro="title"/>
+        </group>
+      </group>
+    </group>
+  </macro>
+  <citation>
+    <layout delimiter="," prefix="(" suffix=")">
+      <text variable="citation-number"/>
+    </layout>
+  </citation>
+  <bibliography et-al-min="7" et-al-use-first="6" second-field-align="flush">
+    <layout>
+      <text suffix="." variable="citation-number"/>
+      <text macro="bibliography"/>
+    </layout>
+  </bibliography>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "Wang",
+        "title": "Deep analysis",
+        "author": [
+            {
+                "family": "Wang",
+                "given": "Jun"
+            },
+            {
+                "family": "Wang",
+                "given": "Liangjiang"
+            }
+        ],
+        "type": "book",
+        "issued": {
+            "date-parts": [
+                [
+                  2020
+                ]
+            ]
+        }
+    }
+]
+<<===== INPUT =====<<
+
+
+>>===== VERSION =====>>
+1.0
+<<===== VERSION =====<<

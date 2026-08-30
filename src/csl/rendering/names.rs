@@ -432,7 +432,7 @@ impl RenderCsl for Names {
         // it is considered empty.
         // If all children are empty, we do not render.
         let children_will_render = self.children.is_empty()
-            || self.children.iter().any(|n| match n {
+            || self.children.iter().all(|n| match n {
                 citationberg::NamesChild::Name(name) => {
                     let opts = name.options(&names_opts);
                     let Some(et_al_min) = opts.et_al_min else {
@@ -447,7 +447,7 @@ impl RenderCsl for Names {
                             ctx.resolve_name_variable(*v).len() >= et_al_min as usize
                         })
                 }
-                _ => false,
+                _ => true,
             });
 
         is_empty |= !children_will_render;
