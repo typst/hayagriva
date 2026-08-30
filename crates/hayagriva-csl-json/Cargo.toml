@@ -1,0 +1,22 @@
+[package]
+name = "hayagriva-csl-json"
+description = "CSL-JSON handling for Hayagriva."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = [
+  "hayagriva",
+  "bibliography",
+  "citation",
+  "reference",
+  "literature",
+  "json",
+]
+
+[dependencies]
+citationberg = { workspace = true, features = ["json"] }
+hayagriva-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }

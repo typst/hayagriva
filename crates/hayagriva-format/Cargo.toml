@@ -1,0 +1,27 @@
+[package]
+name = "hayagriva-format"
+description = "The bibliography format Hayagriva, used in Typst."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = ["hayagriva", "bibliography", "citation", "reference", "literature"]
+
+[dependencies]
+biblatex = { workspace = true, optional = true }
+citationberg = { workspace = true }
+indexmap = { workspace = true }
+paste = "1.0.14"
+serde = { workspace = true }
+unic-langid = { workspace = true }
+yaml_serde = "0.10.4"
+unicode-segmentation = { workspace = true }
+hayagriva-core = { workspace = true }
+thiserror = { workspace = true }
+unscanny = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"

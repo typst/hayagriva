@@ -174,9 +174,9 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "displaydoc"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
+checksum = "1ac70aa55017e108007fbaf5aa0f54b021c98f92ff8af59d42eda9da96e3dd4f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -216,23 +216,74 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
-name = "hayagriva"
+name = "hayagriva-archive"
+version = "0.10.1"
+dependencies = [
+ "ciborium",
+ "citationberg",
+ "serde",
+]
+
+[[package]]
+name = "hayagriva-cli"
 version = "0.10.1"
 dependencies = [
  "biblatex",
- "ciborium",
  "citationberg",
  "clap",
- "heck",
+ "hayagriva-archive",
+ "hayagriva-core",
+ "hayagriva-csl",
+ "hayagriva-format",
+ "strum 0.26.3",
+]
+
+[[package]]
+name = "hayagriva-core"
+version = "0.10.1"
+dependencies = [
+ "citationberg",
+ "roman-numerals-rs",
+ "serde",
+ "thiserror",
+ "unicode-segmentation",
+ "unscanny",
+ "url",
+]
+
+[[package]]
+name = "hayagriva-csl"
+version = "0.10.1"
+dependencies = [
+ "citationberg",
+ "hayagriva-core",
+ "hayagriva-format",
  "icu_collator",
  "icu_locale",
  "indexmap",
+ "unic-langid",
+]
+
+[[package]]
+name = "hayagriva-csl-json"
+version = "0.10.1"
+dependencies = [
+ "citationberg",
+ "hayagriva-core",
+ "serde",
+]
+
+[[package]]
+name = "hayagriva-format"
+version = "0.10.1"
+dependencies = [
+ "biblatex",
+ "citationberg",
+ "hayagriva-core",
+ "indexmap",
  "paste",
- "regex",
- "roman-numerals-rs",
  "serde",
  "serde_json",
- "strum 0.26.3",
  "thiserror",
  "unic-langid",
  "unicode-segmentation",
@@ -440,9 +491,9 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
 name = "memchr"
-version = "2.8.0"
+version = "2.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+checksum = "6b947ae49db0d222b1dbc6b113ce7248a3fc3a6ca21b696717bfc000ba4484d8"
 
 [[package]]
 name = "once_cell_polyfill"
@@ -509,9 +560,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.3"
+version = "1.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -532,9 +583,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "roman-numerals-rs"
@@ -692,6 +743,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tests"
+version = "0.10.1"
+dependencies = [
+ "ciborium",
+ "citationberg",
+ "hayagriva-archive",
+ "hayagriva-core",
+ "hayagriva-csl",
+ "hayagriva-csl-json",
+ "hayagriva-format",
+ "heck",
+ "regex",
+ "serde",
+ "serde_json",
+ "unscanny",
+]
+
+[[package]]
 name = "thiserror"
 version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -798,9 +867,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-segmentation"
-version = "1.13.2"
+version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9629274872b2bfaf8d66f5f15725007f635594914870f65218920345aa11aa8c"
+checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "unscanny"
@@ -881,9 +950,9 @@ dependencies = [
 
 [[package]]
 name = "yoke"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abe8c5fda708d9ca3df187cae8bfb9ceda00dd96231bed36e445a1a48e66f9ca"
+checksum = "709fe23a0424b6a435d82152b1bd3fdfb0833487d5fa90d05d42762a9891fef5"
 dependencies = [
  "stable_deref_trait",
  "yoke-derive",
@@ -904,18 +973,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.48"
+version = "0.8.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eed437bf9d6692032087e337407a86f04cd8d6a16a37199ed57949d415bd68e9"
+checksum = "3b065d4f0e55f82fae73202e189638116a87c55ab6b8e6c2721e13dd9d854ad1"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.48"
+version = "0.8.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70e3cd084b1788766f53af483dd21f93881ff30d7320490ec3ef7526d203bad4"
+checksum = "0b631b19d36a892ab55420c92dbc83ccd79274f25be714855d3074aa71cab639"
 dependencies = [
  "proc-macro2",
  "quote",

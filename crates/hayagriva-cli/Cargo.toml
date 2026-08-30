@@ -1,0 +1,35 @@
+[package]
+name = "hayagriva-cli"
+description = "The command line interface for Hayagriva."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = [
+  "hayagriva",
+  "bibliography",
+  "citation",
+  "reference",
+  "literature",
+  "cli",
+]
+
+[dependencies]
+citationberg = { workspace = true }
+clap = { version = "4", features = ["cargo", "derive"] }
+hayagriva-archive = { workspace = true }
+hayagriva-core = { workspace = true }
+hayagriva-csl = { workspace = true }
+hayagriva-format = { workspace = true }
+strum = { version = "0.26", features = ["derive"] }
+biblatex = { workspace = true, optional = true }
+
+[features]
+default = ["biblatex"]
+biblatex = ["hayagriva-format/biblatex", "dep:biblatex"]
+
+[[bin]]
+name = "hayagriva"
+path = "src/main.rs"

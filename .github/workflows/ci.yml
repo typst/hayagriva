@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0 # 1.98.0
       - run: cargo build
-      - run: cargo test --features csl-json
+      - run: cargo test --all-features
 
   checks:
     name: Check clippy, formatting, and documentation

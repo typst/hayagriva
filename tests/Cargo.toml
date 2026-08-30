@@ -1,0 +1,28 @@
+[package]
+name = "tests"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+publish = false
+
+[dev-dependencies]
+ciborium = { workspace = true }
+citationberg = { workspace = true, features = ["json"] }
+hayagriva-archive = { workspace = true }
+hayagriva-core = { workspace = true }
+hayagriva-csl = { workspace = true }
+hayagriva-csl-json = { workspace = true }
+hayagriva-format = { workspace = true, features = ["biblatex"] }
+heck = "0.5"
+serde = { workspace = true }
+serde_json = "1"
+regex = "1"
+unscanny = { workspace = true }
+
+[[test]]
+name = "test"
+path = "src/tests.rs"
