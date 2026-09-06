@@ -493,6 +493,19 @@ fn label_pluralization(
     }
 }
 
+fn page_label_pluralization(
+    label: &citationberg::Label,
+    variable: &PageVariableResult,
+) -> bool {
+    match label.label.plural {
+        LabelPluralize::Always => true,
+        LabelPluralize::Never => false,
+        LabelPluralize::Contextual => {
+            variable.as_typed().is_some_and(PageRanges::is_plural)
+        }
+    }
+}
+
 impl RenderCsl for citationberg::Label {
     fn render<T: EntryLike>(&self, ctx: &mut Context<T>) {
         if !self.will_have_info(ctx).0 {
@@ -521,7 +534,7 @@ impl RenderCsl for citationberg::Label {
                 };
 
                 let depth = ctx.push_elem(citationberg::Formatting::default());
-                let plural = p.as_typed().is_some_and(|p| p.is_plural());
+                let plural = page_label_pluralization(self, &p);
 
                 let content =
                     ctx.term(Term::from(pv), self.label.form, plural).unwrap_or_default();
@@ -583,7 +596,7 @@ impl RenderCsl for citationberg::Label {
             }
             NumberOrPageVariable::Page(pv) => {
                 if let Some(p) = ctx.resolve_page_variable(pv) {
-                    let plural = p.as_typed().is_some_and(|p| p.is_plural());
+                    let plural = page_label_pluralization(self, &p);
                     (
                         ctx.term(Term::from(pv), self.label.form, plural).is_some(),
                         UsageInfo::default(),
