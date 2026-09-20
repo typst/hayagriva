@@ -3793,6 +3793,48 @@ mod tests {
 
     #[test]
     #[cfg(feature = "archive")]
+    fn issue_529() {
+        let bibtex = r#"@article{turing,
+            title = {On Computable Numbers, with an Application to the Entscheidungsproblem},
+            author = {Turing, Alan M.},
+            year = {1937},
+            journal = {Proceedings of the London Mathematical Society},
+            volume = {s2\\-42}
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let ieee =
+            archive::ArchivedStyle::InstituteOfElectricalAndElectronicsEngineers.get();
+        let citationberg::Style::Independent(ieee) = ieee else { unreachable!() };
+        let entry = library.iter().next().unwrap();
+        let locales = archive::locales();
+
+        let es = LocaleCode("es-ES".to_string());
+
+        let mut driver = BibliographyDriver::new();
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_entry(entry).kind(CitePurpose::Prose)],
+            &ieee,
+            Some(es.clone()),
+            &locales,
+            None,
+        ));
+        let rendered = driver.finish(BibliographyRequest::new(&ieee, Some(es), &locales));
+        let mut output = String::new();
+        let Some(rb) = rendered.bibliography else { unreachable!() };
+        rb.items[0]
+            .content
+            .write_buf(&mut output, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(
+            output,
+            "A. M. Turing, «On Computable Numbers, with an Application to the Entscheidungsproblem», Proceedings of the London Mathematical Society, vol. s2-42, 1937."
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
     /// See https://github.com/typst/hayagriva/issues/243
     fn issue_243() {
         let bibtex = r#"@book{downs57,
