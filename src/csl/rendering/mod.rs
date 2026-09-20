@@ -290,7 +290,7 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                             var: Variable::Standard(StandardVariable::YearSuffix)
                                 | Variable::Number(NumberVariable::Locator),
                             ..
-                        },
+                        } | TextTarget::Term { term: Term::Other(OtherTerm::NoDate), .. },
                     ) =>
             {
                 return None;

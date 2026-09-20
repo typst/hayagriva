@@ -14,11 +14,11 @@ use citationberg::taxonomy::{
     PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
-    Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro,
-    DisambiguationRule, Display, GrammarGender, IndependentStyle, InheritableNameOptions,
-    Layout, LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign,
-    StyleCategory, StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToAffixes,
-    ToFormatting, taxonomy as csl_taxonomy,
+    Affixes, BaseLanguage, Choose, Citation, CitationFormat, Collapse, CslMacro,
+    DisambiguationRule, Display, GrammarGender, Group, IndependentStyle,
+    InheritableNameOptions, Layout, LayoutRenderingElement, Locale, LocaleCode, Names,
+    SecondFieldAlign, StyleCategory, StyleClass, SubsequentAuthorSubstituteRule,
+    TermForm, Text, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
 use indexmap::IndexSet;
@@ -73,6 +73,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     locale: Option<LocaleCode>,
     purpose: Option<CitePurpose>,
     collapse_verdict: Option<CollapseVerdict>,
+    style_uses_year_suffix_var: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -219,6 +220,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                     locale: item.locale.clone(),
                     purpose: item.purpose,
                     collapse_verdict: None,
+                    style_uses_year_suffix_var: uses_year_suffix_var(&style),
                 });
 
                 last_cite = Some(item);
@@ -1040,6 +1042,10 @@ fn disambiguate_year_suffix<F, T>(
     F: FnMut(&T, DisambiguateState),
 {
     if renders.iter().flat_map(|r| r.items.iter()).any(|i| {
+        if i.style_uses_year_suffix_var {
+            return true;
+        }
+
         let entry_has_date = i
             .entry
             .resolve_date_variable(DateVariable::Issued)
@@ -3444,6 +3450,50 @@ fn get_last_text(child: &mut ElemChild) -> Option<&mut String> {
     }
 }
 
+fn uses_year_suffix_var(style: &StyleContext) -> bool {
+    style
+        .csl
+        .citation
+        .layout
+        .elements
+        .iter()
+        .any(|e| has_year_suffix_var(e, style))
+}
+
+fn has_year_suffix_var(e: &LayoutRenderingElement, style: &StyleContext) -> bool {
+    use citationberg::TextTarget;
+    match e {
+        LayoutRenderingElement::Text(Text {
+            target:
+                TextTarget::Variable {
+                    var: Variable::Standard(StandardVariable::YearSuffix),
+                    ..
+                },
+            ..
+        }) => true,
+        LayoutRenderingElement::Text(Text {
+            target: TextTarget::Macro { name }, ..
+        }) => style
+            .get_macro(name)
+            .map(|m| m.children.iter().any(|e| has_year_suffix_var(e, style)))
+            .unwrap_or(false),
+        LayoutRenderingElement::Group(Group { children, .. }) => {
+            children.iter().any(|e| has_year_suffix_var(e, style))
+        }
+        LayoutRenderingElement::Choose(Choose { if_, else_if, otherwise }) => {
+            if_.children.iter().any(|e| has_year_suffix_var(e, style))
+                || else_if
+                    .iter()
+                    .any(|ei| ei.children.iter().any(|e| has_year_suffix_var(e, style)))
+                || otherwise
+                    .as_ref()
+                    .map(|o| o.children.iter().any(|e| has_year_suffix_var(e, style)))
+                    .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs, path::Path};
@@ -3857,6 +3907,83 @@ mod tests {
 
         assert_eq!(c1, "Downs (1957)");
         assert_eq!(c2, "Brady & Collier (2010)");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/530
+    fn issue_530() {
+        let bibtex = r#"@misc{a1,
+                title={One},
+                author={{Same Org}}
+            }
+
+            @misc{a2,
+                title={Two},
+                author={{Same Org}}
+            }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let a1 = library.get("a1").unwrap();
+        let a2 = library.get("a2").unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::new(a1, None, Some(LocaleCode::en_us()), false, None)],
+            &apa,
+            Some(LocaleCode::en_us()),
+            &locales,
+            None,
+        ));
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::new(a2, None, Some(LocaleCode::en_us()), false, None)],
+            &apa,
+            Some(LocaleCode::en_us()),
+            &locales,
+            None,
+        ));
+        driver.citation(CitationRequest::new(
+            vec![
+                CitationItem::new(a1, None, Some(LocaleCode::en_us()), false, None),
+                CitationItem::new(a2, None, Some(LocaleCode::en_us()), false, None),
+            ],
+            &apa,
+            Some(LocaleCode::en_us()),
+            &locales,
+            None,
+        ));
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &apa,
+            locale: Some(LocaleCode::en_us()),
+            locale_files: &locales,
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+        let mut c3 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[2]
+            .citation
+            .write_buf(&mut c3, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "(Same Org, n.d.-a)");
+        assert_eq!(c2, "(Same Org, n.d.-b)");
+        assert_eq!(c3, "(Same Org, n.d.-a; n.d.-b)");
     }
 
     #[test]
