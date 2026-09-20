@@ -926,8 +926,18 @@ fn disambiguate_names<F, T>(
                 // Adding a name would disambiguate, so lets add it
                 disambiguated.insert((d.cite_id, d.item_id));
 
-                // Only add given names here for "by-cite"; all other cases must take all names into account and must be handled elsewhere
-                if rule == Some(DisambiguationRule::ByCite) {
+                // By-cite may expand any name, the primary-name rules only
+                // the first. All-names rules need document-wide comparison.
+                let expand_idx = match rule {
+                    Some(DisambiguationRule::ByCite) => Some(i - 1),
+                    Some(
+                        DisambiguationRule::PrimaryName
+                        | DisambiguationRule::PrimaryNameWithInitials,
+                    ) if i == 1 => Some(0),
+                    _ => None,
+                };
+
+                if let Some(idx) = expand_idx {
                     let name_props_slot =
                         if let Some(DisambiguateState::NameDisambiguation(ndp)) =
                             changed_states.get(&(d.cite_id, d.item_id))
@@ -942,10 +952,9 @@ fn disambiguate_names<F, T>(
                         };
                     if let Some(props) = name_props_slot {
                         let mut props = props.clone();
-                        if let Some(form) = props.get_form_mut(i - 1) {
-                            // Try to add a given name
-                            if disamb_cite_add_given_name(
-                                &d.names[i - 1],
+                        if let Some(form) = props.get_form_mut(idx)
+                            && disamb_cite_add_given_name(
+                                &d.names[idx],
                                 &group
                                     .iter()
                                     .filter(|i| {
@@ -954,13 +963,13 @@ fn disambiguate_names<F, T>(
                                     .flat_map(|i| &i.names)
                                     .collect::<Vec<_>>(),
                                 form,
-                            ) {
-                                changed_states.insert(
-                                    (d.cite_id, d.item_id),
-                                    DisambiguateState::NameDisambiguation(props),
-                                );
-                                disambiguated.insert((d.cite_id, d.item_id));
-                            }
+                            )
+                        {
+                            changed_states.insert(
+                                (d.cite_id, d.item_id),
+                                DisambiguateState::NameDisambiguation(props),
+                            );
+                            disambiguated.insert((d.cite_id, d.item_id));
                         }
                     }
                 }
@@ -982,11 +991,15 @@ fn disambiguate_names<F, T>(
                     };
                 if let Some(state) = name_props_slot {
                     let mut state = state.clone();
+                    let before = state.clone();
                     state.add_name(i);
-                    changed_states.insert(
-                        (d.cite_id, d.item_id),
-                        DisambiguateState::NameDisambiguation(state),
-                    );
+                    // Skip no-ops so other disambiguation methods still run.
+                    if state != before {
+                        changed_states.insert(
+                            (d.cite_id, d.item_id),
+                            DisambiguateState::NameDisambiguation(state),
+                        );
+                    }
                 }
             }
         }
@@ -2640,7 +2653,11 @@ impl<'a> SpeculativeCiteProperties<'a> {
             locator: None,
             citation_number: self.citation_number,
             ibid: self.ibid,
-            disambiguation: self.disambiguation.clone(),
+            // Name disambiguation applies to cites only.
+            disambiguation: match self.disambiguation.clone() {
+                DisambiguateState::NameDisambiguation(_) => DisambiguateState::None,
+                other => other,
+            },
             identifier_usage: self.identifier_usage,
         }
     }
@@ -3841,6 +3858,72 @@ mod tests {
             .unwrap();
 
         assert_eq!(output, "Pratchett");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/470
+    fn issue_470() {
+        let bibtex = r#"@article{alpha,
+            author = {Smith, Alice and Brown, Chris and Davis, Emily},
+            title = {Alpha},
+            journaltitle = {Journal of Examples},
+            date = {2020},
+            volume = {1},
+            pages = {1--10}
+        }
+
+        @article{beta,
+            author = {Smith, Bob and Evans, Frank and Green, Grace},
+            title = {Beta},
+            journaltitle = {Journal of Examples},
+            date = {2020},
+            volume = {2},
+            pages = {11--20}
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+        for key in ["alpha", "beta"] {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_entry(library.get(key).unwrap())],
+                &apa,
+                None,
+                &locales,
+                None,
+            ));
+        }
+
+        let rendered = driver.finish(BibliographyRequest::new(&apa, None, &locales));
+
+        let mut cites = Vec::new();
+        for citation in &rendered.citations {
+            let mut buf = String::new();
+            citation.citation.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
+            cites.push(buf);
+        }
+
+        // Cites of ambiguous entries must be disambiguated with initials.
+        assert_eq!(cites[0], "(A. Smith et al., 2020)");
+        assert_eq!(cites[1], "(B. Smith et al., 2020)");
+
+        let bib = &rendered.bibliography.as_ref().unwrap().items;
+        let mut output = String::new();
+        for item in bib {
+            item.content.write_buf(&mut output, BufWriteFormat::Plain).unwrap();
+            output.push('\n');
+        }
+
+        // The bibliography must keep the full author lists.
+        assert_eq!(
+            output,
+            "Smith, A., Brown, C., & Davis, E. (2020). Alpha. Journal of Examples, 1, 1–10.\n\
+             Smith, B., Evans, F., & Green, G. (2020). Beta. Journal of Examples, 2, 11–20.\n"
+        );
     }
 
     #[test]
