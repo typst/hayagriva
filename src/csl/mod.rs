@@ -3450,6 +3450,7 @@ fn get_last_text(child: &mut ElemChild) -> Option<&mut String> {
     }
 }
 
+/// True iff the style uses the `year-suffix` variable in citations or bibliography. See #534.
 fn uses_year_suffix_var(style: &StyleContext) -> bool {
     style
         .csl
@@ -3460,6 +3461,7 @@ fn uses_year_suffix_var(style: &StyleContext) -> bool {
         .any(|e| has_year_suffix_var(e, style))
 }
 
+/// True iff the element `e` uses the `year-suffix` variable.
 fn has_year_suffix_var(e: &LayoutRenderingElement, style: &StyleContext) -> bool {
     use citationberg::TextTarget;
     match e {
