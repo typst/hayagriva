@@ -282,7 +282,8 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                     _ => return None,
                 }
             }
-            Some(SpecialForm::OnlyFirstDate | SpecialForm::OnlyYearSuffix)
+            // Also render the `no-date` term when applying suffixes.
+            Some(SpecialForm::OnlyFirstDate)
                 if !matches!(&text.target, TextTarget::Macro { .. })
                     && !matches!(
                         text.target,
@@ -290,7 +291,20 @@ impl<'a, 'b> ResolvedTextTarget<'a, 'b> {
                             var: Variable::Standard(StandardVariable::YearSuffix)
                                 | Variable::Number(NumberVariable::Locator),
                             ..
-                        },
+                        } | TextTarget::Term { term: Term::Other(OtherTerm::NoDate), .. },
+                    ) =>
+            {
+                return None;
+            }
+            Some(SpecialForm::OnlyYearSuffix)
+                if !matches!(&text.target, TextTarget::Macro { .. })
+                    && !matches!(
+                        text.target,
+                        TextTarget::Variable {
+                            var: Variable::Standard(StandardVariable::YearSuffix)
+                                | Variable::Number(NumberVariable::Locator),
+                            ..
+                        }
                     ) =>
             {
                 return None;
