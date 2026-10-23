@@ -442,6 +442,13 @@ impl TryFrom<&tex::Entry> for Entry {
             }
         }
 
+        // Map the `eid` field of articles to the serial number.
+        if let Some(number) = map_res(entry.eid())?
+            && item.entry_type == EntryType::Article
+        {
+            item.set_keyed_serial_number("serial", number.format_verbatim());
+        }
+
         if let Some(volume) = map_res(entry.volume())? {
             let val = (&volume).into();
             if let Some(parent) = book(&mut item, parent) {
