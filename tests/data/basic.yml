@@ -39,7 +39,6 @@ omarova-libra:
     author: ["Omarova, Saule", "Steele, Graham"]
     title:
         value: There’s a Lot We Still Don’t Know About Libra
-        sentence-case: There’s a lot we still don’t know about Libra
     date: 2019-11-04
     url: https://www.nytimes.com/2019/11/04/opinion/facebook-libra-cryptocurrency.html
     parent:
@@ -100,7 +99,7 @@ science-e-issue:
           given-name: "Laurenz"
           alias: "laurmaedje"
     date: 2020-07-18
-    parent: 
+    parent:
         type: Repository
         title: Typst
         url: https://github.com/typst/typst
@@ -110,7 +109,7 @@ terminator-2:
     title: "Terminator 2: Judgment Day"
     publisher: Carolco Pictures; Pacific Western Productions; Lightstorm Entertainment; Le Studio Canal+ S.A.
     affiliated:
-        - role: director
+        - role: Director
           names: Cameron, James
         - role: cast-member
           names: ["Schwarzenegger, Arnold", "Hamilton, Linda", "Patrick, Robert"]
