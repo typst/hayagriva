@@ -249,6 +249,9 @@ pub enum EntryType {
     /// A prior publication of the same item.
     #[serde(alias = "Original")]
     Original,
+    /// A personal communication, e.g., email or letter.
+    #[serde(alias = "Letter")]
+    Letter,
 }
 
 impl EntryType {
