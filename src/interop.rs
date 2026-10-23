@@ -191,7 +191,7 @@ impl TryFrom<&tex::Entry> for Entry {
         let mv_attributes =
             !matches!(entry.main_title(), Err(RetrievalError::Missing(_)))
                 && !matches!(entry.volume(), Err(RetrievalError::Missing(_)));
-        let (mut item, parent, mv_parent) = tex_kinds!(entry, mv_attributes, [
+        let (mut item, mut parent, mv_parent) = tex_kinds!(entry, mv_attributes, [
             { tex::EntryType::Article, EntryType::Article, Some(EntryType::Periodical), false },
             { tex::EntryType::Book, EntryType::Book, None, true },
             { tex::EntryType::Booklet, EntryType::Misc, None, false },
@@ -227,6 +227,19 @@ impl TryFrom<&tex::Entry> for Entry {
             { tex::EntryType::XData, EntryType::Misc, None, false },
             { tex::EntryType::Unknown(_), EntryType::Misc, None, false },
         ]);
+
+        // Respect special entry type `legislation`
+        if let tex::EntryType::Unknown(s) = &entry.entry_type
+            && s.to_lowercase() == "legislation"
+        {
+            item.entry_type = EntryType::Legislation;
+            // If the item has a `journaltitle`, create a parent. The setting of the journal title is handled below.
+            if entry.journal_title().is_ok() {
+                let l_parent = Entry::new(&entry.key, EntryType::Misc);
+                item.add_parent(l_parent);
+                parent = true;
+            }
+        }
 
         if let Ok(a) = entry.author().map(|a| a.iter().map(Into::into).collect()) {
             item.set_authors(a);
@@ -340,7 +353,10 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(parent) = book(&mut item, parent) {
-            if entry.entry_type == tex::EntryType::Article {
+            if matches!(
+                entry.entry_type,
+                tex::EntryType::Article | tex::EntryType::Unknown(_)
+            ) {
                 if let Some(title) = map_res(entry.journal_title())?.map(Into::into) {
                     parent.set_title(title);
                 }
@@ -946,5 +962,28 @@ mod tests {
         );
         // But hyphens in number ranges can be converted.
         assert_eq!(entry.volume().unwrap().to_str(), "XY-1–5");
+    }
+
+    #[test]
+    fn issue_540_legislation() {
+        let lib = crate::io::from_biblatex_str(
+            // https://github.com/typst/hayagriva/issues/540
+            r#"@legislation{law2024,
+  title = {Portaria GM/MS nº 3.681, de 7 de maio de 2024},
+  author = {{Brasil. Ministério da Saúde}},
+  date = {2024-05-07},
+  journaltitle = {Diário Oficial da União},
+  number = {98},
+  pages = {215},
+  location = {Brasília, DF},
+}"#,
+        )
+        .unwrap();
+        let entry = lib.get("law2024").unwrap();
+        assert_eq!(EntryType::Legislation, entry.entry_type);
+        assert_eq!(
+            "Diário Oficial da União",
+            format!("{}", entry.parents[0].title.as_ref().unwrap())
+        );
     }
 }
