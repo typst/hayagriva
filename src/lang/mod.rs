@@ -3,9 +3,14 @@
 pub(crate) mod en;
 pub(crate) mod name;
 
-use std::{fmt::Write, mem};
+use std::{borrow::Cow, fmt::Write, mem};
+
+use icu_casemap::{CaseMapper, CaseMapperBorrowed};
+use icu_locale::LanguageIdentifier;
 
 use crate::types::{FoldableKind, FoldableStringChunk};
+
+const CASE_MAPPER: CaseMapperBorrowed<'static> = CaseMapper::new();
 
 /// Rules for the title case transformation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -216,6 +221,7 @@ pub struct CaseFolder {
     last_reconfig: usize,
     /// Index of the last word in the buffer.
     last_word: Option<WordData>,
+    lang_id: Option<LanguageIdentifier>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -334,6 +340,7 @@ impl Default for CaseFolder {
             buf: String::new(),
             last_reconfig: 0,
             last_word: None,
+            lang_id: None,
         }
     }
 }
@@ -349,6 +356,11 @@ impl CaseFolder {
         Self { case, ..Default::default() }
     }
 
+    /// Set the language identifier for correct case transformations.
+    pub fn set_language(&mut self, lang: LanguageIdentifier) {
+        self.lang_id = Some(lang)
+    }
+
     /// Add a string to the buffer.
     pub fn push_str(&mut self, s: &str) {
         match self.case {
@@ -356,11 +368,11 @@ impl CaseFolder {
                 self.buf.push_str(s);
                 self.char_class = CharClass::default();
             }
-            Case::Uppercase => {
+            Case::Uppercase if self.lang_id.is_none() => {
                 self.buf.extend(s.chars().flat_map(char::to_uppercase));
                 self.char_class = CharClass::default();
             }
-            Case::Lowercase => {
+            Case::Lowercase if self.lang_id.is_none() => {
                 self.buf.extend(s.chars().flat_map(char::to_lowercase));
                 self.char_class = CharClass::default();
             }
@@ -400,6 +412,24 @@ impl CaseFolder {
         }
     }
 
+    /// Transform a string to uppercase, respecting its language if known.
+    pub fn uppercase<'s>(&self, s: &'s str) -> Cow<'s, str> {
+        if let Some(lang) = &self.lang_id {
+            CASE_MAPPER.uppercase_to_string(s, lang)
+        } else {
+            Cow::Owned(s.to_uppercase())
+        }
+    }
+
+    /// Transform a string to lowercase, respecting its language if known.
+    pub fn lowercase<'s>(&self, s: &'s str) -> Cow<'s, str> {
+        if let Some(lang) = &self.lang_id {
+            CASE_MAPPER.lowercase_to_string(s, lang)
+        } else {
+            Cow::Owned(s.to_lowercase())
+        }
+    }
+
     /// Add a character to the buffer.
     pub fn push(&mut self, c: char) {
         let prev_class = self.char_class;
@@ -416,16 +446,16 @@ impl CaseFolder {
                 if config.trim_start && self.pristine && c.is_whitespace() => {}
             Case::Title(_) => {
                 if prev_class.is_new_word() {
-                    self.buf.extend(c.to_uppercase());
+                    self.buf.extend(self.uppercase(&c.to_string()).chars());
                 } else {
-                    self.buf.extend(c.to_lowercase());
+                    self.buf.extend(self.lowercase(&c.to_string()).chars());
                 }
             }
             Case::Sentence(config)
                 if config.trim_start && self.pristine && c.is_whitespace() => {}
             Case::Sentence(config) => {
                 if prev_class.is_new_sentence() {
-                    self.buf.extend(c.to_uppercase());
+                    self.buf.extend(self.uppercase(&c.to_string()).chars());
                 } else if config.do_not_format_after_dot
                     && matches!(
                         prev_class,
@@ -434,25 +464,25 @@ impl CaseFolder {
                 {
                     self.buf.push(c);
                 } else {
-                    self.buf.extend(c.to_lowercase());
+                    self.buf.extend(self.lowercase(&c.to_string()).chars());
                 }
             }
             Case::FirstUpper => {
                 if self.pristine && c.is_lowercase() {
-                    self.buf.extend(c.to_uppercase());
+                    self.buf.extend(self.uppercase(&c.to_string()).chars());
                 } else {
                     self.buf.push(c);
                 }
             }
             Case::AllUpper => {
                 if prev_class.is_new_word() && c.is_lowercase() {
-                    self.buf.extend(c.to_uppercase());
+                    self.buf.extend(self.uppercase(&c.to_string()).chars());
                 } else {
                     self.buf.push(c);
                 }
             }
-            Case::Uppercase => self.buf.extend(c.to_uppercase()),
-            Case::Lowercase => self.buf.extend(c.to_lowercase()),
+            Case::Uppercase => self.buf.extend(self.uppercase(&c.to_string()).chars()),
+            Case::Lowercase => self.buf.extend(self.lowercase(&c.to_string()).chars()),
             Case::NoTransform => self.buf.push(c),
         }
 
@@ -742,6 +772,8 @@ pub(crate) fn is_cjk(c: char) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use icu_locale::langid;
+
     use super::*;
 
     #[test]
@@ -1084,5 +1116,13 @@ mod tests {
             "Some people can never stop to scream. It is driving me crazy!",
             title
         );
+    }
+
+    #[test]
+    fn case_turkish() {
+        let mut cf = CaseFolder::with_config(Case::FirstUpper);
+        cf.set_language(langid!("tr"));
+        cf.push_str("içinde");
+        assert_eq!("İçinde", cf.finish())
     }
 }
