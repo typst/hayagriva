@@ -111,8 +111,7 @@ dependencies = [
 [[package]]
 name = "citationberg"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "756ff1e3d43a9ecc8183932fb4d9fd3971236f3ce4acb62fe51d1cd43297547d"
+source = "git+https://github.com/typst/citationberg?rev=072ae9f#072ae9f46b503f6151481ecd02560ac34de5fb78"
 dependencies = [
  "quick-xml",
  "serde",
@@ -490,9 +489,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
  "serde",
