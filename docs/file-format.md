@@ -404,6 +404,7 @@ Needs a keyword with one of the following values:
 - `video`. Motion picture of any form, possibly with accompanying audio (default parent: `video`).
 - `audio`. Recorded audible sound of any kind (default parent: `audio`).
 - `exhibition`. A curated set of artworks.
+- `letter`. Personal communication such as letters and emails.
 
 The field is case insensitive. It defaults to `Misc` or the default parent if the entry appears as a parent of an entry that defines a default parent.
 
