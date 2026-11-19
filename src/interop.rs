@@ -45,6 +45,18 @@ impl From<&tex::Person> for Person {
             if !part.is_empty() { Some(part.to_string()) } else { None }
         }
 
+        // `useprefix=true` makes the prefix part of the family name.
+        if person.use_prefix == Some(true) && !person.prefix.is_empty() {
+            return Self {
+                name: format!("{} {}", person.prefix, person.name),
+                given_name: optional(&person.given_name),
+                prefix: None,
+                suffix: optional(&person.suffix),
+                comma_suffix: false,
+                alias: None,
+            };
+        }
+
         Self {
             name: person.name.clone(),
             given_name: optional(&person.given_name),
@@ -179,7 +191,7 @@ impl TryFrom<&tex::Entry> for Entry {
         let mv_attributes =
             !matches!(entry.main_title(), Err(RetrievalError::Missing(_)))
                 && !matches!(entry.volume(), Err(RetrievalError::Missing(_)));
-        let (mut item, parent, mv_parent) = tex_kinds!(entry, mv_attributes, [
+        let (mut item, mut parent, mv_parent) = tex_kinds!(entry, mv_attributes, [
             { tex::EntryType::Article, EntryType::Article, Some(EntryType::Periodical), false },
             { tex::EntryType::Book, EntryType::Book, None, true },
             { tex::EntryType::Booklet, EntryType::Misc, None, false },
@@ -215,6 +227,19 @@ impl TryFrom<&tex::Entry> for Entry {
             { tex::EntryType::XData, EntryType::Misc, None, false },
             { tex::EntryType::Unknown(_), EntryType::Misc, None, false },
         ]);
+
+        // Respect special entry type `legislation`
+        if let tex::EntryType::Unknown(s) = &entry.entry_type
+            && s.to_lowercase() == "legislation"
+        {
+            item.entry_type = EntryType::Legislation;
+            // If the item has a `journaltitle`, create a parent. The setting of the journal title is handled below.
+            if entry.journal_title().is_ok() {
+                let l_parent = Entry::new(&entry.key, EntryType::Misc);
+                item.add_parent(l_parent);
+                parent = true;
+            }
+        }
 
         if let Ok(a) = entry.author().map(|a| a.iter().map(Into::into).collect()) {
             item.set_authors(a);
@@ -328,7 +353,10 @@ impl TryFrom<&tex::Entry> for Entry {
         }
 
         if let Some(parent) = book(&mut item, parent) {
-            if entry.entry_type == tex::EntryType::Article {
+            if matches!(
+                entry.entry_type,
+                tex::EntryType::Article | tex::EntryType::Unknown(_)
+            ) {
                 if let Some(title) = map_res(entry.journal_title())?.map(Into::into) {
                     parent.set_title(title);
                 }
@@ -428,6 +456,13 @@ impl TryFrom<&tex::Entry> for Entry {
                     _ => item.set_issue(number.into()),
                 }
             }
+        }
+
+        // Map the `eid` field of articles to the serial number.
+        if let Some(number) = map_res(entry.eid())?
+            && item.entry_type == EntryType::Article
+        {
+            item.set_keyed_serial_number("serial", number.format_verbatim());
         }
 
         if let Some(volume) = map_res(entry.volume())? {
@@ -592,6 +627,27 @@ impl TryFrom<&tex::Entry> for Entry {
         // "Doctoral dissertation" for a PhD thesis; "NIH Publication" for an NIH
         // technical report)'
         if let Some(type_) = map_res(entry.type_())? {
+            let type_ = if type_ == "phdthesis" {
+                "Doctoral dissertation".to_string()
+            } else if type_ == "mathesis" {
+                "Master's thesis".to_string()
+            } else if type_ == "bathesis" {
+                "Bachelor's thesis".to_string()
+            } else if type_ == "candthesis" {
+                "Candidate thesis".to_string()
+            } else if type_ == "techreport" {
+                "technical report".to_string()
+            } else if type_ == "resreport" {
+                "research report".to_string()
+            } else if type_ == "software" {
+                "computer software".to_string()
+            } else if type_ == "datacd" {
+                "data CD".to_string()
+            } else if type_ == "audiocd" {
+                "audio CD".to_string()
+            } else {
+                type_
+            };
             item.set_genre(type_.into());
         } else {
             match entry.entry_type {
@@ -869,6 +925,50 @@ mod tests {
         );
     }
 
+    /// See https://github.com/typst/hayagriva/issues/158
+    #[test]
+    fn issue_158_use_prefix() {
+        let entries = crate::io::from_biblatex_str(
+            r#"
+        @article{devreese-2018-populism,
+          title = {Populism as an Expression of Political Communication Content and Style},
+          author = {family=Vreese, given=Claes H., prefix=de, useprefix=true and Esser, Frank},
+          date = {2018-10},
+        }"#,
+        )
+        .unwrap();
+
+        let entry = entries.get("devreese-2018-populism").unwrap();
+        let authors = entry.authors().unwrap();
+        // With `useprefix=true`, the prefix is part of the family name.
+        assert_eq!(authors[0].name, "de Vreese");
+        assert_eq!(authors[0].prefix, None);
+        assert_eq!(authors[0].name_particle(), Some("de"));
+        assert_eq!(authors[0].name_without_particle(), "Vreese");
+        assert_eq!(authors[0].given_first(false), "Claes H. de Vreese");
+        assert_eq!(authors[0].name_first(false, false), "de Vreese, Claes H.");
+        // The other authors are unaffected.
+        assert_eq!(authors[1].name, "Esser");
+        assert_eq!(authors[1].given_name.as_deref(), Some("Frank"));
+
+        // Without `useprefix`, the prefix remains a dropping particle.
+        let entries = crate::io::from_biblatex_str(
+            r#"
+        @article{vreese-2018-populism,
+          title = {Populism as an Expression of Political Communication Content and Style},
+          author = {family=Vreese, given=Claes H., prefix=de and Esser, Frank},
+          date = {2018-10},
+        }"#,
+        )
+        .unwrap();
+
+        let entry = entries.get("vreese-2018-populism").unwrap();
+        let authors = entry.authors().unwrap();
+        assert_eq!(authors[0].name, "Vreese");
+        assert_eq!(authors[0].prefix.as_deref(), Some("de"));
+        assert_eq!(authors[0].given_first(false), "Claes H. de Vreese");
+    }
+
     #[test]
     fn verbatim_serial_number() {
         let entry = crate::io::from_biblatex_str(
@@ -890,5 +990,48 @@ mod tests {
         );
         // But hyphens in number ranges can be converted.
         assert_eq!(entry.volume().unwrap().to_str(), "XY-1–5");
+    }
+
+    #[test]
+    fn issue_540_legislation() {
+        let lib = crate::io::from_biblatex_str(
+            // https://github.com/typst/hayagriva/issues/540
+            r#"@legislation{law2024,
+  title = {Portaria GM/MS nº 3.681, de 7 de maio de 2024},
+  author = {{Brasil. Ministério da Saúde}},
+  date = {2024-05-07},
+  journaltitle = {Diário Oficial da União},
+  number = {98},
+  pages = {215},
+  location = {Brasília, DF},
+}"#,
+        )
+        .unwrap();
+        let entry = lib.get("law2024").unwrap();
+        assert_eq!(EntryType::Legislation, entry.entry_type);
+        assert_eq!(
+            "Diário Oficial da União",
+            format!("{}", entry.parents[0].title.as_ref().unwrap())
+        );
+    }
+
+    #[test]
+    fn issue_550() {
+        let bib = crate::io::from_biblatex_str(r#"
+@thesis{b, author = {Doe, Jane}, title = {Thesis with type phdthesis}, type = {phdthesis}, institution = {Example University}, date = {2020}}
+@thesis{c, author = {Doe, Jane}, title = {Thesis with type mathesis}, type = {mathesis}, institution = {Example University}, date = {2020}}
+@report{d, author = {Doe, Jane}, title = {Report with type techreport}, type = {techreport}, institution = {Example University}, date = {2020}}"#).unwrap();
+        assert_eq!(
+            "Doctoral dissertation",
+            format!("{}", bib.get("b").unwrap().genre().unwrap())
+        );
+        assert_eq!(
+            "Master's thesis",
+            format!("{}", bib.get("c").unwrap().genre().unwrap())
+        );
+        assert_eq!(
+            "technical report",
+            format!("{}", bib.get("d").unwrap().genre().unwrap())
+        );
     }
 }

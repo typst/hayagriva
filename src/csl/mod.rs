@@ -14,13 +14,14 @@ use citationberg::taxonomy::{
     PageVariable, StandardVariable, Term, Variable,
 };
 use citationberg::{
-    Affixes, BaseLanguage, Citation, CitationFormat, Collapse, CslMacro,
-    DisambiguationRule, Display, GrammarGender, IndependentStyle, InheritableNameOptions,
-    Layout, LayoutRenderingElement, Locale, LocaleCode, Names, SecondFieldAlign,
-    StyleCategory, StyleClass, SubsequentAuthorSubstituteRule, TermForm, ToAffixes,
-    ToFormatting, taxonomy as csl_taxonomy,
+    Affixes, BaseLanguage, Choose, Citation, CitationFormat, Collapse, CslMacro,
+    DisambiguationRule, Display, GrammarGender, Group, IndependentStyle,
+    InheritableNameOptions, Layout, LayoutRenderingElement, Locale, LocaleCode, Names,
+    SecondFieldAlign, StyleCategory, StyleClass, SubsequentAuthorSubstituteRule,
+    TermForm, Text, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
+use icu_locale::LanguageIdentifier;
 use indexmap::IndexSet;
 
 use crate::csl::elem::{NonEmptyStack, simplify_children};
@@ -73,6 +74,7 @@ struct SpeculativeItemRender<'a, T: EntryLike> {
     locale: Option<LocaleCode>,
     purpose: Option<CitePurpose>,
     collapse_verdict: Option<CollapseVerdict>,
+    style_uses_year_suffix_var: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -219,6 +221,7 @@ impl<T: EntryLike + Hash + PartialEq + Eq + Debug> BibliographyDriver<'_, T> {
                     locale: item.locale.clone(),
                     purpose: item.purpose,
                     collapse_verdict: None,
+                    style_uses_year_suffix_var: uses_year_suffix_var(&style),
                 });
 
                 last_cite = Some(item);
@@ -924,8 +927,18 @@ fn disambiguate_names<F, T>(
                 // Adding a name would disambiguate, so lets add it
                 disambiguated.insert((d.cite_id, d.item_id));
 
-                // Only add given names here for "by-cite"; all other cases must take all names into account and must be handled elsewhere
-                if rule == Some(DisambiguationRule::ByCite) {
+                // By-cite may expand any name, the primary-name rules only
+                // the first. All-names rules need document-wide comparison.
+                let expand_idx = match rule {
+                    Some(DisambiguationRule::ByCite) => Some(i - 1),
+                    Some(
+                        DisambiguationRule::PrimaryName
+                        | DisambiguationRule::PrimaryNameWithInitials,
+                    ) if i == 1 => Some(0),
+                    _ => None,
+                };
+
+                if let Some(idx) = expand_idx {
                     let name_props_slot =
                         if let Some(DisambiguateState::NameDisambiguation(ndp)) =
                             changed_states.get(&(d.cite_id, d.item_id))
@@ -940,10 +953,9 @@ fn disambiguate_names<F, T>(
                         };
                     if let Some(props) = name_props_slot {
                         let mut props = props.clone();
-                        if let Some(form) = props.get_form_mut(i - 1) {
-                            // Try to add a given name
-                            if disamb_cite_add_given_name(
-                                &d.names[i - 1],
+                        if let Some(form) = props.get_form_mut(idx)
+                            && disamb_cite_add_given_name(
+                                &d.names[idx],
                                 &group
                                     .iter()
                                     .filter(|i| {
@@ -952,13 +964,13 @@ fn disambiguate_names<F, T>(
                                     .flat_map(|i| &i.names)
                                     .collect::<Vec<_>>(),
                                 form,
-                            ) {
-                                changed_states.insert(
-                                    (d.cite_id, d.item_id),
-                                    DisambiguateState::NameDisambiguation(props),
-                                );
-                                disambiguated.insert((d.cite_id, d.item_id));
-                            }
+                            )
+                        {
+                            changed_states.insert(
+                                (d.cite_id, d.item_id),
+                                DisambiguateState::NameDisambiguation(props),
+                            );
+                            disambiguated.insert((d.cite_id, d.item_id));
                         }
                     }
                 }
@@ -980,11 +992,15 @@ fn disambiguate_names<F, T>(
                     };
                 if let Some(state) = name_props_slot {
                     let mut state = state.clone();
+                    let before = state.clone();
                     state.add_name(i);
-                    changed_states.insert(
-                        (d.cite_id, d.item_id),
-                        DisambiguateState::NameDisambiguation(state),
-                    );
+                    // Skip no-ops so other disambiguation methods still run.
+                    if state != before {
+                        changed_states.insert(
+                            (d.cite_id, d.item_id),
+                            DisambiguateState::NameDisambiguation(state),
+                        );
+                    }
                 }
             }
         }
@@ -1040,6 +1056,10 @@ fn disambiguate_year_suffix<F, T>(
     F: FnMut(&T, DisambiguateState),
 {
     if renders.iter().flat_map(|r| r.items.iter()).any(|i| {
+        if i.style_uses_year_suffix_var {
+            return true;
+        }
+
         let entry_has_date = i
             .entry
             .resolve_date_variable(DateVariable::Issued)
@@ -1640,7 +1660,10 @@ impl<'a> StyleContext<'a> {
                 None,
             ),
             style: self,
-            writing: WritingContext::new(self.csl.settings.options.clone()),
+            writing: WritingContext::new(
+                self.csl.settings.options.clone(),
+                self.lang_id(),
+            ),
             bibliography,
         }
     }
@@ -1663,7 +1686,10 @@ impl<'a> StyleContext<'a> {
                 None,
             ),
             style: self,
-            writing: WritingContext::new(self.csl.settings.options.clone()),
+            writing: WritingContext::new(
+                self.csl.settings.options.clone(),
+                self.lang_id(),
+            ),
             bibliography,
         }
     }
@@ -1919,6 +1945,14 @@ impl<'a> StyleContext<'a> {
         ctx.apply_suffix(&affixes, affix_loc);
 
         Some(ctx)
+    }
+
+    /// Return the language identifier to use for this style.
+    fn lang_id(&self) -> Option<LanguageIdentifier> {
+        self.locale_override
+            .clone()
+            .or_else(|| self.csl.default_locale.clone())
+            .and_then(|c| c.0.parse().ok())
     }
 
     /// Return the locale to use for this style.
@@ -2240,9 +2274,14 @@ impl Default for WritingContext {
 }
 
 impl WritingContext {
-    fn new(options: InheritableNameOptions) -> Self {
+    fn new(options: InheritableNameOptions, lang: Option<LanguageIdentifier>) -> Self {
+        let mut buf = CaseFolder::default();
+        if let Some(lang) = lang {
+            buf.set_language(lang);
+        }
         Self {
             name_options: NonEmptyStack::new(options),
+            buf,
             ..Self::default()
         }
     }
@@ -2634,7 +2673,11 @@ impl<'a> SpeculativeCiteProperties<'a> {
             locator: None,
             citation_number: self.citation_number,
             ibid: self.ibid,
-            disambiguation: self.disambiguation.clone(),
+            // Name disambiguation applies to cites only.
+            disambiguation: match self.disambiguation.clone() {
+                DisambiguateState::NameDisambiguation(_) => DisambiguateState::None,
+                other => other,
+            },
             identifier_usage: self.identifier_usage,
         }
     }
@@ -3444,6 +3487,52 @@ fn get_last_text(child: &mut ElemChild) -> Option<&mut String> {
     }
 }
 
+/// True iff the style uses the `year-suffix` variable in citations or bibliography. See #534.
+fn uses_year_suffix_var(style: &StyleContext) -> bool {
+    style
+        .csl
+        .citation
+        .layout
+        .elements
+        .iter()
+        .any(|e| has_year_suffix_var(e, style))
+}
+
+/// True iff the element `e` uses the `year-suffix` variable.
+fn has_year_suffix_var(e: &LayoutRenderingElement, style: &StyleContext) -> bool {
+    use citationberg::TextTarget;
+    match e {
+        LayoutRenderingElement::Text(Text {
+            target:
+                TextTarget::Variable {
+                    var: Variable::Standard(StandardVariable::YearSuffix),
+                    ..
+                },
+            ..
+        }) => true,
+        LayoutRenderingElement::Text(Text {
+            target: TextTarget::Macro { name }, ..
+        }) => style
+            .get_macro(name)
+            .map(|m| m.children.iter().any(|e| has_year_suffix_var(e, style)))
+            .unwrap_or(false),
+        LayoutRenderingElement::Group(Group { children, .. }) => {
+            children.iter().any(|e| has_year_suffix_var(e, style))
+        }
+        LayoutRenderingElement::Choose(Choose { if_, else_if, otherwise }) => {
+            if_.children.iter().any(|e| has_year_suffix_var(e, style))
+                || else_if
+                    .iter()
+                    .any(|ei| ei.children.iter().any(|e| has_year_suffix_var(e, style)))
+                || otherwise
+                    .as_ref()
+                    .map(|o| o.children.iter().any(|e| has_year_suffix_var(e, style)))
+                    .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs, path::Path};
@@ -3835,6 +3924,72 @@ mod tests {
 
     #[test]
     #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/470
+    fn issue_470() {
+        let bibtex = r#"@article{alpha,
+            author = {Smith, Alice and Brown, Chris and Davis, Emily},
+            title = {Alpha},
+            journaltitle = {Journal of Examples},
+            date = {2020},
+            volume = {1},
+            pages = {1--10}
+        }
+
+        @article{beta,
+            author = {Smith, Bob and Evans, Frank and Green, Grace},
+            title = {Beta},
+            journaltitle = {Journal of Examples},
+            date = {2020},
+            volume = {2},
+            pages = {11--20}
+        }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+        for key in ["alpha", "beta"] {
+            driver.citation(CitationRequest::new(
+                vec![CitationItem::with_entry(library.get(key).unwrap())],
+                &apa,
+                None,
+                &locales,
+                None,
+            ));
+        }
+
+        let rendered = driver.finish(BibliographyRequest::new(&apa, None, &locales));
+
+        let mut cites = Vec::new();
+        for citation in &rendered.citations {
+            let mut buf = String::new();
+            citation.citation.write_buf(&mut buf, BufWriteFormat::Plain).unwrap();
+            cites.push(buf);
+        }
+
+        // Cites of ambiguous entries must be disambiguated with initials.
+        assert_eq!(cites[0], "(A. Smith et al., 2020)");
+        assert_eq!(cites[1], "(B. Smith et al., 2020)");
+
+        let bib = &rendered.bibliography.as_ref().unwrap().items;
+        let mut output = String::new();
+        for item in bib {
+            item.content.write_buf(&mut output, BufWriteFormat::Plain).unwrap();
+            output.push('\n');
+        }
+
+        // The bibliography must keep the full author lists.
+        assert_eq!(
+            output,
+            "Smith, A., Brown, C., & Davis, E. (2020). Alpha. Journal of Examples, 1, 1–10.\n\
+             Smith, B., Evans, F., & Green, G. (2020). Beta. Journal of Examples, 2, 11–20.\n"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
     /// See https://github.com/typst/hayagriva/issues/243
     fn issue_243() {
         let bibtex = r#"@book{downs57,
@@ -3899,6 +4054,83 @@ mod tests {
 
         assert_eq!(c1, "Downs (1957)");
         assert_eq!(c2, "Brady & Collier (2010)");
+    }
+
+    #[test]
+    #[cfg(feature = "archive")]
+    /// See https://github.com/typst/hayagriva/issues/530
+    fn issue_530() {
+        let bibtex = r#"@misc{a1,
+                title={One},
+                author={{Same Org}}
+            }
+
+            @misc{a2,
+                title={Two},
+                author={{Same Org}}
+            }"#;
+
+        let library = crate::io::from_biblatex_str(bibtex).unwrap();
+        let a1 = library.get("a1").unwrap();
+        let a2 = library.get("a2").unwrap();
+        let apa = archive::ArchivedStyle::AmericanPsychologicalAssociation.get();
+        let citationberg::Style::Independent(apa) = apa else { unreachable!() };
+
+        let locales = archive::locales();
+
+        let mut driver = BibliographyDriver::new();
+
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::new(a1, None, Some(LocaleCode::en_us()), false, None)],
+            &apa,
+            Some(LocaleCode::en_us()),
+            &locales,
+            None,
+        ));
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::new(a2, None, Some(LocaleCode::en_us()), false, None)],
+            &apa,
+            Some(LocaleCode::en_us()),
+            &locales,
+            None,
+        ));
+        driver.citation(CitationRequest::new(
+            vec![
+                CitationItem::new(a1, None, Some(LocaleCode::en_us()), false, None),
+                CitationItem::new(a2, None, Some(LocaleCode::en_us()), false, None),
+            ],
+            &apa,
+            Some(LocaleCode::en_us()),
+            &locales,
+            None,
+        ));
+
+        let finished = driver.finish(BibliographyRequest {
+            style: &apa,
+            locale: Some(LocaleCode::en_us()),
+            locale_files: &locales,
+        });
+
+        let mut c1 = String::new();
+        let mut c2 = String::new();
+        let mut c3 = String::new();
+
+        finished.citations[0]
+            .citation
+            .write_buf(&mut c1, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[1]
+            .citation
+            .write_buf(&mut c2, BufWriteFormat::Plain)
+            .unwrap();
+        finished.citations[2]
+            .citation
+            .write_buf(&mut c3, BufWriteFormat::Plain)
+            .unwrap();
+
+        assert_eq!(c1, "(Same Org, n.d.-a)");
+        assert_eq!(c2, "(Same Org, n.d.-b)");
+        assert_eq!(c3, "(Same Org, n.d.-a; n.d.-b)");
     }
 
     #[test]
