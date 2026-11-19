@@ -349,6 +349,10 @@ pub enum ArchivedStyle {
     ///
     /// Authors: Andrew Dunning.
     TurabianFullnote8,
+    /// Unified style sheet for linguistics.
+    ///
+    /// Authors: Mark Dingemanse.
+    UnifiedStyleSheetForLinguistics,
 }
 
 #[rustfmt::skip]
@@ -454,6 +458,7 @@ impl ArchivedStyle {
             "trends" => Some(Self::Trends),
             "turabian-author-date" => Some(Self::TurabianAuthorDate),
             "turabian-fullnote-8" => Some(Self::TurabianFullnote8),
+            "unified-style-sheet-for-linguistics" => Some(Self::UnifiedStyleSheetForLinguistics),
             _ => None,
         }
     }
@@ -546,6 +551,7 @@ impl ArchivedStyle {
             "http://www.zotero.org/styles/trends-journals" => Some(Self::Trends),
             "http://www.zotero.org/styles/chicago-author-date-17th-edition" => Some(Self::TurabianAuthorDate),
             "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition" => Some(Self::TurabianFullnote8),
+            "http://www.zotero.org/styles/unified-style-sheet-for-linguistics" => Some(Self::UnifiedStyleSheetForLinguistics),
             _ => None
         }
     }
@@ -638,6 +644,7 @@ impl ArchivedStyle {
             Self::Trends,
             Self::TurabianAuthorDate,
             Self::TurabianFullnote8,
+            Self::UnifiedStyleSheetForLinguistics,
         ]
     }
 
@@ -729,6 +736,7 @@ impl ArchivedStyle {
             Self::Trends => include_bytes!("../../archive/styles/trends-journals.cbor"),
             Self::TurabianAuthorDate => include_bytes!("../../archive/styles/chicago-author-date-17th-edition.cbor"),
             Self::TurabianFullnote8 => include_bytes!("../../archive/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition.cbor"),
+            Self::UnifiedStyleSheetForLinguistics => include_bytes!("../../archive/styles/unified-style-sheet-for-linguistics.cbor"),
         }
     }
 
@@ -1008,6 +1016,9 @@ impl ArchivedStyle {
             Self::TurabianFullnote8 => &[
                 "turabian-fullnote-8",
             ],
+            Self::UnifiedStyleSheetForLinguistics => &[
+                "unified-style-sheet-for-linguistics",
+            ],
         }
     }
 
@@ -1099,6 +1110,7 @@ impl ArchivedStyle {
             Self::Trends => "Trends journals",
             Self::TurabianAuthorDate => "Chicago Manual of Style 17th edition (author-date)",
             Self::TurabianFullnote8 => "Chicago Manual of Style 17th edition (notes and bibliography, subsequent author-title)",
+            Self::UnifiedStyleSheetForLinguistics => "Unified style sheet for linguistics",
         }
     }
 
@@ -1190,6 +1202,7 @@ impl ArchivedStyle {
             Self::Trends => "http://www.zotero.org/styles/trends-journals",
             Self::TurabianAuthorDate => "http://www.zotero.org/styles/chicago-author-date-17th-edition",
             Self::TurabianFullnote8 => "http://www.zotero.org/styles/chicago-notes-bibliography-subsequent-author-title-17th-edition",
+            Self::UnifiedStyleSheetForLinguistics => "http://www.zotero.org/styles/unified-style-sheet-for-linguistics",
         }
     }
 }
