@@ -264,10 +264,17 @@ impl FromStr for Numeric {
         let space_after_value = s.eat_whitespace();
 
         let value = match s.peek() {
-            Some(c) if is_delimiter(c) => {
+            Some(c) if is_delimiter(c) || c == '\\' => {
+                let escape = c == '\\';
                 s.eat();
-                s.eat_until(|c: char| !is_delimiter(c));
-                let mut items = vec![(value, Some(NumericDelimiter::try_from(c)?))];
+                let delim = if escape {
+                    s.eat_if('-');
+                    NumericDelimiter::HyphenEscaped
+                } else {
+                    s.eat_until(|c: char| !is_delimiter(c));
+                    NumericDelimiter::try_from(c)?
+                };
+                let mut items = vec![(value, Some(delim))];
                 loop {
                     s.eat_whitespace();
                     let num = number(&mut s).ok_or(NumericError::NoNumber)?;
@@ -438,6 +445,8 @@ pub enum NumericDelimiter {
     Ampersand,
     /// A hyphen. Will be converted to an en dash for display.
     Hyphen,
+    /// A hyphen. Will *not* be converted to an en dash for display.
+    HyphenEscaped,
 }
 
 impl NumericDelimiter {
@@ -447,6 +456,7 @@ impl NumericDelimiter {
             NumericDelimiter::Comma => ',',
             NumericDelimiter::Ampersand => '&',
             NumericDelimiter::Hyphen => '-',
+            NumericDelimiter::HyphenEscaped => '-',
         }
     }
 }
@@ -457,6 +467,7 @@ impl std::fmt::Display for NumericDelimiter {
             NumericDelimiter::Comma => f.write_str(", "),
             NumericDelimiter::Ampersand => f.write_str(" & "),
             NumericDelimiter::Hyphen => f.write_char('–'),
+            NumericDelimiter::HyphenEscaped => f.write_char('-'),
         }
     }
 }
@@ -470,7 +481,13 @@ impl FromStr for NumericDelimiter {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let first_char = s.chars().next().ok_or(NumericError::MissingDelimiter)?;
-        if first_char != '-' && s.len() > first_char.len_utf8() {
+        if first_char != '-'
+            && s.len() > first_char.len_utf8()
+            && first_char != '\\'
+            && s.len() != 2
+            && let Some(snd) = s.chars().nth(1)
+            && snd != '-'
+        {
             return Err(NumericError::NotADelimiter);
         }
 
@@ -486,6 +503,7 @@ impl TryFrom<char> for NumericDelimiter {
             ',' => Ok(NumericDelimiter::Comma),
             '&' => Ok(NumericDelimiter::Ampersand),
             '-' | '–' => Ok(NumericDelimiter::Hyphen),
+            '\\' => Ok(NumericDelimiter::HyphenEscaped),
             _ => Err(NumericError::NotADelimiter),
         }
     }
