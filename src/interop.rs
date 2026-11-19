@@ -620,6 +620,27 @@ impl TryFrom<&tex::Entry> for Entry {
         // "Doctoral dissertation" for a PhD thesis; "NIH Publication" for an NIH
         // technical report)'
         if let Some(type_) = map_res(entry.type_())? {
+            let type_ = if type_ == "phdthesis" {
+                "Doctoral dissertation".to_string()
+            } else if type_ == "mathesis" {
+                "Master's thesis".to_string()
+            } else if type_ == "bathesis" {
+                "Bachelor's thesis".to_string()
+            } else if type_ == "candthesis" {
+                "Candidate thesis".to_string()
+            } else if type_ == "techreport" {
+                "technical report".to_string()
+            } else if type_ == "resreport" {
+                "research report".to_string()
+            } else if type_ == "software" {
+                "computer software".to_string()
+            } else if type_ == "datacd" {
+                "data CD".to_string()
+            } else if type_ == "audiocd" {
+                "audio CD".to_string()
+            } else {
+                type_
+            };
             item.set_genre(type_.into());
         } else {
             match entry.entry_type {
@@ -984,6 +1005,26 @@ mod tests {
         assert_eq!(
             "Diário Oficial da União",
             format!("{}", entry.parents[0].title.as_ref().unwrap())
+        );
+    }
+
+    #[test]
+    fn issue_550() {
+        let bib = crate::io::from_biblatex_str(r#"
+@thesis{b, author = {Doe, Jane}, title = {Thesis with type phdthesis}, type = {phdthesis}, institution = {Example University}, date = {2020}}
+@thesis{c, author = {Doe, Jane}, title = {Thesis with type mathesis}, type = {mathesis}, institution = {Example University}, date = {2020}}
+@report{d, author = {Doe, Jane}, title = {Report with type techreport}, type = {techreport}, institution = {Example University}, date = {2020}}"#).unwrap();
+        assert_eq!(
+            "Doctoral dissertation",
+            format!("{}", bib.get("b").unwrap().genre().unwrap())
+        );
+        assert_eq!(
+            "Master's thesis",
+            format!("{}", bib.get("c").unwrap().genre().unwrap())
+        );
+        assert_eq!(
+            "technical report",
+            format!("{}", bib.get("d").unwrap().genre().unwrap())
         );
     }
 }
