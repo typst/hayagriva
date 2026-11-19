@@ -528,7 +528,7 @@ impl fmt::Display for ArchivalError {
 }
 
 /// IDs of CSL styles requested for archive inclusion.
-const STYLE_IDS: [&str; 85] = [
+const STYLE_IDS: [&str; 86] = [
     "http://typst.org/csl/alphanumeric",
     "http://www.zotero.org/styles/american-anthropological-association",
     "http://www.zotero.org/styles/american-chemical-society",
@@ -616,6 +616,7 @@ const STYLE_IDS: [&str; 85] = [
     "http://www.zotero.org/styles/the-lancet",
     "http://www.zotero.org/styles/thieme-german",
     "http://www.zotero.org/styles/trends-journals",
+    "http://www.zotero.org/styles/unified-style-sheet-for-linguistics",
 ];
 
 /// Override for the name of a style.
