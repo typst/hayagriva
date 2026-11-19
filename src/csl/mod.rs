@@ -21,6 +21,7 @@ use citationberg::{
     TermForm, Text, ToAffixes, ToFormatting, taxonomy as csl_taxonomy,
 };
 use citationberg::{DateForm, LongShortForm, OrdinalLookup, TextCase};
+use icu_locale::LanguageIdentifier;
 use indexmap::IndexSet;
 
 use crate::csl::elem::{NonEmptyStack, simplify_children};
@@ -1659,7 +1660,10 @@ impl<'a> StyleContext<'a> {
                 None,
             ),
             style: self,
-            writing: WritingContext::new(self.csl.settings.options.clone()),
+            writing: WritingContext::new(
+                self.csl.settings.options.clone(),
+                self.lang_id(),
+            ),
             bibliography,
         }
     }
@@ -1682,7 +1686,10 @@ impl<'a> StyleContext<'a> {
                 None,
             ),
             style: self,
-            writing: WritingContext::new(self.csl.settings.options.clone()),
+            writing: WritingContext::new(
+                self.csl.settings.options.clone(),
+                self.lang_id(),
+            ),
             bibliography,
         }
     }
@@ -1938,6 +1945,14 @@ impl<'a> StyleContext<'a> {
         ctx.apply_suffix(&affixes, affix_loc);
 
         Some(ctx)
+    }
+
+    /// Return the language identifier to use for this style.
+    fn lang_id(&self) -> Option<LanguageIdentifier> {
+        self.locale_override
+            .clone()
+            .or_else(|| self.csl.default_locale.clone())
+            .and_then(|c| c.0.parse().ok())
     }
 
     /// Return the locale to use for this style.
@@ -2259,9 +2274,14 @@ impl Default for WritingContext {
 }
 
 impl WritingContext {
-    fn new(options: InheritableNameOptions) -> Self {
+    fn new(options: InheritableNameOptions, lang: Option<LanguageIdentifier>) -> Self {
+        let mut buf = CaseFolder::default();
+        if let Some(lang) = lang {
+            buf.set_language(lang);
+        }
         Self {
             name_options: NonEmptyStack::new(options),
+            buf,
             ..Self::default()
         }
     }
