@@ -433,6 +433,42 @@ impl Duration {
             return Err(DurationError::Malformed);
         }
 
+        // Validate that lower-order denominations are within bounds when higher-order
+        // denominations are specified. According to the spec: "The left-most time
+        // denomination only allows values that could overflow into the next-largest
+        // denomination if that is not specified."
+        // This means:
+        // - DD:HH:MM:SS: hours < 24, minutes < 60, seconds < 60
+        // - HH:MM:SS: minutes < 60, seconds < 60
+        // - MM:SS: seconds < 60 (minutes can be any value)
+        match start {
+            0 => {
+                // DD:HH:MM:SS format - hours, minutes, and seconds must be in bounds
+                if hours >= 24 || minutes >= 60 || seconds >= 60 {
+                    return Err(DurationError::TooLarge);
+                }
+            }
+            1 => {
+                // HH:MM:SS format - minutes and seconds must be in bounds
+                if minutes >= 60 || seconds >= 60 {
+                    return Err(DurationError::TooLarge);
+                }
+            }
+            2 => {
+                // MM:SS format - only seconds must be in bounds (minutes can overflow)
+                if seconds >= 60 {
+                    return Err(DurationError::TooLarge);
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        // Milliseconds must always be in bounds
+        if milliseconds >= 1000 {
+            return Err(DurationError::TooLarge);
+        }
+
+        // Now normalize overflow values
         for i in (0..=start).rev() {
             match i {
                 0 => {}
@@ -446,10 +482,6 @@ impl Duration {
                 }
                 _ => unreachable!(),
             }
-        }
-
-        if hours >= 24 || minutes >= 60 || seconds >= 60 || milliseconds >= 1000 {
-            return Err(DurationError::TooLarge);
         }
 
         Ok(Duration { days, hours, minutes, seconds, milliseconds })
@@ -749,6 +781,15 @@ mod tests {
         );
         assert!(Duration::from_str("01:00,").is_err());
         assert!(Duration::from_str("010:00,").is_err());
+
+        // Test validation: 01:78:00 should be invalid (HH:MM:SS format, minutes >= 60)
+        assert!(Duration::from_str("01:78:00").is_err());
+
+        // Test validation: 138:00 should be valid (MM:SS format, minutes can overflow)
+        assert!(Duration::from_str("138:00").is_ok());
+
+        // Test validation: 00:78:00 should be invalid (HH:MM:SS format, minutes >= 60)
+        assert!(Duration::from_str("00:78:00").is_err());
     }
 
     #[test]
